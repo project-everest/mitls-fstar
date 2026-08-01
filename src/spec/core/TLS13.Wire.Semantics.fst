@@ -50,6 +50,26 @@ module GCertE  = TLS13.Wire.Generated.CertificateEntry
 let clientHello_random (ch: GCH.clientHello) : Seq.lseq U8.t 32 =
   ch.GCH.random
 
+/// The legacy_session_id the client offered.  TLS 1.3 ignores it semantically,
+/// but a server running in middlebox-compatibility mode (RFC 8446 D.4) MUST
+/// echo it verbatim in its ServerHello, so it has to be readable here.
+let clientHello_legacy_session_id (ch: GCH.clientHello) : Seq.seq U8.t =
+  ch.GCH.legacy_session_id <: Seq.seq U8.t
+
+/// The legacy_session_id, normalised to exactly 32 bytes.
+///
+/// RFC 8446 D.4 (middlebox compatibility) clients -- i.e. every browser and
+/// curl -- always send a 32-byte legacy_session_id, and the implementation
+/// fixes the width at 32 so the whole ClientHello/ServerHello wire image stays
+/// a constant size.  A ClientHello carrying a different session-id length is
+/// still parsed (it is legal TLS), but is normalised to all-zeros here, so the
+/// ServerHello echoes zeros and such a client will reject the handshake.
+let session_id_32 (s: Seq.seq U8.t) : (r:Seq.seq U8.t { Seq.length r == 32 }) =
+  if Seq.length s = 32 then s else Seq.create 32 0uy
+
+let clientHello_session_id_32 (ch: GCH.clientHello) : (r:Seq.seq U8.t { Seq.length r == 32 }) =
+  session_id_32 (clientHello_legacy_session_id ch)
+
 /// The offered cipher suites (the length refinement is dropped).
 let clientHello_cipher_suites (ch: GCH.clientHello) : list GCS.cipherSuite =
   ch.GCH.cipher_suites <: list GCS.cipherSuite
@@ -130,6 +150,20 @@ let serverHello_cipher_suite (sh: GSH.serverHello) : option GCS.cipherSuite =
   match serverHello_body sh with
   | None -> None
   | Some body -> Some body.GSHB.cipher_suite
+
+/// The session id the server echoed back (RFC 8446 D.4 middlebox compat).
+let serverHello_legacy_session_id_echo (sh: GSH.serverHello) : option (Seq.seq U8.t) =
+  match serverHello_body sh with
+  | None -> None
+  | Some body -> Some (body.GSHB.legacy_session_id_echo <: Seq.seq U8.t)
+
+/// The echoed legacy_session_id, normalised to exactly 32 bytes (see
+/// [clientHello_session_id_32]).
+let serverHello_session_id_echo_32 (sh: GSH.serverHello)
+  : (r:Seq.seq U8.t { Seq.length r == 32 }) =
+  match serverHello_legacy_session_id_echo sh with
+  | None -> Seq.create 32 0uy
+  | Some s -> session_id_32 s
 
 /// Find the X25519 key-share in the ServerHello extensions, if present.
 let rec sh_find_key_share (l: list GESH.extensionServerHello)

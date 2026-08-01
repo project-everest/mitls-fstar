@@ -594,7 +594,7 @@ fn mark_received_server_hello
   c.handshake.messages.server_hello := Some lsh;
 
   unfold (IM.is_valid_server_hello lsh sh);
-  with lsh_random lsh_key_share. _;
+  with lsh_random lsh_session_id lsh_key_share. _;
   V.to_array_pts_to lsh.IM.server_hello_key_share;
   V.to_array_pts_to c.handshake.server_key_share.bytes;
   Arr.memcpy
@@ -731,9 +731,10 @@ fn mark_received_client_hello
                  Seq.equal
                    (Ghost.reveal 'fragment_bytes)
                    (W.serialize_handshake (M.ClientHello ch)) /\
-                 lch.IM.client_hello_has_server_name == true /\
-                 client_hello_server_name_len_for ch ==
-                   lch.IM.client_hello_server_name_len /\
+                 lch.IM.client_hello_has_server_name == client_hello_has_sni ch /\
+                 (lch.IM.client_hello_has_server_name ==>
+                    client_hello_server_name_len_for ch ==
+                      lch.IM.client_hello_server_name_len) /\
                  client_hello_cipher_suites_len_for ch ==
                    lch.IM.client_hello_cipher_suites_len /\
                  client_hello_signature_schemes_len_for ch ==
@@ -808,7 +809,7 @@ fn mark_received_client_hello
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with old_client_hello_present old_l_random old_l_server_name
+  with old_client_hello_present old_l_random old_l_session_id old_l_server_name
        old_l_key_share old_l_cipher_suites old_l_signature_schemes. _;
   unfold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -822,7 +823,7 @@ fn mark_received_client_hello
   assert (pure (old_ch_has_server_name == false));
 
   unfold (IM.is_valid_client_hello lch ch);
-  with lch_random lch_server_name lch_key_share
+  with lch_random lch_session_id lch_server_name lch_key_share
        lch_cipher_suites lch_signature_schemes. _;
 
   V.to_array_pts_to lch.IM.client_hello_random;
@@ -833,6 +834,15 @@ fn mark_received_client_hello
     (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_random);
   V.to_vec_pts_to lch.IM.client_hello_random;
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_random;
+
+  V.to_array_pts_to lch.IM.client_hello_session_id;
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
+  Arr.memcpy
+    32sz
+    (V.vec_to_array lch.IM.client_hello_session_id)
+    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_session_id);
+  V.to_vec_pts_to lch.IM.client_hello_session_id;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
 
   V.to_array_pts_to lch.IM.client_hello_server_name;
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_server_name;
@@ -873,8 +883,16 @@ fn mark_received_client_hello
   c.handshake.messages.client_hello_present := true;
   c.handshake.messages.client_hello_has_server_name :=
     lch.IM.client_hello_has_server_name;
-  c.handshake.messages.client_hello_server_name_len :=
-    lch.IM.client_hello_server_name_len;
+  // When the ClientHello carried no server_name extension the parser's length
+  // field is meaningless, so normalise it to 0 to match
+  // client_hello_server_name_len_for, which is 0 for a None server name.
+  let stored_server_name_len =
+    if lch.IM.client_hello_has_server_name {
+      lch.IM.client_hello_server_name_len
+    } else {
+      0sz
+    };
+  c.handshake.messages.client_hello_server_name_len := stored_server_name_len;
   c.handshake.messages.client_hello_cipher_suites_len :=
     lch.IM.client_hello_cipher_suites_len;
   c.handshake.messages.client_hello_signature_schemes_len :=
@@ -888,7 +906,7 @@ fn mark_received_client_hello
 
   assert (pure (Seq.equal stored_random (Sem.clientHello_random (Ghost.reveal ch))));
   assert (pure (IM.optional_byte_prefix_matches
-    true
+    (client_hello_has_sni (Ghost.reveal ch))
     stored_server_name
     (client_hello_server_name_len_for (Ghost.reveal ch))
     (Sem.clientHello_server_name (Ghost.reveal ch))));

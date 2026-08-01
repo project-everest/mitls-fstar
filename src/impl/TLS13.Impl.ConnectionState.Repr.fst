@@ -312,9 +312,10 @@ fn free_client_hello_slot
   ensures emp
 {
   with spec. unfold (client_hello_slot_exactly present_box value spec);
-  with present random server_name key_share cipher_suites signature_schemes. _;
+  with present random session_id server_name key_share cipher_suites signature_schemes. _;
   Box.free present_box;
   V.free value.IM.client_hello_random;
+  V.free value.IM.client_hello_session_id;
   V.free value.IM.client_hello_server_name;
   V.free value.IM.client_hello_key_share;
   V.free value.IM.client_hello_cipher_suites;
@@ -1468,12 +1469,14 @@ fn alloc_client_hello_slot_empty ()
 {
   let present_box = Box.alloc false;
   let client_hello_random = V.alloc 0uy 32sz;
+  let client_hello_session_id = V.alloc 0uy 32sz;
   let client_hello_server_name = V.alloc 0uy (max_hostname_len_sz);
   let client_hello_key_share = V.alloc 0uy 32sz;
   let client_hello_cipher_suites = V.alloc 0us (max_cipher_suites_sz);
   let client_hello_signature_schemes = V.alloc 0us (max_signature_schemes_sz);
   let l = {
     IM.client_hello_random;
+    IM.client_hello_session_id;
     IM.client_hello_server_name;
     IM.client_hello_server_name_len = 0sz;
     IM.client_hello_has_server_name = false;
@@ -1485,6 +1488,8 @@ fn alloc_client_hello_slot_empty ()
   };
   rewrite (V.pts_to client_hello_random (Seq.create 32 0uy)) as
     (V.pts_to l.IM.client_hello_random (Seq.create 32 0uy));
+  rewrite (V.pts_to client_hello_session_id (Seq.create 32 0uy)) as
+    (V.pts_to l.IM.client_hello_session_id (Seq.create 32 0uy));
   rewrite (V.pts_to client_hello_server_name (Seq.create max_hostname_len 0uy)) as
     (V.pts_to l.IM.client_hello_server_name (Seq.create max_hostname_len 0uy));
   rewrite (V.pts_to client_hello_key_share (Seq.create 32 0uy)) as

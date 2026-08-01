@@ -46,6 +46,7 @@ module X = TLS13.X509.Spec
 // records; profile-relevant fields are read through the TLS13.Wire.Semantics
 // accessors instead of the deleted M.<record> projection fields.
 module Sem = TLS13.Wire.Semantics
+module PRef = Pulse.Lib.Reference
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
@@ -1180,7 +1181,7 @@ fn can_send_client_hello_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes.
     assert (pure True);
   unfold (sized_bytes_exactly
@@ -1828,6 +1829,63 @@ fn can_receive_client_finished
   ok
 }
 
+(**
+  Linear scan of the first [len] entries of a u16 vector for [target].
+
+  This is what lets the server *select* a cipher suite / signature algorithm from
+  the client's offered list instead of demanding that it be the first entry.  Real
+  clients order the list by their own preference (curl sends 14 signature
+  algorithms starting with ecdsa_secp256r1_sha256), so a head-only test rejects
+  essentially every browser.  The postcondition is deliberately one-directional:
+  a [true] result carries a witness, a [false] result promises nothing, so the
+  caller simply refuses the handshake.
+**)
+fn scan_u16_for
+  (v: V.vec U16.t)
+  (len: SZ.t)
+  (target: U16.t)
+  (#bytes: erased (Seq.seq U16.t))
+  requires V.pts_to v bytes **
+           pure (SZ.v len <= Seq.length bytes)
+  returns found: bool
+  ensures V.pts_to v bytes **
+          pure (found == true ==>
+                (exists (j:nat). j < SZ.v len /\ j < Seq.length bytes /\
+                                Seq.index bytes j == target))
+{
+  V.pts_to_len v;
+  let mut i = 0sz;
+  let mut found = false;
+  while (
+    let f = PRef.op_Bang found;
+    let iv = PRef.op_Bang i;
+    (not f) && (iv `SZ.lt` len)
+  )
+  invariant exists* iv fnd.
+    PRef.pts_to i iv **
+    PRef.pts_to found fnd **
+    V.pts_to v bytes **
+    pure (
+      SZ.v iv <= SZ.v len /\
+      SZ.v len <= Seq.length bytes /\
+      Seq.length bytes == V.length v /\
+      (fnd ==> (exists (j:nat). j < SZ.v len /\ j < Seq.length bytes /\
+                               Seq.index bytes j == target)))
+  decreases %[(if PRef.op_Bang found then 0 else 1); (SZ.v len - SZ.v (PRef.op_Bang i))]
+  {
+    let iv = PRef.op_Bang i;
+    let el = V.op_Array_Access v iv;
+    if (el = target) {
+      assert (pure (SZ.v iv < SZ.v len /\ Seq.index bytes (SZ.v iv) == target));
+      PRef.op_Colon_Equals found true;
+    } else {
+      PRef.op_Colon_Equals i (SZ.add iv 1sz);
+    }
+  };
+  let result = PRef.op_Bang found;
+  result
+}
+
 fn can_select_supported_server_parameters_runtime
   (c:connection_state)
   (#server_random:erased (b:B.bytes{B.length b == 32}))
@@ -1901,7 +1959,7 @@ fn can_select_supported_server_parameters_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -1916,29 +1974,29 @@ fn can_select_supported_server_parameters_runtime
   let stage = !c.control.handshake_stage_tag;
   let has_selection = !c.handshake.server_selection_present;
   let has_client_hello = !c.handshake.messages.client_hello_present;
-  let has_server_name = !c.handshake.messages.client_hello_has_server_name;
   let cipher_suites_len = !c.handshake.messages.client_hello_cipher_suites_len;
   let signature_schemes_len = !c.handshake.messages.client_hello_signature_schemes_len;
 
   assert (pure (has_selection == selection_present));
   assert (pure (has_client_hello == ch_present));
-  assert (pure (has_server_name == ch_has_server_name));
   assert (pure (cipher_suites_len == ch_cipher_suites_len));
   assert (pure (signature_schemes_len == ch_signature_schemes_len));
 
-  assert (pure (SZ.v 0sz < max_cipher_suites));
-  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
-  let first_cipher =
-    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_cipher_suites).(0sz);
-  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
-  assert (pure (first_cipher == Seq.index ch_cipher_suites 0));
+  V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
+  V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
+  assert (pure (SZ.v cipher_suites_len <= Seq.length ch_cipher_suites));
+  assert (pure (SZ.v signature_schemes_len <= Seq.length ch_signature_schemes));
 
-  assert (pure (SZ.v 0sz < max_signature_schemes));
-  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
-  let first_signature =
-    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_signature_schemes).(0sz);
-  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
-  assert (pure (first_signature == Seq.index ch_signature_schemes 0));
+  let offers_chacha =
+    scan_u16_for
+      c.handshake.messages.client_hello.IM.client_hello_cipher_suites
+      cipher_suites_len
+      0x1303us;
+  let offers_rsa_pss =
+    scan_u16_for
+      c.handshake.messages.client_hello.IM.client_hello_signature_schemes
+      signature_schemes_len
+      0x0804us;
 
   unfold (key_schedule_exactly
     c.handshake.keys
@@ -1967,15 +2025,14 @@ fn can_select_supported_server_parameters_runtime
   let selection_absent = not has_selection;
   let shared_secret_absent = not shared_secret_is_present;
   let cipher_nonempty = SZ.gt cipher_suites_len 0sz;
-  let cipher_supported = first_cipher = 0x1303us;
+  let cipher_supported = offers_chacha;
   let signature_nonempty = SZ.gt signature_schemes_len 0sz;
-  let signature_supported = first_signature = 0x0804us;
+  let signature_supported = offers_rsa_pss;
   let ok =
     control_ok &&
     selection_absent &&
     shared_secret_absent &&
     has_client_hello &&
-    has_server_name &&
     cipher_nonempty &&
     cipher_supported &&
     signature_nonempty &&
@@ -2027,9 +2084,9 @@ fn can_select_supported_server_parameters_runtime
     assert (pure (0 < SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch))));
     assert (pure (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)) <=
       Seq.length ch_cipher_suites));
-    assert (pure (U16.v first_cipher == 0x1303));
-    assert (pure (U16.v (Seq.index ch_cipher_suites 0) == 0x1303));
-    lemma_cipher_suites_match_first_chacha_offer
+    assert (pure (exists (j:nat). j < SZ.v cipher_suites_len /\
+                                 Seq.index ch_cipher_suites j == 0x1303us));
+    lemma_cipher_suites_match_exists_chacha_offer
       ch_cipher_suites
       (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)))
       (Sem.clientHello_cipher_suites (Ghost.reveal ch));
@@ -2051,9 +2108,9 @@ fn can_select_supported_server_parameters_runtime
     assert (pure (0 < SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch))));
     assert (pure (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)) <=
       Seq.length ch_signature_schemes));
-    assert (pure (U16.v first_signature == 0x0804));
-    assert (pure (U16.v (Seq.index ch_signature_schemes 0) == 0x0804));
-    lemma_signature_schemes_match_first_rsa_offer
+    assert (pure (exists (j:nat). j < SZ.v signature_schemes_len /\
+                                 Seq.index ch_signature_schemes j == 0x0804us));
+    lemma_signature_schemes_match_exists_rsa_offer
       ch_signature_schemes
       (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)))
       (Ghost.reveal ch_sas);
@@ -2183,7 +2240,7 @@ fn can_schedule_select_server_parameters_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes. _;
 
   let tag = !c.control.control_tag;
@@ -2276,7 +2333,7 @@ fn can_schedule_derive_shared_secret_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (key_schedule_exactly
     c.handshake.keys
@@ -2408,7 +2465,7 @@ fn can_send_server_hello_runtime
                CS.server_selection_key_share_consistent selection /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
               max_transcript_len)
 {
   unfold (connection_exactly c st0);
@@ -2451,7 +2508,7 @@ fn can_send_server_hello_runtime
   let shared_secret_present = !c.handshake.keys.shared_secret.present;
   let current_transcript_len = !c.handshake.transcript.len;
   let no_server_hello = None? server_hello;
-  let max_start = SZ.sub max_transcript_len_sz 90sz;
+  let max_start = SZ.sub max_transcript_len_sz 122sz;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
   let ok =
@@ -2493,7 +2550,7 @@ fn can_send_server_hello_runtime
   assert (pure (current_transcript_len == transcript_len));
   assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
   assert (pure (ok ==>
-    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
       max_transcript_len));
   if ok {
     CSL.lemma_connection_state_consistent_server_pre_server_hello_shape st0;
@@ -6362,4 +6419,52 @@ fn can_receive_close_notify
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
   ok
+}
+
+fn read_client_hello_session_id
+  (c:connection_state)
+  (out:array U8.t)
+  (#st0:erased CS.connection_state)
+  (#pout:erased (Seq.seq U8.t))
+  requires connection_exactly c st0 **
+           pts_to out pout **
+           pure (B.length pout == 32)
+  ensures exists* (o:Seq.seq U8.t).
+            connection_exactly c st0 **
+            pts_to out o **
+            pure (B.length o == 32 /\
+                  Seq.equal o (stored_client_hello_session_id st0))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+       ch_cipher_suites ch_signature_schemes.
+    assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_session_id ch_session_id);
+
+  Arr.pts_to_len out;
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
+  Arr.pts_to_len (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_session_id);
+  Arr.memcpy
+    32sz
+    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_session_id)
+    out;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
+
+  assert (pure (Seq.equal (Ghost.reveal ch_session_id)
+                          (stored_client_hello_session_id (Ghost.reveal st0))));
+
+  fold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
 }

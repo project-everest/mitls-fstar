@@ -230,9 +230,10 @@ fn mark_received_client_hello
                 Seq.equal
                   (Ghost.reveal 'fragment_bytes)
                   (W.serialize_handshake (M.ClientHello ch)) /\
-                lch.IM.client_hello_has_server_name == true /\
-                client_hello_server_name_len_for ch ==
-                  lch.IM.client_hello_server_name_len /\
+                lch.IM.client_hello_has_server_name == client_hello_has_sni ch /\
+                (lch.IM.client_hello_has_server_name ==>
+                   client_hello_server_name_len_for ch ==
+                     lch.IM.client_hello_server_name_len) /\
                 client_hello_cipher_suites_len_for ch ==
                   lch.IM.client_hello_cipher_suites_len /\
                 client_hello_signature_schemes_len_for ch ==

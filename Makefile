@@ -160,6 +160,8 @@ regen-generated: | check-toolchain
 # consumed as already-cached from the $(GENERATED_DIR)/*.checked copies below), so
 # these leftovers are inert for the rest of the build.
 $(GENERATED_STAMP): $(GENERATED_SRCS) | check-toolchain
+	rm -f $(GENERATED_DIR)/.depend \
+	  $(GENERATED_DIR)/TLS13.Wire.Generated.*.checked
 	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify $(GENERATED_MAKE_VARS)
 	-cp $(GENERATED_DIR)/cache/TLS13.Wire.Generated.*.checked $(GENERATED_DIR)/ 2>/dev/null || true
 	touch $@
@@ -686,7 +688,7 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
 	  -library TLS13.OpenSSL -library TLS13.Trace \
-	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*,TLS13.Wire.Semantics' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
 	  -bundle 'TLS13.Trace' \
 	  -bundle 'TLS13.Wire.Generated.*' \
@@ -1415,6 +1417,100 @@ test-chromium-client-demo: test/openssl_http_server \
 	  ./test/test_chromium_client_socket_demo \
 	    127.0.0.1 $$port test/certs/ca.pem; \
 	  wait $$server_pid
+# ── HTTP sample server over the VERIFIED TLS 1.3 server ────────────
+# Links http_sample/interop/http_server.c (verified HTTP/1.1 leaves) against the
+# extracted TLS13 server driver, so BOTH the record layer and the HTTP codec are
+# extracted Pulse code.  Selected at run time with HTTP_TLS_BACKEND=verified.
+HTTP_SAMPLE_DIR = http_sample
+HTTP_SAMPLE_EXTRACT = $(HTTP_SAMPLE_DIR)/_extract
+HTTP_SAMPLE_VTLS_BIN = $(HTTP_SAMPLE_EXTRACT)/http_server_vtls
+
+.PHONY: http-sample-vtls-server
+http-sample-vtls-server: $(HTTP_SAMPLE_VTLS_BIN)
+
+$(HTTP_SAMPLE_VTLS_BIN): \
+  $(HTTP_SAMPLE_DIR)/interop/http_server.c $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	@$(MAKE) --no-print-directory -C $(HTTP_SAMPLE_DIR) extract-loops
+	@mkdir -p $(HTTP_SAMPLE_EXTRACT)/vtls_obj
+	@# The HTTP translation units are extracted against the VARIADIC Common.TCP
+	@# stub declarations (they pass erased ghost arguments), which clash with the
+	@# TLS13 bundle's strict Common_TCP.h -- so compile them on their own.
+	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -DHTTP_VERIFIED_TLS \
+	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
+	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I runtime -I $(HTTP_SAMPLE_EXTRACT) \
+	  -I $(KRML_HOME)/include -I $(KRML_HOME)/include/krml \
+	  -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -c $(HTTP_SAMPLE_DIR)/interop/http_server.c \
+	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o
+	$(CC) -std=gnu11 -D_DEFAULT_SOURCE \
+	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
+	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I $(HTTP_SAMPLE_EXTRACT) \
+	  -I $(KRML_HOME)/include -I $(KRML_HOME)/include/krml \
+	  -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -c $(HTTP_SAMPLE_EXTRACT)/HTTP_Verified.c \
+	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/HTTP_Verified.o
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o \
+	  $(HTTP_SAMPLE_EXTRACT)/vtls_obj/HTTP_Verified.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+	@echo "Built $@ (verified HTTP/1.1 over verified TLS 1.3)"
+
+# End-to-end demo/test: the verified HTTP server serving HTTPS over the VERIFIED
+# TLS 1.3 record layer.  curl is pinned to the one profile the verified server
+# implements (TLS 1.3, X25519, TLS_CHACHA20_POLY1305_SHA256, rsa_pss_rsae_sha256).
+HTTP_SAMPLE_VTLS_PORT ?= 18443
+HTTP_SAMPLE_VTLS_CLIENT = $(HTTP_SAMPLE_EXTRACT)/vtls_client
+
+$(HTTP_SAMPLE_VTLS_CLIENT): $(HTTP_SAMPLE_DIR)/interop/vtls_client.c
+	@mkdir -p $(HTTP_SAMPLE_EXTRACT)
+	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -Wall -Wextra -Wno-deprecated-declarations \
+	  $< -lssl -lcrypto -o $@
+
+.PHONY: test-http-sample-vtls
+test-http-sample-vtls: $(HTTP_SAMPLE_VTLS_BIN) $(HTTP_SAMPLE_VTLS_CLIENT) \
+  test/certs/leaf.der test/certs/ca.pem test/certs/leaf.key
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " verified HTTP/1.1 over VERIFIED TLS 1.3 (no OpenSSL on the server path)"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@rm -rf _run_vtls && mkdir -p _run_vtls
+	@printf 'verified HTTP over verified TLS %s\n' "$$(date +%s)" > _run_vtls/body.txt
+	@set -e; \
+	  HTTP_TLS_BACKEND=verified \
+	  HTTP_TLS_CERT=test/certs/leaf.der \
+	  HTTP_TLS_KEY=test/certs/leaf.key \
+	  ./$(HTTP_SAMPLE_VTLS_BIN) $(HTTP_SAMPLE_VTLS_PORT) _run_vtls/body.txt \
+	    > _run_vtls/server.log 2>&1 & \
+	  srv=$$!; \
+	  trap 'kill '"$$srv"' 2>/dev/null || true' EXIT; \
+	  sleep 1; \
+	  rc=0; \
+	  ./$(HTTP_SAMPLE_VTLS_CLIENT) localhost $(HTTP_SAMPLE_VTLS_PORT) test/certs/ca.pem / \
+	    > _run_vtls/recv.txt 2> _run_vtls/client.log || rc=$$?; \
+	  cat _run_vtls/client.log; \
+	  if [ "$$rc" = "0" ] && cmp -s _run_vtls/recv.txt _run_vtls/body.txt; then \
+	    echo "  RESULT: PASS - verified HTTP body served over the VERIFIED TLS 1.3 record layer"; \
+	  else \
+	    echo "  RESULT: FAIL"; sed -n '1,40p' _run_vtls/server.log; exit 1; \
+	  fi
 
 # ── Extracted Server / OpenSSL Client Test ─────────────────────────
 test/test_extracted_server_openssl_client: \

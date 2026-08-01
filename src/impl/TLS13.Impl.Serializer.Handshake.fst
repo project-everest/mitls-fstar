@@ -48,6 +48,7 @@ module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GESHKS = TLS13.Wire.Generated.ExtensionServerHello_extension_data_key_share
 module GCert = TLS13.Wire.Generated.Certificate
@@ -443,24 +444,24 @@ fn serialize_empty_encrypted_extensions_poc
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 (* ---- canonical mid ---- *)
 noextract
-let poc_sh_mid (rnd ks: B.bytes) (cs: GCS.cipherSuite)
+let poc_sh_mid (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello_mid
-    (requires Seq.length rnd == 32 /\ Seq.length ks == 32)
+    (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32)
     (ensures fun _ -> True)
   = let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share (kse <: GESH.extensionServerHello_extension_data_key_share) in
     let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
     let exts : list GESH.extensionServerHello = [ks_ext; sv_ext] in
-    let shbody_mid : GSHBody.serverHelloBody_mid = (((B.empty <: Seq.seq U8.t), cs), (0uy, exts)) in
+    let shbody_mid : GSHBody.serverHelloBody_mid = (((sid <: Seq.seq U8.t), cs), (0uy, exts)) in
     let body_mid : GSHB.serverHello_body_mid = ((rnd <: Seq.seq U8.t), (| false, shbody_mid |)) in
     (GPV.TLS_1p2, body_mid)
 #pop-options
 
 (* ---- forward conv lemma: the canonical mid converts to the canonical record ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_sh_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures GSH.serverHello_conv (poc_sh_mid rnd ks cs) == Some (poc_canonical_sh rnd ks cs))
+let lemma_sh_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+          (ensures GSH.serverHello_conv (poc_sh_mid rnd ks sid cs) == Some (poc_canonical_sh rnd ks sid cs))
   = GNG.namedGroup_bytesize_eq GNG.X25519;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn (ks <: GKSE.keyShareEntry_key_exchange);
     GSHBody.serverHelloBody_extensions_list_bytesize_nil;
@@ -493,10 +494,10 @@ let lemma_sh_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
 
 (* ---- size lemma: the canonical ServerHello handshake message is 90 bytes ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_sh_size (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks cs)) == 90)
-  = let sh = poc_canonical_sh rnd ks cs in
+let lemma_sh_size (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs)) == 122)
+  = let sh = poc_canonical_sh rnd ks sid cs in
     let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share (kse <: GESH.extensionServerHello_extension_data_key_share) in
@@ -685,19 +686,19 @@ fn intro_handshake_server_hello_vmatch
 (* Sem-connection + handshake-level conv lemmas                          *)
 (* ===================================================================== *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_canonical_random (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures Sem.serverHello_random (poc_canonical_sh rnd ks cs) == Some (rnd <: Seq.lseq U8.t 32))
+let lemma_canonical_random (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+          (ensures Sem.serverHello_random (poc_canonical_sh rnd ks sid cs) == Some (rnd <: Seq.lseq U8.t 32))
   = ()
 
-let lemma_canonical_key_share (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures Sem.serverHello_key_share_x25519 (poc_canonical_sh rnd ks cs) == Some (ks <: Seq.seq U8.t))
+let lemma_canonical_key_share (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+          (ensures Sem.serverHello_key_share_x25519 (poc_canonical_sh rnd ks sid cs) == Some (ks <: Seq.seq U8.t))
   = ()
 
-let lemma_canonical_cs (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures Sem.serverHello_cipher_suite (poc_canonical_sh rnd ks cs) == Some cs)
+let lemma_canonical_cs (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+          (ensures Sem.serverHello_cipher_suite (poc_canonical_sh rnd ks sid cs) == Some cs)
   = ()
 
 let lemma_ks_ext_conv (ks: B.bytes)
@@ -718,11 +719,11 @@ let lemma_sv_ext_conv ()
                              (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions)))
   = ()
 
-let lemma_sh_handshake_conv_fwd (rnd ks: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32)
-          (ensures GHS.handshake_conv (GHS.Body_server_hello_mid (poc_sh_mid rnd ks cs))
-                     == Some (GHS.Body_server_hello (poc_canonical_sh rnd ks cs)))
-  = lemma_sh_conv_fwd rnd ks cs
+let lemma_sh_handshake_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+          (ensures GHS.handshake_conv (GHS.Body_server_hello_mid (poc_sh_mid rnd ks sid cs))
+                     == Some (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs)))
+  = lemma_sh_conv_fwd rnd ks sid cs
 #pop-options
 
 (* ===================================================================== *)
@@ -733,31 +734,35 @@ fn serialize_server_hello_handshake_poc
   (#sh: erased GSH.serverHello)
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: A.array U8.t)
   (out_len: SZ.t)
   (#old: erased B.bytes)
   requires L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out (reveal old) **
-           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 90 /\
+           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 122 /\
                  Seq.length (reveal rnd) == 32 /\
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
+                 Seq.length (reveal sid) == 32 /\
                  reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
-                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal cs))
+                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **
-          pure (B.length out_bytes == 90 /\ SZ.v written == 90 /\
+          pure (B.length out_bytes == 122 /\ SZ.v written == 122 /\
                 Seq.equal out_bytes (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 {
   unfold (L.is_valid_server_hello lsh (reveal sh));
   with random. assert (V.pts_to lsh.L.server_hello_random random);
   with key_share. assert (V.pts_to lsh.L.server_hello_key_share key_share);
-  lemma_canonical_random (reveal rnd) (reveal ks) (reveal cs);
-  lemma_canonical_key_share (reveal rnd) (reveal ks) (reveal cs);
+  with sid_bytes. assert (V.pts_to lsh.L.server_hello_session_id sid_bytes);
+  lemma_canonical_random (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
+  lemma_canonical_key_share (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
   Seq.lemma_eq_elim random (reveal rnd);
   Seq.lemma_eq_elim key_share (reveal ks);
+  Seq.lemma_eq_elim sid_bytes (reveal sid);
   (* copy random & key_share into fresh exact-32 vecs; is_valid stays intact *)
   V.pts_to_len lsh.L.server_hello_random;
   let rnd_vec = alloc_copy_vec_exact lsh.L.server_hello_random 32sz 32sz;
@@ -767,9 +772,14 @@ fn serialize_server_hello_handshake_poc
   let ks_vec = alloc_copy_vec_exact lsh.L.server_hello_key_share 32sz 32sz;
   with ks_copy. assert (V.pts_to ks_vec ks_copy);
   Seq.lemma_eq_elim ks_copy (reveal ks);
+  V.pts_to_len lsh.L.server_hello_session_id;
+  let sid_vec = alloc_copy_vec_exact lsh.L.server_hello_session_id 32sz 32sz;
+  with sid_copy. assert (V.pts_to sid_vec sid_copy);
+  Seq.lemma_eq_elim sid_copy (reveal sid);
   fold (L.is_valid_server_hello lsh (reveal sh));
   rewrite (V.pts_to rnd_vec rnd_copy) as (V.pts_to rnd_vec (reveal rnd));
   rewrite (V.pts_to ks_vec ks_copy) as (V.pts_to ks_vec (reveal ks));
+  rewrite (V.pts_to sid_vec sid_copy) as (V.pts_to sid_vec (reveal sid));
 
   (* ---- key_share entry vmatch ---- *)
   let ks_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = ks_vec; PPBY.lvec_len = 32sz };
@@ -827,22 +837,19 @@ fn serialize_server_hello_handshake_poc
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
   let exts_low = PPVCL.vmatch_vclist_some_intro 2sz ext_vec #(Seq.upd (Seq.create 2 ks_low) 1 sv_low) #[Ghost.reveal ks_ext; Ghost.reveal sv_ext] [Ghost.reveal ks_ext; Ghost.reveal sv_ext];
 
-  (* ---- empty session-id-echo lvec ---- *)
-  let sid_vec = V.alloc 0uy 0sz;
-  Seq.lemma_eq_elim (Seq.create 0 0uy) (B.empty <: Seq.seq U8.t);
-  rewrite (V.pts_to sid_vec (Seq.create 0 0uy)) as (V.pts_to sid_vec (B.empty <: Seq.seq U8.t));
-  let sid_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = sid_vec; PPBY.lvec_len = 0sz };
-  rewrite (V.pts_to sid_vec (B.empty <: Seq.seq U8.t)) as (V.pts_to sid_lvec.PPBY.lvec_vec (B.empty <: Seq.seq U8.t));
-  fold (LSeqB.vmatch_copy_seqbytes sid_lvec (B.empty <: Seq.seq U8.t));
-  rewrite (LSeqB.vmatch_copy_seqbytes sid_lvec (B.empty <: Seq.seq U8.t))
-       as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (B.empty <: Seq.seq U8.t));
+  (* ---- 32-byte session-id-echo lvec (RFC 8446 D.4 middlebox compat) ---- *)
+  let sid_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = sid_vec; PPBY.lvec_len = 32sz };
+  rewrite (V.pts_to sid_vec (reveal sid)) as (V.pts_to sid_lvec.PPBY.lvec_vec (reveal sid));
+  fold (LSeqB.vmatch_copy_seqbytes sid_lvec (reveal sid));
+  rewrite (LSeqB.vmatch_copy_seqbytes sid_lvec (reveal sid))
+       as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (reveal sid));
 
   (* ---- serverHelloBody vmatch ---- *)
   let shbody_low : GSHBody.serverHelloBody_lowtype =
     ((sid_lvec, GCS.TLS_CHACHA20_POLY1305_SHA256), (0uy, exts_low));
   let shm : Ghost.erased GSHBody.serverHelloBody_mid =
-    Ghost.hide (((B.empty <: Seq.seq U8.t), reveal cs), (0uy, ([Ghost.reveal ks_ext; Ghost.reveal sv_ext] <: list GESH.extensionServerHello)));
-  rewrite (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (B.empty <: Seq.seq U8.t))
+    Ghost.hide (((reveal sid <: Seq.seq U8.t), reveal cs), (0uy, ([Ghost.reveal ks_ext; Ghost.reveal sv_ext] <: list GESH.extensionServerHello)));
+  rewrite (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (reveal sid))
       as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch (fst (fst shbody_low)) (fst (fst (Ghost.reveal shm))));
   rewrite (PPVCL.vmatch_vclist
              (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
@@ -854,7 +861,7 @@ fn serialize_server_hello_handshake_poc
 
   (* ---- ite payload (false branch) + random tag ---- *)
   let cm : Ghost.erased GSH.serverHello_mid =
-    Ghost.hide (poc_sh_mid (reveal rnd) (reveal ks) (reveal cs));
+    Ghost.hide (poc_sh_mid (reveal rnd) (reveal ks) (reveal sid) (reveal cs));
   let rnd_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = rnd_vec; PPBY.lvec_len = 32sz };
   let sh_body_low : GSHB.serverHello_body_lowtype = (rnd_lvec, (| false, shbody_low |));
   let xsh : GSH.serverHello_lowtype = (GPV.TLS_1p2, sh_body_low);
@@ -879,9 +886,9 @@ fn serialize_server_hello_handshake_poc
              #(Ghost.hide (GHS.Body_server_hello_mid (Ghost.reveal cm)))
              s perr;
   with v'. assert (S.pts_to s v');
-  lemma_sh_handshake_conv_fwd (reveal rnd) (reveal ks) (reveal cs);
-  lemma_sh_size (reveal rnd) (reveal ks) (reveal cs);
-  GHS.handshake_bytesize_eq (GHS.Body_server_hello (poc_canonical_sh (reveal rnd) (reveal ks) (reveal cs)));
+  lemma_sh_handshake_conv_fwd (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
+  lemma_sh_size (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
+  GHS.handshake_bytesize_eq (GHS.Body_server_hello (poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs)));
   S.to_array s;
   A.pts_to_len out;
   Rev.lemma_serialize_handshake_server_hello (Ghost.reveal sh);
@@ -1242,64 +1249,64 @@ let ch_exts (sni ks: B.bytes) (sa: GECH.extensionClientHello_extension_data_sign
 
 (* ---- Sem accessor lemmas (canonical pins random/server_name/key_share) ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_ch_random (rnd sni ks: B.bytes)
+let lemma_ch_random (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures Sem.clientHello_random (poc_canonical_ch rnd sni ks cs sa) == (rnd <: Seq.lseq U8.t 32))
+          (ensures Sem.clientHello_random (poc_canonical_ch rnd sni ks sid cs sa) == (rnd <: Seq.lseq U8.t 32))
   = ()
 
-let lemma_ch_server_name (rnd sni ks: B.bytes)
+let lemma_ch_server_name (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures Sem.clientHello_server_name (poc_canonical_ch rnd sni ks cs sa) == Some (sni <: Seq.seq U8.t))
+          (ensures Sem.clientHello_server_name (poc_canonical_ch rnd sni ks sid cs sa) == Some (sni <: Seq.seq U8.t))
   = ()
 
-let lemma_ch_key_share (rnd sni ks: B.bytes)
+let lemma_ch_key_share (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures Sem.clientHello_key_share_x25519 (poc_canonical_ch rnd sni ks cs sa) == Some (ks <: Seq.seq U8.t))
+          (ensures Sem.clientHello_key_share_x25519 (poc_canonical_ch rnd sni ks sid cs sa) == Some (ks <: Seq.seq U8.t))
   = ()
 
-let lemma_ch_cipher_suites (rnd sni ks: B.bytes)
+let lemma_ch_cipher_suites (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures Sem.clientHello_cipher_suites (poc_canonical_ch rnd sni ks cs sa) == (cs <: list GCS.cipherSuite))
+          (ensures Sem.clientHello_cipher_suites (poc_canonical_ch rnd sni ks sid cs sa) == (cs <: list GCS.cipherSuite))
   = ()
 
-let lemma_ch_sig_algs (rnd sni ks: B.bytes)
+let lemma_ch_sig_algs (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures Sem.clientHello_sig_algs (poc_canonical_ch rnd sni ks cs sa) == Some (sa <: list GSS.signatureScheme))
+          (ensures Sem.clientHello_sig_algs (poc_canonical_ch rnd sni ks sid cs sa) == Some (sa <: list GSS.signatureScheme))
   = ()
 #pop-options
 
 (* ---- canonical mid (same data, untyped tuple form) ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 noextract
-let poc_ch_mid (rnd sni ks: B.bytes)
+let poc_ch_mid (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
   : Pure GCH.clientHello_mid
-    (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+    (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
               1 <= Seq.length sni /\ Seq.length sni <= 65461)
     (ensures fun _ -> True)
   = (((GPV.TLS_1p2, (rnd <: Seq.seq U8.t)),
-      ((B.empty <: Seq.seq U8.t), (cs <: list GCS.cipherSuite))),
+      ((sid <: Seq.seq U8.t), (cs <: list GCS.cipherSuite))),
      ((Seq.create 1 0uy <: Seq.seq U8.t), (ch_exts sni ks sa <: list GECH.extensionClientHello)))
 #pop-options
 
@@ -1382,23 +1389,23 @@ let lemma_ch_ks_ext_conv (ks: B.bytes)
 let lemma_ch_sv_ext_conv ()
   : Lemma (ensures GECH.extensionClientHello_conv
                      (GECH.Extension_data_supported_versions_mid
-                       ([GPV.TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid))
+                       ([GOV.Offered_TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid))
                    == Some ch_sv_high)
-  = LPL.serialize_list_nil _ GPV.protocolVersion_serializer;
-    LPL.serialize_list_singleton _ GPV.protocolVersion_serializer GPV.TLS_1p3;
-    GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
+  = LPL.serialize_list_nil _ GOV.offeredVersion_serializer;
+    LPL.serialize_list_singleton _ GOV.offeredVersion_serializer GOV.Offered_TLS_1p3;
+    GOV.offeredVersion_bytesize_eq GOV.Offered_TLS_1p3;
     ()
 #pop-options
 
 (* ---- forward conv: mid converts to the canonical record ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 300"
-let lemma_ch_conv_fwd (rnd sni ks: B.bytes)
+let lemma_ch_conv_fwd (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures GCH.clientHello_conv (poc_ch_mid rnd sni ks cs sa) == Some (poc_canonical_ch rnd sni ks cs sa))
+          (ensures GCH.clientHello_conv (poc_ch_mid rnd sni ks sid cs sa) == Some (poc_canonical_ch rnd sni ks sid cs sa))
   = let sn_ext = ch_sn_high sni in
     let sg_ext = ch_sg_high in
     let sa_ext = ch_sa_high sa in
@@ -1417,15 +1424,15 @@ let lemma_ch_conv_fwd (rnd sni ks: B.bytes)
 
 (* ---- handshake-level conv (wraps the body) ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_ch_handshake_conv_fwd (rnd sni ks: B.bytes)
+let lemma_ch_handshake_conv_fwd (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
-  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32 /\
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
-          (ensures GHS.handshake_conv (GHS.Body_client_hello_mid (poc_ch_mid rnd sni ks cs sa))
-                   == Some (GHS.Body_client_hello ((poc_canonical_ch rnd sni ks cs sa) <: GHS.handshake_body_client_hello)))
-  = lemma_ch_conv_fwd rnd sni ks cs sa
+          (ensures GHS.handshake_conv (GHS.Body_client_hello_mid (poc_ch_mid rnd sni ks sid cs sa))
+                   == Some (GHS.Body_client_hello ((poc_canonical_ch rnd sni ks sid cs sa) <: GHS.handshake_body_client_hello)))
+  = lemma_ch_conv_fwd rnd sni ks sid cs sa
 #pop-options
 (* ===================================================================== *)
 (* Intro ghost helpers for the 5 ClientHello extensions (copied/adapted   *)
@@ -1551,14 +1558,14 @@ fn intro_vmatch_extCH_sv
   (cm: GSVCH.supportedVersionsClientHello_mid)
   (#h: GECH.extensionClientHello)
   requires PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm **
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm **
            pure (GECH.extensionClientHello_conv
                    (GECH.Extension_data_supported_versions_mid cm) == Some h)
   ensures PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
             (GECH.Extension_data_supported_versions_low v0) h
 {
   rewrite (PPVCL.vmatch_vclist
-             (PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv) v0 cm)
+             (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv) v0 cm)
       as (GECH.extensionClientHello_extension_data_supported_versions_vmatch v0 cm);
   fold (GECH.extensionClientHello_vmatch
           (GECH.Extension_data_supported_versions_low v0)
@@ -1852,7 +1859,7 @@ let lemma_ch_kse_conv (ks: B.bytes)
 #push-options "--fuel 6 --ifuel 6 --z3rlimit 120"
 fn serialize_client_hello_handshake_poc
   (#ch: erased GCH.clientHello)
-  (#rnd #sni #ks: erased B.bytes)
+  (#rnd #sni #ks #sid: erased B.bytes)
   (#cs: erased GCH.clientHello_cipher_suites)
   (#sa: erased GECH.extensionClientHello_extension_data_signature_algorithms)
   (l: L.client_hello)
@@ -1863,9 +1870,10 @@ fn serialize_client_hello_handshake_poc
            pure (B.length (reveal old) == SZ.v out_len /\
                  SZ.v out_len == B.length (WS.serialize_handshake (M.ClientHello (reveal ch))) /\
                  Seq.length (reveal rnd) == 32 /\ Seq.length (reveal ks) == 32 /\
+                 Seq.length (reveal sid) == 32 /\
                  1 <= Seq.length (reveal sni) /\ Seq.length (reveal sni) <= 255 /\
                  LL.length (reveal cs) <= 16 /\ LL.length (reveal sa) <= 16 /\
-                 reveal ch == poc_canonical_ch (reveal rnd) (reveal sni) (reveal ks) cs sa)
+                 reveal ch == poc_canonical_ch (reveal rnd) (reveal sni) (reveal ks) (reveal sid) cs sa)
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* ob.
           L.is_valid_client_hello l (reveal ch) ** A.pts_to out ob **
@@ -1874,23 +1882,25 @@ fn serialize_client_hello_handshake_poc
 {
   unfold (L.is_valid_client_hello l (reveal ch));
   with random. assert (V.pts_to l.L.client_hello_random random);
+  with sid_bytes. assert (V.pts_to l.L.client_hello_session_id sid_bytes);
   with server_name. assert (V.pts_to l.L.client_hello_server_name server_name);
   with key_share. assert (V.pts_to l.L.client_hello_key_share key_share);
   with cs_wire. assert (V.pts_to l.L.client_hello_cipher_suites cs_wire);
   with ss_wire. assert (V.pts_to l.L.client_hello_signature_schemes ss_wire);
-  lemma_ch_random (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa);
-  lemma_ch_server_name (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa);
-  lemma_ch_key_share (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa);
+  lemma_ch_random (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa);
+  lemma_ch_server_name (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa);
+  lemma_ch_key_share (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa);
   Seq.lemma_eq_elim random (reveal rnd);
   Seq.lemma_eq_elim key_share (reveal ks);
+  Seq.lemma_eq_elim sid_bytes (reveal sid);
   let sn_len = l.L.client_hello_server_name_len;
 
   (* ---- build the VARIABLE cipher_suites + signature_schemes vclists from
           the L-mirror vecs (each helper call preserves its source vec) ---- *)
   let cs_len = l.L.client_hello_cipher_suites_len;
   let ss_len = l.L.client_hello_signature_schemes_len;
-  lemma_ch_cipher_suites (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa);
-  lemma_ch_sig_algs (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa);
+  lemma_ch_cipher_suites (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa);
+  lemma_ch_sig_algs (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa);
   let cs_lo : Ghost.erased (list GCS.cipherSuite) = Ghost.hide (reveal cs <: list GCS.cipherSuite);
   let sa_lo : Ghost.erased (list GSS.signatureScheme) = Ghost.hide (reveal sa <: list GSS.signatureScheme);
   lemma_cipher_suites_match_coerce cs_wire (SZ.v cs_len) (reveal cs);
@@ -1917,6 +1927,10 @@ fn serialize_client_hello_handshake_poc
   let ks_vec = alloc_copy_vec_exact l.L.client_hello_key_share 32sz 32sz;
   with ks_copy. assert (V.pts_to ks_vec ks_copy);
   Seq.lemma_eq_elim ks_copy (reveal ks);
+  V.pts_to_len l.L.client_hello_session_id;
+  let sid_vec = alloc_copy_vec_exact l.L.client_hello_session_id 32sz 32sz;
+  with sid_copy. assert (V.pts_to sid_vec sid_copy);
+  Seq.lemma_eq_elim sid_copy (reveal sid);
 
   (* ---- copy SNI sub-slice server_name[0..sn_len) into a fresh exact vec ---- *)
   V.pts_to_len l.L.client_hello_server_name;
@@ -1927,6 +1941,7 @@ fn serialize_client_hello_handshake_poc
   fold (L.is_valid_client_hello l (reveal ch));
   rewrite (V.pts_to rnd_vec rnd_copy) as (V.pts_to rnd_vec (reveal rnd));
   rewrite (V.pts_to ks_vec ks_copy) as (V.pts_to ks_vec (reveal ks));
+  rewrite (V.pts_to sid_vec sid_copy) as (V.pts_to sid_vec (reveal sid));
   rewrite (V.pts_to sni_vec sni_copy) as (V.pts_to sni_vec (reveal sni));
 
   (* ---- random lvec ---- *)
@@ -1934,13 +1949,10 @@ fn serialize_client_hello_handshake_poc
   rewrite (V.pts_to rnd_vec (reveal rnd)) as (V.pts_to rnd_lvec.PPBY.lvec_vec (reveal rnd));
   fold (LSeqB.vmatch_copy_seqbytes rnd_lvec (reveal rnd));
 
-  (* ---- empty legacy_session_id lvec ---- *)
-  let sid_vec = V.alloc 0uy 0sz;
-  Seq.lemma_eq_elim (Seq.create 0 0uy) (B.empty <: Seq.seq U8.t);
-  rewrite (V.pts_to sid_vec (Seq.create 0 0uy)) as (V.pts_to sid_vec (B.empty <: Seq.seq U8.t));
-  let sid_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = sid_vec; PPBY.lvec_len = 0sz };
-  rewrite (V.pts_to sid_vec (B.empty <: Seq.seq U8.t)) as (V.pts_to sid_lvec.PPBY.lvec_vec (B.empty <: Seq.seq U8.t));
-  fold (LSeqB.vmatch_copy_seqbytes sid_lvec (B.empty <: Seq.seq U8.t));
+  (* ---- 32-byte legacy_session_id lvec (RFC 8446 D.4 middlebox compat) ---- *)
+  let sid_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = sid_vec; PPBY.lvec_len = 32sz };
+  rewrite (V.pts_to sid_vec (reveal sid)) as (V.pts_to sid_lvec.PPBY.lvec_vec (reveal sid));
+  fold (LSeqB.vmatch_copy_seqbytes sid_lvec (reveal sid));
 
   (* ---- 1-byte null legacy_compression_methods lvec ---- *)
   let comp_vec = V.alloc 0uy 1sz;
@@ -2019,16 +2031,16 @@ fn serialize_client_hello_handshake_poc
              ks_elem_low (ch_ks_high (reveal ks)));
 
   (* ---- supported_versions extension element ---- *)
-  fold (LPS.eq_as_slprop GPV.protocolVersion GPV.TLS_1p3 GPV.TLS_1p3);
-  rewrite (LPS.eq_as_slprop GPV.protocolVersion GPV.TLS_1p3 GPV.TLS_1p3)
-      as (GPV.protocolVersion_vmatch GPV.TLS_1p3 GPV.TLS_1p3);
-  PPB.intro_vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv
-    GPV.TLS_1p3 GPV.TLS_1p3 GPV.TLS_1p3;
+  fold (LPS.eq_as_slprop GOV.offeredVersion GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3);
+  rewrite (LPS.eq_as_slprop GOV.offeredVersion GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3)
+      as (GOV.offeredVersion_vmatch GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3);
+  PPB.intro_vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv
+    GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3 GOV.Offered_TLS_1p3;
   let sv_vclist = mk_singleton_vclist
-    #_ #_ #(PPB.vmatch_conv GPV.protocolVersion_vmatch GPV.protocolVersion_conv)
-    GPV.TLS_1p3 #GPV.TLS_1p3;
+    #_ #_ #(PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
+    GOV.Offered_TLS_1p3 #GOV.Offered_TLS_1p3;
   lemma_ch_sv_ext_conv ();
-  intro_vmatch_extCH_sv sv_vclist ([GPV.TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid) #ch_sv_high;
+  intro_vmatch_extCH_sv sv_vclist ([GOV.Offered_TLS_1p3] <: GSVCH.supportedVersionsClientHello_mid) #ch_sv_high;
   let sv_elem_low : GECH.extensionClientHello_low = GECH.Extension_data_supported_versions_low sv_vclist;
   rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
              (GECH.Extension_data_supported_versions_low sv_vclist) ch_sv_high)
@@ -2089,12 +2101,12 @@ fn serialize_client_hello_handshake_poc
 
   (* ---- assemble clientHello_lowtype and fold the handshake sum vmatch ---- *)
   let cm : Ghost.erased GCH.clientHello_mid =
-    Ghost.hide (poc_ch_mid (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa));
+    Ghost.hide (poc_ch_mid (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa));
   let xch : GCH.clientHello_lowtype =
     (((GPV.TLS_1p2, rnd_lvec), (sid_lvec, cs_vclist)), (comp_lvec, exts_vclist));
   rewrite (LSeqB.vmatch_copy_seqbytes rnd_lvec (reveal rnd))
       as (LSeqB.vmatch_copy_seqbytes (snd (fst (fst xch))) (snd (fst (fst (Ghost.reveal cm)))));
-  rewrite (LSeqB.vmatch_copy_seqbytes sid_lvec (B.empty <: Seq.seq U8.t))
+  rewrite (LSeqB.vmatch_copy_seqbytes sid_lvec (reveal sid))
       as (LSeqB.vmatch_copy_seqbytes (fst (snd (fst xch))) (fst (snd (fst (Ghost.reveal cm)))));
   rewrite (PPVCL.vmatch_vclist (PPB.vmatch_conv GCS.cipherSuite_vmatch GCS.cipherSuite_conv)
              cs_vclist (reveal cs <: list GCS.cipherSuite))
@@ -2118,8 +2130,8 @@ fn serialize_client_hello_handshake_poc
              #(Ghost.hide (GHS.Body_client_hello_mid (Ghost.reveal cm)))
              s perr;
   with v'. assert (S.pts_to s v');
-  lemma_ch_handshake_conv_fwd (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa);
-  GHS.handshake_bytesize_eq (GHS.Body_client_hello ((poc_canonical_ch (reveal rnd) (reveal sni) (reveal ks) (reveal cs) (reveal sa)) <: GHS.handshake_body_client_hello));
+  lemma_ch_handshake_conv_fwd (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa);
+  GHS.handshake_bytesize_eq (GHS.Body_client_hello ((poc_canonical_ch (reveal rnd) (reveal sni) (reveal ks) (reveal sid) (reveal cs) (reveal sa)) <: GHS.handshake_body_client_hello));
   S.to_array s;
   A.pts_to_len out;
   Rev.lemma_serialize_handshake_client_hello (Ghost.reveal ch);

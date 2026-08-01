@@ -3295,7 +3295,7 @@ let lemma_cf_producer_core (s:sysp)
   )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
 let lemma_finish_cf (s:sysp)
   (ms:CS.connection_model)
   (mat_write_s mat_read_s:CS.traffic_key_material)
@@ -3335,6 +3335,11 @@ let lemma_finish_cf (s:sysp)
   assert (Seq.equal fl_sent_c fl_recv_s);
   (* ---- SH agreement (ss = server sent, cr = client received) ---- *)
   Seq.lemma_eq_elim ss cr;
+  assert (Seq.equal ss
+            (B.append
+              (W.serialize_record T.Handshake
+                (W.serialize_handshake (M.ServerHello sh_c)))
+              sh_rest_c));
   lemma_front_handshake_record_agree
     (W.serialize_handshake (M.ServerHello sh_s))
     (W.serialize_handshake (M.ServerHello sh_c))
