@@ -1066,3 +1066,32 @@ val lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slo
       (requires connection_state_consistent st)
       (ensures
         first_epoch_handshake_traffic_material_slots_match_expected st)
+
+(* Brick 3.6 : positive record-epoch lemmas.  From bare consistency plus a  *)
+(* RECORD-LEVEL key-presence hypothesis, derive [R.epoch == R.Handshake] at *)
+(* the client-Finished send (client write) and delivery (server read)       *)
+(* control points.  The record-level hypothesis excludes [R.Initial]        *)
+(* directly (consistency's Initial arm forces [R.key == None]); the         *)
+(* committed negative-epoch lemmas exclude [R.Application].  Consumed by the *)
+(* non-ready cross-endpoint handshake-agreement route (Brick 4).            *)
+val lemma_client_finished_verified_write_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified /\
+        Some? st.cs_model.model_record.record_write.R.key)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch == R.Handshake)
+
+val lemma_server_finished_sent_read_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedSent /\
+        Some? st.cs_model.model_record.record_read.R.key)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch == R.Handshake)

@@ -11825,3 +11825,72 @@ let lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slo
       (state_of_model_for_first_epoch_application_material st.cs_model));
   assert
     (first_epoch_handshake_traffic_material_slots_match_expected st)
+
+(* ------------------------------------------------------------------------ *)
+(* Brick 3.6 : positive record-epoch lemmas.                                 *)
+(*                                                                           *)
+(* From bare consistency plus a RECORD-LEVEL key-presence hypothesis         *)
+(* [Some? record_direction.R.key], derive [record_direction.R.epoch ==       *)
+(* R.Handshake] at the client-Finished send/delivery control points.  The    *)
+(* record-level hypothesis excludes [R.Initial] DIRECTLY: consistency's      *)
+(* [record_keys_match_key_schedule_for_role] Initial arm forces              *)
+(* [R.key == None], contradicting [Some?].  [R.Application] is excluded by    *)
+(* the committed negative-epoch lemmas.  Three arms exhausted -> Handshake.   *)
+(* Record-level (not key-schedule-slot) hypothesis is deliberate: it is      *)
+(* exactly what the discharge sites supply (seal at send / open_record at    *)
+(* delivery both yield [record.key == Some]) and it avoids any reachable-     *)
+(* shape induction -- the key-schedule Initial arm says nothing about the     *)
+(* slot, so a slot-level hypothesis would NOT exclude Initial without one.    *)
+(* ------------------------------------------------------------------------ *)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_client_finished_verified_write_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified /\
+        Some? st.cs_model.model_record.record_write.R.key)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch == R.Handshake)
+=
+  let m = st.cs_model in
+  lemma_connection_state_consistent_record_keys_consistent_for_config_role st;
+  lemma_client_finished_verified_write_epoch_not_application st;
+  let keys = m.model_handshake.hs_keys in
+  let rw = m.model_record.record_write in
+  assert (model_record_keys_consistent_for_role ClientEndpoint m);
+  assert (record_keys_match_key_schedule_for_role
+            ClientEndpoint TrafficWrite m.model_control keys rw);
+  assert (rw.R.epoch =!= R.Application);
+  match rw.R.epoch with
+  | R.Handshake -> ()
+  | R.Application -> ()
+  | R.Initial -> assert (rw.R.key == None)
+
+let lemma_server_finished_sent_read_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedSent /\
+        Some? st.cs_model.model_record.record_read.R.key)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch == R.Handshake)
+=
+  let m = st.cs_model in
+  lemma_connection_state_consistent_record_keys_consistent_for_config_role st;
+  lemma_handshaking_nonfinal_read_not_application st;
+  let keys = m.model_handshake.hs_keys in
+  let rr = m.model_record.record_read in
+  assert (model_record_keys_consistent_for_role ServerEndpoint m);
+  assert (record_keys_match_key_schedule_for_role
+            ServerEndpoint TrafficRead m.model_control keys rr);
+  assert (rr.R.epoch =!= R.Application);
+  match rr.R.epoch with
+  | R.Handshake -> ()
+  | R.Application -> ()
+  | R.Initial -> assert (rr.R.key == None)
+#pop-options
