@@ -59,6 +59,7 @@ module L    = FStar.List.Tot
 module WStep = TLS13.System.WireStep
 module WF   = Common.WireFormat
 module SCB  = TLS13.System.SeqCountBase
+module ORD  = TLS13.System.Ordering
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -1288,10 +1289,50 @@ let inflight_single_record (s:SY.tls_system_state) : prop =
 (** The full STAGE (b)+(c) extras carried on top of the stream bundle.  Defined
     here (rather than next to the STAGE-(b) send families) because it now folds in
     the two carried in-flight payload facts above. **)
+(** ─────────────────────────────────────────────────────────────────────────
+    READ/WRITE COUPLING — the cross-endpoint progress conjunct (Route Y).
+
+    The `hello_coupling`-analogue framing (System.fst:330) at the record-epoch
+    level: it cannot use `hello_coupling`'s monotone-`Some?` register because the
+    fact it carries — a sender snapshot's write epoch — is not a stored-message
+    flag but a record-layer position.  For a payload in flight TO THE SERVER, IF
+    the server is still in its handshake RECEIVE region (`server_recv_region_ctrl`,
+    WireStep.fst:4801 — the controls strictly before the client-Finished delivery,
+    INCLUDING `HsServerFinishedSent`), THEN the sealing snapshot's write epoch is
+    NOT yet `Application`.
+
+    WHY IT IS TRUE / WHERE IT IS PROVEN: this is an HONEST record-COUNT argument,
+    NOT a decode/authenticity fact — a client that has installed its application
+    write keys has SENT >= 1 protected record (its Finished), whereas a server still
+    in its receive region has RECEIVED 0; byte-pairing right-cancellation then gives
+    the contradiction.  It is discharged by
+    `ORD.lemma_inflight_sender_write_epoch_not_application_server`
+    (Ordering.fst:285), whose author explicitly anticipated THIS conjunct as the
+    `inflight_snap_reachable` carrier of its hypotheses.  The full reachable
+    snapshot `connection_state` the count lemma needs is available only AT THE
+    SEND (the pre-send client), so we invoke the lemma there and carry only its
+    EPOCH CONCLUSION — the payload keeps only `pl_snap : connection_model`
+    (System.fst:87), which has no `raw_sent`, so the ingredients cannot be carried.
+
+    NON-CIRCULAR: the antecedent reads only `s.server`'s control, never
+    `p.pl_sent`, so it is decidable at the delivery without the decode.
+
+    STABILITY: a `ToServer` channel is entered ONLY by `client_send` (establishment)
+    and the ONLY family enabled from it is `deliver_to_server`, which exits to
+    `Quiet` (Common.SystemProduct.fst:54-60); so the conjunct is non-vacuous only
+    in the frozen window and is established once, at the send. **)
+let read_write_coupling (s:SY.tls_system_state) : prop =
+  match s.channel with
+  | MP.ToServer p ->
+      WStep.server_recv_region_ctrl (SY.ctrl s.server) ==>
+        (snap_wr p).R.epoch =!= R.Application
+  | _ -> True
+
 let app_extras (s:SY.tls_system_state) : prop =
   app_seq_pairing s /\ cf_inflight_client_appdata s /\
   app_material_agreement s /\ channel_seal_ok s /\
-  inflight_sender_stepped s /\ inflight_single_record s
+  inflight_sender_stepped s /\ inflight_single_record s /\
+  read_write_coupling s
 
 (** Initial state: both record epochs are `Initial`, so `cf_delivered` is false
     and the agreement is vacuous; `app_seq_pairing` was shown initial above; and
@@ -1763,6 +1804,86 @@ let lemma_asp_deliver_to_client
           // biconditional), so both sides are 0.
           lemma_recv_rseq_delta a.client.CS.cs_model c'.CS.cs_model msg
         )
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    ESTABLISHMENT + PRESERVATION of `read_write_coupling`.
+
+    The conjunct is non-vacuous only for a `ToServer` channel, which is entered
+    ONLY by `client_send` and exited ONLY by `deliver_to_server` (to `Quiet`);
+    `server_serve` is disabled and every other family keeps the channel `Quiet`
+    or turns it `ToClient`.  So preservation is: ESTABLISH at the client send,
+    and VACUOUS everywhere else.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** VACUITY: any state whose channel is not `ToServer` satisfies the coupling. **)
+let lemma_rwc_not_to_server (s:SY.tls_system_state)
+  : Lemma (requires ~(MP.ToServer? s.channel))
+          (ensures read_write_coupling s)
+  = ()
+
+(** ESTABLISHMENT at the client send.  The pre-send client (= the payload's
+    frozen snapshot `p.pl_snap`) is byte-reachable and consistent (from
+    `tls_system_inv a`), and at the pre-state `Quiet` channel `byte_pairing a`
+    gives `a.client.raw_sent == a.server.raw_received`.  When the (frozen) server
+    is in its receive region, the count lemma
+    `ORD.lemma_inflight_sender_write_epoch_not_application_server` then yields
+    `(snap_wr p).epoch =!= Application` directly — no snapshot state is carried;
+    the full `connection_state` witness is used only here, at the send.
+
+    Note (asymmetry with the committed sibling `lemma_asp_client_send_inflight`,
+    which carries `SY.tls_no_rekeying b`): that hypothesis is used there via
+    `lemma_sent_not_key_update`/`inflight_sender_stepped`'s `~KeyUpdate` conjunct;
+    the count argument here needs no such exclusion, so `tls_no_rekeying` is
+    genuinely absent from this establishment. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_rwc_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_send a b)
+      (ensures read_write_coupling b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c';
+                    channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns read_write_coupling b
+    with _pf.
+    (
+      let p : SY.tls_payload =
+        { SY.pl_raw = SY.emitted_raw out;
+          SY.pl_snap = a.client.CS.cs_model;
+          SY.pl_sent = sent } in
+      assert (b.channel == MP.ToServer p);
+      assert (b.server == a.server);
+      introduce WStep.server_recv_region_ctrl (SY.ctrl b.server) ==>
+                (snap_wr p).R.epoch =!= R.Application
+      with _reg.
+      (
+        // byte_pairing a @ Quiet: a.client.raw_sent == a.server.raw_received.
+        assert (SY.byte_pairing a);
+        assert (Seq.equal a.client.CS.cs_wire_log.CL.raw_sent
+                          a.server.CS.cs_wire_log.CL.raw_received);
+        Seq.lemma_eq_elim a.client.CS.cs_wire_log.CL.raw_sent
+                          a.server.CS.cs_wire_log.CL.raw_received;
+        // supply the Ordering lemma's remaining inputs from `tls_system_inv a`.
+        assert (WStep.client_reachable
+                  (CS.initial a.client.CS.cs_model.CS.model_config) a.client);
+        assert (WStep.server_reachable
+                  (CS.initial a.server.CS.cs_model.CS.model_config) a.server);
+        assert (SMR.connection_state_consistent a.client);
+        assert (a.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+        assert (a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+        assert (WStep.server_recv_region_ctrl a.server.CS.cs_model.CS.model_control);
+        ORD.lemma_inflight_sender_write_epoch_not_application_server
+          a.server a.client (SY.emitted_raw out)
       )
     )
 #pop-options
