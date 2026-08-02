@@ -437,3 +437,31 @@ let lemma_drained_network_preserves_invariant
     st0 st_mid buffer_resp network_input
     old_network_out network_out old_app_out app_out;
   lemma_drained_facts st_mid st1
+
+(**
+  The composite is *weaker* than the undrained predicate: a call that drained
+  nothing is described by taking the intermediate state to be the final one.
+
+  This is what makes moving the driver predicates onto the composite a
+  weakening rather than a rewrite, exactly as in Phase 5a: every existing proof
+  that establishes the undrained predicate still establishes the composite, and
+  only consumers need adjusting -- via [drained_network_middle] to get back to
+  the undrained step, and [lemma_drained_facts] to transport the conclusion.
+**)
+let lemma_coalesced_implies_drained_network
+      (st0 st1:CS.connection_state)
+      (buffer_resp:CT.client_buffer_response)
+      (network_input:B.bytes)
+      (old_network_out network_out:B.bytes)
+      (old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.coalesced_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        drained_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+=
+  lemma_drained_refl st1

@@ -1131,11 +1131,31 @@ small enough to avoid the Z3 crash above.
 Both modules verify with **no admits and no assumes**, and the full
 `make -j128 verify test` gate is green with them in the tree.
 
-**What remains for Phase 5b:** wiring `drain_pending` into
-`BufferedNetwork.process` (which needs a zero-length array to pass as `empty`,
-as `Client.Engine` does with `engine_empty_payload`) and moving `result_valid`,
-`completed_drive_correct` and `client_receive_observation_network_correct` onto
-`drained_network_bytes_end_to_end_correct` using the eliminator pattern above.
+**What remains for Phase 5b**, in order:
+
+1. Wire `DL.drain_pending` into `BufferedNetwork.process`, immediately after
+   `C.process_coalesced_network_bytes` returns.  It needs a zero-length array
+   to pass as `empty`; `Client.Engine` keeps one as `engine_empty_payload`, and
+   `client_process_internal` allocates one per call with a 0-length
+   `V.alloc`/`V.free` pair.  Draining unconditionally is correct and simplest:
+   when nothing is pending the first call reports quiescence and `drained` holds
+   reflexively.
+2. Move `result_valid` (`BufferedNetwork.fst`), `completed_drive_correct`
+   (`BufferedNetwork.fsti`, both `DriveYield` and `DriveReject`) and
+   `client_receive_observation_network_correct` (`Driver.State.fst`) onto
+   `D.drained_network_bytes_end_to_end_correct`, then follow the errors out
+   through `Driver.Core.fst`, `Driver.Receive.fst` and
+   `ChannelImplementation.fst` -- about 43 textual sites in all.
+
+`lemma_coalesced_implies_drained_network` is what makes step 2 safe: the
+composite is strictly *weaker* than the coalesced predicate (take the
+intermediate state to be the final one and use reflexivity of `drained`).  So
+this is the same shape of change Phase 5a already carried out successfully --
+every existing proof that establishes the undrained predicate still establishes
+the composite, and only consumers need adjusting.  Each consumer is mechanical:
+call `drained_network_middle` to recover `st_mid`, apply the existing undrained
+lemma to `(st0, st_mid)`, and transport its conclusion to `st1` with
+`lemma_drained_facts`.
 
 ### Phase 5a as built — coalesced vocabulary everywhere, one blocked switch
 
