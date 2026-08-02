@@ -338,14 +338,6 @@ fn process
     sent);
   BT.recall_model
     e.endpoint_driver.top_buffered_driver_core.buffered_driver_channel;
-  // Expose client_end_to_end_invariant, which process_coalesced_network_bytes
-  // demands; the fact survives the re-fold in Pulse's logical context.
-  unfold (buffered_driver_canonical_progress
-    e.endpoint_driver.top_buffered_driver_core
-    (Ghost.reveal st).endpoint_connection);
-  fold (buffered_driver_canonical_progress
-    e.endpoint_driver.top_buffered_driver_core
-    (Ghost.reveal st).endpoint_connection);
   let view =
     BT.borrow_pending
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_channel;
@@ -357,8 +349,16 @@ fn process
     (CR.connection_exactly
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       (Ghost.reveal st).endpoint_connection);
+  // NOTE: this deliberately stays on the non-coalescing primitive until the
+  // Phase 5 schedule lands.  process_coalesced_network_bytes stops after the
+  // head protected-handshake step and leaves the rest of a coalesced record
+  // pending; the buffered driver has no internal-step drain yet, so switching
+  // it now would stall against a peer that coalesces a handshake flight into
+  // one record.  Everything else on this path already speaks the weaker
+  // coalesced vocabulary, so the switch is a one-line change once
+  // BufferedNetwork.process drains pending internal steps.
   let buffer_resp =
-    C.process_coalesced_network_bytes
+    C.process_network_bytes
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       (BT.view_data view)
       (BT.view_length view)
@@ -459,10 +459,6 @@ fn process
         e.endpoint_app_out_buffer
         (Ghost.reveal st).endpoint_app_out);
     W.lemma_record_prefix_incomplete_bound (BT.pending (Ghost.reveal model));
-    assert (pure (Seq.length (BT.pending (Ghost.reveal model)) < 5 + 16640));
-    assert (pure (BT.capacity (Ghost.reveal model) == 65535));
-    assert (pure (Seq.length (BT.pending (Ghost.reveal model)) <
-      BT.capacity (Ghost.reveal model)));
     assert (pure (BT.can_read (Ghost.reveal model)));
     let result = {
       buffered_network_read = read_result;
