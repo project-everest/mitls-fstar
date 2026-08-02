@@ -1072,6 +1072,71 @@ Then `result_valid` / `lemma_result_valid_preserves` (`BufferedNetwork.fst`),
 `client_receive_observation_network_correct` (`Driver.State.fst`) move to the
 composite predicate.  This is the last structural piece before Phases 6-9.
 
+### Phase 5b as built (part 1) — the drain, proved and implemented
+
+Two new modules land the whole drain argument.  Both are deliberately small and
+free-standing so that iterating on them costs seconds rather than the ~19 minute
+rebuild that touching `Client.Types.fst` would.
+
+**`src/impl/TLS13.Impl.Client.Drain.fst`** — the pure theory.
+
+* `drain_step st0 st1` — one successful internal step, i.e.
+  `pending_protected_handshake_result_correct st0 st1 (Some resp)` with
+  `resp.status == StepOk`.
+* `drain_chain n st0 st1` — the `n`-bounded reflexive-transitive closure, and
+  `drained st0 st1 = exists n. drain_chain n st0 st1`.
+* `drain_step_witness` — a `Ghost` extractor for the `(resp, step)` pair.
+  Factoring this out is what makes the facts below provable at all: proving them
+  in one lemma produced a VC large enough to **crash Z3**
+  (`ASSERTION VIOLATION ... lar_solver.cpp:1066`).
+* `lemma_drain_step_wire_log`, `..._config`, `..._invariant`,
+  `..._state_correct`, and the bundled `lemma_drain_step_facts`.  The wire-log
+  lemma is the heart of it: `legal_connection_delta` appends the event's raw
+  deltas to both halves of the wire log, and a `ConnProtectedHandshake` drain
+  step has both deltas empty, so **both halves are unchanged**.
+* `lemma_drain_chain_refl`, `lemma_drain_chain_snoc` / `lemma_drained_snoc`
+  (right extension, the direction an imperative loop needs),
+  `lemma_drain_chain_facts` and `lemma_drained_facts` — the single-step facts
+  lifted over a chain by induction.
+* `drained_network_bytes_end_to_end_correct` — the composite predicate above,
+  with `lemma_drained_network_intro`, the `drained_network_middle` eliminator,
+  `lemma_coalesced_preserves_config`,
+  `lemma_drained_network_preserves_config` and
+  `lemma_drained_network_preserves_invariant`.
+
+The eliminator is the point: every lemma that already exists for the undrained
+step applies to `(st0, st_mid)`, and `lemma_drained_facts` transports its
+conclusion to `st1`.  That makes the remaining driver work mechanical rather
+than inventive.
+
+**`src/impl/TLS13.Impl.Client.DrainLoop.fst`** — the imperative loop.
+
+`drain_pending c empty` runs `C.process_pending_protected_handshake` until it
+reports quiescence, under a `drain_fuel = 16384sz` bound (every handshake
+message carries a four-byte header, so a maximum-size fragment cannot hold more
+messages than that; the bound is unreachable in practice and exists to make
+progress manifest).  It returns
+
+```
+exists* st1. CR.connection_exactly c st1 ** ...
+             pure (D.drained 'st0 st1 /\ CT.client_end_to_end_invariant st1)
+```
+
+Two Pulse notes worth keeping: the loop guard reads only the `bool` flag and the
+fuel check lives in the body, which sidesteps needing the guard's value in the
+body; and the `StepOk` branch needs its intermediate facts spelled out as
+explicit `assert (pure ...)` steps, both to guide SMT and to keep each query
+small enough to avoid the Z3 crash above.
+
+Both modules verify with **no admits and no assumes**, and the full
+`make -j128 verify test` gate is green with them in the tree.
+
+**What remains for Phase 5b:** wiring `drain_pending` into
+`BufferedNetwork.process` (which needs a zero-length array to pass as `empty`,
+as `Client.Engine` does with `engine_empty_payload`) and moving `result_valid`,
+`completed_drive_correct` and `client_receive_observation_network_correct` onto
+`drained_network_bytes_end_to_end_correct` using the eliminator pattern above.
+
 ### Phase 5a as built — coalesced vocabulary everywhere, one blocked switch
 
 Phase 5a weakened the whole client driver stack from
