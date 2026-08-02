@@ -10,6 +10,7 @@ module CL = TLS13.ConnectionLog
 module CPI = Common.ProtocolImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
+module CSL = TLS13.ConnectionState.Lemmas
 module SMRep = TLS13.Spec.StateMachine.Replay
 module SMLog = TLS13.Spec.StateMachine.Log
 module SMCan = TLS13.Spec.StateMachine.Canonical
@@ -32,6 +33,7 @@ module Tac = FStar.Tactics
 module TCP = Common.TCP
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
 module WF = Common.WireFormat
 module WFSM = Common.WireFormatStateMachine
 module WS = TLS13.Wire.Spec
@@ -1854,6 +1856,51 @@ let client_internal_frame_post
     pure (
       B.length payload == SZ.v frame.tls_client_local_payload_len /\
       B.length app_out == SZ.v frame.tls_client_local_app_out_len)
+
+(* Phase 1: the TLS client has no internal events yet, so internal
+   processing is unconditionally quiescent.  Phase 3 replaces the body
+   with a real step over the pending record plaintext; this signature and
+   its contract do not change. *)
+(* ==================================================================== *)
+(* Internal events (INTERNAL_EVENT_PLAN.md S3.3/S4).                    *)
+(*                                                                      *)
+(* An internal step drains one handshake message that is already        *)
+(* retained in the pending protected-handshake plaintext.  It is a      *)
+(* LOCAL event -- it consumes no wire input -- whose semantic content   *)
+(* is a TAIL ConnProtectedHandshake step.                               *)
+(* ==================================================================== *)
+
+let client_is_internal (ev:CTypes.client_local_event) : bool =
+  match CTypes.client_local_event_kind ev with
+  | CT.LocalProcessPendingHandshake -> true
+  | _ -> false
+
+let lemma_client_is_internal_api_kind (ev:CTypes.client_local_event)
+  : Lemma
+      (requires client_is_internal ev)
+      (ensures
+        (CTypes.client_local_event_api ev).CTypes.client_local_kind ==
+          CT.LocalProcessPendingHandshake)
+=
+  match ev with
+  | CTypes.ClientAPI _ -> ()
+  | CTypes.ClientValidateCertificate _ -> ()
+
+let client_internal_event : CTypes.client_local_event =
+  CTypes.ClientAPI {
+    CTypes.client_local_kind = CT.LocalProcessPendingHandshake;
+    CTypes.client_local_payload = B.empty;
+  }
+
+let lemma_client_internal_event_is_internal ()
+  : Lemma (client_is_internal client_internal_event)
+= ()
+
+(** Unprocessed plaintext remains in the pending protected-handshake buffer. *)
+let client_internal_pending (st:CS.connection_state) : prop =
+  st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed <
+  B.length
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes
 
 let client_state_ahead
   (initial:client_initial_state)
@@ -5346,7 +5393,7 @@ requires
   pts_to out (Ghost.reveal old_out) **
   pure (
     SZ.v out_len == Seq.length (Ghost.reveal old_out) /\
-    ~ (CPI.no_internal_events #CTypes.client_local_event ev))
+    ~ (client_is_internal ev))
 returns result:CPI.process_result
 ensures exists* (received1:Ghost.erased B.bytes)
                 (sent1:Ghost.erased B.bytes)
@@ -5561,10 +5608,376 @@ ensures exists* (received1:Ghost.erased B.bytes)
     CTypes.client_local_process_result resp
 }
 
-(* Phase 1: the TLS client has no internal events yet, so internal
-   processing is unconditionally quiescent.  Phase 3 replaces the body
-   with a real step over the pending record plaintext; this signature and
-   its contract do not change. *)
+
+(** A step consuming no raw input cannot be a HEAD step: a head step must
+    take delivery of exactly one Application_data record, and the empty byte
+    string carries none. **)
+let lemma_protected_step_empty_raw_is_tail
+  (model:CS.connection_model)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires CS.event_raw_delta_legal model (CS.ConnProtectedHandshake step) B.empty B.empty)
+      (ensures step.CS.protected_handshake_head == false)
+=
+  if step.CS.protected_handshake_head
+  then (
+    CSL.lemma_raw_records_exactly_one_parse_record B.empty T.Application_data;
+    WS.lemma_parse_record_implies_parse_record_wire B.empty;
+    eliminate exists fragment.
+      WS.parse_record B.empty == Some (T.Application_data, fragment, B.length B.empty)
+    returns False
+    with _pr.
+      WS.lemma_parse_record_wire_some_consumed_positive
+        B.empty T.Application_data fragment (B.length B.empty)
+  )
+
+(** The internal kind matches only TAIL protected-handshake events. **)
+let lemma_internal_kind_matches_only_tail
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        CT.local_event_kind_matches st CT.LocalProcessPendingHandshake payload ev)
+      (ensures
+        (exists step.
+          ev == CS.ConnProtectedHandshake step /\
+          step.CS.protected_handshake_head == false))
+=
+  match ev with
+  | CS.ConnProtectedHandshake step ->
+    CT.lemma_local_event_kind_matches_protected_is_tail
+      st CT.LocalProcessPendingHandshake payload step
+  | _ -> ()
+
+(** When the pending buffer holds no unprocessed plaintext, no internal step
+    is enabled: a tail step's legality requires its offset -- which is pinned
+    to [hb_encrypted_server_handshake_parsed] -- to lie strictly inside the
+    buffer. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_no_internal_step_when_not_pending
+  (initial:EC.client_initial_state)
+  (st0:CS.connection_state)
+  : Lemma
+      (requires ~ (client_internal_pending st0))
+      (ensures
+        CPI.no_internal_step_enabled
+          (client_system #CTypes.client_local_event initial)
+          client_is_internal
+          st0)
+=
+  introduce
+    CPI.internal_step_enabled
+      (client_system #CTypes.client_local_event initial)
+      client_is_internal
+      st0
+    ==> False
+  with _pf. (
+    eliminate exists (ev:CTypes.client_local_event)
+                     (st1:CS.connection_state)
+                     (output:SM.step_output CW.wire_message EAPI.local_output).
+      client_is_internal ev /\
+      client_step st0 (SM.LocalEvent ev) st1 output
+    returns False
+    with _pe. (
+      eliminate exists conn_ev raw_sent.
+        client_representation_matches st0 ev conn_ev /\
+        client_wire_outputs_match raw_sent output.SM.so_wire_outputs /\
+        client_local_outputs_match conn_ev output.SM.so_local_outputs /\
+        SMCan.canonical_wire_step st0 st1 conn_ev raw_sent B.empty
+      returns False
+      with _pc. (
+        lemma_client_is_internal_api_kind ev;
+        assert (CTypes.client_local_event_matches st0 ev conn_ev);
+        assert (CT.local_event_kind_matches
+          st0
+          CT.LocalProcessPendingHandshake
+          (CTypes.client_local_event_api ev).CTypes.client_local_payload
+          conn_ev);
+        lemma_internal_kind_matches_only_tail
+          st0
+          (CTypes.client_local_event_api ev).CTypes.client_local_payload
+          conn_ev;
+        eliminate exists step.
+          conn_ev == CS.ConnProtectedHandshake step /\
+          step.CS.protected_handshake_head == false
+        returns False
+        with _ps. (
+          assert (CS.legal_protected_handshake_step st0.CS.cs_model step);
+          assert (step.CS.protected_handshake_offset <
+            B.length step.CS.protected_handshake_fragment)
+        )
+      )
+    )
+  )
+#pop-options
+
+(** A successful drain of one pending handshake message IS a client local
+    step at the internal event.  This is decision S1 discharged for TLS: the
+    internal step inherits the local-event refinement rather than needing a
+    parallel one. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_internal_step_is_client_step
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CT.protected_handshake_step_correct st0 st1 resp step B.empty B.empty B.empty)
+      (ensures
+        client_step
+          st0
+          (SM.LocalEvent client_internal_event)
+          st1
+          (CPI.step_output
+            ([] <: list CW.wire_message)
+            ([] <: list EAPI.local_output)))
+=
+  let conn_ev = CS.ConnProtectedHandshake step in
+  assert (CT.legal_response_for_event
+    st0 st1 resp conn_ev B.empty B.empty B.empty B.empty);
+  assert (CS.legal_connection_delta st0 {
+    CS.delta_event = conn_ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } st1);
+  lemma_protected_step_empty_raw_is_tail st0.CS.cs_model step;
+  assert (CT.local_event_kind_matches
+    st0 CT.LocalProcessPendingHandshake B.empty conn_ev);
+  CTypes.lemma_client_api_event_semantic_exact
+    st0
+    (CTypes.client_local_event_api client_internal_event)
+    conn_ev;
+  assert (client_api_event_matches
+    st0
+    (CTypes.client_local_event_api client_internal_event)
+    conn_ev);
+  assert (Seq.equal
+    (WF.serialize_all CW.tls_record_wire_format ([] <: list CW.wire_message))
+    B.empty);
+  assert (client_wire_outputs_match B.empty ([] <: list CW.wire_message));
+  assert (Seq.equal
+    (EAPI.local_outputs_app_bytes ([] <: list EAPI.local_output))
+    (CL.concat_bytes (EAPI.conn_event_app_received_delta conn_ev)));
+  assert (client_local_outputs_match conn_ev ([] <: list EAPI.local_output));
+  assert (B.length B.empty == 0);
+  assert (SMRep.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev B.empty);
+  lemma_client_step_from_local_witness
+    st0
+    st1
+    client_internal_event
+    conn_ev
+    B.empty
+    ([] <: list CW.wire_message)
+    ([] <: list EAPI.local_output)
+#pop-options
+
+let internal_noop_result : CPI.internal_result =
+  {
+    CPI.internal_status = CPI.InternalQuiescent;
+    CPI.internal_process = {
+      CPI.process_status = CPI.StepOk;
+      CPI.process_consumed_len = 0sz;
+      CPI.process_produced_len = 0sz;
+      CPI.process_app_len = 0sz;
+    };
+  }
+
+let internal_progress_result : CPI.internal_result =
+  {
+    CPI.internal_status = CPI.InternalProgress;
+    CPI.internal_process = {
+      CPI.process_status = CPI.StepOk;
+      CPI.process_consumed_len = 0sz;
+      CPI.process_produced_len = 0sz;
+      CPI.process_app_len = 0sz;
+    };
+  }
+
+let internal_failed_result (status:CPI.process_status) : CPI.internal_result =
+  {
+    CPI.internal_status = CPI.InternalFailed;
+    CPI.internal_process = {
+      CPI.process_status = status;
+      CPI.process_consumed_len = 0sz;
+      CPI.process_produced_len = 0sz;
+      CPI.process_app_len = 0sz;
+    };
+  }
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_internal_quiescent_correct
+  (initial:EC.client_initial_state)
+  (st0:CS.connection_state)
+  (old_out:B.bytes)
+  (out_len:SZ.t)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  : Lemma
+      (requires
+        ~ (client_internal_pending st0) /\
+        SZ.v out_len == Seq.length old_out)
+      (ensures
+        CPI.internal_process_correct
+          (client_system #CTypes.client_local_event initial)
+          client_is_internal
+          client_internal_pending
+          old_out old_out out_len
+          received0 sent0 st0
+          internal_noop_result
+          received0 sent0 st0
+          ([] <: list CW.wire_message)
+          ([] <: list EAPI.local_output))
+=
+  lemma_no_internal_step_when_not_pending initial st0
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 80"
+let lemma_internal_progress_correct
+  (initial:EC.client_initial_state)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (old_out:B.bytes)
+  (out_len:SZ.t)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  : Lemma
+      (requires
+        CT.pending_protected_handshake_result_correct st0 st1 (Some resp) /\
+        resp.CT.status == CT.StepOk /\
+        SZ.v out_len == Seq.length old_out /\
+        Seq.equal received0 st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal sent0 st0.CS.cs_wire_log.CL.raw_sent)
+      (ensures
+        st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+        CPI.internal_process_correct
+          (client_system #CTypes.client_local_event initial)
+          client_is_internal
+          client_internal_pending
+          old_out old_out out_len
+          received0 sent0 st0
+          internal_progress_result
+          st1.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_sent
+          st1
+          ([] <: list CW.wire_message)
+          ([] <: list EAPI.local_output))
+=
+  eliminate exists step.
+    CT.protected_handshake_step_correct st0 st1 resp step B.empty B.empty B.empty
+  returns
+    st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
+    CPI.internal_process_correct
+      (client_system #CTypes.client_local_event initial)
+      client_is_internal
+      client_internal_pending
+      old_out old_out out_len
+      received0 sent0 st0
+      internal_progress_result
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      ([] <: list CW.wire_message)
+      ([] <: list EAPI.local_output)
+  with _ps. (
+    lemma_internal_step_is_client_step st0 st1 resp step;
+    lemma_client_internal_event_is_internal ();
+    CSL.lemma_step_model_preserves_config
+      st0.CS.cs_model
+      (CS.ConnProtectedHandshake step)
+      st1.CS.cs_model;
+    assert (CS.legal_connection_delta st0 {
+      CS.delta_event = CS.ConnProtectedHandshake step;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    } st1);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_received received0);
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (Seq.append sent0 (B.empty <: B.bytes)));
+    assert (Seq.equal
+      (WF.serialize_all CW.tls_record_wire_format ([] <: list CW.wire_message))
+      B.empty);
+    assert (CPI.output_written old_out 0sz (B.empty <: B.bytes))
+  )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_internal_failed_correct
+  (initial:EC.client_initial_state)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (old_out:B.bytes)
+  (out_len:SZ.t)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  : Lemma
+      (requires
+        CT.pending_protected_handshake_result_correct st0 st1 (Some resp) /\
+        (resp.CT.status == CT.DecodeError \/
+         resp.CT.status == CT.IllegalTransition) /\
+        SZ.v out_len == Seq.length old_out /\
+        Seq.equal received0 st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal sent0 st0.CS.cs_wire_log.CL.raw_sent)
+      (ensures
+        st1 == st0 /\
+        CPI.internal_process_correct
+          (client_system #CTypes.client_local_event initial)
+          client_is_internal
+          client_internal_pending
+          old_out old_out out_len
+          received0 sent0 st0
+          (internal_failed_result
+            (if resp.CT.status = CT.DecodeError
+             then CPI.DecodeError
+             else CPI.IllegalTransition))
+          received0 sent0 st0
+          ([] <: list CW.wire_message)
+          ([] <: list EAPI.local_output))
+=
+  lemma_client_internal_event_is_internal ();
+  assert (Seq.equal
+    (WF.serialize_all CW.tls_record_wire_format ([] <: list CW.wire_message))
+    B.empty);
+  assert (CPI.output_written old_out 0sz (B.empty <: B.bytes));
+  assert (Seq.equal received0 received0);
+  assert (Seq.equal sent0 (Seq.append sent0 (B.empty <: B.bytes)));
+  assert (CPI.local_error_refines_state_machine
+    (client_system #CTypes.client_local_event initial)
+    st0 st0
+    ([] <: list CW.wire_message)
+    ([] <: list EAPI.local_output))
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_internal_progress_preorder
+  (initial:EC.client_initial_state)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  : Lemma
+      (requires
+        CT.pending_protected_handshake_result_correct st0 st1 (Some resp) /\
+        resp.CT.status == CT.StepOk)
+      (ensures client_progress_preorder #CTypes.client_local_event st0 st1)
+=
+  if st0 = st1
+  then assert (client_progress_preorder #CTypes.client_local_event st0 st1)
+  else (
+    eliminate exists step.
+      CT.protected_handshake_step_correct st0 st1 resp step B.empty B.empty B.empty
+    returns client_canonical_step_rel #CTypes.client_local_event st0 st1
+    with _ps. lemma_internal_step_is_client_step st0 st1 resp step;
+    RTC.closure_step
+      (client_canonical_step_rel #CTypes.client_local_event)
+      st0
+      st1
+  )
+#pop-options
+
 fn client_process_internal
   (cc:canonical_client)
   (frame:tls_client_local_frame)
@@ -5615,8 +6028,8 @@ ensures exists* (received1:Ghost.erased B.bytes)
       (client_system
         #CTypes.client_local_event
         (Ghost.reveal cc.canonical_client_initial))
-      (CPI.no_internal_events #CTypes.client_local_event)
-      (CPI.nothing_pending #CS.connection_state)
+      client_is_internal
+      client_internal_pending
       (Ghost.reveal old_out)
       out_contents
       out_len
@@ -5630,26 +6043,138 @@ ensures exists* (received1:Ghost.erased B.bytes)
       wire_outputs
       local_outputs)
 {
-  let result : CPI.internal_result = {
-    CPI.internal_status = CPI.InternalQuiescent;
-    CPI.internal_process = {
-      CPI.process_status = CPI.StepOk;
-      CPI.process_consumed_len = 0sz;
-      CPI.process_produced_len = 0sz;
-      CPI.process_app_len = 0sz;
-    };
-  };
-  with payload. assert (pts_to frame.tls_client_local_payload payload);
-  fold (client_internal_frame_post
+  unfold (client_invariant
+    cc
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0));
+  unfold (client_internal_frame_pre
     frame
-    result
-    (Ghost.reveal old_out)
-    (Ghost.reveal old_out)
     (Ghost.reveal st0)
-    (Ghost.reveal st0)
-    ([] <: list CW.wire_message)
-    ([] <: list EAPI.local_output));
-  result
+    out
+    out_len
+    (Ghost.reveal old_out));
+  let empty_payload = V.alloc 0uy 0sz;
+  V.to_array_pts_to empty_payload;
+  rewrite
+    (C.connection_exactly cc.canonical_client_state (Ghost.reveal st0))
+    as
+    (CR.connection_exactly cc.canonical_client_state (Ghost.reveal st0));
+  let pending =
+    C.process_pending_protected_handshake
+      cc.canonical_client_state
+      (V.vec_to_array empty_payload);
+  with st1. assert (CR.connection_exactly cc.canonical_client_state st1);
+  V.to_vec_pts_to empty_payload;
+  V.free empty_payload;
+  match pending {
+    None -> {
+      rewrite
+        (CR.connection_exactly cc.canonical_client_state st1)
+        as
+        (C.connection_exactly cc.canonical_client_state (Ghost.reveal st0));
+      lemma_internal_quiescent_correct
+        (Ghost.reveal cc.canonical_client_initial)
+        (Ghost.reveal st0)
+        (Ghost.reveal old_out)
+        out_len
+        (Ghost.reveal received0)
+        (Ghost.reveal sent0);
+      fold (client_internal_frame_post
+        frame
+        internal_noop_result
+        (Ghost.reveal old_out)
+        (Ghost.reveal old_out)
+        (Ghost.reveal st0)
+        (Ghost.reveal st0)
+        ([] <: list CW.wire_message)
+        ([] <: list EAPI.local_output));
+      fold (client_invariant
+        cc
+        (Ghost.reveal received0)
+        (Ghost.reveal sent0)
+        (Ghost.reveal st0));
+      internal_noop_result
+    }
+    Some resp -> {
+      let ok = resp.CT.status = CT.StepOk;
+      if ok {
+        let st1e : Ghost.erased CS.connection_state = Ghost.hide st1;
+        let received1e : Ghost.erased B.bytes =
+          Ghost.hide st1.CS.cs_wire_log.CL.raw_received;
+        let sent1e : Ghost.erased B.bytes =
+          Ghost.hide st1.CS.cs_wire_log.CL.raw_sent;
+        lemma_internal_progress_correct
+          (Ghost.reveal cc.canonical_client_initial)
+          (Ghost.reveal st0)
+          st1
+          resp
+          (Ghost.reveal old_out)
+          out_len
+          (Ghost.reveal received0)
+          (Ghost.reveal sent0);
+        lemma_internal_progress_preorder
+          (Ghost.reveal cc.canonical_client_initial)
+          (Ghost.reveal st0)
+          st1
+          resp;
+        rewrite
+          (CR.connection_exactly cc.canonical_client_state st1)
+          as
+          (C.connection_exactly cc.canonical_client_state (Ghost.reveal st1e));
+        MR.update cc.canonical_client_progress (Ghost.reveal st1e);
+        fold (client_internal_frame_post
+          frame
+          internal_progress_result
+          (Ghost.reveal old_out)
+          (Ghost.reveal old_out)
+          (Ghost.reveal st0)
+          (Ghost.reveal st1e)
+          ([] <: list CW.wire_message)
+          ([] <: list EAPI.local_output));
+        fold (client_invariant
+          cc
+          (Ghost.reveal received1e)
+          (Ghost.reveal sent1e)
+          (Ghost.reveal st1e));
+        internal_progress_result
+      } else {
+        lemma_internal_failed_correct
+          (Ghost.reveal cc.canonical_client_initial)
+          (Ghost.reveal st0)
+          st1
+          resp
+          (Ghost.reveal old_out)
+          out_len
+          (Ghost.reveal received0)
+          (Ghost.reveal sent0);
+        rewrite
+          (CR.connection_exactly cc.canonical_client_state st1)
+          as
+          (C.connection_exactly cc.canonical_client_state (Ghost.reveal st0));
+        let failed =
+          internal_failed_result
+            (if resp.CT.status = CT.DecodeError
+             then CPI.DecodeError
+             else CPI.IllegalTransition);
+        fold (client_internal_frame_post
+          frame
+          failed
+          (Ghost.reveal old_out)
+          (Ghost.reveal old_out)
+          (Ghost.reveal st0)
+          (Ghost.reveal st0)
+          ([] <: list CW.wire_message)
+          ([] <: list EAPI.local_output));
+        fold (client_invariant
+          cc
+          (Ghost.reveal received0)
+          (Ghost.reveal sent0)
+          (Ghost.reveal st0));
+        failed
+      }
+    }
+  }
 }
 
 noextract
@@ -5667,8 +6192,8 @@ let client_protocol_implementation
       client_system
         #CTypes.client_local_event
         (Ghost.reveal cc.canonical_client_initial));
-    CPI.pi_internal = CPI.no_internal_events #CTypes.client_local_event;
-    CPI.pi_internal_pending = CPI.nothing_pending #CS.connection_state;
+    CPI.pi_internal = client_is_internal;
+    CPI.pi_internal_pending = client_internal_pending;
     CPI.pi_invariant = client_invariant;
     CPI.pi_snapshot = client_snapshot;
     CPI.pi_network_frame = tls_client_network_bridge_frame;

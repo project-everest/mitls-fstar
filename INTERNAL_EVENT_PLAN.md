@@ -832,6 +832,55 @@ only works if that fn's dependence can be narrowed to facts derivable from
 `connection_state_consistent`. If it cannot, defer the merge to Phase 5 and
 re-order the plan accordingly.
 
+## Phase 3 (internal primitive) as built
+
+**The internal event.** `TLS13.Spec.Endpoint.Client.local_event` gained
+`ClientProcessPendingHandshake`, mapped by `client_local_event_matches` to
+`CS.ConnProtectedHandshake step` with `protected_handshake_head == false`; the
+implementation mirror is `CT.LocalProcessPendingHandshake`, appended last in
+`local_event_kind` so the extracted C enum stays ABI-compatible.
+
+`client_step` needed **no change**. Its `LocalEvent` case already passes
+`B.empty` as the raw-*received* delta, and `event_raw_delta_legal` for a tail
+`ConnProtectedHandshake` demands exactly `Seq.equal raw_received B.empty` with
+`received_event_decode_projection` trivially `True`. §2.3 likewise needed no
+generalisation: `ClientSendClientHello` was already a local event emitting wire
+output.
+
+Two facts made the drain wiring cheap and are worth recording:
+
+- **A head step cannot consume empty raw input.** `head == true` requires
+  `raw_records_exactly raw Application_data 1`; chaining
+  `lemma_raw_records_exactly_one_parse_record`,
+  `lemma_parse_record_implies_parse_record_wire` and
+  `lemma_parse_record_wire_some_consumed_positive` (consumed `>= 5`) contradicts
+  `raw == B.empty`. So the internal event is *necessarily* a tail step and
+  `pending_protected_handshake_result_correct` needed no `head == false`
+  conjunct.
+- **`copy_pending_protected_handshake` returns `None` exactly when exhausted.**
+  Propagating that through `process_pending_protected_handshake`'s `None` case
+  gives `parsed >= B.length bytes` for free, which is precisely
+  `~ client_internal_pending`. Hence `client_internal_pending st` is *defined*
+  as `parsed < B.length bytes`, and `no_internal_step_enabled` follows from the
+  tail branch of `legal_protected_handshake_step` pinning `offset` to `parsed`
+  and requiring `offset < B.length fragment`.
+
+**Deferred to Phase 5: `InternalBlocked`.** `client_process_internal` currently
+produces only `InternalQuiescent`, `InternalProgress` and `InternalFailed`. When
+the client sits after `Certificate` awaiting `LocalValidateCertificate`, the
+drain returns `IllegalTransition`, which is mapped to `InternalFailed`. This is
+*sound* — `local_error_refines_state_machine` permits the `st1 == st0` "no move"
+disjunct — but weaker than intended. Producing `InternalBlocked` requires
+inverting `legal_handshake_message` to show no tail step is legal in that
+control state. Phase 5 is where `InternalBlocked`'s payoff is consumed (it must
+never authorise a socket read) and where `next_local_action` is wired in, so the
+obligation is discharged there.
+
+**Temporary wart.** `client_process_internal` allocates and frees a 0-length
+`Vec` per call to supply the empty payload. The Engine already keeps a
+persistent `engine_empty_payload`; Phase 8 folds the Engine into the driver and
+this allocation goes away.
+
 ### Phase 3 — Pulse implementation
 Files: `src/impl/TLS13.Impl.Client.fst/.fsti`, client Types/Repr/ConnectionState.
 - `process_network_bytes` stops after the record transition.

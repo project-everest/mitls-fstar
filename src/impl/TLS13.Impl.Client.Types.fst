@@ -2643,7 +2643,13 @@ let pending_protected_handshake_result_correct
   : prop =
   match result with
   | None ->
-    st1 == st0
+    (* The drain reports [None] exactly when the pending buffer holds no
+       unprocessed plaintext.  Exposing that here is what lets the internal
+       primitive claim InternalQuiescent rather than merely "no change". *)
+    st1 == st0 /\
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+      B.length
+        st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes
   | Some resp ->
     resp.network_out_len == 0sz /\
     resp.app_out_len == 0sz /\
