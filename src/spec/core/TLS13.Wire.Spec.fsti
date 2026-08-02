@@ -677,6 +677,83 @@ val lemma_ptm_handshake_fallback:
           | Some body -> Some (M.TlsIgnoredPostHandshake body)
           | None -> None)))
 
+(* --- Streaming handshake-content parser ------------------------------------
+
+   [parse_tls_message T.Handshake] is a WHOLE-FRAGMENT parser: it succeeds only
+   when the message occupies the record fragment exactly, so it cannot describe
+   a record whose plaintext coalesces several handshake messages.  The internal-
+   event pipeline needs a STREAMING parser: one that reads the first message of
+   a handshake-content plaintext and reports how many bytes it consumed, so the
+   remainder can be re-parsed by a subsequent internal step.
+
+   [parse_handshake] is already streaming but ranges over [M.handshake_msg],
+   which excludes the post-handshake messages ([TlsKeyUpdate],
+   [TlsIgnoredPostHandshake]) that [parse_tls_message] handles by fallback.
+   [parse_handshake_stream] closes that gap: it ranges over the full
+   [M.tls_message] and always reports a consumed length.
+
+   Note the post-handshake fallbacks are themselves whole-input parsers, so on
+   that branch the reported length is [B.length input] and the residual is
+   empty.  This is exactly the pre-existing behaviour, now made explicit rather
+   than implicit in the record framing. *)
+val parse_handshake_stream:
+  input:B.bytes ->
+  GTot (option (M.tls_message & nat))
+
+val lemma_parse_handshake_stream_def:
+  input:B.bytes ->
+  Lemma (parse_handshake_stream input ==
+    (match parse_handshake input with
+     | Some (msg, consumed) -> Some (M.TlsHandshake msg, consumed)
+     | None ->
+       (match parse_key_update input with
+        | Some req -> Some (M.TlsKeyUpdate req, B.length input)
+        | None ->
+          (match parse_ignored_post_handshake input with
+           | Some body -> Some (M.TlsIgnoredPostHandshake body, B.length input)
+           | None -> None))))
+
+(* The consumed length is strictly positive and within the input.  Strict
+   positivity is what makes an internal-step loop over a pending plaintext
+   terminate: each step strictly decreases the residual length. *)
+val lemma_parse_handshake_stream_bounds:
+  input:B.bytes ->
+  msg:M.tls_message ->
+  consumed:nat ->
+  Lemma
+    (requires parse_handshake_stream input == Some (msg, consumed))
+    (ensures 0 < consumed /\ consumed <= B.length input)
+
+(* Agreement with the whole-fragment parser: on a plaintext holding exactly one
+   message the two coincide, and when the streaming parser leaves a residual the
+   whole-fragment parser rejects.  This is the bridge that lets the pipeline
+   subsume the existing single-message receive path without changing its
+   semantics. *)
+val lemma_parse_handshake_stream_whole:
+  input:B.bytes ->
+  Lemma (parse_tls_message T.Handshake input ==
+    (match parse_handshake_stream input with
+     | Some (msg, consumed) -> if consumed = B.length input then Some msg else None
+     | None -> None))
+
+(* A streaming parse of a prefix is stable under extension of the input, so a
+   message parsed out of a pending plaintext is the same message that would be
+   parsed out of the whole record.  Mirrors [lemma_parse_handshake_strong_prefix]
+   at [tls_message] range. *)
+val lemma_parse_handshake_stream_strong_prefix:
+  prefix:B.bytes ->
+  input:B.bytes ->
+  msg:M.tls_message ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake_stream prefix == Some (msg, consumed) /\
+      consumed == B.length prefix /\
+      M.TlsHandshake? msg /\
+      B.length prefix <= B.length input /\
+      Seq.equal prefix (Seq.slice input 0 (B.length prefix)))
+    (ensures parse_handshake_stream input == Some (msg, consumed))
+
 val serialize_tls_message:
   msg:M.tls_message ->
   GTot (T.content_type & B.bytes)

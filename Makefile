@@ -111,7 +111,8 @@ ROOT_FILES = \
   src/impl/TLS13.System.SeqCountBase.fst \
   src/impl/TLS13.System.Ordering.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
-  src/impl/TLS13.Impl.Server.Driver.fst
+  src/impl/TLS13.Impl.Server.Driver.fst \
+  src/spec/properties/TLS13.Spec.InternalEvent.Baseline.fst
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),

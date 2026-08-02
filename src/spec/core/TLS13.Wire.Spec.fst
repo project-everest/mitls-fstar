@@ -991,6 +991,39 @@ let lemma_parse_handshake_none_of_synth_none fragment v consumed = ()
 
 let lemma_ptm_handshake_fallback fragment = ()
 
+let parse_handshake_stream (input:B.bytes) : GTot (option (M.tls_message & nat)) =
+  match parse_handshake input with
+  | Some (msg, consumed) -> Some (M.TlsHandshake msg, consumed)
+  | None ->
+    match parse_key_update input with
+    | Some req -> Some (M.TlsKeyUpdate req, B.length input)
+    | None ->
+      match parse_ignored_post_handshake input with
+      | Some body -> Some (M.TlsIgnoredPostHandshake body, B.length input)
+      | None -> None
+
+let lemma_parse_handshake_stream_def input = ()
+
+let lemma_parse_handshake_stream_bounds input msg consumed =
+  match parse_handshake input with
+  | Some (m, c) ->
+    LP.parser_kind_prop_intro GHS.handshake_parser_kind GHS.handshake_parser;
+    LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
+    assert (LP.parses_at_least 5 GHS.handshake_parser)
+  | None ->
+    (match parse_key_update input with
+     | Some _ -> ()
+     | None -> lemma_parse_ignored_post_handshake_def input)
+
+let lemma_parse_handshake_stream_whole input = ()
+
+let lemma_parse_handshake_stream_strong_prefix prefix input msg consumed =
+  match parse_handshake prefix with
+  | Some (m, c) ->
+    lemma_parse_handshake_strong_prefix prefix input m c
+  | None -> ()
+
+
 let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) =
   match msg with
   | M.TlsHandshake hs -> (T.Handshake, serialize_handshake hs)
