@@ -337,7 +337,7 @@ fn mark_received_protected_encrypted_extensions
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v message_len < SZ.v protected_fragment_len /\
+             SZ.v message_len <= SZ.v protected_fragment_len /\
              st0.CS.cs_model.CS.model_control ==
                CS.ControlHandshaking CS.HsServerHelloReceived /\
              st0.CS.cs_model.CS.model_config.CS.config_role ==
@@ -451,7 +451,7 @@ fn mark_received_protected_certificate_head
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v message_len < SZ.v protected_fragment_len /\
+             SZ.v message_len <= SZ.v protected_fragment_len /\
              st0.CS.cs_model.CS.model_control ==
                CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
              st0.CS.cs_model.CS.model_config.CS.config_role ==
@@ -650,7 +650,7 @@ fn mark_received_protected_certificate_verify_head
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v message_len < SZ.v protected_fragment_len /\
+             SZ.v message_len <= SZ.v protected_fragment_len /\
              st0.CS.cs_model.CS.model_control ==
                CS.ControlHandshaking CS.HsCertificateValidated /\
              st0.CS.cs_model.CS.model_config.CS.config_role ==

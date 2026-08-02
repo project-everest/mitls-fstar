@@ -1038,6 +1038,25 @@ fn mark_received_client_hello
     (received_client_hello_state st0 ch (Ghost.reveal 'raw_bytes)))
 }
 
+// Discard the contents of a sized_bytes slot, leaving it empty.  Kept as its
+// own fn rather than inlined at the use site: unfolding sized_bytes_exactly
+// inside a conditional branch leaves the surrounding frame with uvars, and
+// Pulse then reports "Cannot check relation with uvars".
+fn collapse_sized_bytes_to_empty
+  (slot:sized_bytes)
+  (#cap:erased nat)
+  (#bs:erased B.bytes)
+  requires sized_bytes_exactly slot cap (Ghost.reveal bs)
+  ensures sized_bytes_exactly slot cap B.empty
+{
+  unfold (sized_bytes_exactly slot cap (Ghost.reveal bs));
+  with storage len. _;
+  slot.len := 0sz;
+  Seq.lemma_len_slice (Ghost.reveal storage) 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice (Ghost.reveal storage) 0 0);
+  fold (sized_bytes_exactly slot cap B.empty);
+}
+
 fn store_pending_protected_handshake
   (c:connection_state)
   (fragment:array U8.t)
@@ -1050,7 +1069,7 @@ fn store_pending_protected_handshake
              CS.protected_handshake_buffer_empty (Ghost.reveal model) /\
              B.length (Ghost.reveal 'fragment_bytes) == SZ.v fragment_len /\
              SZ.v fragment_len <= max_handshake_flight_len /\
-             SZ.v parsed < SZ.v fragment_len)
+             SZ.v parsed <= SZ.v fragment_len)
   ensures connection_model_exactly
             c
             (CS.set_pending_protected_handshake
@@ -1086,6 +1105,35 @@ fn store_pending_protected_handshake
     max_handshake_flight_len_sz
     fragment_len;
   c.handshake.buffers.encrypted_server_handshake_parsed := parsed;
+  // When the head message saturates the record fragment there is nothing left
+  // to drain, and `set_pending_protected_handshake` resets the buffer to
+  // {empty; 0} rather than retaining the fully-consumed fragment.  Mirror that
+  // here, using the same collapse as advance_pending_protected_handshake_storage.
+  let saturated = SZ.eq parsed fragment_len;
+  if saturated {
+    collapse_sized_bytes_to_empty
+      c.handshake.buffers.encrypted_server_handshake_bytes;
+    c.handshake.buffers.encrypted_server_handshake_parsed := 0sz;
+    rewrite (sized_bytes_exactly
+      c.handshake.buffers.encrypted_server_handshake_bytes
+      max_handshake_flight_len
+      B.empty)
+      as (sized_bytes_exactly
+        c.handshake.buffers.encrypted_server_handshake_bytes
+        max_handshake_flight_len
+        (Ghost.reveal target_model).CS.model_handshake
+          .CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes);
+  } else {
+    rewrite (sized_bytes_exactly
+      c.handshake.buffers.encrypted_server_handshake_bytes
+      max_handshake_flight_len
+      (Ghost.reveal 'fragment_bytes))
+      as (sized_bytes_exactly
+        c.handshake.buffers.encrypted_server_handshake_bytes
+        max_handshake_flight_len
+        (Ghost.reveal target_model).CS.model_handshake
+          .CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes);
+  };
   assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_start ==
     (Ghost.reveal model).CS.model_handshake.CS.hs_start));
   assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_server_selection ==
@@ -1392,7 +1440,7 @@ fn finish_protected_handshake_head
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v parsed < SZ.v protected_fragment_len /\
+             SZ.v parsed <= SZ.v protected_fragment_len /\
              CS.protected_handshake_buffer_empty (Ghost.reveal base_model) /\
              (protected_handshake_state
                st0
@@ -1780,7 +1828,7 @@ fn mark_received_protected_encrypted_extensions
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v message_len < SZ.v protected_fragment_len /\
+             SZ.v message_len <= SZ.v protected_fragment_len /\
              st0.CS.cs_model.CS.model_control ==
                CS.ControlHandshaking CS.HsServerHelloReceived /\
              st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
@@ -2200,7 +2248,7 @@ fn mark_received_protected_certificate_head
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v message_len < SZ.v protected_fragment_len /\
+             SZ.v message_len <= SZ.v protected_fragment_len /\
              st0.CS.cs_model.CS.model_control ==
                CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
              st0.CS.cs_model.CS.model_config.CS.config_role ==
@@ -2746,7 +2794,7 @@ fn mark_received_protected_certificate_verify_head
              B.length (Ghost.reveal 'protected_fragment_bytes) ==
                SZ.v protected_fragment_len /\
              SZ.v protected_fragment_len <= max_handshake_flight_len /\
-             SZ.v message_len < SZ.v protected_fragment_len /\
+             SZ.v message_len <= SZ.v protected_fragment_len /\
              st0.CS.cs_model.CS.model_control ==
                CS.ControlHandshaking CS.HsCertificateValidated /\
              st0.CS.cs_model.CS.model_config.CS.config_role ==

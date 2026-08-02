@@ -68,7 +68,7 @@ let lemma_legal_protected_handshake_head
        step.CS.protected_handshake_offset == 0 /\
        step.CS.protected_handshake_head /\
        0 < step.CS.protected_handshake_consumed /\
-       step.CS.protected_handshake_consumed <
+       step.CS.protected_handshake_consumed <=
          B.length step.CS.protected_handshake_fragment /\
        CS.protected_handshake_message_supported
          step.CS.protected_handshake_message /\
@@ -166,7 +166,7 @@ fn try_process_protected_handshake_head
             B.length 'old_app_out == SZ.v app_out_len /\
             0 < SZ.v consumed /\
             SZ.v protected_fragment_len <= Bounds.max_handshake_flight_len /\
-            SZ.v consumed < SZ.v protected_fragment_len /\
+            SZ.v consumed <= SZ.v protected_fragment_len /\
             CT.protected_decoder_fragment_relation
               'st0
               content_type
@@ -274,7 +274,7 @@ fn try_process_protected_handshake_head
            assert (pure (CS.protected_handshake_message_supported
              (M.EncryptedExtensions ee)));
            assert (pure (0 < SZ.v consumed));
-           assert (pure (SZ.v consumed <
+           assert (pure (SZ.v consumed <=
              B.length (Ghost.reveal 'protected_fragment_bytes)));
            lemma_legal_protected_handshake_head
              'st0.CS.cs_model
@@ -406,7 +406,7 @@ fn try_process_protected_handshake_head
            assert (pure (CS.protected_handshake_message_supported
              (M.Certificate cert)));
            assert (pure (0 < SZ.v consumed));
-           assert (pure (SZ.v consumed <
+           assert (pure (SZ.v consumed <=
              B.length (Ghost.reveal 'protected_fragment_bytes)));
            lemma_legal_protected_handshake_head
              'st0.CS.cs_model
@@ -541,7 +541,7 @@ fn try_process_protected_handshake_head
            assert (pure (CS.protected_handshake_message_supported
              (M.CertificateVerify cv)));
            assert (pure (0 < SZ.v consumed));
-           assert (pure (SZ.v consumed <
+           assert (pure (SZ.v consumed <=
              B.length (Ghost.reveal 'protected_fragment_bytes)));
            lemma_legal_protected_handshake_head
              'st0.CS.cs_model
@@ -2225,11 +2225,20 @@ fn process_coalesced_network_bytes
                     L.is_valid_tls_message
                       parsed_prefix.L.parsed_handshake_message
                       (M.TlsHandshake msg));
-                let coalesced =
-                  SZ.lt
+                // A protected record is described by a head/tail chain of
+                // ConnProtectedHandshake steps whether or not it actually
+                // coalesces several messages: since Phase 2b the head step may
+                // saturate its fragment, so a single-message record takes this
+                // same route rather than the legacy ConnNetworkEvent one.  The
+                // test is therefore vacuous (parse_handshake_prefix cannot
+                // report consuming more than the fragment holds); it is kept
+                // explicit so the `else` branch below stays well-typed, and is
+                // removed in the Phase 9 cleanup.
+                let head_shaped =
+                  SZ.lte
                     parsed_prefix.L.parsed_handshake_consumed
                     decoded_buffer.L.decoded_buffer_fragment_len;
-                if coalesced {
+                if head_shaped {
                   V.to_array_pts_to
                     decoded_buffer.L.decoded_buffer_raw_record;
                   V.to_array_pts_to
