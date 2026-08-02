@@ -39,6 +39,7 @@ module SMReplay = TLS13.Spec.StateMachine.Replay
 module CD = TLS13.Impl.Client.Driver
 module SD = TLS13.Impl.Server.Driver
 module CCShape = TLS13.ConnectionState.ClientCanonicalShape
+module PWHead = TLS13.ConnectionState.ProtectedWireHead
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module WStep = TLS13.System.WireStep
 module WFL = TLS13.Spec.WireFormatLemmas
@@ -143,7 +144,12 @@ let client_normalized_appdata_exact_spine (client:CS.connection_state) : prop =
          (cv:GCV.certificateVerify)
          (cv_verify:CS.local_event)
          (sf:GFin.finished)
+         (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
          (tail:list CS.conn_event).
+    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee) raw_ee /\
+    PWHead.received_handshake_head_normal_form (M.Certificate cert) raw_cert /\
+    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv) raw_cv /\
+    PWHead.received_handshake_head_normal_form (M.Finished sf) raw_sf /\
     (forall (e:CS.conn_event).
       L.memP e region ==> CCShape.is_client_hs_install e == true) /\
     (exists (er:CS.conn_event).
@@ -157,26 +163,12 @@ let client_normalized_appdata_exact_spine (client:CS.connection_state) : prop =
         (PWSeg.client_cleartext_handshake_prefix_events
           start ch sh client_shared)
         (L.append region
-          (CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value =
-               M.TlsHandshake (M.EncryptedExtensions ee);
-           } ::
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value = M.TlsHandshake (M.Certificate cert);
-           } ::
+          (raw_ee ::
+           raw_cert ::
            CS.ConnLocalEvent cv_validate ::
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value =
-               M.TlsHandshake (M.CertificateVerify cv);
-           } ::
+           raw_cv ::
            CS.ConnLocalEvent cv_verify ::
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value = M.TlsHandshake (M.Finished sf);
-           } ::
+           raw_sf ::
            tail))
 
 val lemma_server_flight_pairs_from_replays_and_pairing

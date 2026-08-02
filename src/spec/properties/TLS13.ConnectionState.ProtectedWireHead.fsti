@@ -12,6 +12,52 @@ module WFL = TLS13.Spec.WireFormatLemmas
 
 open TLS13.ConnectionState.ProtectedWireBase
 
+(* The receiver-side NORMAL FORM of a single-message protected handshake
+   delivery: a received-decode replay whose head is the [ConnNetworkEvent]
+   carrying the message.
+
+   The implementation emits a saturating HEAD [ConnProtectedHandshake] step
+   instead, but the two denote the same transition
+   ([TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_replay_normalizes]),
+   so the pairing proofs -- which are written against the network shape --
+   apply to either after normalising here. *)
+(* The receiver's head event in normal form: either the network event
+   carrying the message, or a SATURATING head [ConnProtectedHandshake] step
+   for it (one whose [consumed] covers the whole record fragment, so no tail
+   step follows).  Nothing else can describe a single-message record. *)
+unfold let received_handshake_head_normal_form
+  (received_msg:M.handshake_msg)
+  (ev:CS.conn_event)
+  : prop =
+  match ev with
+  | CS.ConnNetworkEvent directed ->
+    directed == ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake received_msg;
+    } <: CL.directed_message M.tls_message)
+  | CS.ConnProtectedHandshake step ->
+    step.CS.protected_handshake_message == received_msg /\
+    TLS13.Spec.StateMachine.Replay.single_message_head_step_shape step
+  | CS.ConnLocalEvent _ -> False
+
+unfold let normalized_received_handshake_replay
+  (receiver:CS.connection_model)
+  (received_msg:M.handshake_msg)
+  (receiver_rest:list CS.conn_event)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (receiver_final:CS.connection_model)
+  : prop =
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+    receiver
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake received_msg;
+    } :: receiver_rest)
+    receiver_raw_sent
+    receiver_raw_received
+    receiver_final
+
 val lemma_sent_replay_skip_empty_head_preserves_peer_stream
   (sender:CS.connection_model)
   (ev:CS.conn_event)
@@ -370,10 +416,14 @@ val lemma_single_message_sender_normalizes_received_handshake_head
           receiver_raw_received
           receiver_final)
       (ensures
-        receiver_head == CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake received_msg;
-        })
+        received_handshake_head_normal_form received_msg receiver_head /\
+        normalized_received_handshake_replay
+          receiver
+          received_msg
+          receiver_rest
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
 
 val lemma_protected_handshake_event_projection_pair_from_aligned_heads
   (sender:CS.connection_model)

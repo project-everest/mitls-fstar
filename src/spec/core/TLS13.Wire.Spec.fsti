@@ -849,6 +849,33 @@ val lemma_parse_tls_message_round_trip:
        return the generated wire record itself ([Some b] iff representable),
        matching how [synth_handshake_msg_of] wraps [M.ClientHello b]. --- *)
 
+
+(* A handshake fragment that parses AS A WHOLE MESSAGE is the serialisation
+   of that message, and re-parsing that serialisation returns the message and
+   consumes all of it.
+
+   Callers need this to describe a received single-message protected record
+   as a [ConnProtectedHandshake] head step whose fragment is written
+   [serialize_handshake msg]: it says that doing so loses no information
+   about the bytes that actually arrived. *)
+val lemma_parse_handshake_serialize_round_trip:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  Lemma
+    (requires
+      parse_tls_message T.Handshake fragment == Some (M.TlsHandshake msg) /\
+      (match msg with
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _ -> True
+       | _ -> False))
+    (ensures
+      Seq.equal fragment (serialize_handshake msg) /\
+      0 < B.length (serialize_handshake msg) /\
+      parse_handshake (serialize_handshake msg) ==
+        Some (msg, B.length (serialize_handshake msg)))
+
 val synth_client_hello:
   c:GCH.clientHello ->
   GTot (option GCH.clientHello)

@@ -199,41 +199,56 @@ val lemma_tail_finished_keeps_stepped_record_state
       | None -> False))
 
 (* -------------------------------------------------------------------- *)
-(* B5.  The semantic fork this work removes.                              *)
+(* B5.  The semantic fork, and its removal.                              *)
 (*                                                                       *)
-(* A protected record carrying EXACTLY ONE handshake message cannot use   *)
-(* the pipeline at all: the head case demands [consumed < length          *)
-(* fragment].  Such a record must therefore be described by a             *)
-(* [ConnNetworkEvent], while a multi-message record is described by a     *)
-(* head plus tails.  Two spec-level shapes for one physical event is      *)
-(* precisely the fork that INTERNAL_EVENT_PLAN.md eliminates; this lemma  *)
-(* records it so that its disappearance in Phase 2 is deliberate and      *)
-(* visible.                                                               *)
+(* A protected record carrying EXACTLY ONE handshake message used to be   *)
+(* excluded from the pipeline: the head case demanded [consumed < length  *)
+(* fragment], so such a record had to be described by a                   *)
+(* [ConnNetworkEvent], while a multi-message record was described by a    *)
+(* head plus tails.  Two spec-level shapes for one physical event was     *)
+(* the fork that INTERNAL_EVENT_PLAN.md eliminates.                       *)
+(*                                                                       *)
+(* These lemmas record that it is gone, from both sides: the head step    *)
+(* now describes a single-message record, and the network route for such  *)
+(* a message no longer exists.                                            *)
 (* -------------------------------------------------------------------- *)
 
-val lemma_single_message_record_has_no_head_step
+(* A record carrying exactly one message is a head step with no tails: the *)
+(* pending buffer it leaves behind is empty.                               *)
+val lemma_single_message_record_is_a_head_step
   (model:CS.connection_model)
   (step:CS.protected_handshake_step)
+  (stepped:CS.connection_model)
   : Lemma
     (requires
+      CS.legal_protected_handshake_step model step /\
+      CS.step_protected_handshake model step == Some stepped /\
       step.CS.protected_handshake_head /\
       step.CS.protected_handshake_consumed ==
         B.length step.CS.protected_handshake_fragment)
-    (ensures ~ (CS.legal_protected_handshake_step model step))
+    (ensures
+      CS.protected_handshake_buffer_empty stepped)
 
-(* Conversely, a head step exists only for a genuinely coalesced record.  *)
-val lemma_head_implies_multi_message
+(* The other side of the fork.  The two descriptions of a single-message  *)
+(* protected record -- the saturating HEAD step the implementation emits, *)
+(* and the ordinary received [ConnNetworkEvent] the pairing proofs are    *)
+(* written against -- denote the SAME transition.  This is what makes the *)
+(* fork removable without banning either route: the spec stays            *)
+(* permissive, and every proof may normalise one into the other.          *)
+val lemma_single_message_routes_agree
   (model:CS.connection_model)
   (step:CS.protected_handshake_step)
   : Lemma
     (requires
       CS.legal_protected_handshake_step model step /\
-      step.CS.protected_handshake_head)
+      TLS13.Spec.StateMachine.Replay.single_message_head_step_shape step)
     (ensures
-      step.CS.protected_handshake_consumed <
-        B.length step.CS.protected_handshake_fragment)
+      CS.legal_event model
+        (TLS13.Spec.StateMachine.Replay.head_step_network_event step) /\
+      CS.step_model model (CS.ConnProtectedHandshake step) ==
+        CS.step_model model
+          (TLS13.Spec.StateMachine.Replay.head_step_network_event step))
 
-(* -------------------------------------------------------------------- *)
 (* B7.  Why a three-way internal status is not enough (decision S2).      *)
 (*                                                                       *)
 (* Receiving [Certificate] leaves the client at [HsCertificateReceived],  *)

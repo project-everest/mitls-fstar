@@ -81,10 +81,22 @@ val lemma_single_message_sender_after_server_write_client_read_install_normalize
           client_raw_received
           client_final)
       (ensures
-        client_head == CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake received_msg;
-        })
+        TLS13.ConnectionState.ProtectedWireHead.received_handshake_head_normal_form
+          received_msg client_head /\
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+          client
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = client_material;
+            }) :: CS.ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg;
+            } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
 
 val lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
   (server:CS.connection_model)

@@ -1459,6 +1459,14 @@ let legal_tls_message
   let hs = model.model_handshake in
   match msg, model.model_control with
   | M.TlsHandshake handshake_msg, _ ->
+    (* Note: a client-received PROTECTED handshake message may also be
+       delivered by [ConnProtectedHandshake] with [protected_handshake_head],
+       including when the record carries exactly one message.  The two
+       descriptions denote the SAME transition -- see
+       [TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_replay_normalizes].
+       The implementation emits only the head/tail form, so there is one
+       receive path; this route is retained so that the pairing proofs can
+       normalise into it. *)
     legal_handshake_message model dir handshake_msg
   | M.TlsApplicationData _, ControlApplicationData ->
     application_traffic_available_for_role
@@ -1510,8 +1518,16 @@ let legal_protected_handshake_step
   legal_handshake_message model CL.Received step.protected_handshake_message /\
   (if step.protected_handshake_head
    then
+     (* The head step takes delivery of a whole record: the offset comes
+        from the wire, not from state, and the buffer must be empty.
+
+        [consumed] is NOT required to be strictly less than the fragment
+        length.  That strict inequality was what forced a record carrying
+        exactly one message down the [ConnNetworkEvent] path and created
+        the fork; dropping it lets the head step describe such a record,
+        with the pending buffer left empty by
+        [set_pending_protected_handshake] and no tail steps following. *)
      offset == 0 /\
-     consumed < B.length fragment /\
      protected_handshake_buffer_empty model
    else
      Seq.equal

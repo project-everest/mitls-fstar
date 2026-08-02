@@ -100,10 +100,22 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
           client_raw_received
           client_final)
       (ensures
-        client_head == ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake received_msg;
-        })
+        TLS13.ConnectionState.ProtectedWireHead.received_handshake_head_normal_form
+          received_msg client_head /\
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+          client
+          (ConnLocalEvent
+            (LocalInstallTrafficKeys {
+              install_epoch = TrafficHandshake;
+              install_direction = TrafficRead;
+              install_material = client_material;
+            }) :: ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg;
+            } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
 =
   let server_install_ev =
     ConnLocalEvent
@@ -148,10 +160,18 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
       server_received_after_install
       server_final
   returns
-    client_head == ConnNetworkEvent {
-      CL.message_direction = CL.Received;
-      CL.message_value = M.TlsHandshake received_msg;
-    }
+    (TLS13.ConnectionState.ProtectedWireHead.received_handshake_head_normal_form
+       received_msg client_head /\
+     conn_events_received_decode_replay
+          client
+          (client_install_ev ::
+           ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = M.TlsHandshake received_msg;
+           } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
   with _.
   ( lemma_received_replay_skip_empty_head_preserves_peer_stream
       server_sent_after_install
@@ -175,10 +195,18 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
         client_received_after_install
         client_final
     returns
-      client_head == ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake received_msg;
-      }
+      (TLS13.ConnectionState.ProtectedWireHead.received_handshake_head_normal_form
+         received_msg client_head /\
+       conn_events_received_decode_replay
+            client
+            (client_install_ev ::
+             ConnNetworkEvent {
+               CL.message_direction = CL.Received;
+               CL.message_value = M.TlsHandshake received_msg;
+             } :: client_rest)
+            client_raw_sent
+            client_raw_received
+            client_final)
     with _.
     ( assert (legal_local_event server
         (LocalInstallTrafficKeysForRole {
@@ -231,7 +259,27 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
         client_sent_after_install
         client_received_after_install
         server_final
-        client_final ) )
+        client_final;
+      (* [client_head] is now known to be in normal form: either the network
+         event itself, or a saturating head step for the same message.  In the
+         first case the hypothesis replay IS the conclusion; in the second we
+         normalise the head step behind the install event. *)
+      match client_head with
+      | ConnNetworkEvent _ -> ()
+      | ConnProtectedHandshake step ->
+        assert (protected_handshake_buffer_empty client);
+        lemma_single_message_head_step_replay_normalizes_after
+          client
+          (LocalInstallTrafficKeys {
+            install_epoch = TrafficHandshake;
+            install_direction = TrafficRead;
+            install_material = client_material;
+          })
+          step
+          client_rest
+          client_raw_sent
+          client_raw_received
+          client_final ) )
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"

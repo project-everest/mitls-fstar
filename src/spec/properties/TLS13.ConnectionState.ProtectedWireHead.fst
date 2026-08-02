@@ -955,10 +955,14 @@ let lemma_single_message_sender_normalizes_received_handshake_head
           receiver_raw_received
           receiver_final)
       (ensures
-        receiver_head == ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake received_msg;
-        })
+        received_handshake_head_normal_form received_msg receiver_head /\
+        normalized_received_handshake_replay
+          receiver
+          received_msg
+          receiver_rest
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
 =
   let sender_head = ConnNetworkEvent {
     CL.message_direction = CL.Sent;
@@ -1001,10 +1005,14 @@ let lemma_single_message_sender_normalizes_received_handshake_head
       sender_tail_received
       sender_final
   returns
-    receiver_head == ConnNetworkEvent {
-      CL.message_direction = CL.Received;
-      CL.message_value = M.TlsHandshake received_msg;
-    }
+    received_handshake_head_normal_form received_msg receiver_head /\
+    normalized_received_handshake_replay
+      receiver
+      received_msg
+      receiver_rest
+      receiver_raw_sent
+      receiver_raw_received
+      receiver_final
   with _.
   ( lemma_conn_events_received_decode_replay_head
       receiver
@@ -1043,14 +1051,22 @@ let lemma_single_message_sender_normalizes_received_handshake_head
         receiver_tail_received
         receiver_final
     returns
-      receiver_head == ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake received_msg;
-      }
+      received_handshake_head_normal_form received_msg receiver_head /\
+      normalized_received_handshake_replay
+        receiver
+        received_msg
+        receiver_rest
+        receiver_raw_sent
+        receiver_raw_received
+        receiver_final
     with _.
     ( match receiver_head with
       | ConnNetworkEvent directed ->
         assert (directed == {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake received_msg;
+        });
+        assert (receiver_head == ConnNetworkEvent {
           CL.message_direction = CL.Received;
           CL.message_value = M.TlsHandshake received_msg;
         })
@@ -1100,10 +1116,14 @@ let lemma_single_message_sender_normalizes_received_handshake_head
                   (sender_outer,
                    R.next_seq sender.model_record.record_write)
             returns
-              receiver_head == ConnNetworkEvent {
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake received_msg;
-              }
+              received_handshake_head_normal_form received_msg receiver_head /\
+              normalized_received_handshake_replay
+                receiver
+                received_msg
+                receiver_rest
+                receiver_raw_sent
+                receiver_raw_received
+                receiver_final
             with _.
             ( W.lemma_parse_record_implies_parse_record_wire sender_delta_sent;
               eliminate exists
@@ -1136,10 +1156,14 @@ let lemma_single_message_sender_normalizes_received_handshake_head
                     (step.protected_handshake_message,
                      step.protected_handshake_consumed)
               returns
-                receiver_head == ConnNetworkEvent {
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake received_msg;
-                }
+                received_handshake_head_normal_form received_msg receiver_head /\
+                normalized_received_handshake_replay
+                  receiver
+                  received_msg
+                  receiver_rest
+                  receiver_raw_sent
+                  receiver_raw_received
+                  receiver_final
               with _.
               ( lemma_equal_stream_record_head_lengths
                   sender_raw_sent
@@ -1163,13 +1187,20 @@ let lemma_single_message_sender_normalizes_received_handshake_head
                 Seq.lemma_eq_elim
                   sender_delta_sent
                   receiver_delta_received;
-                PWP.lemma_single_protected_message_seal_excludes_protected_head
+                PWP.lemma_single_protected_message_seal_saturates_protected_head
                   sender
                   receiver
                   sent_msg
                   step
                   receiver_delta_received;
-                assert False ) )
+                assert (single_message_head_step_shape step);
+                lemma_single_message_head_step_replay_normalizes
+                  receiver
+                  step
+                  receiver_rest
+                  receiver_raw_sent
+                  receiver_raw_received
+                  receiver_final ) )
           end
         else
           begin

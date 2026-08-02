@@ -238,7 +238,7 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"
-let lemma_single_protected_message_seal_excludes_protected_head
+let lemma_single_protected_message_seal_saturates_protected_head
   (sender:connection_model)
   (receiver:connection_model)
   (sent_msg:M.handshake_msg)
@@ -267,7 +267,10 @@ let lemma_single_protected_message_seal_excludes_protected_head
           receiver
           (ConnProtectedHandshake step)
           raw)
-      (ensures False)
+      (ensures
+        step.protected_handshake_offset == 0 /\
+        step.protected_handshake_consumed ==
+          B.length step.protected_handshake_fragment)
 =
   let sent_tls_msg = M.TlsHandshake sent_msg in
   CSL.lemma_received_record_opened_from_sent_single_protected_message_seal_peer
@@ -282,7 +285,9 @@ let lemma_single_protected_message_seal_excludes_protected_head
       raw
       sent_outer
       (sent_tls_inner_plaintext_fragment sent_tls_msg)
-  returns False
+  returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
   with _.
   ( eliminate exists
       (received_outer:B.bytes)
@@ -304,7 +309,9 @@ let lemma_single_protected_message_seal_excludes_protected_head
         Some
           (step.protected_handshake_message,
            step.protected_handshake_consumed)
-    returns False
+    returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
     with _.
     ( W.lemma_parse_record_implies_parse_record_wire raw;
       assert (received_outer == sent_outer);
@@ -314,7 +321,9 @@ let lemma_single_protected_message_seal_excludes_protected_head
           (record_header_aad raw)
           sent_outer ==
           Some (sent_tls_inner_plaintext_fragment sent_tls_msg, sent_read_state')
-      returns False
+      returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
       with _.
       ( eliminate exists (received_read_state':R.direction_state).
           R.open_record
@@ -322,7 +331,9 @@ let lemma_single_protected_message_seal_excludes_protected_head
             (record_header_aad raw)
             received_outer ==
             Some (opened, received_read_state')
-        returns False
+        returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
         with _.
         ( assert (opened == sent_tls_inner_plaintext_fragment sent_tls_msg);
           W.lemma_serialize_tls_message_handshake sent_msg;
@@ -338,8 +349,6 @@ let lemma_single_protected_message_seal_excludes_protected_head
             Some sent_plaintext);
           assert (plaintext == sent_plaintext);
           assert (step.protected_handshake_offset == 0);
-          assert (step.protected_handshake_consumed <
-                  B.length step.protected_handshake_fragment);
           assert (Seq.equal
             step.protected_handshake_fragment
             (W.serialize_handshake sent_msg));
@@ -353,8 +362,7 @@ let lemma_single_protected_message_seal_excludes_protected_head
           W.lemma_parse_handshake_serialize_protected_consumes_all
             sent_msg
             step.protected_handshake_message
-            step.protected_handshake_consumed;
-          assert False ) ) ) )
+            step.protected_handshake_consumed ) ) ) )
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"

@@ -25,6 +25,7 @@ module PWBase = TLS13.ConnectionState.ProtectedWireBase
 module PWReplay = TLS13.ConnectionState.ProtectedWireReplay
 module PWSFlight = TLS13.ConnectionState.ProtectedWireServerFlight
 module PWHead = TLS13.ConnectionState.ProtectedWireHead
+module PWNorm = TLS13.ConnectionState.ProtectedWireNormalize
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module PWStaged = TLS13.ConnectionState.ProtectedWireStaged
 module SFInv = TLS13.ConnectionState.ProtectedWireServerFlightInversion
@@ -2438,7 +2439,7 @@ let lemma_forall_server_install_empty_recv (region:list CS.conn_event)
     L.for_all_mem Region.is_empty_recv_ev region
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
 let lemma_client_side_cf (s:sysp)
   : Lemma (requires client_finished_bridge_inputs s.client s.server)
           (ensures client_pkg_exists s)
@@ -2462,7 +2463,12 @@ let lemma_client_side_cf (s:sysp)
                    (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
                    (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
                    (cv_verify:CS.local_event) (sf:GFin.finished)
+                   (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
                    (tail:list CS.conn_event).
+    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee) raw_ee /\
+    PWHead.received_handshake_head_normal_form (M.Certificate cert) raw_cert /\
+    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv) raw_cv /\
+    PWHead.received_handshake_head_normal_form (M.Finished sf) raw_sf /\
     (forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
     (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
     (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
@@ -2470,19 +2476,25 @@ let lemma_client_side_cf (s:sysp)
       L.append
         (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
         (L.append region
-           (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+           (raw_ee ::
+            raw_cert ::
             CS.ConnLocalEvent cv_validate ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+            raw_cv ::
             CS.ConnLocalEvent cv_verify ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+            raw_sf ::
             tail))
   returns client_pkg_exists s
   with _.
   (
     let prefix = PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared in
+    (* The log carries the RAW flight; the network-event spine [cflight] is its
+       normal form, and the two denote the same replay
+       ([PWNorm.lemma_normalize_flight_sent]). *)
+    let raw_cflight =
+      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate ::
+      raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: tail in
     let cflight = client_flight_tail ee cert cv_validate cv cv_verify sf tail in
-    let suffix = L.append region cflight in
+    let suffix = L.append region raw_cflight in
     assert (s.client.CS.cs_event_log == L.append prefix suffix);
     (* ---- SENT-seal branch ---- *)
     lemma_replay_cong_sent m0 s.client.CS.cs_event_log (L.append prefix suffix) cs cr final;
@@ -2498,16 +2510,33 @@ let lemma_client_side_cf (s:sysp)
     (
       lemma_client_prefix_model_sent cfg_c start ch sh client_shared ps_sent ps_recv mp;
       lemma_client_prefix_sent_bytes cfg_c start ch sh client_shared ps_sent ps_recv mp;
-      PWReplay.lemma_conn_events_sent_seal_replay_append_split mp region cflight suf_sent suf_recv final;
+      PWReplay.lemma_conn_events_sent_seal_replay_append_split mp region raw_cflight suf_sent suf_recv final;
       eliminate exists (mc:CS.connection_model)
                        (rg_sent rg_recv fl_sent fl_recv:B.bytes).
         Seq.equal suf_sent (B.append rg_sent fl_sent) /\
         Seq.equal suf_recv (B.append rg_recv fl_recv) /\
         SMReplay.conn_events_sent_seal_replay mp region rg_sent rg_recv mc /\
-        SMReplay.conn_events_sent_seal_replay mc cflight fl_sent fl_recv final
+        SMReplay.conn_events_sent_seal_replay mc raw_cflight fl_sent fl_recv final
       returns client_pkg_exists s
       with _.
       (
+        PWNorm.lemma_normalize_flight_sent mc
+          (M.EncryptedExtensions ee) (M.Certificate cert)
+          (M.CertificateVerify cv) (M.Finished sf)
+          raw_ee raw_cert raw_cv raw_sf
+          cv_validate cv_verify tail
+          fl_sent fl_recv final;
+        assert (PWNorm.normal_flight
+                  (M.EncryptedExtensions ee) (M.Certificate cert)
+                  (M.CertificateVerify cv) (M.Finished sf)
+                  cv_validate cv_verify tail
+                == cflight);
+        lemma_replay_cong_sent mc
+          (PWNorm.normal_flight
+            (M.EncryptedExtensions ee) (M.Certificate cert)
+            (M.CertificateVerify cv) (M.Finished sf)
+            cv_validate cv_verify tail)
+          cflight fl_sent fl_recv final;
         lemma_forall_client_install_empty_sent region;
         Region.lemma_empty_sent_tail_collapses mp region rg_sent rg_recv mc;
         lemma_cw_region_write_installed mp region rg_sent rg_recv mc;

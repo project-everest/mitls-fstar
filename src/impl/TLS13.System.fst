@@ -2820,7 +2820,8 @@ let lemma_client_step_preserves_stage_ok
     with _pf.
       (match d.CS.delta_event with
        | CS.ConnLocalEvent _ -> ()
-       | CS.ConnNetworkEvent _ -> ())
+       | CS.ConnNetworkEvent _ -> ()
+       | CS.ConnProtectedHandshake _ -> ())
 #pop-options
 
 (** SERVER.  `server_stage_ok` alone is NOT inductive per-step: at the wide

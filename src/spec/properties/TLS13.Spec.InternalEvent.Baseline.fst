@@ -43,9 +43,11 @@ let lemma_tail_finished_keeps_stepped_record_state model step stepped = ()
 
 (* B5 *)
 
-let lemma_single_message_record_has_no_head_step model step = ()
+let lemma_single_message_record_is_a_head_step model step stepped = ()
 
-let lemma_head_implies_multi_message model step = ()
+let lemma_single_message_routes_agree model step =
+  TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_legal model step;
+  TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_model model step
 
 (* B7 *)
 

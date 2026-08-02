@@ -1228,6 +1228,17 @@ let lemma_parse_tls_message_round_trip
 
 (* --- synth_client_hello: accept/reject gate returning the wire record. --- *)
 
+let lemma_parse_handshake_serialize_round_trip fragment msg =
+  lemma_parse_tls_message_round_trip T.Handshake fragment;
+  match msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ ->
+    Seq.lemma_eq_elim fragment (serialize_handshake msg);
+    LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
+    assert (LP.parses_at_least 5 GHS.handshake_parser)
+
 let synth_client_hello (c:GCH.clientHello) : GTot (option GCH.clientHello) =
   if clientHello_representable c then Some c else None
 

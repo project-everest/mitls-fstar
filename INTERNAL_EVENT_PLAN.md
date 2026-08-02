@@ -712,10 +712,59 @@ behaviour-preserving on today's event type:
   `lemma_single_protected_message_seal_excludes_protected_head` with the
   buffer-emptiness argument already written at its only call site
   (`ProtectedWireHead.fst:1188`). Gates alone.
-- **Phase 2b — the event split.** Replay the parked branch
-  `internal-events-phase2-wip`, add the `canonical_log` erasure (M1), flip the
-  skip guards, and point the normalization lemma at
-  `ConnReceiveHandshakeRecord`.
+- **Phase 2b — the event split.** *Landed, by a different route than
+  planned.* See "Phase 2b as built" below.
+
+#### Phase 2b as built — permissive spec plus transport
+
+Two designs were attempted and abandoned before the one that landed.
+
+1. **A new `ConnReceiveHandshakeRecord` constructor** (branch
+   `internal-events-phase2-wip`). Abandoned: it forces the `canonical_log`
+   erasure M1, which breaks the pure, list-shaped
+   `lemma_canonical_flight_raw_spine` that the whole pairing stack rests on.
+2. **Banning the network route** for client-received protected handshake
+   messages, via a guard in `legal_tls_message`. Abandoned: with the network
+   route illegal there is no transport lemma, so every pairing proof would have
+   to be rewritten onto head-step shapes.
+
+**What landed instead.** The spec is made *permissive* and the two descriptions
+are proved equal:
+
+- `legal_protected_handshake_step` no longer requires
+  `consumed < B.length fragment` in its head case, so a single-message record
+  is describable as a *saturating head step* as well as a `ConnNetworkEvent`.
+  Both routes stay legal.
+- `TLS13.Spec.StateMachine.Replay` gains a family of **transport lemmas**
+  proving the two descriptions denote the same transition: same legality
+  (`lemma_single_message_head_step_legal`), same successor model (`_model`),
+  same raw accounting (`_raw_delta`, and its converse), same decode projection
+  (`_decode`), and therefore the same replay in both the received-decode and
+  the sent-seal directions (`_replay_normalizes`,
+  `_seal_replay_normalizes`).
+- A new module `TLS13.ConnectionState.ProtectedWireNormalize` lifts that to a
+  whole server flight, in both replay directions.
+- The pairing stack is made **shape-agnostic**: `ProtectedWireHead`,
+  `ProtectedWireServerFlight`, `ProtectedWireServerFlightInversion` and
+  `ProtectedWireClientFinishedInversion` now carry the client's *raw* events
+  together with `received_handshake_head_normal_form`, and normalise their own
+  replays where they need the network-event spine.
+  `client_normalized_appdata_exact_spine` is stated over raw events in normal
+  form rather than over literal `ConnNetworkEvent`s.
+
+**What did not land, and why.** `TLS13.Impl.ConnectionState.Model` still emits
+`ConnNetworkEvent` for a single-message record. Emitting the head step instead
+requires `protected_handshake_buffer_empty` at the four
+`mark_received_*` call sites in `TLS13.Impl.ConnectionState.Network`, and that
+fact is only available once the pending-plaintext structure is threaded through
+the Pulse receive path — which is Phase 3 work. The proof stack is already
+prepared for it: because every pairing lemma now accepts either shape, flipping
+the emission is a local change with no further proof obligations in the
+properties layer.
+
+`TLS13.Spec.InternalEvent.Baseline` records the new invariant as B5:
+`lemma_single_message_record_is_a_head_step` and
+`lemma_single_message_routes_agree`.
 
 ### Phase 3 — Pulse implementation
 Files: `src/impl/TLS13.Impl.Client.fst/.fsti`, client Types/Repr/ConnectionState.
