@@ -646,19 +646,14 @@ let lemma_client_wire_event_no_output
         Seq.equal
           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
           B.empty)
-  = eliminate exists msg.
-      (let conn_ev =
-         CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received;
-           CL.message_value = msg;
-         } in
+  = eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event st0 wire conn_ev /\
        SMCan.canonical_wire_step
          st0
          st1
          conn_ev
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection st0 wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns
       Seq.equal
@@ -1474,6 +1469,19 @@ let lemma_client_recv_not_into_appdata
             ~(client_at_appdata m.CS.model_control))
           (ensures ~(client_at_appdata m'.CS.model_control))
   = ()
+
+(** A protected-handshake receipt never moves the client into the
+    application-data control: that control is entered only by SENDING the
+    protected Finished. **)
+let lemma_client_protected_not_into_appdata
+  (m:CS.connection_model) (step:CS.protected_handshake_step) (m':CS.connection_model)
+  : Lemma (requires
+            CS.legal_event m (CS.ConnProtectedHandshake step) /\
+            CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            ~(client_at_appdata m.CS.model_control))
+          (ensures ~(client_at_appdata m'.CS.model_control))
+  = ()
 #pop-options
 
 #push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
@@ -1506,9 +1514,8 @@ let lemma_client_step_preserves_config
           (ensures st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -1518,13 +1525,10 @@ let lemma_client_step_preserves_config
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
       with _.
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
-         lemma_step_model_preserves_config st0.CS.cs_model conn_ev st1.CS.cs_model)
+        (         lemma_step_model_preserves_config st0.CS.cs_model conn_ev st1.CS.cs_model)
     | SM.LocalEvent local ->
       let api = CTy.client_local_event_api local in
       eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
@@ -1557,9 +1561,8 @@ let lemma_client_step_into_appdata_emits
           (ensures list_has_appdata out.SM.so_wire_outputs)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -1569,11 +1572,17 @@ let lemma_client_step_into_appdata_emits
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns list_has_appdata out.SM.so_wire_outputs
       with _.
-        lemma_client_recv_not_into_appdata st0.CS.cs_model msg st1.CS.cs_model
+        (match conn_ev with
+         | CS.ConnLocalEvent _ -> ()
+         | CS.ConnNetworkEvent dm ->
+           lemma_client_recv_not_into_appdata
+             st0.CS.cs_model dm.CL.message_value st1.CS.cs_model
+         | CS.ConnProtectedHandshake step ->
+           lemma_client_protected_not_into_appdata
+             st0.CS.cs_model step st1.CS.cs_model)
     | SM.LocalEvent local ->
       let api = CTy.client_local_event_api local in
       eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
@@ -1839,9 +1848,8 @@ let lemma_client_step_model_stepped
           (ensures model_stepped st0.CS.cs_model st1.CS.cs_model)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -1851,13 +1859,10 @@ let lemma_client_step_model_stepped
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns model_stepped st0.CS.cs_model st1.CS.cs_model
       with _.
       (
-        let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
         introduce exists (ce:CS.conn_event).
           CS.legal_event st0.CS.cs_model ce /\
           CS.step_model st0.CS.cs_model ce == Some st1.CS.cs_model
@@ -2373,9 +2378,8 @@ let lemma_client_step_sent_zero
   = lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
     match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -2385,15 +2389,12 @@ let lemma_client_step_sent_zero
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns
         (client_start_shape st1.CS.cs_model /\
          list_appdata_count out.SM.so_wire_outputs == 0)
       with _.
       (
-        let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
         let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
         lemma_client_marker_step
           st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
@@ -2865,9 +2866,8 @@ let lemma_client_step_recv_potential
           >= client_recv_min_potential st1.CS.cs_model)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -2877,7 +2877,6 @@ let lemma_client_step_recv_potential
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns
         (list_appdata_count (WFSM.event_input_messages ev)
@@ -2885,8 +2884,6 @@ let lemma_client_step_recv_potential
           >= client_recv_min_potential st1.CS.cs_model)
       with _.
       (
-        let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
         let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
         lemma_list_appdata_count_single_wire wire;
         lemma_client_recv_potential_step
@@ -3064,9 +3061,8 @@ let lemma_client_step_sent_potential
   = lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
     match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -3076,7 +3072,6 @@ let lemma_client_step_sent_potential
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns
         (list_appdata_count out.SM.so_wire_outputs
@@ -3084,8 +3079,6 @@ let lemma_client_step_sent_potential
           >= client_sent_potential st1.CS.cs_model.CS.model_control)
       with _.
       (
-        let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
         let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
         lemma_client_sent_potential_step
           st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)
@@ -3483,9 +3476,8 @@ let lemma_client_recv_at_appdata_count1
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             client_at_appdata st0.CS.cs_model.CS.model_control)
           (ensures raw_appdata_count (CW.wire_serialize wire) == 1)
-  = eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received; CL.message_value = msg; } in
+  = eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event st0 wire conn_ev /\
        CS.legal_connection_delta st0
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent =
@@ -3495,15 +3487,20 @@ let lemma_client_recv_at_appdata_count1
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection st0 wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns raw_appdata_count (CW.wire_serialize wire) == 1
     with _.
     (
-      let dm = { CL.message_direction = CL.Received; CL.message_value = msg; } in
-      lemma_client_recv_at_appdata_appdata_record
-        st0.CS.cs_model dm st1.CS.cs_model (CW.wire_serialize wire);
-      lemma_protected_raw_count_one (CW.wire_serialize wire)
+      match conn_ev with
+      | CS.ConnLocalEvent _ -> ()
+      | CS.ConnNetworkEvent dm ->
+        lemma_client_recv_at_appdata_appdata_record
+          st0.CS.cs_model dm st1.CS.cs_model (CW.wire_serialize wire);
+        lemma_protected_raw_count_one (CW.wire_serialize wire)
+      | CS.ConnProtectedHandshake step ->
+        // A head protected-handshake step consumes exactly one Application_data
+        // record, straight from [event_raw_delta_legal].
+        lemma_protected_raw_count_one (CW.wire_serialize wire)
     )
 #pop-options
 
@@ -3572,9 +3569,8 @@ let lemma_client_wire_recv_not_into_appdata
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             client_at_appdata st1.CS.cs_model.CS.model_control)
           (ensures client_at_appdata st0.CS.cs_model.CS.model_control)
-  = eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received; CL.message_value = msg; } in
+  = eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event st0 wire conn_ev /\
        CS.legal_connection_delta st0
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent =
@@ -3584,14 +3580,20 @@ let lemma_client_wire_recv_not_into_appdata
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection st0 wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns client_at_appdata st0.CS.cs_model.CS.model_control
     with _.
     (
       if client_at_appdata st0.CS.cs_model.CS.model_control then ()
       else
-        lemma_client_recv_not_into_appdata st0.CS.cs_model msg st1.CS.cs_model
+        match conn_ev with
+        | CS.ConnLocalEvent _ -> ()
+        | CS.ConnNetworkEvent dm ->
+          lemma_client_recv_not_into_appdata
+            st0.CS.cs_model dm.CL.message_value st1.CS.cs_model
+        | CS.ConnProtectedHandshake step ->
+          lemma_client_protected_not_into_appdata
+            st0.CS.cs_model step st1.CS.cs_model
     )
 #pop-options
 
@@ -4278,9 +4280,8 @@ let lemma_client_step_recv_upper
           <= client_recv_potential st1.CS.cs_model.CS.model_control)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -4290,7 +4291,6 @@ let lemma_client_step_recv_upper
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns
         (list_appdata_count (WFSM.event_input_messages ev)
@@ -4298,8 +4298,6 @@ let lemma_client_step_recv_upper
           <= client_recv_potential st1.CS.cs_model.CS.model_control)
       with _.
       (
-        let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
         let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
         lemma_list_appdata_count_single_wire wire;
         lemma_client_recv_upper_step
@@ -4740,9 +4738,8 @@ let lemma_client_step_finished_flag
   = lemma_raw_appdata_count_serialize_all out.SM.so_wire_outputs;
     match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (EC.client_wire_received_event st0 wire conn_ev /\
          CS.legal_connection_delta st0
            { CS.delta_event = conn_ev;
              CS.delta_raw_sent =
@@ -4752,7 +4749,6 @@ let lemma_client_step_finished_flag
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection st0 wire msg /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
       returns
         (list_appdata_count out.SM.so_wire_outputs
@@ -4760,8 +4756,6 @@ let lemma_client_step_finished_flag
           >= client_finished_sent_flag st1.CS.cs_model)
       with _.
       (
-        let conn_ev = CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received; CL.message_value = msg; } in
         let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
         lemma_client_finished_flag_step
           st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent (CW.wire_serialize wire)

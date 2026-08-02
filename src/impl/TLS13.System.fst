@@ -1465,9 +1465,8 @@ let lemma_wire_facts_deliver_to_client a b =
   with _pd. (
     lemma_client_step_shape a.client c' (SM.WireEvent wire) out;
     Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent
-          { CL.message_direction = CL.Received; CL.message_value = msg } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event a.client wire conn_ev /\
        CS.legal_connection_delta a.client
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
@@ -1476,13 +1475,30 @@ let lemma_wire_facts_deliver_to_client a b =
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
        SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection a.client wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
     with _ps. (
       assert (WStep.hs_hellos_stable a.client.CS.cs_model c'.CS.cs_model);
-      let conn_ev = CS.ConnNetworkEvent
-        { CL.message_direction = CL.Received; CL.message_value = msg } in
+      match conn_ev with
+      | CS.ConnLocalEvent _ -> ()
+      | CS.ConnProtectedHandshake _ ->
+        // A protected handshake receipt touches neither hello field, so FACTS
+        // 1-3 and the coupling transfer from a unchanged.
+        assert (forall (dir:CS.direction) (sh:GSH.serverHello).
+          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh) }));
+        lemma_step_preserves_server_hello a.client.CS.cs_model conn_ev c'.CS.cs_model;
+        assert (forall (dir:CS.direction) (ch:GCH.clientHello).
+          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
+        lemma_step_preserves_client_hello_legal a.client.CS.cs_model conn_ev c'.CS.cs_model;
+        assert (ch_wire_equiv b);
+        assert (sh_wire_equiv b);
+        assert (hello_key_shares_ok b);
+        assert (hello_coupling b)
+      | CS.ConnNetworkEvent dm ->
+      let msg = dm.CL.message_value in
+      assert (EC.network_input_message_projection a.client wire msg);
       (match msg with
        | M.TlsHandshake (M.ServerHello client_sh) ->
          // ServerHello receive: hs_server_hello is installed; hs_client_hello is

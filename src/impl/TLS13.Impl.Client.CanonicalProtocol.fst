@@ -2646,12 +2646,8 @@ let lemma_client_step_wire_log_delta
 =
   match ev with
   | SM.WireEvent wire ->
-    eliminate exists msg.
-      (let conn_ev =
-        CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = msg;
-        } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (client_wire_received_event st0 wire conn_ev /\
       CS.legal_connection_delta
         st0
         {
@@ -2967,15 +2963,11 @@ let lemma_client_step_histories_ahead
 =
   match ev with
   | SM.WireEvent wire ->
-    let msg =
+    let conn_ev =
       FStar.IndefiniteDescription.indefinite_description_ghost
-        M.tls_message
-        (fun msg ->
-          let conn_ev =
-            CS.ConnNetworkEvent {
-              CL.message_direction = CL.Received;
-              CL.message_value = msg;
-            } in
+        CS.conn_event
+        (fun conn_ev ->
+          client_wire_received_event st0 wire conn_ev /\
           CS.legal_connection_delta
             st0
             {
@@ -2986,11 +2978,6 @@ let lemma_client_step_histories_ahead
             }
             st1 /\
           client_local_outputs_match conn_ev out.SM.so_local_outputs) in
-    let conn_ev =
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = msg;
-      } in
     let delta = {
       CS.delta_event = conn_ev;
       CS.delta_raw_sent =

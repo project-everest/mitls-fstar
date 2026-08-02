@@ -126,23 +126,17 @@ let lemma_client_step_appends_non_ccs
 =
   match ev with
   | SM.WireEvent wire ->
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev =
-         CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received; CL.message_value = msg; } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event st0 wire conn_ev /\
        SMCan.canonical_wire_step st0 st1 conn_ev
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection st0 wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns (exists (ce:CS.conn_event).
       st1.CS.cs_event_log == L.append st0.CS.cs_event_log [ce] /\
       CCShape.is_received_ccs ce == false)
     with _.
     (
-      let conn_ev =
-        CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received; CL.message_value = msg; } in
       // canonical_wire_step (unfold) gives legal_connection_delta, hence the log
       // append and the received raw-delta legality.
       assert (CS.legal_connection_delta st0
@@ -153,18 +147,22 @@ let lemma_client_step_appends_non_ccs
       assert (st1.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev]);
       assert (L.memP wire (WFSM.event_input_messages ev));
       // rule out a received CCS
-      (match msg with
-       | M.TlsChangeCipherSpec ->
-         // event_raw_delta_legal (Received) => network_message_raw_delta_legal
-         assert (CS.network_message_raw_delta_legal st0.CS.cs_model
-                   { CL.message_direction = CL.Received; CL.message_value = msg; }
-                   (CW.wire_serialize wire));
-         assert (Seq.equal (CW.wire_serialize wire)
-                   (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec));
-         lemma_received_ccs_wire_content wire;
-         assert (wire.CW.wm_content_type == T.Change_cipher_spec);
-         assert (False)
-       | _ -> ());
+      (match conn_ev with
+       | CS.ConnProtectedHandshake _ -> ()
+       | CS.ConnLocalEvent _ -> ()
+       | CS.ConnNetworkEvent dm ->
+         (match dm.CL.message_value with
+          | M.TlsChangeCipherSpec ->
+            // event_raw_delta_legal (Received) => network_message_raw_delta_legal
+            assert (CS.network_message_raw_delta_legal st0.CS.cs_model
+                      dm
+                      (CW.wire_serialize wire));
+            assert (Seq.equal (CW.wire_serialize wire)
+                      (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec));
+            lemma_received_ccs_wire_content wire;
+            assert (wire.CW.wm_content_type == T.Change_cipher_spec);
+            assert (False)
+          | _ -> ()));
       assert (CCShape.is_received_ccs conn_ev == false);
       introduce exists (ce:CS.conn_event).
         st1.CS.cs_event_log == L.append st0.CS.cs_event_log [ce] /\

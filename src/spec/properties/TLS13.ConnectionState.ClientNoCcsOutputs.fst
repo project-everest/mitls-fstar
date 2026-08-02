@@ -195,9 +195,8 @@ let lemma_client_step_outputs_no_ccs
   match ev with
   | SM.WireEvent wire ->
     // received event: raw_sent (= serialize_all so) forced empty
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received; CL.message_value = msg; } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event st0 wire conn_ev /\
        CS.legal_connection_delta st0
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent =
@@ -207,7 +206,6 @@ let lemma_client_step_outputs_no_ccs
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection st0 wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns (forall (wm:CW.wire_message).
       L.memP wm out.SM.so_wire_outputs ==>
