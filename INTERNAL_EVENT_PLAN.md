@@ -646,50 +646,68 @@ every message-level consumer downstream — including the Pairing theorem — ke
 their statements **verbatim**. Blast radius is 4 files (`ClientCanonicalShape`
 `.fst`/`.fsti`, `ServerCanonicalShape`, `ProtectedWireServerFlightInversion`).
 
-**M2 — `raw_flight_spine` skips record events between slots.** Introduce
+**M2 — slots become delivery groups.** A first attempt at M2 used a
+`skip_records` function that drops leading record events. That is wrong: the
+record event is the *byte-consuming* member of the group, so dropping it is not
+replay-preserving on the receiver side. The correct primitive keeps the group
+intact. In `ClientCanonicalShape`:
 
 ```fstar
-let rec skip_records (evs:list CS.conn_event) : list CS.conn_event =
-  match evs with
-  | CS.ConnReceiveHandshakeRecord _ :: rest -> skip_records rest
-  | _ -> evs
+(* The events by which the client takes delivery of one handshake message.
+   Today always a singleton; after the split, a record event followed by the
+   internal event that consumes it. *)
+let delivers_handshake (grp:list CS.conn_event) (msg:M.handshake_msg) : prop =
+  match grp with
+  | [ev] -> canonical_event ev == recv_ev msg
+  | _    -> False
 ```
 
-and replace the single list equality above by a chain
-`skip_records raw_suffix == raw_ee :: r1`, `skip_records r1 == raw_cert :: r2`,
-and so on. This is the *only* site where the 1-to-N arity change is visible.
-Introduced as the identity function on today's event type, it lands and gates
-before any event-type change.
+and `raw_flight_spine` replaces its single list equality by an append of groups:
 
-**M3 — the byte-level pairing peels a group, not an event.** In a pair,
+```fstar
+raw_suffix ==
+  L.append g_ee (L.append g_cert (ConnLocalEvent cv_validate ::
+    L.append g_cv (ConnLocalEvent cv_verify :: L.append g_sf raw_tail)))
+/\ delivers_handshake g_ee   (M.EncryptedExtensions ee)
+/\ delivers_handshake g_cert (M.Certificate cert)
+/\ ...
+```
+
+With singleton groups `L.append [x] l` reduces to `x :: l`, so today's statement
+is recovered definitionally and the step is behaviour-preserving. In Phase 2b
+`delivers_handshake` gains one case:
+
+```fstar
+  | [CS.ConnReceiveHandshakeRecord _; ev] -> canonical_event ev == recv_ev msg
+```
+
+and nothing else in the spine changes.
+
+**M3 — peeling a group.** The byte-level pairing peels a whole group against
+the sender's single `ConnNetworkEvent`. In a pair
 `protected_record_count Sent msg == 1` for every handshake message
-(`TLS13.Spec.StateMachine.fst:1577`), so the sender emits exactly one record
-per message and the receiver's group is exactly
-
-```
-[ ConnReceiveHandshakeRecord pt ; ConnProtectedHandshake step ]
-```
-
-— fixed length two, never variable-length stuttering. The record event is the
-byte-consuming member and pairs with the sender's `ConnNetworkEvent`; the
+(`TLS13.Spec.StateMachine.fst:1577`), so the sender emits exactly one record per
+message and the group has fixed length two — never variable-length stuttering.
+The record event carries the bytes and pairs with the sender's event; the
 internal event is a zero-byte stutter absorbed by the existing
 `lemma_received_replay_skip_empty_head_preserves_peer_stream`, whose guard
 *simplifies* to `ConnProtectedHandshake _ -> True` /
 `ConnReceiveHandshakeRecord _ -> False`.
 
-Coalesced records (a peer that packs several messages into one record) produce
-a longer group. That case is already outside the pairing theorem's scope — it
+Coalesced records (a peer packing several messages into one record) produce a
+longer group. That case is already outside the pairing theorem's scope — it
 concerns interop with third-party servers, not this implementation paired with
 itself — so M3 does not need the general form to close Phase 2.
 
 **Revised ordering.** Phase 2 now splits into three gated steps, the first two
 behaviour-preserving on today's event type:
 
-- **Phase 2a-i — `skip_records`.** Introduce it as the identity and restate
-  `raw_flight_spine` and `lemma_client_raw_suffix_flight_spine` through it.
-  Small, self-contained, gates alone.
-- **Phase 2a-ii — delivery groups.** Introduce the group predicate in
-  `ProtectedWireBase` with today's intro forms, restate the ~9 normalization
+- **Phase 2a-i — delivery groups in the spine.** Introduce
+  `delivers_handshake` with only the singleton case and restate
+  `raw_flight_spine`, `lemma_client_raw_suffix_flight_spine` and its single
+  caller in `ProtectedWireServerFlightInversion` through group appends.
+  Behaviour-preserving; gates alone.
+- **Phase 2a-ii — group-based pairing.** Restate the ~9 normalization
   and pairing lemmas over groups, replace
   `lemma_single_protected_message_seal_excludes_protected_head` with the
   buffer-emptiness argument already written at its only call site
