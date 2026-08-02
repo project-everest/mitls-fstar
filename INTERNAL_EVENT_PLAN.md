@@ -995,6 +995,119 @@ Three facts made the weakening cheap and are worth recording:
    `raw_received = prefix` (recall
    `raw_received_matches_network_input r n = Seq.equal r B.empty \/ Seq.equal r n`).
 
+#### What the switch does and does not fix
+
+`TLS13.Impl.Client.CanonicalProtocol.client_process_network` (Phase 4) and
+`TLS13.Impl.Client.Driver.BufferedNetwork.process` (Phase 5a) now both call
+`C.process_coalesced_network_bytes`.  `grep C.process_network_bytes` over the
+client modules returns nothing outside `process_legacy_coalesced_fallback`.
+
+It is worth being precise about what that buys, because an early reading of the
+Phase 5a diff suggested it introduced a stall and it does not:
+
+* `process_legacy_coalesced_fallback` is a **thin wrapper** around
+  `process_network_bytes` — same body, same behaviour, only a weakened
+  postcondition.  So the *only* behavioural difference between the two
+  primitives is the head route, and the head route is reachable only when
+  `decode_network_buffer` returns `decoded_buffer_parsed == None`, which is
+  exactly the coalesced case where the legacy primitive fails.
+  `process_coalesced_network_bytes` is therefore strictly better than
+  `process_network_bytes`: identical everywhere except that it makes progress
+  on the head message where the legacy path errors out.
+* Neither primitive drains.  There is **no loop anywhere in
+  `TLS13.Impl.Client.fst`** — every entry point performs at most one protected
+  handshake step and leaves the rest of the record in the model's
+  `hb_encrypted_server_handshake_bytes` with `..._parsed` short of its length.
+  Draining is `process_pending_protected_handshake`, and a grep of every
+  `Client.Driver.*` module and `ChannelImplementation` shows **no driver calls
+  it** — only `Client.Engine.fst` and the canonical instance drain.
+
+So the buffered driver's inability to finish a coalesced record is
+**pre-existing and independent of this switch**; Phase 5a strictly improves the
+failure mode (progress-then-stall instead of immediate decode failure) and is
+the prerequisite for fixing it properly.
+
+That the root gate stays green is not evidence either way.  A traced run
+(`make ATLAS_LOGGING=1 test-openssl-echo`) emits no `client_protected_head`
+(event 2030) at all: OpenSSL in that test sends each handshake message in its
+own record, so `decoded_buffer_parsed` is always `Some` and the head route is
+never entered.  The coalesced path is unexercised by the test suite, which is
+why it has to be closed by construction rather than by testing.
+
+#### Phase 5b: the drain
+
+`BufferedNetwork.process` must perform the network step and then drain pending
+internal steps to completion under a fuel bound.  The proof obligation is a
+composite predicate, because `coalesced_network_bytes_end_to_end_correct` pins
+`st1` as the *direct* successor of `st0`:
+
+```
+drained_network_bytes_end_to_end_correct st0 st1 resp input old_no no old_ao ao :=
+  exists st_mid.
+    coalesced_network_bytes_end_to_end_correct
+      st0 st_mid resp input old_no no old_ao ao /\
+    protected_drain_chain st_mid st1
+```
+
+with `protected_drain_chain` a fuel-indexed reflexive-transitive closure of
+`pending_protected_handshake_result_correct _ _ (Some resp) /\ resp.status == StepOk`.
+
+What makes this tractable is that a drain step is *application-invisible*:
+`pending_protected_handshake_result_correct` gives
+`protected_handshake_step_correct st_mid st' resp step B.empty B.empty B.empty`,
+so a drain step has `network_out_len == 0sz`, `app_out_len == 0sz`,
+`raw_sent == B.empty` and `raw_received == B.empty`.  It therefore adds nothing
+to either wire log, emits no application or network output, preserves
+`model_config`, and preserves `client_end_to_end_invariant`.  Each property the
+driver consumes needs one induction over the chain:
+
+* config preservation, `client_state_correct`, `client_end_to_end_invariant`;
+* wire-log stability (both `raw_sent` and `raw_received` unchanged), which
+  discharges `lemma_network_bytes_wire_lengths` and
+  `lemma_coalesced_logged_received_exact_when_nonfailed`;
+* application-log stability, for `ChannelImplementation`.
+
+Then `result_valid` / `lemma_result_valid_preserves` (`BufferedNetwork.fst`),
+`completed_drive_correct` (`BufferedNetwork.fsti`) and
+`client_receive_observation_network_correct` (`Driver.State.fst`) move to the
+composite predicate.  This is the last structural piece before Phases 6-9.
+
+### Phase 5a as built — coalesced vocabulary everywhere, one blocked switch
+
+Phase 5a weakened the whole client driver stack from
+`CT.network_bytes_end_to_end_correct` to
+`CT.coalesced_network_bytes_end_to_end_correct`, so every predicate and lemma
+on the receive path now speaks the vocabulary that admits a head
+protected-handshake step.  Concretely:
+
+* `TLS13.Impl.Client.CanonicalProtocol` gained six coalesced-variant lemmas
+  (`lemma_client_coalesced_head_step`,
+  `..._head_raw_record_parse_success`, `..._network_bytes_step_correct`,
+  `..._preserves_config`, `..._head_wire_logs`, `..._network_progress`).
+* `Driver.State` gained `lemma_coalesced_logged_received_exact_when_nonfailed`,
+  and `lemma_network_bytes_wire_lengths` /
+  `lemma_network_bytes_logged_received_accounted` were weakened to depend only
+  on `CT.network_bytes_step_correct`, which the head disjunct satisfies.  This
+  avoided touching `Client.Types.fst` at all.
+* `Driver.BufferedNetwork` (`result_valid`, `lemma_result_valid_preserves`,
+  `completed_drive_correct`), `Driver.Receive`, `Driver.Core` and
+  `ChannelImplementation` were all renamed to the coalesced predicate.
+
+Three facts made the weakening cheap and are worth recording:
+
+1. The head-protected disjunct forces `StepOk` (`protected_handshake_step_correct`
+   pins `status == StepOk`, `network_out_len == 0sz`, `app_out_len == 0sz`).  So
+   any other status pins the strong predicate —
+   `lemma_client_coalesced_not_step_ok_is_strong` proves this with an empty
+   body, and every non-`StepOk` branch of every affected proof delegates to the
+   pre-existing argument unchanged.
+2. `NeedMoreInput ==> consumed_len == 0sz` contradicts the head disjunct's
+   `0 < consumed_len`, so SMT usually excludes the head disjunct unaided.
+3. The head disjunct satisfies `network_bytes_step_correct`, witnessed by
+   `ev = ConnProtectedHandshake step`, `raw_sent = B.empty`,
+   `raw_received = prefix` (recall
+   `raw_received_matches_network_input r n = Seq.equal r B.empty \/ Seq.equal r n`).
+
 #### The switch that is deliberately *not* taken yet
 
 `TLS13.Impl.Client.CanonicalProtocol.client_process_network` — the canonical
