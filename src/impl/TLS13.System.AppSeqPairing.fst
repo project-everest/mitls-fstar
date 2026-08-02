@@ -60,6 +60,10 @@ module WStep = TLS13.System.WireStep
 module WF   = Common.WireFormat
 module SCB  = TLS13.System.SeqCountBase
 module ORD  = TLS13.System.Ordering
+module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
+module HANR = TLS13.ConnectionState.HandshakeAgreementNonReady
+module WFL  = TLS13.Spec.WireFormatLemmas
+module SLM  = TLS13.System.SlotMono
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -1374,11 +1378,60 @@ let read_write_coupling (s:SY.tls_system_state) : prop =
         (snap_wr p).R.epoch =!= R.Application
   | _ -> True
 
+(** THE MISSING `server_clean` MIRROR (cross-endpoint appdata-epoch coupling).
+
+    `SY.tls_system_inv` carries `client_clean` (System.fst:589), coupling the
+    CLIENT's readiness to the server — but NO `server_clean`.  This conjunct is
+    that mirror: at a `Quiet` channel, each endpoint AT `ControlApplicationData`
+    forces its PEER's application WRITE epoch to be installed.
+
+    STATED AT THE EPOCH LEVEL DELIBERATELY (control antecedent, EPOCH consequent).
+    A control-level mirror (`peer @ ControlApplicationData`) would COLLAPSE in the
+    closure region: `fail_model`/close move the peer OFF `ControlApplicationData`
+    to `ControlFailed`/`ControlClosing`, so a control consequent would become
+    false there.  The application WRITE epoch, by contrast, PERSISTS: `fail_model`
+    (StateMachine.fst:303) preserves `model_record`, and — given
+    `SY.tls_no_rekeying` (which excludes the `M.TlsKeyUpdate` re-`install_keys`
+    arms) — no step ever un-installs an `Application` epoch.  So the consequent is
+    MONOTONE and survives the closure region, which is exactly what lets the two
+    LOCAL families preserve it for free and lets the closure-region sends discharge
+    it (they leave `ControlApplicationData`, weakening the antecedent). **)
+let quiet_appdata_write_coupling (s:SY.tls_system_state) : prop =
+  MP.Quiet? s.channel ==>
+    ( (CS.ControlApplicationData? (SY.ctrl s.server) ==>
+         R.Application? (wr s.client).R.epoch) /\
+      (CS.ControlApplicationData? (SY.ctrl s.client) ==>
+         R.Application? (wr s.server).R.epoch) )
+
+(** GATE 2a conjunct 1 — both-slots gate: the missing `server_clean` mirror of
+    the client-side readiness.  Once the CLIENT has verified the server Finished
+    and BOTH endpoints hold their `ks_client_handshake_traffic` slot, the two
+    slots carry byte-identical record material.  The consume-side spec support is
+    the server's protected-Finished open at StateMachine.fst:1375-1377. **)
+let hs_material_agreement (s:SY.tls_system_state) : prop =
+  ( s.client.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified /\
+    Some? s.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+    Some? s.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ) ==>
+      SMKM.key_schedule_traffic_record_material_agrees
+        (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) s.client s.server
+
+(** GATE 2a conjunct 2 — client record<->slot link, gated on the client's
+    Handshake WRITE epoch, per-endpoint.  Survives ControlFailed as a carried
+    fact (fail_model preserves model_record + hs_keys). **)
+let client_hs_write_record_slot_link (s:SY.tls_system_state) : prop =
+  R.Handshake? (wr s.client).R.epoch ==>
+    SMKM.record_direction_material_matches_key_schedule_for_role
+      CS.ClientEndpoint CS.TrafficWrite
+      (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) s.client.CS.cs_model
+
 let app_extras (s:SY.tls_system_state) : prop =
   app_seq_pairing s /\
   app_material_agreement s /\ channel_seal_ok s /\
   inflight_sender_stepped s /\ inflight_single_record s /\
-  read_write_coupling s
+  read_write_coupling s /\
+  quiet_appdata_write_coupling s /\
+  hs_material_agreement s /\
+  client_hs_write_record_slot_link s
 
 (** Initial state: both record epochs are `Initial`, so `cf_delivered` is false
     and the agreement is vacuous; `app_seq_pairing` was shown initial above; and

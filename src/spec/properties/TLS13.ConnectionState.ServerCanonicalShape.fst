@@ -1080,3 +1080,123 @@ let lemma_server_reachable_sfs_shared_secret_present
       with _. ()
     )
 #pop-options
+
+(* ================================================================== *)
+(* Traffic-slot PRESENCE forces both hellos, monotonically.            *)
+(*                                                                     *)
+(* The server READ handshake key ([ks_client_handshake_traffic]) is    *)
+(* installed only at [HsServerHelloSent] (via                          *)
+(* [traffic_install_allowed_at_stage_for_role]); at every server       *)
+(* control from [HsServerHelloSent] onward the ServerHello and the     *)
+(* ClientHello are already present, and no step ever clears those      *)
+(* fields or the slot (in particular [fail_model] preserves            *)
+(* [model_handshake]).  Unlike [server_canonical_shape] (control-keyed, *)
+(* [True] at [ControlFailed]) this invariant survives ControlFailed.   *)
+(* ================================================================== *)
+
+(* At every server control where the READ slot can already be present,
+   the two hellos are recorded.  [HsServerHelloSent] onward forces both;
+   [HsClientHelloReceived] forces only the client hello (server hello is
+   sent later).  All other controls carry no constraint. *)
+let control_forces_hellos (m:CS.connection_model) : prop =
+  match m.CS.model_control with
+  | CS.ControlHandshaking CS.HsServerHelloSent
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
+  | CS.ControlHandshaking CS.HsServerFinishedSent
+  | CS.ControlApplicationData ->
+    Some? m.CS.model_handshake.CS.hs_server_hello /\
+    Some? m.CS.model_handshake.CS.hs_client_hello
+  | CS.ControlHandshaking CS.HsClientHelloReceived ->
+    Some? m.CS.model_handshake.CS.hs_client_hello
+  | _ -> True
+
+(* The monotone invariant carried through the canonical trace. *)
+let hellos_inv (m:CS.connection_model) : prop =
+  m.CS.model_config.CS.config_role == CS.ServerEndpoint ==>
+    ( (Some? m.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ==>
+         (Some? m.CS.model_handshake.CS.hs_server_hello /\
+          Some? m.CS.model_handshake.CS.hs_client_hello)) /\
+      control_forces_hellos m )
+
+(* Single-step preservation of [hellos_inv].  [step_pre] provides
+   [server_canonical_shape st0], which is used only to exclude the
+   canonically-unreachable [HsClientFinishedReceived] control (whose
+   [log_shape] is [False]); every other case is field monotonicity plus the
+   install-stage constraint from [legal_event]. *)
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 40 --split_queries always"
+let lemma_step_preserves_hellos (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
+  : Lemma (requires step_pre st0 s' conn_ev /\ hellos_inv st0.CS.cs_model)
+          (ensures hellos_inv s'.CS.cs_model)
+  = CLem.lemma_step_model_preserves_config st0.CS.cs_model conn_ev s'.CS.cs_model
+#pop-options
+
+(* Trace induction: carry both [server_canonical_shape] and [hellos_inv]. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let rec lemma_trace_hellos
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                             CTy.server_local_event EAPI.local_output))
+  : Lemma
+      (requires
+        SM.trace_reaches (WStep.server_sm init) st0 trace st1 /\
+        server_canonical_shape st0 /\
+        hellos_inv st0.CS.cs_model /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        log_has_no_received_ccs st1.CS.cs_event_log)
+      (ensures hellos_inv st1.CS.cs_model)
+      (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+        let s' = tr.SM.tr_next_state in
+        lemma_server_step_facts st0 s' tr.SM.tr_event tr.SM.tr_output;
+        lemma_server_step_config st0 s' tr.SM.tr_event tr.SM.tr_output;
+        lemma_trace_log_extends init s' st1 rest;
+        eliminate exists (conn_ev:CS.conn_event).
+          (s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
+           CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
+           CS.legal_event st0.CS.cs_model conn_ev /\
+           is_server_canonical_event conn_ev)
+        returns hellos_inv st1.CS.cs_model
+        with _.
+          eliminate exists (ext':list CS.conn_event).
+            st1.CS.cs_event_log == L.append s'.CS.cs_event_log ext'
+          returns hellos_inv st1.CS.cs_model
+          with _.
+          (
+            L.append_memP st0.CS.cs_event_log [conn_ev] conn_ev;
+            L.append_memP s'.CS.cs_event_log ext' conn_ev;
+            assert (is_received_ccs conn_ev == false);
+            lemma_step_preserves_shape st0 s' conn_ev;
+            lemma_step_preserves_hellos st0 s' conn_ev;
+            lemma_trace_hellos init s' st1 rest
+          )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_server_reachable_traffic_slot_hellos_present
+  (cfg:CS.connection_config) (s:CS.connection_state)
+  : Lemma
+    (requires
+       WStep.server_reachable (CS.initial cfg) s /\
+       s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+       Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+       log_has_no_received_ccs s.CS.cs_event_log)
+    (ensures
+       Some? s.CS.cs_model.CS.model_handshake.CS.hs_server_hello /\
+       Some? s.CS.cs_model.CS.model_handshake.CS.hs_client_hello)
+  = let init = CS.initial cfg in
+    lemma_shape_initial cfg;
+    assert (hellos_inv init.CS.cs_model);
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                                 CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches (WStep.server_sm init) init trace s
+    returns
+      (Some? s.CS.cs_model.CS.model_handshake.CS.hs_server_hello /\
+       Some? s.CS.cs_model.CS.model_handshake.CS.hs_client_hello)
+    with _.
+    (
+      lemma_trace_config init init s trace;
+      lemma_trace_hellos init init s trace
+    )
+#pop-options

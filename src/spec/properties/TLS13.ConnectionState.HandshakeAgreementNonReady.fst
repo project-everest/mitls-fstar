@@ -35,6 +35,7 @@ module TLS13.ConnectionState.HandshakeAgreementNonReady
 module R = TLS13.Record.Spec
 module C = TLS13.Crypto.Spec
 module Seq = FStar.Seq
+module SHSL = TLS13.ConnectionState.ServerHelloSelectionLink
 
 open TLS13.Spec.StateMachine
 open TLS13.Spec.StateMachine.KeyIdentifiers
@@ -113,6 +114,86 @@ let lemma_paired_x25519_key_shares_nonready
 
 #pop-options
 
+(* ControlFailed-AWARE paired-x25519 combine (Gate 2a generalization).          *)
+(* Identical to [lemma_paired_x25519_key_shares_nonready] but drops the server    *)
+(* control restrictions [=!= HsClientHelloReceived] and [~ControlFailed?].  The    *)
+(* server-side x25519 projection is recovered control-independently via            *)
+(* [SHSL.lemma_server_x25519_key_share_projection_of_hello_present]: the load-      *)
+(* bearing [x25519_shared server_sk ch_ks == Some shared] survives ControlFailed    *)
+(* (server_x25519_reachable_shape's ControlFailed disjunction), and the one extra   *)
+(* piece the non-failed proof used --- the sh<->sel link                            *)
+(* [server_hello_key_share sh == selection.server_key_share_public] --- is a         *)
+(* fail_model-preserved local fact (SHSL.lemma_consistent_server_hello_selection_    *)
+(* link).  [paired_cleartext_hello_key_shares] already forces [Some? hs_server_      *)
+(* hello], and the link shape then forces [Some? hs_server_selection].              *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_paired_x25519_key_shares_nonready_cf
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server)
+      (ensures paired_x25519_key_shares client server)
+=
+  lemma_consistent_shared_secret_stable_client_x25519_projection client;
+  (* server-side projection, ControlFailed-robust *)
+  SHSL.lemma_consistent_server_hello_selection_link server;
+  assert (SHSL.server_hello_selection_link_shape server);
+  (* [paired_cleartext_hello_key_shares] forces [Some? server.hs_server_hello]; *)
+  (* the link shape's [Some sh, None -> False] arm then forces the selection.   *)
+  assert (Some? server.cs_model.model_handshake.hs_server_hello);
+  assert (Some? server.cs_model.model_handshake.hs_server_selection);
+  SHSL.lemma_server_x25519_key_share_projection_of_hello_present server;
+  assert (client_x25519_key_share_projection client);
+  assert (server_x25519_key_share_projection server);
+  assert (paired_cleartext_hello_key_shares client server);
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_start,
+    client_hs.hs_client_hello,
+    client_hs.hs_server_hello,
+    client_hs.hs_keys.ks_shared_secret,
+    server_hs.hs_server_selection,
+    server_hs.hs_client_hello,
+    server_hs.hs_server_hello,
+    server_hs.hs_keys.ks_shared_secret
+  with
+  | Some start, Some client_ch, Some client_sh, Some client_shared,
+    Some selection, Some server_ch, Some server_sh, Some server_shared ->
+    (match
+       start.start_client_key_share_private,
+       selection.server_key_share_private
+     with
+     | Some client_sk, Some server_sk ->
+       assert (client_hello_key_share client_ch ==
+         client_hello_key_share server_ch);
+       assert (server_hello_key_share client_sh ==
+         server_hello_key_share server_sh);
+       (match
+          client_hello_key_share server_ch,
+          server_hello_key_share client_sh
+        with
+        | Some ch_ks, Some sh_ks ->
+          assert (ch_ks == start.start_client_key_share_public);
+          assert (sh_ks == selection.server_key_share_public);
+          assert (C.x25519_public_from_private client_sk ==
+            start.start_client_key_share_public);
+          assert (C.x25519_public_from_private server_sk ==
+            selection.server_key_share_public);
+          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+        | _, _ -> assert False)
+     | _, _ -> assert False)
+  | _, _, _, _, _, _, _, _ -> assert False
+#pop-options
+
 (* Local copy of the internal [Lemmas.fst] slot-agreement bridge (not exposed  *)
 (* in the interface): from expected-material match on both endpoints plus       *)
 (* peer derived-key agreement, chain [Seq.equal] transitively to conclude the   *)
@@ -164,6 +245,49 @@ let lemma_local_key_schedule_traffic_record_material_agrees_from_expected
   | _, _, _, _, _, _ ->
     assert False
 #pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
+let lemma_handshake_client_traffic_key_schedule_material_agrees_nonready
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        (server.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived) /\
+        (~(ControlFailed? server.cs_model.model_control)) /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures
+        key_schedule_traffic_record_material_agrees
+          (traffic_id TrafficHandshake ClientTraffic) client server)
+=
+  let tid = traffic_id TrafficHandshake ClientTraffic in
+  assert (tid == traffic_id TrafficHandshake ClientTraffic);
+  (* lineage from Brick 3.7 *)
+  lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage client;
+  lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage server;
+  (* paired x25519 (non-ready); server control excludes HsClientHelloReceived + ControlFailed *)
+  lemma_paired_x25519_key_shares_nonready client server;
+  (* derived-key agreement for the record key and iv of tid *)
+  lemma_paired_x25519_key_shares_derived_key_agrees (TrafficKey tid) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees (TrafficIV tid) client server;
+  (* slots match expected derived material (Brick 3.5) *)
+  lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected client;
+  lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected server;
+  assert (traffic_material_matches_expected_derived_material tid client);
+  assert (traffic_material_matches_expected_derived_material tid server);
+  (* slot agreement across endpoints *)
+  lemma_local_key_schedule_traffic_record_material_agrees_from_expected tid client server
+#pop-options
+
+
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_handshake_client_traffic_peer_record_material_agrees_nonready
@@ -231,4 +355,50 @@ let lemma_handshake_client_traffic_peer_record_material_agrees_nonready
   (* assemble the inputs and conclude *)
   assert (peer_record_material_inputs_agree tid client server);
   lemma_peer_record_material_agrees tid client server
+#pop-options
+
+(* ControlFailed-AWARE slot-level agreement (Gate 2a generalization).           *)
+(* Same as [lemma_handshake_client_traffic_key_schedule_material_agrees_nonready] *)
+(* but drops the server control restrictions, using the CF-robust paired-x25519   *)
+(* combine.  This is what the deliver_to_client flip establishment consumes: at    *)
+(* the flip the server may already sit at [ControlFailed] (a protected            *)
+(* Close_notify from the encrypted-flight window is legal and count-             *)
+(* indistinguishable from a Finished; the crypto model has no INT-CTXT axiom to    *)
+(* exclude it), and the SLOT-level agreement is exactly the fact that survives     *)
+(* there --- unlike the record-level [peer_record_material_agrees], which epoch-    *)
+(* checks record directions and goes blind under [model_record_keys_consistent =    *)
+(* True] at ControlFailed. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
+let lemma_handshake_client_traffic_key_schedule_material_agrees_nonready_cf
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures
+        key_schedule_traffic_record_material_agrees
+          (traffic_id TrafficHandshake ClientTraffic) client server)
+=
+  let tid = traffic_id TrafficHandshake ClientTraffic in
+  assert (tid == traffic_id TrafficHandshake ClientTraffic);
+  lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage client;
+  lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage server;
+  (* CF-robust paired x25519: no server control restriction *)
+  lemma_paired_x25519_key_shares_nonready_cf client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees (TrafficKey tid) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees (TrafficIV tid) client server;
+  lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected client;
+  lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected server;
+  assert (traffic_material_matches_expected_derived_material tid client);
+  assert (traffic_material_matches_expected_derived_material tid server);
+  lemma_local_key_schedule_traffic_record_material_agrees_from_expected tid client server
 #pop-options

@@ -24,6 +24,34 @@ open TLS13.Spec.WireFormatLemmas
 (* endpoint.  The server record-read presence is a plain send-readable gate;      *)
 (* where it is absent the delivery's [open_record] fails and the consumer's       *)
 (* conjunct is vacuous. *)
+(* SLOT-LEVEL variant (Gate 2a): the first half of Brick 4, cut at the           *)
+(* key-schedule slot agreement.  Concludes only that the two                      *)
+(* [ks_client_handshake_traffic] slots carry byte-identical record material,      *)
+(* with NO record-direction material gates and NO fixed client/server controls    *)
+(* (only the server exclusion of [HsClientHelloReceived]/[ControlFailed] that     *)
+(* [paired_x25519_key_shares_nonready] needs).  Used to establish conjunct 1      *)
+(* ([hs_material_agreement]) at the deliver_to_client flip. *)
+val lemma_handshake_client_traffic_key_schedule_material_agrees_nonready
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        (server.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived) /\
+        (~(ControlFailed? server.cs_model.model_control)) /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures
+        key_schedule_traffic_record_material_agrees
+          (traffic_id TrafficHandshake ClientTraffic) client server)
+
 val lemma_handshake_client_traffic_peer_record_material_agrees_nonready
   (client:connection_state)
   (server:connection_state)
@@ -43,4 +71,31 @@ val lemma_handshake_client_traffic_peer_record_material_agrees_nonready
         Some? (record_direction_material server.cs_model.model_record.record_read))
       (ensures
         peer_record_material_agrees
+          (traffic_id TrafficHandshake ClientTraffic) client server)
+
+(* ControlFailed-AWARE slot-level variant (Gate 2a): drops the server control    *)
+(* restrictions of [lemma_handshake_client_traffic_key_schedule_material_agrees_  *)
+(* nonready].  Consumed at the deliver_to_client flip, where the server may       *)
+(* already sit at [ControlFailed].  Sound because the SLOT-level agreement        *)
+(* depends only on the x25519 key-share projection (which survives ControlFailed  *)
+(* via server_x25519_reachable_shape's disjunction + the fail_model-preserved     *)
+(* sh<->sel link), NOT on record-key consistency (which goes blind at             *)
+(* ControlFailed). *)
+val lemma_handshake_client_traffic_key_schedule_material_agrees_nonready_cf
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures
+        key_schedule_traffic_record_material_agrees
           (traffic_id TrafficHandshake ClientTraffic) client server)

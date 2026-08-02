@@ -63,6 +63,12 @@ module CW   = TLS13.Spec.Endpoint.Wire
 module EAPI = TLS13.Spec.Endpoint.API
 module SM   = Common.StateMachine
 module SMCorr = TLS13.Spec.StateMachine.Correspondence
+module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
+module HANR = TLS13.ConnectionState.HandshakeAgreementNonReady
+module WFL  = TLS13.Spec.WireFormatLemmas
+module SLM  = TLS13.System.SlotMono
+module CCS  = TLS13.ConnectionState.ClientCanonicalShape
+module SCS  = TLS13.ConnectionState.ServerCanonicalShape
 
 let wr (st:CS.connection_state) : R.direction_state =
   st.CS.cs_model.CS.model_record.CS.record_write
@@ -490,5 +496,184 @@ let lemma_ama_client_send (a b:SY.tls_system_state)
             a.client.CS.cs_wire_log.CL.raw_sent a.server.CS.cs_wire_log.CL.raw_received
         )
       )
+    )
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    GATE 2a — CONJUNCT 2 preservation: [ASP.client_hs_write_record_slot_link].
+
+    The conjunct reads ONLY [s.client].  SERVER families are therefore trivial
+    (client frozen).  CLIENT families re-derive at a non-failed Handshake-write
+    client via [CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role],
+    and transfer through a fail step (which preserves [model_record] + [hs_keys],
+    so the material match survives into [ControlFailed]) otherwise.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+let match_cw (client:CS.connection_state) : prop =
+  SMKM.record_direction_material_matches_key_schedule_for_role
+    CS.ClientEndpoint CS.TrafficWrite
+    (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) client.CS.cs_model
+
+(** A step whose RESULT lands at [ControlFailed] preserves [model_record] and the
+    key schedule (fail is a pure control/failure-field update). **)
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+let lemma_step_failed_result_preserves_record_keys
+  (m m':CS.connection_model) (ce:CS.conn_event)
+  : Lemma
+      (requires
+        CS.legal_event m ce /\ CS.step_model m ce == Some m' /\
+        CS.ControlFailed? m'.CS.model_control)
+      (ensures
+        m'.CS.model_record == m.CS.model_record /\
+        m'.CS.model_handshake.CS.hs_keys == m.CS.model_handshake.CS.hs_keys)
+  = ()
+#pop-options
+
+(** Per-endpoint transfer for conjunct 2 across ANY client step. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_chwsl_client_transfer (ca cb:CS.connection_state)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent cb /\
+        cb.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        (R.Handshake? (wr ca).R.epoch ==> match_cw ca) /\
+        WStep.model_stepped ca.CS.cs_model cb.CS.cs_model)
+      (ensures (R.Handshake? (wr cb).R.epoch ==> match_cw cb))
+  = introduce R.Handshake? (wr cb).R.epoch ==> match_cw cb
+    with _hs.
+    (
+      if CS.ControlFailed? cb.CS.cs_model.CS.model_control then
+      (
+        eliminate exists (ce:CS.conn_event).
+          CS.legal_event ca.CS.cs_model ce /\
+          CS.step_model ca.CS.cs_model ce == Some cb.CS.cs_model
+        returns match_cw cb
+        with _ce.
+        (
+          lemma_step_failed_result_preserves_record_keys ca.CS.cs_model cb.CS.cs_model ce;
+          assert (wr cb == wr ca);
+          assert (cb.CS.cs_model.CS.model_handshake.CS.hs_keys
+                    == ca.CS.cs_model.CS.model_handshake.CS.hs_keys);
+          assert (R.Handshake? (wr ca).R.epoch)
+        )
+      )
+      else
+      (
+        CSL.lemma_connection_state_consistent_record_keys_consistent_for_config_role cb;
+        assert (SMKM.model_record_keys_consistent_for_role CS.ClientEndpoint cb.CS.cs_model);
+        CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role
+          CS.ClientEndpoint CS.TrafficWrite cb.CS.cs_model;
+        assert (SMKI.traffic_id CS.TrafficHandshake
+                  (CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficWrite)
+                  == SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic)
+      )
+    )
+#pop-options
+
+(** CONJUNCT 2 — SERVER SEND (trivial: client frozen). **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_chwsl_server_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.client_hs_write_record_slot_link a /\ MP.Quiet? a.channel /\
+        SY.tls_step_server_send a b /\ SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.client_hs_write_record_slot_link b)
+  = SY.lemma_server_send_shape a b
+#pop-options
+
+(** CONJUNCT 2 — SERVER LOCAL (trivial: client frozen). **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_chwsl_server_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.client_hs_write_record_slot_link a /\ MP.Quiet? a.channel /\
+        SY.tls_step_server_local a b /\ SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.client_hs_write_record_slot_link b)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with server = s' }
+    returns ASP.client_hs_write_record_slot_link b
+    with _pf. ()
+#pop-options
+
+(** CONJUNCT 2 — DELIVER TO SERVER (trivial: client frozen). **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_chwsl_deliver_to_server (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.client_hs_write_record_slot_link a /\
+        SY.tls_step_deliver_to_server a b /\ SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.client_hs_write_record_slot_link b)
+  = SY.lemma_deliver_to_server_shape a b
+#pop-options
+
+(** CONJUNCT 2 — CLIENT SEND (re-derive / fail transfer). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_chwsl_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.client_hs_write_record_slot_link a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_send a b /\ SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.client_hs_write_record_slot_link b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output)
+                     (w:CW.wire_message) (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns ASP.client_hs_write_record_slot_link b
+    with _pf.
+    (
+      WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
+      lemma_chwsl_client_transfer a.client c'
+    )
+#pop-options
+
+(** CONJUNCT 2 — CLIENT LOCAL (re-derive / fail transfer). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_chwsl_client_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.client_hs_write_record_slot_link a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_local a b /\ SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.client_hs_write_record_slot_link b)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with client = c' }
+    returns ASP.client_hs_write_record_slot_link b
+    with _pf.
+    (
+      WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
+      lemma_chwsl_client_transfer a.client c'
+    )
+#pop-options
+
+(** CONJUNCT 2 — DELIVER TO CLIENT (re-derive / fail transfer). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_chwsl_deliver_to_client (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.client_hs_write_record_slot_link a /\
+        SY.tls_step_deliver_to_client a b /\ SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.client_hs_write_record_slot_link b)
+  = SY.lemma_deliver_to_client_shape a b;
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      b == { a with client = c'; channel = MP.Quiet }
+    returns ASP.client_hs_write_record_slot_link b
+    with _pf.
+    (
+      WStep.lemma_client_step_model_stepped a.client (SM.WireEvent wire) c' out;
+      lemma_chwsl_client_transfer a.client c'
     )
 #pop-options

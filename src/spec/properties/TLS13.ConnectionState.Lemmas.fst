@@ -11934,3 +11934,25 @@ let lemma_connection_state_consistent_shared_secret_supported_profile_key_schedu
     lemma_supported_profile_base_lineage_or_empty_to_lineage keys
   | _ -> assert False
 #pop-options
+
+(* Gate 2a: a present handshake-traffic slot forces the shared secret.  From    *)
+(* [traffic_material_slots_have_base_secret] (slot ⟹ handshake_secret) and       *)
+(* [supported_profile_base_lineage_or_empty] (all-four None or all-four Some),   *)
+(* a [Some? ks_handshake_secret] excludes the all-None arm, so [ks_shared_secret] *)
+(* is [Some].  Control-independent (reachable shape from bare consistency), hence  *)
+(* usable at [ControlFailed]. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_consistent_client_handshake_traffic_slot_shared_secret
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+=
+  lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape st;
+  let keys = st.cs_model.model_handshake.hs_keys in
+  assert (traffic_material_slots_have_base_secret keys);
+  assert (Some? keys.ks_handshake_secret);
+  assert (supported_profile_base_lineage_or_empty keys)
+#pop-options

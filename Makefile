@@ -105,6 +105,9 @@ IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
+  src/impl/TLS13.System.SlotMono.fst \
+  src/impl/TLS13.System.ServerSfsRecovery.fst \
+  src/impl/TLS13.System.HsMaterialFamilies.fst \
   src/impl/TLS13.System.Temporal.fst \
   src/impl/TLS13.System.SeqCountBase.fst \
   src/impl/TLS13.System.AppSeqPairing.fst \
@@ -113,6 +116,7 @@ ROOT_FILES = \
   src/impl/TLS13.System.AppBothCongruence.fst \
   src/impl/TLS13.System.AppMaterialFamilies.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
+  src/spec/properties/TLS13.ConnectionState.ServerHelloSelectionLink.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeSeqZero.fst \
   src/impl/TLS13.System.Ordering.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \

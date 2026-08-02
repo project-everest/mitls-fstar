@@ -1111,3 +1111,16 @@ val lemma_connection_state_consistent_shared_secret_supported_profile_key_schedu
         Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
       (ensures
         connection_supported_profile_key_schedule_lineage st)
+
+(* Gate 2a: a present client-handshake-traffic slot forces [Some? ks_shared_secret], *)
+(* control-independently (from the consistency-only reachable shape).  Used to        *)
+(* discharge the shared-secret precondition of the ControlFailed-aware slot-level      *)
+(* handshake-agreement route at a possibly-failed endpoint, where record-key           *)
+(* consistency is blind but the key-schedule lineage shape still holds.                *)
+val lemma_consistent_client_handshake_traffic_slot_shared_secret
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
