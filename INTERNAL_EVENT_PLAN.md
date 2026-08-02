@@ -509,6 +509,64 @@ Files: `src/spec/core/TLS13.Spec.StateMachine.fst`,
 Exit: one record induces a finite legal sequence of internal steps; raw bytes
 and record sequence accounted exactly once; full gate.
 
+#### 7.2.1 Status and the ordering constraint discovered while attempting it
+
+A first implementation of Phase 2 is parked on branch
+`internal-events-phase2-wip`. The following is verified there and should be
+reused verbatim:
+
+- `TLS13.Spec.StateMachine`: the event type gains
+  `ConnReceiveHandshakeRecord of receive_handshake_record_step`
+  (`{ receive_record_plaintext : B.bytes }`), whose step advances
+  `record_read` once, retains the plaintext at parse offset `0`, and performs
+  **no** handshake transition. `protected_handshake_head` is deleted, and
+  `step_protected_handshake` becomes uniformly the former tail formula.
+  `event_raw_delta_legal` charges exactly one `Application_data` record to the
+  record event and nothing to the internal event.
+- `legal_receive_handshake_record` carries a well-formedness *guard* (the
+  plaintext prefix parses to a supported, currently-legal handshake message).
+  A guard is not a transition, so it does not re-create the fork; it keeps a
+  garbage record unreceivable, exactly as today.
+- `TLS13.Impl.ConnectionState.Model`: `receive_handshake_record_state`,
+  `protected_handshake_head_state` (defined *as* the two-event composition),
+  `protected_handshake_head_legal`, plus
+  `lemma_protected_handshake_head_legal_intro` and
+  `lemma_protected_handshake_head_state_evolves`. These make the head path a
+  definitional composition rather than a restructuring of Pulse control flow.
+- The behaviour-preservation argument, checked by hand and re-derivable as a
+  lemma: for `EncryptedExtensions` / `Certificate` / `CertificateVerify` the
+  record event's `next_seq` followed by the internal step's restore yields
+  exactly today's head result; for `Finished`, `R.install_keys` ignores the
+  state it is given, so the order is irrelevant. The refactor is therefore
+  semantics-preserving on the client receive path.
+
+**The constraint.** Phase 2 cannot complete before the shape-agnostic
+received-message projection exists, because the peer-pairing argument in
+`TLS13.ConnectionState.ProtectedWireHead` (4947 lines, ~117 sites) currently
+derives a contradiction from "the receiver's head event is a protected step
+while the sender sealed a single message" — i.e. it *relies* on a
+single-message record being representable only as `ConnNetworkEvent`. That
+uniqueness is precisely the fork this document removes. Concretely,
+`lemma_single_protected_message_seal_excludes_protected_head`
+(`TLS13.ConnectionState.ProtectedWireProjection`) becomes false by design, and
+every caller whose `returns` clause is
+`receiver_head == ConnNetworkEvent { Received; TlsHandshake msg }` must weaken
+to a disjunction over the two shapes, discharged by the projection.
+
+**Revised ordering.** Phase 2 splits:
+
+- **Phase 2a — projection first.** Generalise `event_trace_has_tls_message`
+  (`TLS13.Impl.Driver.Pairing.fsti:238`, already shape-agnostic) into a total
+  received-message projection over `conn_event`, and rewrite
+  `ProtectedWireHead` / `ProtectedWireProjection` / `ProtectedWireSegmentation`
+  to consume *only* that projection, never a constructor test. This is
+  behaviour-preserving on today's event type and can therefore land and be
+  gated on its own, before any event-type change.
+- **Phase 2b — the event split.** Replay the parked branch. With 2a in place
+  the ~117 sites become mechanical.
+
+Doing 2b first, as was attempted, forces 2a to be done under a broken tree.
+
 ### Phase 3 — Pulse implementation
 Files: `src/impl/TLS13.Impl.Client.fst/.fsti`, client Types/Repr/ConnectionState.
 - `process_network_bytes` stops after the record transition.
