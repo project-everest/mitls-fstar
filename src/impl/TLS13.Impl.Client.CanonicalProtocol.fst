@@ -1811,6 +1811,45 @@ let client_local_frame_post
     pure (
       B.length app_out == SZ.v frame.tls_client_local_app_out_len)
 
+(* Internal processing reuses the local frame.  It takes no event, so the
+   payload buffer contents are existentially quantified rather than tied
+   to a caller-supplied event's payload. *)
+[@@pulse_unfold]
+let client_internal_frame_pre
+  (frame:tls_client_local_frame)
+  (_st0:CS.connection_state)
+  (_out:array U8.t)
+  (out_len:SZ.t)
+  (old_network_out:B.bytes)
+  : slprop =
+  exists* (payload:B.bytes).
+    pts_to frame.tls_client_local_payload payload **
+    pts_to
+      frame.tls_client_local_app_out
+      (Ghost.reveal frame.tls_client_local_old_app_out) **
+    pure (
+      B.length payload == SZ.v frame.tls_client_local_payload_len /\
+      B.length old_network_out == SZ.v out_len /\
+      B.length (Ghost.reveal frame.tls_client_local_old_app_out) ==
+        SZ.v frame.tls_client_local_app_out_len)
+
+let client_internal_frame_post
+  (frame:tls_client_local_frame)
+  (_result:CPI.internal_result)
+  (_old_network_out:B.bytes)
+  (_network_out:B.bytes)
+  (_st0:CS.connection_state)
+  (_st1:CS.connection_state)
+  (_wire_outputs:list CW.wire_message)
+  (_local_outputs:list EAPI.local_output)
+  : slprop =
+  exists* (payload:B.bytes) (app_out:B.bytes).
+    pts_to frame.tls_client_local_payload payload **
+    pts_to frame.tls_client_local_app_out app_out **
+    pure (
+      B.length payload == SZ.v frame.tls_client_local_payload_len /\
+      B.length app_out == SZ.v frame.tls_client_local_app_out_len)
+
 let client_state_ahead
   (initial:client_initial_state)
   (st0:CS.connection_state)
@@ -5300,7 +5339,9 @@ requires
     out_len
     (Ghost.reveal old_out) **
   pts_to out (Ghost.reveal old_out) **
-  pure (SZ.v out_len == Seq.length (Ghost.reveal old_out))
+  pure (
+    SZ.v out_len == Seq.length (Ghost.reveal old_out) /\
+    ~ (CPI.no_internal_events #CTypes.client_local_event ev))
 returns result:CPI.process_result
 ensures exists* (received1:Ghost.erased B.bytes)
                 (sent1:Ghost.erased B.bytes)
@@ -5515,6 +5556,97 @@ ensures exists* (received1:Ghost.erased B.bytes)
     CTypes.client_local_process_result resp
 }
 
+(* Phase 1: the TLS client has no internal events yet, so internal
+   processing is unconditionally quiescent.  Phase 3 replaces the body
+   with a real step over the pending record plaintext; this signature and
+   its contract do not change. *)
+fn client_process_internal
+  (cc:canonical_client)
+  (frame:tls_client_local_frame)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (received0:erased B.bytes)
+  (sent0:erased B.bytes)
+  (st0:erased CS.connection_state)
+  (old_out:erased B.bytes)
+requires
+  client_invariant
+    cc
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0) **
+  client_internal_frame_pre
+    frame
+    (Ghost.reveal st0)
+    out
+    out_len
+    (Ghost.reveal old_out) **
+  pts_to out (Ghost.reveal old_out) **
+  pure (SZ.v out_len == Seq.length (Ghost.reveal old_out))
+returns result:CPI.internal_result
+ensures exists* (received1:Ghost.erased B.bytes)
+                (sent1:Ghost.erased B.bytes)
+                (st1:Ghost.erased CS.connection_state)
+                (out_contents:B.bytes)
+                (wire_outputs:list CW.wire_message)
+                (local_outputs:list EAPI.local_output).
+  client_invariant
+    cc
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1) **
+  client_internal_frame_post
+    frame
+    result
+    (Ghost.reveal old_out)
+    out_contents
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    wire_outputs
+    local_outputs **
+  pts_to out out_contents **
+  pure (
+    CPI.internal_process_correct
+      (client_system
+        #CTypes.client_local_event
+        (Ghost.reveal cc.canonical_client_initial))
+      (CPI.no_internal_events #CTypes.client_local_event)
+      (CPI.nothing_pending #CS.connection_state)
+      (Ghost.reveal old_out)
+      out_contents
+      out_len
+      (Ghost.reveal received0)
+      (Ghost.reveal sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs)
+{
+  let result : CPI.internal_result = {
+    CPI.internal_status = CPI.InternalQuiescent;
+    CPI.internal_process = {
+      CPI.process_status = CPI.StepOk;
+      CPI.process_consumed_len = 0sz;
+      CPI.process_produced_len = 0sz;
+      CPI.process_app_len = 0sz;
+    };
+  };
+  with payload. assert (pts_to frame.tls_client_local_payload payload);
+  fold (client_internal_frame_post
+    frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal old_out)
+    (Ghost.reveal st0)
+    (Ghost.reveal st0)
+    ([] <: list CW.wire_message)
+    ([] <: list EAPI.local_output));
+  result
+}
+
 noextract
 let client_protocol_implementation
   : CPI.protocol_implementation
@@ -5530,6 +5662,8 @@ let client_protocol_implementation
       client_system
         #CTypes.client_local_event
         (Ghost.reveal cc.canonical_client_initial));
+    CPI.pi_internal = CPI.no_internal_events #CTypes.client_local_event;
+    CPI.pi_internal_pending = CPI.nothing_pending #CS.connection_state;
     CPI.pi_invariant = client_invariant;
     CPI.pi_snapshot = client_snapshot;
     CPI.pi_network_frame = tls_client_network_bridge_frame;
@@ -5538,9 +5672,12 @@ let client_protocol_implementation
     CPI.pi_local_frame = tls_client_local_frame;
     CPI.pi_local_frame_pre = client_local_frame_pre;
     CPI.pi_local_frame_post = client_local_frame_post;
+    CPI.pi_internal_frame_pre = client_internal_frame_pre;
+    CPI.pi_internal_frame_post = client_internal_frame_post;
     CPI.pi_invariant_valid = client_invariant_valid;
     CPI.pi_take_snapshot = take_client_snapshot;
     CPI.pi_recall_snapshot = recall_client_snapshot_for_protocol;
     CPI.pi_process_network = client_process_network;
     CPI.pi_process_local = client_process_local;
+    CPI.pi_process_internal = client_process_internal;
   }

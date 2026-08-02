@@ -5230,8 +5230,47 @@ let server_local_bridge_frame_post
       B.length app_out ==
         SZ.v frame.tls_server_local_bridge_base.tls_server_local_app_out_len)
 
-let server_process_network_post
-  (srv:canonical_server)
+(* Internal processing reuses the local bridge frame.  It takes no event,
+   so the payload buffer contents are existentially quantified. *)
+[@@pulse_unfold]
+let server_internal_frame_pre
+  (frame:tls_server_local_bridge_frame)
+  (_st0:CS.connection_state)
+  (_out:array U8.t)
+  (out_len:SZ.t)
+  (old_network_out:B.bytes)
+  : slprop =
+  let base = frame.tls_server_local_bridge_base in
+  exists* (payload:B.bytes).
+    pts_to base.tls_server_local_payload payload **
+    pts_to
+      base.tls_server_local_app_out
+      (Ghost.reveal base.tls_server_local_old_app_out) **
+    pure (
+      B.length payload == SZ.v base.tls_server_local_payload_len /\
+      B.length old_network_out == SZ.v out_len /\
+      B.length (Ghost.reveal base.tls_server_local_old_app_out) ==
+        SZ.v base.tls_server_local_app_out_len)
+
+let server_internal_frame_post
+  (frame:tls_server_local_bridge_frame)
+  (_result:CPI.internal_result)
+  (_old_network_out:B.bytes)
+  (_network_out:B.bytes)
+  (_st0:CS.connection_state)
+  (_st1:CS.connection_state)
+  (_wire_outputs:list CW.wire_message)
+  (_local_outputs:list EAPI.local_output)
+  : slprop =
+  let base = frame.tls_server_local_bridge_base in
+  exists* (payload:B.bytes) (app_out:B.bytes).
+    pts_to base.tls_server_local_payload payload **
+    pts_to base.tls_server_local_app_out app_out **
+    pure (
+      B.length payload == SZ.v base.tls_server_local_payload_len /\
+      B.length app_out == SZ.v base.tls_server_local_app_out_len)
+
+let server_process_network_post  (srv:canonical_server)
   (frame:tls_server_network_bridge_frame)
   (input:array U8.t)
   (input_len:SZ.t)
@@ -6496,7 +6535,9 @@ requires
     out_len
     (Ghost.reveal old_out) **
   pts_to out (Ghost.reveal old_out) **
-  pure (SZ.v out_len == Seq.length (Ghost.reveal old_out))
+  pure (
+    SZ.v out_len == Seq.length (Ghost.reveal old_out) /\
+    ~ (CPI.no_internal_events #CTypes.server_local_event ev))
 returns result:CPI.process_result
 ensures exists* (received1:Ghost.erased B.bytes)
                 (sent1:Ghost.erased B.bytes)
@@ -6847,6 +6888,98 @@ ensures exists* (received1:Ghost.erased B.bytes)
       CTypes.server_local_process_result resp
 }
 
+(* Phase 1: the TLS server has no internal events, so internal processing
+   is unconditionally quiescent. *)
+fn server_process_internal
+  (srv:canonical_server)
+  (frame:tls_server_local_bridge_frame)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (received0:erased B.bytes)
+  (sent0:erased B.bytes)
+  (st0:erased CS.connection_state)
+  (old_out:erased B.bytes)
+requires
+  server_invariant
+    srv
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0) **
+  server_internal_frame_pre
+    frame
+    (Ghost.reveal st0)
+    out
+    out_len
+    (Ghost.reveal old_out) **
+  pts_to out (Ghost.reveal old_out) **
+  pure (SZ.v out_len == Seq.length (Ghost.reveal old_out))
+returns result:CPI.internal_result
+ensures exists* (received1:Ghost.erased B.bytes)
+                (sent1:Ghost.erased B.bytes)
+                (st1:Ghost.erased CS.connection_state)
+                (out_contents:B.bytes)
+                (wire_outputs:list CW.wire_message)
+                (local_outputs:list EAPI.local_output).
+  server_invariant
+    srv
+    (Ghost.reveal received1)
+    (Ghost.reveal sent1)
+    (Ghost.reveal st1) **
+  server_internal_frame_post
+    frame
+    result
+    (Ghost.reveal old_out)
+    out_contents
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    wire_outputs
+    local_outputs **
+  pts_to out out_contents **
+  pure (
+    CPI.internal_process_correct
+      (server_system
+        #CTypes.server_local_event
+        (Ghost.reveal srv.canonical_server_initial))
+      (CPI.no_internal_events #CTypes.server_local_event)
+      (CPI.nothing_pending #CS.connection_state)
+      (Ghost.reveal old_out)
+      out_contents
+      out_len
+      (Ghost.reveal received0)
+      (Ghost.reveal sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs)
+{
+  let result : CPI.internal_result = {
+    CPI.internal_status = CPI.InternalQuiescent;
+    CPI.internal_process = {
+      CPI.process_status = CPI.StepOk;
+      CPI.process_consumed_len = 0sz;
+      CPI.process_produced_len = 0sz;
+      CPI.process_app_len = 0sz;
+    };
+  };
+  with payload.
+    assert (pts_to
+      frame.tls_server_local_bridge_base.tls_server_local_payload
+      payload);
+  fold (server_internal_frame_post
+    frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal old_out)
+    (Ghost.reveal st0)
+    (Ghost.reveal st0)
+    ([] <: list CW.wire_message)
+    ([] <: list EAPI.local_output));
+  result
+}
+
 noextract
 let server_protocol_implementation
   : CPI.protocol_implementation
@@ -6859,6 +6992,8 @@ let server_protocol_implementation
   {
     CPI.pi_system =
       (fun srv -> server_system #CTypes.server_local_event (Ghost.reveal srv.canonical_server_initial));
+    CPI.pi_internal = CPI.no_internal_events #CTypes.server_local_event;
+    CPI.pi_internal_pending = CPI.nothing_pending #CS.connection_state;
     CPI.pi_invariant = server_invariant;
     CPI.pi_snapshot = server_snapshot;
     CPI.pi_network_frame = tls_server_network_bridge_frame;
@@ -6867,9 +7002,12 @@ let server_protocol_implementation
     CPI.pi_local_frame = tls_server_local_bridge_frame;
     CPI.pi_local_frame_pre = server_local_bridge_frame_pre;
     CPI.pi_local_frame_post = server_local_bridge_frame_post;
+    CPI.pi_internal_frame_pre = server_internal_frame_pre;
+    CPI.pi_internal_frame_post = server_internal_frame_post;
     CPI.pi_invariant_valid = server_invariant_valid;
     CPI.pi_take_snapshot = take_server_snapshot;
     CPI.pi_recall_snapshot = recall_server_snapshot_for_protocol;
     CPI.pi_process_network = server_process_network;
     CPI.pi_process_local = server_process_local;
+    CPI.pi_process_internal = server_process_internal;
   }
