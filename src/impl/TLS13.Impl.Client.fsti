@@ -466,7 +466,8 @@ fn process_coalesced_network_bytes
                  app_out_bytes /\
                 CT.client_end_to_end_invariant st1 /\
                 (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                buffer_resp.CT.consumed_len == 0sz) /\
+                buffer_resp.CT.consumed_len == 0sz /\
+                WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
                 (buffer_resp.CT.response.CT.status == CT.StepOk ==>
                 0 < SZ.v buffer_resp.CT.consumed_len) /\
                 (buffer_resp.CT.response.CT.status == CT.DecodeError ==>

@@ -905,6 +905,60 @@ Files: `TLS13.Impl.Client.CanonicalProtocol.fst`,
 Exit: the coalesced public-site execution establishes `valid_byte_trace`; full
 gate.
 
+## Phase 4 as built — one canonical receive primitive
+
+The canonical `ProtocolImplementation` for the client now calls
+`process_coalesced_network_bytes`, the same primitive the Engine uses.  There is
+one production receive entry point at the canonical site.
+
+Two changes made this possible.
+
+1. **`client_step`'s `WireEvent` case was generalised** (committed separately).
+   It now reads `exists conn_ev. client_wire_received_event st0 wire conn_ev /\
+   canonical_wire_step ... /\ client_local_outputs_match ...`, where
+   `client_wire_received_event` admits a received `ConnNetworkEvent` *or* a head
+   `ConnProtectedHandshake` step, and rejects `ConnLocalEvent`.  Three insulation
+   lemmas (`lemma_client_wire_step_from_network_witness`,
+   `..._from_protected_head_witness`, `lemma_client_wire_step_inversion`) keep
+   consumers away from the existential.
+
+2. **The bridge machinery was weakened to the coalesced predicate.**
+   `client_network_frame_post_fact` now carries
+   `coalesced_network_bytes_end_to_end_correct` rather than
+   `network_bytes_end_to_end_correct`, and `client_network_bridge_obligation`
+   takes the weaker hypothesis.  Three facts make this cheap:
+
+   - The head-protected disjunct forces `StepOk`, so any other status pins the
+     strong predicate (`lemma_client_coalesced_not_step_ok_is_strong`).  Every
+     non-`StepOk` branch of the obligation and the non-`StepOk` branch of
+     `lemma_client_network_common_witness_progress` therefore delegate to the
+     existing proofs unchanged.
+   - In the `StepOk` branch the obligation case-splits on the strong predicate;
+     the `else` side is discharged by the new
+     `lemma_client_network_protected_head_bridge_result`, which mirrors
+     `lemma_client_network_wire_event_bridge_result` line for line and reuses
+     `lemma_client_consumed_prefix_parse`,
+     `lemma_client_wire_event_network_error_refines_state_machine`,
+     `lemma_client_wire_event_network_process_correct`,
+     `lemma_client_network_common_witness_from_parts` and
+     `lemma_client_network_bridge_result_from_common_witness` verbatim.
+   - A non-empty consumed prefix forces `protected_handshake_head == true`,
+     because a tail step demands an empty raw-received delta.  From
+     `raw_records_exactly raw Application_data 1` the chain
+     `lemma_raw_records_exactly_one_parse_record` →
+     `lemma_parse_record_implies_parse_record_wire` yields
+     `raw_record_parse_success`, which is exactly what the parse bridge needs.
+
+`process_coalesced_network_bytes` and `process_legacy_coalesced_fallback` gained
+`NeedMoreInput ==> parse_record_wire input == None`; every `NeedMoreInput` result
+provably comes from the legacy fallback, since the head route always returns
+`StepOk`.
+
+Still outstanding for Phase 5: `Client.Driver.BufferedNetwork.fst` calls
+`process_network_bytes` because it cannot supply `client_end_to_end_invariant`
+(it propagates the invariant conditionally).  Threading that into
+`buffered_driver_indexed` is Phase 5 work.
+
 ### Phase 5 — BufferedStream and Channel
 Files: TLS buffered driver modules, client/server ChannelImplementation.
 - Implement the §5 schedule inside the TLS instance; `InternalBlocked` must
