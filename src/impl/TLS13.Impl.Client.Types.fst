@@ -131,6 +131,8 @@ type local_event_kind =
   | LocalSendKeyUpdate
   | LocalSendCloseNotify
   | LocalFail
+  (** Internal event; see [EC.ClientProcessPendingHandshake]. *)
+  | LocalProcessPendingHandshake
 
 type local_payload_kind =
   | LocalPayloadNone
@@ -2215,6 +2217,8 @@ let local_event_kind_matches
     st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv
   | LocalVerifyFinished, CS.ConnLocalEvent (CS.LocalVerifyFinished _) -> True
   | LocalFail, CS.ConnLocalEvent (CS.LocalFail _) -> True
+  | LocalProcessPendingHandshake, CS.ConnProtectedHandshake step ->
+    step.CS.protected_handshake_head == false
   | _, _ -> False
 
 let local_payload_matches_app_sent_delta
@@ -4693,6 +4697,37 @@ let lemma_decoded_message_event_response_received_decode_projection
       app_out
   )
 
+let lemma_local_event_kind_matches_network_is_sent
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (msg:CS.directed_message M.tls_message)
+  : Lemma
+      (requires local_event_kind_matches st kind payload (CS.ConnNetworkEvent msg))
+      (ensures msg.CL.message_direction == CL.Sent)
+=
+  match kind with
+  | LocalSendApplicationData
+  | LocalSendClientHello
+  | LocalSendClientFinished
+  | LocalSendCloseNotify
+  | LocalSendKeyUpdate -> ()
+  | _ -> ()
+
+let lemma_local_event_kind_matches_protected_is_tail
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        local_event_kind_matches st kind payload (CS.ConnProtectedHandshake step))
+      (ensures step.CS.protected_handshake_head == false)
+=
+  match kind with
+  | LocalProcessPendingHandshake -> ()
+  | _ -> ()
+
 let lemma_legal_handled_local_response_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4742,16 +4777,20 @@ let lemma_legal_handled_local_response_received_decode_projection
     | CS.ConnLocalEvent _ ->
       assert (Seq.equal raw_received B.empty);
       Seq.lemma_eq_elim raw_received B.empty
-    | CS.ConnProtectedHandshake _ ->
+    | CS.ConnProtectedHandshake step ->
+      (* Reachable only for the internal event, whose matcher pins the step to
+         a tail step; [event_raw_delta_legal] then forces empty raw input. *)
       assert (local_event_kind_matches st0 kind payload ev);
-      assert False
+      lemma_local_event_kind_matches_protected_is_tail st0 kind payload step;
+      assert (Seq.equal raw_received B.empty);
+      Seq.lemma_eq_elim raw_received B.empty
     | CS.ConnNetworkEvent msg ->
       (match msg.CL.message_direction with
        | CL.Sent ->
          assert (Seq.equal raw_received B.empty);
          Seq.lemma_eq_elim raw_received B.empty
        | CL.Received ->
-         assert (local_event_kind_matches st0 kind payload ev);
+         lemma_local_event_kind_matches_network_is_sent st0 kind payload msg;
          assert False);
     assert (B.length raw_received == 0);
     assert (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection

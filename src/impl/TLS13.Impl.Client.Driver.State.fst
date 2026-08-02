@@ -1652,6 +1652,10 @@ let lemma_local_event_wire_lengths
     (match ev with
      | CS.ConnLocalEvent _ ->
        assert (Seq.equal raw_received B.empty)
+     | CS.ConnProtectedHandshake step ->
+       (* Internal event: a tail step consumes no raw input. *)
+       CT.lemma_local_event_kind_matches_protected_is_tail st0 kind payload step;
+       assert (Seq.equal raw_received B.empty)
      | CS.ConnNetworkEvent msg ->
        (match msg.CL.message_direction with
         | CL.Sent ->

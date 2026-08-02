@@ -40,6 +40,13 @@ type local_event =
   | ClientSendKeyUpdate
   | ClientSendCloseNotify
   | ClientFail
+  (**
+    Internal event: process one handshake message already retained in the
+    pending-plaintext buffer.  It consumes no wire input and produces no wire
+    output; the message it processes is determined by the pending buffer, not
+    by the event.
+   **)
+  | ClientProcessPendingHandshake
 
 let validation_peer
   (st:CS.connection_state)
@@ -115,6 +122,8 @@ let client_local_event_matches
       True
   | ClientFail, CS.ConnLocalEvent (CS.LocalFail _) ->
       True
+  | ClientProcessPendingHandshake, CS.ConnProtectedHandshake step ->
+      step.CS.protected_handshake_head == false
   | _, _ ->
       False
 

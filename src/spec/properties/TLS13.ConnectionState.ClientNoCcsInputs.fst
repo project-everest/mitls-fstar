@@ -98,6 +98,7 @@ let lemma_client_local_matches_not_received_ccs
 =
   match conn_ev with
   | CS.ConnLocalEvent _ -> ()
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnNetworkEvent msg ->
     // for any matching local event, a network event must be SENT
     ()

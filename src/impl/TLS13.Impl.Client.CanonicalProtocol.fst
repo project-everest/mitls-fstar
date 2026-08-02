@@ -421,6 +421,11 @@ let lemma_client_api_event_raw_received_empty
   match ev with
   | CS.ConnLocalEvent _ ->
     ()
+  | CS.ConnProtectedHandshake step ->
+    (* Internal event: the matcher pins the step to a tail step, which
+       [event_raw_delta_legal] requires to consume no raw input. *)
+    CT.lemma_local_event_kind_matches_protected_is_tail
+      st0 api.CTypes.client_local_kind api.CTypes.client_local_payload step
   | CS.ConnNetworkEvent msg ->
     match api.CTypes.client_local_kind with
     | CT.LocalSendApplicationData

@@ -2582,7 +2582,8 @@ fn process_local_event
      | CT.LocalSendApplicationData -> 12UL
      | CT.LocalSendKeyUpdate -> 13UL
      | CT.LocalSendCloseNotify -> 14UL
-     | CT.LocalFail -> 15UL)
+     | CT.LocalFail -> 15UL
+     | CT.LocalProcessPendingHandshake -> 16UL)
     (SZ.sizet_to_uint64 payload_len)
     0UL;
   let resp =

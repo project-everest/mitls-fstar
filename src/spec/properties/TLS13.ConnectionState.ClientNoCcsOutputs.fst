@@ -245,6 +245,10 @@ let lemma_client_step_outputs_no_ccs
         // event_raw_delta_legal (local) forces raw_sent == empty
         assert (Seq.equal raw_sent B.empty);
         lemma_outputs_no_ccs_from_empty out.SM.so_wire_outputs
+      | CS.ConnProtectedHandshake _ ->
+        // event_raw_delta_legal (protected handshake) forces raw_sent == empty
+        assert (Seq.equal raw_sent B.empty);
+        lemma_outputs_no_ccs_from_empty out.SM.so_wire_outputs
       | CS.ConnNetworkEvent msg ->
         lemma_client_sent_msg_shape st0
           (CTy.client_local_event_semantic local) msg;

@@ -1091,6 +1091,19 @@ let lemma_cc_client_send
              returns _
              with _pf2.
                W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
+        | CS.ConnProtectedHandshake _ ->
+          // Internal event: raw_sent is empty, exactly as for a local event.
+          eliminate exists server_ch.
+            CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw
+          returns _
+          with _pw.
+            (eliminate exists fragment.
+               W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+               W.parse_tls_message T.Handshake fragment ==
+                 Some (M.TlsHandshake (M.ClientHello server_ch))
+             returns _
+             with _pf2b.
+               W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
         | CS.ConnNetworkEvent nmsg ->
           (match nmsg.CL.message_value with
            | M.TlsHandshake (M.ClientHello ch) ->
