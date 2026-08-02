@@ -590,6 +590,19 @@ Two genuine edits remain:
    contradicts the parse. That argument survives the refactor verbatim and
    subsumes the deleted lemma.
 
+3. **The receiver's event list grows.** This is the one genuinely
+   non-mechanical consequence. Where the sender's list has one
+   `ConnNetworkEvent`, the receiver's now has `ConnReceiveHandshakeRecord`
+   followed by one `ConnProtectedHandshake` per message. The inversion
+   argument in `ProtectedWireServerFlightInversion` (3520 lines) currently
+   destructures the two lists at equal length — e.g. `stageA_result`'s
+   existential packages a receiver list `cEE :: cCert :: cCV :: cFin :: tail`
+   in bijection with the server's. Each receiver element becomes two, and the
+   internal one is discharged by the skip machinery. Budget this file, plus
+   `ProtectedWireServerFlight` (6067 lines), as the bulk of Phase 2a: the edits
+   are individually routine but there are many, and each changes an
+   existential's arity.
+
 **Revised ordering.** Phase 2 splits into two gated steps:
 
 - **Phase 2a — projection first.** Introduce a named, total received-message
