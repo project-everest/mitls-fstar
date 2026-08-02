@@ -165,6 +165,17 @@ let rec canonical_log_length (events:list CS.conn_event)
     | [] -> ()
     | _ :: rest -> canonical_log_length rest
 
+let lemma_delivers_handshake_singleton grp msg = ()
+
+(** [canonical_event] only ever rewrites [ConnProtectedHandshake] events, and
+    always into a [ConnNetworkEvent]; so a local event in its image was already
+    that local event. *)
+let lemma_canonical_event_local (ev:CS.conn_event) (le:CS.local_event)
+  : Lemma
+      (requires canonical_event ev == CS.ConnLocalEvent le)
+      (ensures ev == CS.ConnLocalEvent le)
+  = ()
+
 let lemma_canonical_flight_raw_spine
   (raw_suffix:list CS.conn_event)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
@@ -206,28 +217,37 @@ let lemma_canonical_flight_raw_spine
       assert (canonical_event raw_verify == CS.ConnLocalEvent cv_verify);
       assert (canonical_event raw_sf == ev_recv_fin sf);
       assert (canonical_log raw_tail == tail);
-      match raw_validate with
-      | CS.ConnLocalEvent validate ->
-        assert (validate == cv_validate)
-      | _ ->
-        assert False;
-      match raw_verify with
-      | CS.ConnLocalEvent verify ->
-        assert (verify == cv_verify)
-      | _ ->
-        assert False;
+      lemma_canonical_event_local raw_validate cv_validate;
+      lemma_canonical_event_local raw_verify cv_verify;
+      assert (L.append [raw_sf] raw_tail == raw_sf :: raw_tail);
+      assert (L.append [raw_cv]
+                (CS.ConnLocalEvent cv_verify :: L.append [raw_sf] raw_tail) ==
+              raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail);
+      assert (L.append [raw_ee]
+                (L.append [raw_cert]
+                  (CS.ConnLocalEvent cv_validate ::
+                    L.append [raw_cv]
+                      (CS.ConnLocalEvent cv_verify ::
+                        L.append [raw_sf] raw_tail))) == raw_suffix);
+      assert (delivers_handshake [raw_ee] (M.EncryptedExtensions ee));
+      assert (delivers_handshake [raw_cert] (M.Certificate cert));
+      assert (delivers_handshake [raw_cv] (M.CertificateVerify cv));
+      assert (delivers_handshake [raw_sf] (M.Finished sf));
       introduce exists
-        (raw_ee0 raw_cert0 raw_cv0 raw_sf0:CS.conn_event)
-        (raw_tail0:list CS.conn_event).
+        (g_ee0 g_cert0 g_cv0 g_sf0 raw_tail0:list CS.conn_event).
         raw_suffix ==
-          raw_ee0 :: raw_cert0 :: CS.ConnLocalEvent cv_validate ::
-          raw_cv0 :: CS.ConnLocalEvent cv_verify :: raw_sf0 :: raw_tail0 /\
-        canonical_event raw_ee0 == ev_recv_ee ee /\
-        canonical_event raw_cert0 == ev_recv_cert cert /\
-        canonical_event raw_cv0 == ev_recv_cv cv /\
-        canonical_event raw_sf0 == ev_recv_fin sf /\
+          L.append g_ee0
+            (L.append g_cert0
+              (CS.ConnLocalEvent cv_validate ::
+                L.append g_cv0
+                  (CS.ConnLocalEvent cv_verify ::
+                    L.append g_sf0 raw_tail0))) /\
+        delivers_handshake g_ee0 (M.EncryptedExtensions ee) /\
+        delivers_handshake g_cert0 (M.Certificate cert) /\
+        delivers_handshake g_cv0 (M.CertificateVerify cv) /\
+        delivers_handshake g_sf0 (M.Finished sf) /\
         canonical_log raw_tail0 == tail
-      with raw_ee raw_cert raw_cv raw_sf raw_tail and () )
+      with [raw_ee] [raw_cert] [raw_cv] [raw_sf] raw_tail and () )
   | [] -> assert False
   | _ :: [] -> assert False
   | _ :: _ :: [] -> assert False

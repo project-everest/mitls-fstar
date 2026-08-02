@@ -2082,7 +2082,12 @@ let lemma_client_side (s:sysp)
               tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
           with mc material ee cert cv_validate cv cv_verify sf tail raw_suffix
                fl_sent fl_recv ch sh rest
-          and ()
+          and (assert (CCShape.raw_flight_spine
+                         raw_suffix ee cert cv_validate cv cv_verify sf tail);
+               assert (client_raw_prefix_package s ch sh raw_suffix);
+               assert (SMReplay.conn_events_received_decode_replay mc
+                         (RI.client_hs_read_install_event material :: raw_suffix)
+                         fl_sent fl_recv s.client.CS.cs_model))
         )
       )
     )
@@ -3353,21 +3358,40 @@ let lemma_finish_strong (s:sysp)
                 mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret with
           | Some a, Some b -> Seq.equal a b
           | _ -> False);
-  eliminate exists (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
-                   (raw_tail:list CS.conn_event).
+  eliminate exists (g_ee g_cert g_cv g_sf raw_tail:list CS.conn_event).
       raw_flight_c ==
-        raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate_c ::
-        raw_cv :: CS.ConnLocalEvent cv_verify_c :: raw_sf :: raw_tail /\
-      CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
-      CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
-      CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
-      CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
+        L.append g_ee
+          (L.append g_cert
+            (CS.ConnLocalEvent cv_validate_c ::
+              L.append g_cv
+                (CS.ConnLocalEvent cv_verify_c ::
+                  L.append g_sf raw_tail))) /\
+      CCShape.delivers_handshake g_ee (M.EncryptedExtensions ee_c) /\
+      CCShape.delivers_handshake g_cert (M.Certificate cert_c) /\
+      CCShape.delivers_handshake g_cv (M.CertificateVerify cv_c) /\
+      CCShape.delivers_handshake g_sf (M.Finished sf_c) /\
       CCShape.canonical_log raw_tail == tail_c
   returns
     (server_flight_pairs_conclusion s.client s.server /\
      client_normalized_appdata_exact_spine s.client)
   with _.
   (
+    (* Peel each delivery group down to the event that carries its message. *)
+    CCShape.lemma_delivers_handshake_singleton g_ee (M.EncryptedExtensions ee_c);
+    CCShape.lemma_delivers_handshake_singleton g_cert (M.Certificate cert_c);
+    CCShape.lemma_delivers_handshake_singleton g_cv (M.CertificateVerify cv_c);
+    CCShape.lemma_delivers_handshake_singleton g_sf (M.Finished sf_c);
+    let raw_ee = L.hd g_ee in
+    let raw_cert = L.hd g_cert in
+    let raw_cv = L.hd g_cv in
+    let raw_sf = L.hd g_sf in
+    assert (L.append g_sf raw_tail == raw_sf :: raw_tail);
+    assert (L.append g_cv
+              (CS.ConnLocalEvent cv_verify_c :: L.append g_sf raw_tail) ==
+            raw_cv :: CS.ConnLocalEvent cv_verify_c :: raw_sf :: raw_tail);
+    assert (raw_flight_c ==
+      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate_c ::
+      raw_cv :: CS.ConnLocalEvent cv_verify_c :: raw_sf :: raw_tail);
     let server_list_stageA =
       install_ev_server material_s ::
       sent_ev (M.EncryptedExtensions ee_s) ::

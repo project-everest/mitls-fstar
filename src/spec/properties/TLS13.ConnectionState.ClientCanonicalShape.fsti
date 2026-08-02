@@ -116,8 +116,51 @@ let rec canonical_log (events:list CS.conn_event) : Tot (list CS.conn_event)
   | [] -> []
   | ev :: rest -> canonical_event ev :: canonical_log rest
 
+(** A received handshake message, as a conn_event. *)
+let recv_handshake_ev (msg:M.handshake_msg) : CS.conn_event =
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake msg;
+  }
+
+(** A DELIVERY GROUP: the run of consecutive client events by which the client
+    takes delivery of exactly one received handshake message.
+
+    Today a group is always a singleton -- either a cleartext
+    [ConnNetworkEvent], or a protected step, which [canonical_event] projects
+    to the same network event.
+
+    Once record receipt is separated from message processing (see
+    INTERNAL_EVENT_PLAN.md), a protected group becomes a record event followed
+    by the internal step that consumes it, and this predicate gains one case.
+    Stating the spine over groups rather than over single events is what keeps
+    that later change from perturbing the surrounding argument: the group is
+    the unit that pairs with ONE sender event, because the sender emits exactly
+    one record per handshake message
+    ([protected_record_count Sent msg == 1]). *)
+let delivers_handshake (grp:list CS.conn_event) (msg:M.handshake_msg) : prop =
+  match grp with
+  | [ev] -> canonical_event ev == recv_handshake_ev msg
+  | _ -> False
+
+(** While every delivery group is a singleton, the group IS its message
+    event.  Consumers use this to descend from the group-shaped spine to the
+    single event, without committing the spine's statement to singletons. *)
+val lemma_delivers_handshake_singleton
+  (grp:list CS.conn_event) (msg:M.handshake_msg)
+  : Lemma
+      (requires delivers_handshake grp msg)
+      (ensures
+        Cons? grp /\
+        grp == [L.hd grp] /\
+        canonical_event (L.hd grp) == recv_handshake_ev msg)
+
 (** The actual raw encrypted-flight suffix, retaining protected head/drain
-    events while identifying their canonical handshake messages. *)
+    events while identifying their canonical handshake messages.
+
+    The suffix is an append of delivery groups rather than a cons-chain of
+    single events; with singleton groups [L.append [x] l] reduces to [x :: l],
+    so this is the same statement as before. *)
 let raw_flight_spine
   (raw_suffix:list CS.conn_event)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
@@ -127,31 +170,18 @@ let raw_flight_spine
   (sf:GFin.finished)
   (tail:list CS.conn_event)
   : prop =
-  exists (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
-         (raw_tail:list CS.conn_event).
+  exists (g_ee g_cert g_cv g_sf raw_tail:list CS.conn_event).
     raw_suffix ==
-      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate ::
-      raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail /\
-    canonical_event raw_ee ==
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-      } /\
-    canonical_event raw_cert ==
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.Certificate cert);
-      } /\
-    canonical_event raw_cv ==
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
-      } /\
-    canonical_event raw_sf ==
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.Finished sf);
-      } /\
+      L.append g_ee
+        (L.append g_cert
+          (CS.ConnLocalEvent cv_validate ::
+            L.append g_cv
+              (CS.ConnLocalEvent cv_verify ::
+                L.append g_sf raw_tail))) /\
+    delivers_handshake g_ee (M.EncryptedExtensions ee) /\
+    delivers_handshake g_cert (M.Certificate cert) /\
+    delivers_handshake g_cv (M.CertificateVerify cv) /\
+    delivers_handshake g_sf (M.Finished sf) /\
     canonical_log raw_tail == tail
 
 val lemma_client_raw_suffix_flight_spine
