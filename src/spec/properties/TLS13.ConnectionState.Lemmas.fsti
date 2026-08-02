@@ -1124,3 +1124,25 @@ val lemma_consistent_client_handshake_traffic_slot_shared_secret
         connection_state_consistent st /\
         Some? st.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
       (ensures Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+
+(* Gate-2a slimming: the [Some? ks_shared_secret] branch of the server x25519    *)
+(* reachable shape, surfaced in terms of the public Correspondence projections.  *)
+(* Lets ServerHelloSelectionLink drop its local re-derivation of the x25519       *)
+(* shape machinery.  Control-independent; [ControlFailed] gives the genuine       *)
+(* pre-ServerHello / key-share disjunction. *)
+val lemma_consistent_server_x25519_shared_secret_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        (match st.cs_model.model_control with
+         | ControlHandshaking HsClientHelloReceived ->
+           server_x25519_pre_server_hello_projection st
+         | ControlFailed _ ->
+           server_x25519_pre_server_hello_projection st \/
+           server_x25519_key_share_projection st
+         | _ ->
+           stable_server_x25519_key_share_projection st))

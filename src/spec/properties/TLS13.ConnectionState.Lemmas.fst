@@ -11956,3 +11956,31 @@ let lemma_consistent_client_handshake_traffic_slot_shared_secret
   assert (Some? keys.ks_handshake_secret);
   assert (supported_profile_base_lineage_or_empty keys)
 #pop-options
+
+(* Gate-2a slimming: the [Some? ks_shared_secret] branch of                    *)
+(* [server_x25519_reachable_shape], surfaced directly in terms of the (public) *)
+(* Correspondence projections.  This is the one already-proven consequence the *)
+(* ServerHelloSelectionLink module needs at a possibly-[ControlFailed] server,  *)
+(* so that module no longer re-derives the x25519 reachable-shape machinery.     *)
+(* Control-independent; the [ControlFailed] arm is the genuine disjunction       *)
+(* (pre-ServerHello vs key-share projection). *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_consistent_server_x25519_shared_secret_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        (match st.cs_model.model_control with
+         | ControlHandshaking HsClientHelloReceived ->
+           server_x25519_pre_server_hello_projection st
+         | ControlFailed _ ->
+           server_x25519_pre_server_hello_projection st \/
+           server_x25519_key_share_projection st
+         | _ ->
+           stable_server_x25519_key_share_projection st))
+=
+  lemma_connection_state_consistent_server_x25519_reachable_shape st
+#pop-options

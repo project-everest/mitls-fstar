@@ -1,6 +1,20 @@
 module TLS13.System.ServerSfsRecovery
 
 (**
+  STATUS (Gate 2a, post-ControlFailed-generalization): this module is currently
+  UNCONSUMED.  The forward-direction flip establishment
+  (`HsMaterialFamilies.lemma_hma_deliver_to_client_flip`) now closes at the
+  SLOT level with NO residual — `lemma_establish_cf` recovers the server's
+  shared secret and both hellos from its present `ks_client_handshake_traffic`
+  slot, control-independently, and discharges the agreement via the
+  ControlFailed-aware HANR variant (which never consults record-key
+  consistency).  So the SFS-counting server-control recovery below is not needed
+  for the forward direction and its `~(ControlFailed? ...)` residual is moot.
+
+  RETAINED (do NOT delete): the REVERSE-direction (server-side mirror) agreement
+  is still outstanding, and an SFS-counting recovery of this shape is the
+  plausible tool for it.  Kept in ROOT_FILES so it stays verified and ready.
+
   GATE 2a — the deliver_to_client FLIP server-control recovery, via the SlotMono
   record-counting technique (NON-circular: record counts, NOT crypto decode).
 
