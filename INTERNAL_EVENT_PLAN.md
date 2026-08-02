@@ -603,21 +603,101 @@ Two genuine edits remain:
    are individually routine but there are many, and each changes an
    existential's arity.
 
-**Revised ordering.** Phase 2 splits into two gated steps:
+#### Resolving the lock-step breakage
 
-- **Phase 2a — projection first.** Introduce a named, total received-message
-  projection over `conn_event` in `ProtectedWireBase`, and rewrite
-  `ProtectedWireHead` / `ProtectedWireProjection` / `ProtectedWireServerFlight`
-  / `ProtectedWireServerFlightInversion` to consume only that projection rather
-  than testing constructors. Replace the use of
+The lock step is **not** in the replay relations.
+`conn_events_sent_seal_replay` and `conn_events_received_decode_replay`
+(`TLS13.Spec.StateMachine.Replay`) each range over *one* side's own event list
+and *its own* byte streams; the two sides are coupled only by
+`Seq.equal sender_raw_sent receiver_raw_received`. Nothing in either relation
+requires the lists to have equal length. The lock step lives in exactly one
+place: `raw_flight_spine`
+(`TLS13.ConnectionState.ClientCanonicalShape.fsti:121`), which asserts
+
+```fstar
+raw_suffix == raw_ee :: raw_cert :: ConnLocalEvent cv_validate ::
+              raw_cv :: ConnLocalEvent cv_verify :: raw_sf :: raw_tail
+```
+
+one raw client event per received message. That single equality is what makes
+the receiver's list grow relative to the sender's, and it is reached from
+exactly one junction: `ProtectedWireServerFlightInversion` calls
+`lemma_client_canonical_appdata_exact_spine` to obtain the message-level shape
+and then `lemma_client_raw_suffix_flight_spine` to descend to raw events.
+
+Three mechanisms resolve it.
+
+**M1 — `canonical_log` erases record events.**
+
+```fstar
+let rec canonical_log (events:list CS.conn_event) : list CS.conn_event =
+  match events with
+  | [] -> []
+  | CS.ConnReceiveHandshakeRecord _ :: rest -> canonical_log rest
+  | ev :: rest -> canonical_event ev :: canonical_log rest
+```
+
+This is sound because `canonical_log` is a **message-level** normalizer and was
+never byte-preserving: today a *tail* `ConnProtectedHandshake` consumes zero
+received bytes, yet `canonical_event` maps it to a `ConnNetworkEvent` worth a
+whole record. Erasing an event that delivers no message is the same kind of
+step. The payoff is large: `lemma_client_canonical_appdata_exact_spine` and
+every message-level consumer downstream — including the Pairing theorem — keep
+their statements **verbatim**. Blast radius is 4 files (`ClientCanonicalShape`
+`.fst`/`.fsti`, `ServerCanonicalShape`, `ProtectedWireServerFlightInversion`).
+
+**M2 — `raw_flight_spine` skips record events between slots.** Introduce
+
+```fstar
+let rec skip_records (evs:list CS.conn_event) : list CS.conn_event =
+  match evs with
+  | CS.ConnReceiveHandshakeRecord _ :: rest -> skip_records rest
+  | _ -> evs
+```
+
+and replace the single list equality above by a chain
+`skip_records raw_suffix == raw_ee :: r1`, `skip_records r1 == raw_cert :: r2`,
+and so on. This is the *only* site where the 1-to-N arity change is visible.
+Introduced as the identity function on today's event type, it lands and gates
+before any event-type change.
+
+**M3 — the byte-level pairing peels a group, not an event.** In a pair,
+`protected_record_count Sent msg == 1` for every handshake message
+(`TLS13.Spec.StateMachine.fst:1577`), so the sender emits exactly one record
+per message and the receiver's group is exactly
+
+```
+[ ConnReceiveHandshakeRecord pt ; ConnProtectedHandshake step ]
+```
+
+— fixed length two, never variable-length stuttering. The record event is the
+byte-consuming member and pairs with the sender's `ConnNetworkEvent`; the
+internal event is a zero-byte stutter absorbed by the existing
+`lemma_received_replay_skip_empty_head_preserves_peer_stream`, whose guard
+*simplifies* to `ConnProtectedHandshake _ -> True` /
+`ConnReceiveHandshakeRecord _ -> False`.
+
+Coalesced records (a peer that packs several messages into one record) produce
+a longer group. That case is already outside the pairing theorem's scope — it
+concerns interop with third-party servers, not this implementation paired with
+itself — so M3 does not need the general form to close Phase 2.
+
+**Revised ordering.** Phase 2 now splits into three gated steps, the first two
+behaviour-preserving on today's event type:
+
+- **Phase 2a-i — `skip_records`.** Introduce it as the identity and restate
+  `raw_flight_spine` and `lemma_client_raw_suffix_flight_spine` through it.
+  Small, self-contained, gates alone.
+- **Phase 2a-ii — delivery groups.** Introduce the group predicate in
+  `ProtectedWireBase` with today's intro forms, restate the ~9 normalization
+  and pairing lemmas over groups, replace
   `lemma_single_protected_message_seal_excludes_protected_head` with the
-  buffer-emptiness argument. All of this is behaviour-preserving on today's
-  event type, so it lands and gates on its own.
+  buffer-emptiness argument already written at its only call site
+  (`ProtectedWireHead.fst:1188`). Gates alone.
 - **Phase 2b — the event split.** Replay the parked branch
-  `internal-events-phase2-wip`. With 2a in place the remaining work is the
-  guard rewrite above, which is mechanical.
-
-Doing 2b first, as was attempted, forces 2a to be done under a broken tree.
+  `internal-events-phase2-wip`, add the `canonical_log` erasure (M1), flip the
+  skip guards, and point the normalization lemma at
+  `ConnReceiveHandshakeRecord`.
 
 ### Phase 3 — Pulse implementation
 Files: `src/impl/TLS13.Impl.Client.fst/.fsti`, client Types/Repr/ConnectionState.
