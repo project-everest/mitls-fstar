@@ -540,30 +540,69 @@ reused verbatim:
   state it is given, so the order is irrelevant. The refactor is therefore
   semantics-preserving on the client receive path.
 
-**The constraint.** Phase 2 cannot complete before the shape-agnostic
-received-message projection exists, because the peer-pairing argument in
-`TLS13.ConnectionState.ProtectedWireHead` (4947 lines, ~117 sites) currently
-derives a contradiction from "the receiver's head event is a protected step
-while the sender sealed a single message" — i.e. it *relies* on a
-single-message record being representable only as `ConnNetworkEvent`. That
-uniqueness is precisely the fork this document removes. Concretely,
-`lemma_single_protected_message_seal_excludes_protected_head`
-(`TLS13.ConnectionState.ProtectedWireProjection`) becomes false by design, and
-every caller whose `returns` clause is
-`receiver_head == ConnNetworkEvent { Received; TlsHandshake msg }` must weaken
-to a disjunction over the two shapes, discharged by the projection.
+**The obstacle, precisely.** The peer-pairing argument replays the sender's
+and the receiver's event lists in lock step against a shared byte stream.
+Internal events break lock step by construction: one sent record event
+corresponds to one received *record* event plus N received *internal* events.
 
-**Revised ordering.** Phase 2 splits:
+The machinery for this already exists and is already used. The
+`lemma_*_replay_skip_*_head_preserves_peer_stream` family in
+`TLS13.ConnectionState.ProtectedWireHead` skips exactly those head events that
+consume no bytes on the relevant side. Today its received-side guard is
 
-- **Phase 2a — projection first.** Generalise `event_trace_has_tls_message`
-  (`TLS13.Impl.Driver.Pairing.fsti:238`, already shape-agnostic) into a total
-  received-message projection over `conn_event`, and rewrite
-  `ProtectedWireHead` / `ProtectedWireProjection` / `ProtectedWireSegmentation`
-  to consume *only* that projection, never a constructor test. This is
-  behaviour-preserving on today's event type and can therefore land and be
-  gated on its own, before any event-type change.
-- **Phase 2b — the event split.** Replay the parked branch. With 2a in place
-  the ~117 sites become mechanical.
+```fstar
+| CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+```
+
+which in the new event type becomes the strictly simpler
+
+```fstar
+| CS.ConnProtectedHandshake _        -> True    (* always a stutter *)
+| CS.ConnReceiveHandshakeRecord _    -> False   (* consumes one record *)
+```
+
+That is the whole of the structural change: internal events are received-side
+stutters, and the record event takes over the pairing role that the head step
+used to play. Every one of the ~117 `ConnNetworkEvent` occurrences in that
+module is either this guard, or a *representative* event inside a projection
+predicate (`received_event_decode_projection m (ConnNetworkEvent {Received;
+TlsHandshake msg}) raw` is by definition `received_single_protected_message_decode
+m msg raw`, which is shape-independent and needs no change).
+
+Two genuine edits remain:
+
+1. **`lemma_single_message_sender_normalizes_received_handshake_head`**
+   (`ProtectedWireHead.fsti:329`, 4 external call sites: 3 in
+   `ProtectedWireServerFlightInversion`, 1 in `ProtectedWireServerFlight`).
+   Its conclusion `receiver_head == ConnNetworkEvent { Received; TlsHandshake
+   msg }` must become `receiver_head == ConnReceiveHandshakeRecord { plaintext }`
+   for protected handshake messages. Callers then pair the record event with
+   the sender's network event and let the existing skip machinery absorb the
+   internal step that follows.
+
+2. **`lemma_single_protected_message_seal_excludes_protected_head`**
+   (`ProtectedWireProjection`) should be **deleted**, not repaired. It currently
+   derives its contradiction from the head step's strict
+   `consumed < B.length fragment`, which no longer exists. The correct
+   argument is already written two branches below its only call site
+   (`ProtectedWireHead.fst:1188`): at a head the receiver's pending buffer is
+   empty, so `step.protected_handshake_fragment` would have to be empty, which
+   contradicts the parse. That argument survives the refactor verbatim and
+   subsumes the deleted lemma.
+
+**Revised ordering.** Phase 2 splits into two gated steps:
+
+- **Phase 2a — projection first.** Introduce a named, total received-message
+  projection over `conn_event` in `ProtectedWireBase`, and rewrite
+  `ProtectedWireHead` / `ProtectedWireProjection` / `ProtectedWireServerFlight`
+  / `ProtectedWireServerFlightInversion` to consume only that projection rather
+  than testing constructors. Replace the use of
+  `lemma_single_protected_message_seal_excludes_protected_head` with the
+  buffer-emptiness argument. All of this is behaviour-preserving on today's
+  event type, so it lands and gates on its own.
+- **Phase 2b — the event split.** Replay the parked branch
+  `internal-events-phase2-wip`. With 2a in place the remaining work is the
+  guard rewrite above, which is mechanical.
 
 Doing 2b first, as was attempted, forces 2a to be done under a broken tree.
 
