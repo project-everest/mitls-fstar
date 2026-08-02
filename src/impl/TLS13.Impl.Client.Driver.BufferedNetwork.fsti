@@ -121,7 +121,7 @@ let completed_drive_correct
   | BS.DriveYield network consumed _ _ ->
     let buffer_resp =
       network.DS.buffered_network_read.DS.network_read_buffer_resp in
-    CT.network_bytes_end_to_end_correct
+    CT.coalesced_network_bytes_end_to_end_correct
       st0
       st1
       buffer_resp
@@ -136,7 +136,7 @@ let completed_drive_correct
   | BS.DriveReject network error _ ->
     let buffer_resp =
       network.DS.buffered_network_read.DS.network_read_buffer_resp in
-    CT.network_bytes_end_to_end_correct
+    CT.coalesced_network_bytes_end_to_end_correct
       st0
       st1
       buffer_resp

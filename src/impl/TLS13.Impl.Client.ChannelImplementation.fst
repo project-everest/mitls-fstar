@@ -412,7 +412,7 @@ let lemma_network_response_app_out_length
   (network_input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        CT.coalesced_network_bytes_end_to_end_correct
           st0 st1 buffer_resp network_input
           old_network_out network_out old_app_out app_out)
       (ensures
@@ -469,7 +469,7 @@ let lemma_receive_observation_app_out_length
 =
   if obs.DS.client_receive_observed_status == DS.DriverWorkflowOk then (
     assert (exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
-      CT.network_bytes_end_to_end_correct
+      CT.coalesced_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.DS.client_receive_observed_response
@@ -484,7 +484,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         CS.connection_state
         (fun st_before -> exists st_network input old_network_out network_out old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -499,7 +499,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun input -> exists st_network old_network_out network_out old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -514,7 +514,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun old_network_out -> exists st_network network_out old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -529,7 +529,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun network_out -> exists st_network old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -544,7 +544,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun old_app_out -> exists st_network observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -559,7 +559,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun observed_app_out -> exists st_network.
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -571,7 +571,7 @@ let lemma_receive_observation_app_out_length
           st_network == st1 /\
           Seq.equal observed_app_out app_out) in
     assert (exists st_network.
-      CT.network_bytes_end_to_end_correct
+      CT.coalesced_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.DS.client_receive_observed_response
@@ -586,7 +586,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         CS.connection_state
         (fun st_network ->
-          CT.network_bytes_end_to_end_correct
+          CT.coalesced_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -707,7 +707,7 @@ let lemma_network_bytes_application_log
   (network_input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        CT.coalesced_network_bytes_end_to_end_correct
           st0 st1 buffer_resp network_input
           old_network_out network_out old_app_out app_out)
       (ensures
@@ -718,6 +718,22 @@ let lemma_network_bytes_application_log
             else CI.append_received (TChannel.application_log st0) output)))
 =
   let resp = buffer_resp.CT.response in
+  if not (CT.network_bytes_end_to_end_correct
+            st0 st1 buffer_resp network_input
+            old_network_out network_out old_app_out app_out)
+  then (
+    // Head protected-handshake step: the event carries no application bytes.
+    let step =
+      CP.lemma_client_coalesced_head_step
+        st0 st1 buffer_resp network_input
+        old_network_out network_out old_app_out app_out in
+    let raw_received =
+      CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
+    lemma_legal_response_observable_receive_log
+      st0 st1 resp
+      (CS.ConnProtectedHandshake step)
+      B.empty raw_received network_out app_out
+  ) else (
   assert (CT.network_bytes_step_correct
     st0 st1 buffer_resp network_input
     old_network_out network_out old_app_out app_out);
@@ -806,6 +822,7 @@ let lemma_network_bytes_application_log
         network_out
         app_out
     )
+  )
   )
 #pop-options
 

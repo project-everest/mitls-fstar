@@ -103,7 +103,7 @@ let result_valid
   : prop =
   let buffer_resp =
     result.buffered_network_read.network_read_buffer_resp in
-  CT.network_bytes_end_to_end_correct
+  CT.coalesced_network_bytes_end_to_end_correct
     before.endpoint_connection
     after.endpoint_connection
     buffer_resp
@@ -132,7 +132,7 @@ let lemma_result_valid_preserves
     result.buffered_network_read.network_read_buffer_resp in
   let prefix =
     Ghost.reveal result.buffered_network_read.network_read_prefix in
-  CT.lemma_network_bytes_end_to_end_correct_preserves_config
+  CP.lemma_client_coalesced_preserves_config
     before.endpoint_connection
     after.endpoint_connection
     response
@@ -143,7 +143,7 @@ let lemma_result_valid_preserves
     after.endpoint_app_out;
   if CT.client_end_to_end_invariant before.endpoint_connection
   then
-    CT.lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant
+    CT.lemma_coalesced_network_bytes_end_to_end_correct_preserves_invariant
       before.endpoint_connection
       after.endpoint_connection
       response
@@ -338,6 +338,14 @@ fn process
     sent);
   BT.recall_model
     e.endpoint_driver.top_buffered_driver_core.buffered_driver_channel;
+  // Expose client_end_to_end_invariant, which process_coalesced_network_bytes
+  // demands; the fact survives the re-fold in Pulse's logical context.
+  unfold (buffered_driver_canonical_progress
+    e.endpoint_driver.top_buffered_driver_core
+    (Ghost.reveal st).endpoint_connection);
+  fold (buffered_driver_canonical_progress
+    e.endpoint_driver.top_buffered_driver_core
+    (Ghost.reveal st).endpoint_connection);
   let view =
     BT.borrow_pending
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_channel;
@@ -350,7 +358,7 @@ fn process
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       (Ghost.reveal st).endpoint_connection);
   let buffer_resp =
-    C.process_network_bytes
+    C.process_coalesced_network_bytes
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       (BT.view_data view)
       (BT.view_length view)
@@ -374,7 +382,7 @@ fn process
     (C.connection_exactly
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       st1);
-  assert (pure (CT.network_bytes_end_to_end_correct
+  assert (pure (CT.coalesced_network_bytes_end_to_end_correct
     (Ghost.reveal st).endpoint_connection
     st1
     buffer_resp
@@ -383,6 +391,15 @@ fn process
     network_out_bytes
     (Ghost.reveal st).endpoint_app_out
     app_out_bytes));
+  CP.lemma_client_coalesced_network_bytes_step_correct
+    (Ghost.reveal st).endpoint_connection
+    st1
+    buffer_resp
+    (BT.pending (Ghost.reveal model))
+    (Ghost.reveal st).endpoint_network_out
+    network_out_bytes
+    (Ghost.reveal st).endpoint_app_out
+    app_out_bytes;
   lemma_network_bytes_wire_lengths
     (Ghost.reveal st).endpoint_connection
     st1
@@ -442,6 +459,10 @@ fn process
         e.endpoint_app_out_buffer
         (Ghost.reveal st).endpoint_app_out);
     W.lemma_record_prefix_incomplete_bound (BT.pending (Ghost.reveal model));
+    assert (pure (Seq.length (BT.pending (Ghost.reveal model)) < 5 + 16640));
+    assert (pure (BT.capacity (Ghost.reveal model) == 65535));
+    assert (pure (Seq.length (BT.pending (Ghost.reveal model)) <
+      BT.capacity (Ghost.reveal model)));
     assert (pure (BT.can_read (Ghost.reveal model)));
     let result = {
       buffered_network_read = read_result;
@@ -573,7 +594,7 @@ fn process
       (Ghost.reveal st).endpoint_app_out
       app_out_bytes
       (Ghost.reveal committed);
-    lemma_network_bytes_logged_received_exact_when_nonfailed
+    lemma_coalesced_logged_received_exact_when_nonfailed
       (Ghost.reveal st).endpoint_connection
       st1
       buffer_resp
@@ -622,7 +643,7 @@ fn process
     unfold (buffered_driver_canonical_progress
       e.endpoint_driver.top_buffered_driver_core
       (Ghost.reveal st).endpoint_connection);
-    CP.lemma_client_network_progress
+    CP.lemma_client_coalesced_network_progress
       (Ghost.reveal st).endpoint_connection
       st1
       buffer_resp
@@ -631,7 +652,7 @@ fn process
       network_out_bytes
       (Ghost.reveal st).endpoint_app_out
       app_out_bytes;
-    CT.lemma_network_bytes_end_to_end_correct_preserves_config
+    CP.lemma_client_coalesced_preserves_config
       (Ghost.reveal st).endpoint_connection
       st1
       buffer_resp
