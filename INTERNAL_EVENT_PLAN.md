@@ -766,6 +766,72 @@ properties layer.
 `lemma_single_message_record_is_a_head_step` and
 `lemma_single_message_routes_agree`.
 
+## Phase 3 as built — implementation fork removed; exit criterion re-scoped
+
+**What landed.** The implementation-level fork is gone. It turned out to be a
+single guard in `process_coalesced_network_bytes`:
+
+```
+let coalesced = SZ.lt consumed fragment_len;
+if coalesced { try_process_protected_handshake_head ... }
+else         { process_legacy_coalesced_fallback ... }
+```
+
+— the implementation branched on exactly the condition Phase 2b deleted from
+the head branch of `legal_protected_handshake_step`. Relaxing it to `SZ.lte`
+sends every protected handshake record down the head route. The same strict
+bound had been threaded through five further layers
+(`lemma_legal_protected_handshake_head`,
+`try_process_protected_handshake_head`, `mark_received_protected_{ee,cert,cv}`,
+`finish_protected_handshake_head`, `store_pending_protected_handshake`) and was
+relaxed at each; Phase 2b's spec change carries them all.
+
+The one place needing real work was `store_pending_protected_handshake`: when
+the head message saturates the fragment, `set_pending_protected_handshake`
+resets the pending buffer to `{empty; 0}` rather than retaining the
+fully-consumed fragment, and the implementation now mirrors that. The collapse
+is factored into `collapse_sized_bytes_to_empty` because unfolding
+`sized_bytes_exactly` inside a conditional branch leaves the frame with uvars.
+
+This is verified end to end: the extracted-C OpenSSL echo interop and the
+Chromium async HTTPS demo both pass, so single-message records really do take
+the new route at runtime.
+
+**What did not land: the exit criterion, and why it belongs to Phase 5.** The
+stated exit — "`process_network_bytes` is the only network receive primitive" —
+cannot be met at this point in the sequence. `process_coalesced_network_bytes`
+requires `CT.client_end_to_end_invariant`, and `process_network_bytes` does
+not. Reducing either to an alias of the other therefore forces that invariant
+into `process_network_bytes`'s precondition, and its callers cannot supply it:
+`TLS13.Impl.Client.Driver.BufferedNetwork` deliberately propagates the
+invariant *conditionally* (`invariant before ==> invariant after`) rather than
+carrying it.
+
+`client_end_to_end_invariant` is `client_state_correct /\
+connection_state_raw_to_message_replay_consistent` — genuine log-consistency
+facts, not derivable from `connection_exactly`. It *is* an inductive invariant
+(established by `lemma_initial_client_state_correct`, preserved by
+`lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant`); the
+driver simply does not carry it in `buffered_driver_indexed`. Adding it there
+ripples across ~180 occurrences in 20 client and server driver modules — which
+is precisely the surface Phase 5 (BufferedStream and Channel) already owns.
+
+**Recommendation for the next session.** Before accepting that ripple, evaluate
+the cheaper idiom the codebase already uses: give `process_network_bytes` a
+*conditional* postcondition,
+
+```
+(client_end_to_end_invariant 'st0 ==>
+   coalesced_network_bytes_end_to_end_correct 'st0 st1 buffer_resp ...)
+```
+
+mirroring `BufferedNetwork`'s existing `invariant before ==> invariant after`
+shape. The obstacle to check first is that Pulse needs the invariant as a
+*precondition* to call `try_process_protected_handshake_head` at all, so this
+only works if that fn's dependence can be narrowed to facts derivable from
+`connection_state_consistent`. If it cannot, defer the merge to Phase 5 and
+re-order the plan accordingly.
+
 ### Phase 3 — Pulse implementation
 Files: `src/impl/TLS13.Impl.Client.fst/.fsti`, client Types/Repr/ConnectionState.
 - `process_network_bytes` stops after the record transition.

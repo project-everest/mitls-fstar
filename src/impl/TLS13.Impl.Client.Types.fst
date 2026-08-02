@@ -2740,6 +2740,31 @@ let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
     app_out;
   lemma_client_state_correct_raw_to_message_replay st1
 
+// Conditional form of the lemma above.  The protected-handshake head path needs
+// client_end_to_end_invariant only to prove its *postcondition* -- no state
+// update depends on it -- so callers that cannot supply the invariant (notably
+// the buffered driver, which propagates it as `held before ==> holds after`
+// rather than carrying it) can still use that path and simply propagate the
+// implication.
+let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        protected_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1)
+=
+  introduce client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1
+  with _.
+    lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+      st0 st1 resp step raw_received network_out app_out
+
 let network_event_step_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)

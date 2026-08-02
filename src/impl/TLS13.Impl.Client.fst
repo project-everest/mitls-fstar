@@ -178,8 +178,7 @@ fn try_process_protected_handshake_head
                   (T.Application_data,
                    outer_fragment,
                    B.length (Ghost.reveal 'raw_bytes))) /\
-            L.content_type_matches content_type T.Handshake /\
-            CT.client_end_to_end_invariant 'st0)
+            L.content_type_matches content_type T.Handshake)
   returns handled:option CT.client_response
   ensures
     (match handled with
@@ -210,7 +209,8 @@ fn try_process_protected_handshake_head
               (Ghost.reveal 'raw_bytes)
               'old_network_out
               'old_app_out) /\
-          CT.client_end_to_end_invariant st1))
+          (CT.client_end_to_end_invariant 'st0 ==>
+           CT.client_end_to_end_invariant st1)))
 {
   Trace.emit Trace.client_protected_head
     (SZ.sizet_to_uint64 consumed)
@@ -312,7 +312,7 @@ fn try_process_protected_handshake_head
              (Ghost.reveal 'raw_bytes)
              'old_network_out
              'old_app_out;
-           CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+           CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
              'st0
              (CM.protected_handshake_state
                'st0
@@ -335,11 +335,12 @@ fn try_process_protected_handshake_head
                (Ghost.reveal 'raw_bytes)
                'old_network_out
                'old_app_out /\
-             CT.client_end_to_end_invariant
-               (CM.protected_handshake_state
-                 'st0
-                 (Ghost.reveal step)
-                 (Ghost.reveal 'raw_bytes))));
+             (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant
+                (CM.protected_handshake_state
+                  'st0
+                  (Ghost.reveal step)
+                  (Ghost.reveal 'raw_bytes)))));
            Some resp
          } else {
            fold
@@ -444,7 +445,7 @@ fn try_process_protected_handshake_head
              (Ghost.reveal 'raw_bytes)
              'old_network_out
              'old_app_out;
-           CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+           CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
              'st0
              (CM.protected_handshake_state
                'st0
@@ -467,11 +468,12 @@ fn try_process_protected_handshake_head
                (Ghost.reveal 'raw_bytes)
                'old_network_out
                'old_app_out /\
-             CT.client_end_to_end_invariant
-               (CM.protected_handshake_state
-                 'st0
-                 (Ghost.reveal step)
-                 (Ghost.reveal 'raw_bytes))));
+             (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant
+                (CM.protected_handshake_state
+                  'st0
+                  (Ghost.reveal step)
+                  (Ghost.reveal 'raw_bytes)))));
            Some resp
          } else {
            fold
@@ -579,7 +581,7 @@ fn try_process_protected_handshake_head
              (Ghost.reveal 'raw_bytes)
              'old_network_out
              'old_app_out;
-           CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+           CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
              'st0
              (CM.protected_handshake_state
                'st0
@@ -602,11 +604,12 @@ fn try_process_protected_handshake_head
                (Ghost.reveal 'raw_bytes)
                'old_network_out
                'old_app_out /\
-             CT.client_end_to_end_invariant
-               (CM.protected_handshake_state
-                 'st0
-                 (Ghost.reveal step)
-                 (Ghost.reveal 'raw_bytes))));
+             (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant
+                (CM.protected_handshake_state
+                  'st0
+                  (Ghost.reveal step)
+                  (Ghost.reveal 'raw_bytes)))));
            Some resp
          } else {
            fold
