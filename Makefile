@@ -261,8 +261,14 @@ restore-generated-cache:
 # generated sources), so the generated Wire modules would be re-verified once per
 # sub-make — racing under -jN.  These goals manage the generated .checked files
 # explicitly via the stamp and never need the spec/impl dependency graph.
+#
+# `quick` is excluded for a different reason: it invokes F* directly on a single
+# file and uses no rule from .depend, but editing any source (or this Makefile)
+# invalidates .depend, and regenerating it costs ~2.5min — which would dwarf the
+# ~1min iteration cycle that `quick` exists to provide.
 DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
   parsers generated-checked save-generated-cache restore-generated-cache \
+  quick \
   $(GENERATED_STAMP)
 ifeq (,$(filter $(DEPEND_EXCLUDED_GOALS),$(MAKECMDGOALS)))
 include .depend
@@ -1580,6 +1586,47 @@ clean:
 	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
 
+# ── Fast proof iteration ───────────────────────────────────────────
+# Re-verifying a whole proof module costs minutes, but the fixed cost of a
+# module (elaboration + loading dependencies) is only ~20-45s; almost all of
+# the rest is SMT attached to individual definitions.  So while iterating on
+# one lemma or one Pulse fn, admit every *other* definition in the file:
+#
+#   make quick FILE=src/impl/TLS13.Impl.ConnectionState.Network.fst \
+#              DEF=TLS13.Impl.ConnectionState.Network.mark_received_encrypted_extensions
+#
+# Measured (warm dependency cache, this machine):
+#   TLS13.Impl.ConnectionState.Network.fst          3m16s -> 58s
+#   ...ProtectedWireClientFinishedInversion.fst     6m56s -> 2m30s
+#
+# DEF may be omitted to typecheck the file with *all* SMT admitted, which
+# checks syntax, binder scoping and slprop framing only (~20-45s).  That is
+# the fastest way to shake out Pulse framing errors.
+#
+# SAFETY: these runs admit proof obligations, so they must never be allowed to
+# deposit a .checked file into the shared $(CACHE_DIR) -- a partially-admitted
+# .checked would be indistinguishable from a real one and would silently
+# poison every downstream module.  We therefore verify into a scratch cache
+# that is seeded (copy-on-write if the filesystem supports it) from the real
+# one and thrown away afterwards.  `make verify` remains the only thing that
+# writes $(CACHE_DIR).
+QUICK_CACHE = _cache_quick
+
+.PHONY: quick
+quick:
+	@if [ -z "$(FILE)" ]; then \
+	  echo "usage: make quick FILE=<path/to/Module.fst> [DEF=<Module.definition>]"; \
+	  exit 1; \
+	fi
+	@rm -rf $(QUICK_CACHE)
+	@cp -r --reflink=auto $(CACHE_DIR) $(QUICK_CACHE) 2>/dev/null \
+	  || cp -r $(CACHE_DIR) $(QUICK_CACHE)
+	@rm -f $(QUICK_CACHE)/$(notdir $(FILE)).checked
+	$(FSTAR_EXE) $(FSTAR_FLAGS) --cache_dir $(QUICK_CACHE) \
+	  $(if $(DEF),--admit_except '$(DEF)',--admit_smt_queries true) \
+	  $(FILE)
+	@rm -f $(QUICK_CACHE)/$(notdir $(FILE)).checked
+
 .PHONY: all verify test extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
@@ -1590,4 +1637,4 @@ clean:
   test-chromium-browser-public chromium-demo-bundle \
   test-chromium-demo-bundle \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
-  benchmark-profile-build profile clean
+  benchmark-profile-build profile clean quick
