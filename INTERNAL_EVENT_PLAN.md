@@ -1319,6 +1319,87 @@ Files: `src/impl/TLS13.System.fst`, `TLS13.System.WireStep.fst`,
 Exit: a delivered multi-message record is followed by internal steps with the
 channel quiet; full gate.
 
+### Phase 7 as built — internal steps in the combined system
+
+`src/impl/TLS13.System.Internal.fst` (new, verified, no admits). Three claims,
+all machine-checked; `Common.SystemProduct`, `Common.MachineProduct`,
+`TLS13.System.fst` and `TLS13.System.Temporal.fst` are **unmodified**.
+
+**1. No new move families — discharged, not asserted.**
+`lemma_drain_step_is_client_local` proves a client drain step *is* an
+`MP.mp_client_local` move at `tls_machine_iface`. That family asks for a
+`LocalEvent` step emitting no wire output; decision S1 made the internal event
+an ordinary local event, so `CP.lemma_internal_step_is_client_step` supplies
+exactly that at `CP.client_internal_event` with
+`internal_step_output = CPI.step_output [] []`.
+`lemma_drain_step_is_sys_step` adds the quiet gate and concludes `tls_sys_step`.
+
+The quiet gate is `SP.product_step`'s, not a new one: a local move is enabled
+only with an empty channel. That *is* the §5 schedule, already enforced by the
+product.
+
+**2. A drain chain is a system run, and the invariant survives it.**
+`lemma_drain_chain_reachable` (induction on the chain bound) and
+`lemma_drained_reachable` lift `D.drained a.client c'` to
+`T.reachable tls_sys_step a { a with client = c' }`. A drain touches neither
+the channel nor the server, so every intermediate state is again quiescent and
+the next local move stays enabled — the whole drain runs inside one quiet
+window rather than interleaving with the channel discipline.
+
+`lemma_reachable_combined_inv` then transports `combined_inv` along it via
+`RTC.stable_on_closure` and the existing `lemma_combined_inv_preserved`; no
+inductive re-proof was needed, which is precisely the payoff of the internal
+step being an ordinary move. `lemma_drained_inv` gives
+`tls_system_inv { a with client = c' }`.
+
+This is the phase's substantive claim: the states in which a delivered record
+is only *partly* consumed are ordinary reachable states of the system, not a
+gap in the invariant between delivery and completion.
+
+**3. The settled payoff — the added ready/quiescent clause.**
+`tls_internal_pending s = CP.client_internal_pending s.client`;
+`tls_settled s = tls_quiescent s /\ ~(tls_internal_pending s)`.
+
+`lemma_flagship_settled_record_material_agreement` re-establishes the flagship
+at settled states:
+
+```
+AG ( no_rekeying /\ settled /\ application_ready
+     ==> peer_record_material_agrees (Application, ClientTraffic) client server
+      /\ peer_record_material_agrees (Application, ServerTraffic) client server )
+```
+
+Why the clause matters now and did not before: `tls_quiescent` is satisfied the
+instant a record is delivered, while the receiver may still owe several
+internal steps. Once a record is consumed over several steps, "quiescent" alone
+is satisfiable at a state where the client has already *received* the server's
+Finished but not yet *processed* it. `tls_settled` is the condition under which
+the endpoint has actually finished reacting.
+
+The original `lemma_flagship_record_material_agreement` is retained unchanged
+and is the stronger statement (its antecedent is weaker); the settled form is
+the one Phase 8's drivers can actually witness.
+
+**The implementation supplies the witness.** `lemma_drain_to_settled` closes
+the loop: `DrainLoop.drain_pending` returns `quiet` exactly when
+`~(D.internal_pending c')` holds, `DP.lemma_internal_pending_agrees` identifies
+that with `CP.client_internal_pending`, and the lemma concludes both
+`T.reachable tls_sys_step` and `tls_settled` at the drained state. The
+production drain loop is therefore a constructive realisation of a system run
+to a settled state.
+
+**Refactor not required.** The phase anticipated reworking TLS delivery so that
+record delivery establishes a pending witness carried in `tls_system_inv`. It
+turned out unnecessary: `tls_system_inv`'s conjuncts are already stated over
+per-endpoint reachability and byte pairing, both of which a local step
+preserves for free, and `tls_no_rekeying` is recovered backwards by the
+existing `lemma_no_key_update_backward`. The pairing argument needs no
+adjustment across intermediate pending states for the same reason. Nothing was
+weakened to achieve this — `lemma_drained_inv` proves the full `tls_system_inv`
+at the drained state.
+
+Gate: `make -j128 verify test` green; `make admit-count` = 0.
+
 ### Phase 8 — Drivers, Engine and Chromium
 Files: client/server Driver modules, `TLS13.Impl.Client.Engine.fst/.fsti`,
 `runtime/`, `c_stubs/`, Chromium extraction/API modules.
