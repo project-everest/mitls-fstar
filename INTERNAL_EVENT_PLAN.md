@@ -1244,6 +1244,66 @@ Exit: `client_step`'s `WireEvent` case is record-only for all client-received
 handshake records, or the exception is documented with a rationale; full gate.
 Keep-or-revert is decided here, before Phase 7 depends on it.
 
+### Phase 6 as built — the cleartext exception, upgraded to a theorem
+
+**Decision: keep the S4 exception. `ServerHello` and `HelloRetryRequest` stay on
+`ConnNetworkEvent`.** Not as a budget compromise, but because the migration
+would add machinery to describe something the type system already forbids.
+
+`src/spec/properties/TLS13.Spec.Client.CleartextNoTail.fst` (new, verified, no
+admits) replaces the prose rationale of §9 S4 with six machine-checked facts.
+
+**1. A cleartext handshake record cannot coalesce.**
+`lemma_cleartext_handshake_fragment_has_no_tail` — if
+`W.parse_tls_message T.Handshake fragment == Some (M.TlsHandshake hs)` then
+`W.parse_handshake fragment == Some (hs, B.length fragment)`. The message
+occupies the fragment *exactly*. `parse_tls_message` is a whole-fragment
+parser, so the residue a pipeline would drain is provably empty.
+
+This is the crux. The fork §1.1 describes is that one physical record had two
+spec shapes — a `ConnProtectedHandshake` chain when it coalesced, a
+`ConnNetworkEvent` when it did not. On the cleartext path the first shape is
+uninhabited. `ConnNetworkEvent` is therefore the pipeline's zero-tail
+degenerate case, not a competing description, and there is no fork to remove.
+
+**2. The scope really is two messages.**
+`lemma_client_received_cleartext_handshake_messages` enumerates
+`M.handshake_msg`: `ClientHello` is client-sent; the other four are exactly
+`CS.protected_handshake_message_supported`, hence already migrated; the
+remainder is `{ServerHello, HelloRetryRequest}`.
+`lemma_client_cleartext_disjoint_from_protected` proves the two sets are
+disjoint, so the migrated and unmigrated paths cannot overlap.
+
+**3. The cleartext path leaves the pipeline quiescent.**
+`model_internal_pending` reads the two pending fields of `hs_buffers`.
+`lemma_step_handshake_message_preserves_pending_buffer` proves
+`step_handshake_message` never writes them; `lemma_network_event_preserves_
+pending_buffer` lifts that to `step_tls_message`; `lemma_network_event_
+preserves_quiescence` concludes that a `ConnNetworkEvent` from a quiescent
+model leaves it quiescent.
+
+That last lemma is what Phase 7 needs: `~(pi_internal_pending st)` survives
+every cleartext receive, so the ready/quiescent clause of the temporal theorem
+is not weakened by the retained exception.
+
+Note the exact statement. Several `step_handshake_message` branches *do* write
+`hs_buffers` — the certificate leaf DER, the CertificateVerify input — so
+"`hs_buffers` unchanged" is false. The lemma names
+`hb_encrypted_server_handshake_bytes` and `hb_encrypted_server_handshake_
+parsed` specifically. `CS.set_pending_protected_handshake` and
+`CS.initial_buffers` remain their only writers.
+
+**Not done, deliberately:** no new `client_step` constructor, so the mechanical
+`PairingNoTailServerHelloWindowRank` / `PairingNoTailInversion` branches the
+phase anticipated are unnecessary. `raw_records_exactly` and
+`received_cleartext_tls_message_raw` are untouched.
+
+**Cost of reverting later.** If a future TLS extension makes a cleartext record
+carry a tail, fact 1 fails to verify and the migration becomes forced. The
+exception is thus self-policing rather than a silent assumption.
+
+Gate: `make -j128 verify test` green; `make admit-count` = 0.
+
 ### Phase 7 — System and temporal
 Files: `src/impl/TLS13.System.fst`, `TLS13.System.WireStep.fst`,
 `TLS13.System.Ordering.fst`, `TLS13.System.ProgressCount.fst`,
