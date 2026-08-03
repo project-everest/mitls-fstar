@@ -1507,6 +1507,65 @@ Gate: `make -j128 verify test` green (including `test-client-engine-openssl-echo
   canonical state machine`, with no C-level handshake sequencing.
 - Update `ARCH_AUDIT.md`, `BUFFERING_DESIGN.md`, `PAIRING_THEOREM.md`.
 
+### Phase 9 as built (samples) — one generic helper, seven instances
+
+Phase 1 deferred the sample protocols by decision D5/S5. The bill came due
+here: `calc_sample`'s gate failed with
+
+```
+Error 118: Missing fields: pi_process_internal, pi_internal_frame_post,
+           pi_internal_frame_pre, pi_internal_pending, pi_internal
+```
+
+There are seven `protocol_implementation` instances across the samples
+(`ftp_sample` has none): calc server, http client/server, tftp client/server,
+ymodem client/server.
+
+**The helper, not the template.** Rather than copy the TLS-server no-internal
+template seven times, `common/Common.ProtocolImplementation.fst` gained three
+generic definitions placed immediately before `class protocol_implementation`:
+
+- `no_internal_frame_pre` and `no_internal_frame_post`, both `emp` — a protocol
+  with no internal events owns no resources across an internal step;
+- `fn quiescent_process_internal`, a Pulse function parameterised by the
+  instance's invariant and system, which returns `InternalQuiescent`
+  unconditionally. It is total and proof-complete: `no_internal_events` is the
+  constant `false` classifier, so `lemma_no_internal_events_quiescent`
+  discharges the correctness obligation directly.
+
+Each instance therefore needs five one-line fields:
+
+```fstar
+CPI.pi_internal            = CPI.no_internal_events #<LocalEvent>;
+CPI.pi_internal_pending    = CPI.nothing_pending #<State>;
+CPI.pi_internal_frame_pre  = CPI.no_internal_frame_pre #<LocalFrame> #<State>;
+CPI.pi_internal_frame_post = CPI.no_internal_frame_post #<LocalFrame> #<State> #<Wire> #<LOut>;
+CPI.pi_process_internal    = CPI.quiescent_process_internal ... <inv> <system>;
+```
+
+**Two knock-on obligations**, both consequences of Phase 1 rather than of this
+phase, and both a good sign — they are the type system insisting that the
+internal/local split is respected everywhere, not just in TLS:
+
+1. Phase 1 added `~(pi_internal ev)` to `pi_process_local`'s precondition, so
+   each sample's `*_process_local` needed the same conjunct in its `requires`
+   (7 edits). Symptom: `Error 19 Subtyping check failed` at the
+   `pi_process_local = ...` field.
+2. `Common.ProtocolEndpoint` requires `pure (action_not_internal impl action)`
+   in `pe_next_action`'s ensures, so the three `*_next_action` functions (calc
+   server, ymodem client, ymodem server) needed that clause (3 edits). For
+   ymodem this is not vacuous — `next_action` really does return
+   `EndpointLocal` actions — but it is still definitional, because
+   `no_internal_events` is constantly `false`.
+
+All five sample gates and the root gate are green. `Common.ProtocolImplementation.fst`
+is shared with TLS, so the root gate was re-run after the helper landed.
+
+**The root gate now covers the samples.** `make verify-samples` recurses into
+all five sample directories, and `make test` depends on it. This closes the
+"extend the root gate to cover the sample protocols" exit criterion: a future
+change to `Common.ProtocolImplementation` can no longer silently break a sample.
+
 ---
 
 ## 8. Proof obligations

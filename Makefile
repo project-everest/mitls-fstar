@@ -295,8 +295,23 @@ generated-checked: $(GENERATED_STAMP)
 verify: generated-checked $(ALL_CHECKED_FILES)
 	@echo "All F* modules verified"
 
+# ── Sample-protocol gate ───────────────────────────────────────────
+# The sample protocols instantiate the same generic classes as TLS
+# (`Common.ProtocolImplementation`, `Common.ProtocolEndpoint`), so a change to
+# those classes can break them without the root `verify` target noticing.
+# `verify-samples` closes that gap; `test` depends on it.
+SAMPLE_DIRS = calc_sample ftp_sample http_sample tftp_sample ymodem_sample
+
+.PHONY: verify-samples $(addprefix verify-sample-,$(SAMPLE_DIRS))
+
+verify-samples: $(addprefix verify-sample-,$(SAMPLE_DIRS))
+	@echo "All sample protocols verified"
+
+$(addprefix verify-sample-,$(SAMPLE_DIRS)): verify-sample-%:
+	$(MAKE) -C $* verify
+
 admit-count:
-	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src common $(SAMPLE_DIRS) || true); \
 	if [ -n "$$matches" ]; then \
 	  printf "%s\n" "$$matches"; \
 	  count=$$(printf "%s\n" "$$matches" | wc -l); \
@@ -306,7 +321,7 @@ admit-count:
 	fi
 
 check-admits:
-	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src common $(SAMPLE_DIRS) || true); \
 	if [ -n "$$matches" ]; then \
 	  printf "%s\n" "$$matches"; \
 	  count=$$(printf "%s\n" "$$matches" | wc -l); \
@@ -1017,7 +1032,7 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
   test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
   test-key-schedule-bindings check-c-stubs
 
-test: verify check-c-stubs test-hacl-stubs test-key-schedule-bindings \
+test: verify verify-samples check-c-stubs test-hacl-stubs test-key-schedule-bindings \
   test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient
 

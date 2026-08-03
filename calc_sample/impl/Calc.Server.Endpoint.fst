@@ -191,7 +191,8 @@ returns action:PE.endpoint_action
   CalcCP.calc_local_frame
 ensures
   CalcCP.canonical_server_exactly srv (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal log) **
-  calc_action_frame srv cfg frame (Ghost.reveal log) action
+  calc_action_frame srv cfg frame (Ghost.reveal log) action **
+  pure (PE.action_not_internal CalcCP.calc_server_protocol_implementation action)
 {
   unfold (calc_frame_ready srv cfg frame (Ghost.reveal log));
   fold (calc_action_frame srv cfg frame (Ghost.reveal log) (PE.EndpointNeedInput frame));

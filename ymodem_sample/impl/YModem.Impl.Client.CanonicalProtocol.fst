@@ -400,7 +400,9 @@ requires
   ymodem_client_inv i received0 sent0 st0 **
   ymodem_client_local_frame_pre ev frame st0 out out_len old_out **
   pts_to out old_out **
-  pure (SZ.v out_len == Seq.length old_out)
+  pure (
+    SZ.v out_len == Seq.length old_out /\
+    ~ (CPI.no_internal_events #YP.ymodem_client_local ev))
 returns result:CPI.process_result
 ensures exists* (received1:Ghost.erased TCP.bytes)
                 (sent1:Ghost.erased TCP.bytes)
@@ -501,6 +503,8 @@ let ymodem_client_protocol_implementation
   =
   {
     CPI.pi_system = (fun _ -> YP.ymodem_client_wfsm);
+    CPI.pi_internal = CPI.no_internal_events #YP.ymodem_client_local;
+    CPI.pi_internal_pending = CPI.nothing_pending #YP.ymodem_client_state;
     CPI.pi_invariant = ymodem_client_inv;
     CPI.pi_snapshot = ymodem_client_snap;
     CPI.pi_network_frame = ymodem_client_network_frame;
@@ -509,9 +513,18 @@ let ymodem_client_protocol_implementation
     CPI.pi_local_frame = ymodem_client_local_frame;
     CPI.pi_local_frame_pre = ymodem_client_local_frame_pre;
     CPI.pi_local_frame_post = ymodem_client_local_frame_post;
+    CPI.pi_internal_frame_pre =
+      CPI.no_internal_frame_pre #ymodem_client_local_frame #YP.ymodem_client_state;
+    CPI.pi_internal_frame_post =
+      CPI.no_internal_frame_post #ymodem_client_local_frame #YP.ymodem_client_state #ymodem_message #unit;
     CPI.pi_invariant_valid = ymodem_client_invariant_valid;
     CPI.pi_take_snapshot = ymodem_client_take_snapshot;
     CPI.pi_recall_snapshot = ymodem_client_recall_snapshot;
     CPI.pi_process_network = ymodem_client_process_network;
     CPI.pi_process_local = ymodem_client_process_local;
+    CPI.pi_process_internal =
+      CPI.quiescent_process_internal
+        #_ #YP.ymodem_client_state #ymodem_message #YP.ymodem_client_local #unit #ymodem_client_local_frame
+        ymodem_client_inv
+        (fun _ -> YP.ymodem_client_wfsm);
   }

@@ -1170,6 +1170,148 @@ let lemma_no_internal_events_quiescent
         wire_outputs local_outputs)
 = ()
 
+(* The generic no-internal plumbing.  A protocol without internal events
+   needs three more field values beyond [no_internal_events] and
+   [nothing_pending]: two frame slprops and the processor itself.  All
+   three are protocol-independent, so they are supplied once here rather
+   than copied into every instance.
+
+   The frames are [emp]: an internal step of such a protocol demands no
+   resources and produces none, so whatever the caller holds is carried
+   across by framing. *)
+
+let no_internal_frame_pre
+  (#local_frame #state:Type0)
+  (_frame:local_frame)
+  (_st0:state)
+  (_out:array U8.t)
+  (_out_len:SZ.t)
+  (_old_out:TCP.bytes)
+  : slprop =
+  emp
+
+let no_internal_frame_post
+  (#local_frame #state #wire_message #local_output:Type0)
+  (_frame:local_frame)
+  (_result:internal_result)
+  (_old_out:TCP.bytes)
+  (_out_contents:TCP.bytes)
+  (_st0:state)
+  (_st1:state)
+  (_wire_outputs:list wire_message)
+  (_local_outputs:list local_output)
+  : slprop =
+  emp
+
+(* The quiescent internal processor.  It reports [InternalQuiescent]
+   unconditionally, which is sound because [no_internal_events] classifies
+   nothing as internal and [nothing_pending] is [False]: there is never
+   work for it to do.  Instances supply their own invariant and system as
+   the first two arguments and partially apply. *)
+fn quiescent_process_internal
+  (#impl #state #wire_message #local_event #local_output #local_frame:Type0)
+  (inv:impl -> TCP.bytes -> TCP.bytes -> state -> slprop)
+  (system:impl ->
+     GTot (WFSM.wire_format_state_machine state wire_message local_event local_output))
+  (i:impl)
+  (frame:local_frame)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (received0:Ghost.erased TCP.bytes)
+  (sent0:Ghost.erased TCP.bytes)
+  (st0:Ghost.erased state)
+  (old_out:Ghost.erased TCP.bytes)
+requires
+  inv i (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0) **
+  no_internal_frame_pre
+    #local_frame #state
+    frame
+    (Ghost.reveal st0)
+    out
+    out_len
+    (Ghost.reveal old_out) **
+  pts_to out (Ghost.reveal old_out) **
+  pure (SZ.v out_len == Seq.length (Ghost.reveal old_out))
+returns result:internal_result
+ensures exists* (received1:Ghost.erased TCP.bytes)
+                (sent1:Ghost.erased TCP.bytes)
+                (st1:Ghost.erased state)
+                (out_contents:TCP.bytes)
+                (wire_outputs:list wire_message)
+                (local_outputs:list local_output).
+  inv i (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1) **
+  no_internal_frame_post
+    #local_frame #state #wire_message #local_output
+    frame
+    result
+    (Ghost.reveal old_out)
+    out_contents
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    wire_outputs
+    local_outputs **
+  pts_to out out_contents **
+  pure (
+    internal_process_correct
+      (system i)
+      (no_internal_events #local_event)
+      (nothing_pending #state)
+      (Ghost.reveal old_out)
+      out_contents
+      out_len
+      (Ghost.reveal received0)
+      (Ghost.reveal sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs)
+{
+  let result : internal_result = {
+    internal_status = InternalQuiescent;
+    internal_process = {
+      process_status = StepOk;
+      process_consumed_len = 0sz;
+      process_produced_len = 0sz;
+      process_app_len = 0sz;
+    };
+  };
+  unfold (no_internal_frame_pre
+    #local_frame #state
+    frame
+    (Ghost.reveal st0)
+    out
+    out_len
+    (Ghost.reveal old_out));
+  fold (no_internal_frame_post
+    #local_frame #state #wire_message #local_output
+    frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal old_out)
+    (Ghost.reveal st0)
+    (Ghost.reveal st0)
+    ([] <: list wire_message)
+    ([] <: list local_output));
+  lemma_no_internal_events_quiescent
+    (system i)
+    (Ghost.reveal old_out)
+    (Ghost.reveal old_out)
+    out_len
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0)
+    result
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0)
+    ([] <: list wire_message)
+    ([] <: list local_output);
+  result
+}
+
 noextract
 class protocol_implementation
   (impl:Type0)
