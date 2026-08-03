@@ -118,13 +118,28 @@ let lemma_serialize_all_single (w:CW.wire_message)
 (** The system is quiescent when nothing is in flight. **)
 let tls_quiescent (s:tls_system_state) : prop = MP.Quiet? s.channel
 
-(** Both endpoints have completed the handshake and installed application keys,
-    at the canonical no-tail completion boundary (event log length exactly 16 on
-    each side — the corrected handshake-completion length; see
-    `TLS13.Impl.Driver.PairingNoTail`/`PairingNoTailServerShape`).  Pinning the
-    boundary length is what makes the `clean16` byte-trace entry predicate
-    available at a ready+quiescent state, from which the protected-flight
-    projection witnesses (FACT 4) are derived on demand. **)
+(** Both endpoints have finished the handshake and installed application keys.
+
+    Per endpoint this is the driver's readiness predicate, which carries the
+    end-to-end invariant, `ControlApplicationData`, and the application record
+    keys.  On the client it additionally carries
+    `CS.protected_handshake_buffer_empty`: reaching `ControlApplicationData` is
+    not by itself the end of the handshake, because the client gets there by
+    *sending* its own Finished and a coalesced record can leave protected
+    plaintext still buffered.  That conjunct is what makes readiness imply
+    `TLS13.System.Internal.tls_settled`; see `lemma_application_ready_settled`.
+
+    NOTE: this predicate does *not* pin the event log to any particular length.
+    An earlier version of this comment claimed it pinned each side to exactly 16
+    events and that the pinning was what made the `clean16` byte-trace route
+    available.  Neither is true: no `== 16` constraint appears anywhere in the
+    development, and the FACT-4 producer `lemma_pw_establish` takes only
+    reachability, byte pairing, both-endpoint readiness, hello key-share
+    agreement, the four hellos and the role conditions — the same bundle as
+    `ProtectedWireClientFinishedInversion.client_finished_bridge_inputs`.  The
+    event-log prefix/suffix split that the `PairingNoTail*` lemmas need is
+    supplied by *their own* explicit byte-trace hypotheses, not derived from
+    readiness. **)
 let tls_application_ready (s:tls_system_state) : prop =
   TLS13.Impl.Client.Driver.client_driver_application_ready s.client /\
   TLS13.Impl.Server.Driver.server_driver_application_ready s.server
@@ -2384,12 +2399,16 @@ let lemma_server_appdata_installed_backward
     | CS.ConnLocalEvent _ -> ()
 #pop-options
 
-(** FACT-4 ESTABLISHMENT producer (ROUTE B).  From a ready+quiescent BOTH-ready
-    boundary-16 state with the byte-level reachability/pairing facts, the hello
+(** FACT-4 ESTABLISHMENT producer (ROUTE B).  From a quiescent state with both
+    endpoints ready, the byte-level reachability/pairing facts, the hello
     key-share agreement, and no rekeying, the `clean16` producer supplies the
     protected projection-pair witnesses.  This is exactly the middle block of
     `lemma_ready_quiescent_agrees`, factored out so it can be invoked at the
-    server-verify instant. **)
+    server-verify instant.
+
+    The `requires` clause below is the whole truth about what this needs; in
+    particular there is no constraint on event-log length (see the note on
+    `tls_application_ready`). **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 let lemma_pw_establish (s:tls_system_state)
   : Lemma
