@@ -3737,6 +3737,181 @@ let lemma_recv_preserves_read_epoch_handshake
   = ()
 #pop-options
 
+(** ─────────────────────────────────────────────────────────────────────────
+    THE SEND/RECEIVE HANDSHAKE-SEQ COUPLING.
+
+    When a single `sent` message is put on the wire by one endpoint (`snap ->
+    sender'`) and later delivered to the peer (`rcv -> rcv'`), and BOTH endpoints
+    end up at a Handshake epoch (write on the sender side, read on the receiver
+    side), the handshake-epoch seq projections are coupled:
+
+      sender'.write.seq + m_hrseq rcv == m_hwseq snap + rcv'.read.seq
+
+    Composed with `snap_hs_wseq p == hs_rseq a.client` (from `sc_hs_seq_ok a`) this
+    yields `hs_wseq a.server == hs_rseq c'` UNIFORMLY across the terminal and
+    non-terminal receiver cases — which is exactly what dropping `~terminal` from
+    `sc_hs_seq_ok` needs.
+
+    WARNING — THE GENERAL RAW-SEQ FORM IS *FALSE*.  The un-projected coupling
+    `sender'.write.seq + rcv.read.seq == snap.write.seq + rcv'.read.seq` (over the
+    raw record seqs, without the Handshake-epoch gates) does NOT hold.  Counter-
+    example: a `Close_notify` alert.  On the SEND side at `ControlApplicationData`
+    the Close_notify does `next_seq` on the *Application* write (+1); the SAME alert
+    delivered into a *handshake-read* receiver takes the `M.TlsAlert alert, _ ->
+    fail_model` arm (StateMachine.fst:968), which advances NOTHING (+0).  So the raw
+    deltas are +1 (send) vs +0 (recv) and the raw equality is violated.  The reason
+    the PROJECTED coupling survives is that `next_seq` PRESERVES the epoch
+    (Record.Spec.fst:33) and the Close_notify arms are control-guarded, so a
+    *consistent* endpoint at Closing/Closed has an *Application* write epoch (see
+    `CSL.lemma_connection_closing_closed_record_epochs_installed`): the
+    `Handshake?(sender'.write.epoch)` gate then EXCLUDES the Close_notify send arm
+    entirely, and the consistent receiver excludes the fail_model advance arms
+    symmetrically.  Consistency — not faithful decode — is what kills the bad case.
+    Do not attempt the raw form; it is genuinely false, not merely underivable.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** Finished RECEIVE installs the Application read epoch (both the client arm at
+    `HsCertificateValidated`/`HsCertificateVerifyVerified` and the server arm at
+    `HsServerFinishedSent` set `record_read` to an `Application` epoch).  So a
+    Finished receive is INCOMPATIBLE with a POST Handshake read epoch. **)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 40 --split_queries always"
+let lemma_hs_recv_finished_installs_app_read
+  (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        M.TlsHandshake? msg /\ M.Finished? (M.TlsHandshake?._0 msg))
+      (ensures R.Application? m'.CS.model_record.CS.record_read.R.epoch)
+  = ()
+#pop-options
+
+(** An EE / Cert / CV RECEIVE lands in `ControlHandshaking`, preserves the Handshake
+    read epoch on both sides, and is NOT cleartext.  The forward companion of
+    `lemma_hs_recv_is_ee_cert_cv`. **)
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 20"
+let lemma_ee_cert_cv_recv_not_cleartext
+  (msg:M.tls_message)
+  : Lemma
+      (requires
+        M.TlsHandshake? msg /\
+        (M.EncryptedExtensions? (M.TlsHandshake?._0 msg) \/
+         M.Certificate? (M.TlsHandshake?._0 msg) \/
+         M.CertificateVerify? (M.TlsHandshake?._0 msg)))
+      (ensures CS.network_message_is_cleartext CL.Received msg == false)
+  = ()
+#pop-options
+
+(** An EE / Cert / CV RECEIVE lands in `ControlHandshaking`.  This is CONTROL-only
+    reasoning (the three messages are legal receives at unique handshaking controls),
+    so it is sound at the model level without consistency.  The read-epoch facts are
+    NOT proven here — at the model level an inconsistent state could pair a
+    handshaking control with a non-Handshake read epoch — they are supplied by the
+    caller from the coupling's gate + `lemma_recv_preserves_read_epoch_handshake`. **)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+let lemma_hs_recv_ee_cert_cv_lands_hs
+  (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        M.TlsHandshake? msg /\
+        (M.EncryptedExtensions? (M.TlsHandshake?._0 msg) \/
+         M.Certificate? (M.TlsHandshake?._0 msg) \/
+         M.CertificateVerify? (M.TlsHandshake?._0 msg)))
+      (ensures CS.ControlHandshaking? m'.CS.model_control)
+  = match msg, m.CS.model_control with
+    | M.TlsHandshake (M.EncryptedExtensions _), CS.ControlHandshaking CS.HsServerHelloReceived -> ()
+    | M.TlsHandshake (M.Certificate _), CS.ControlHandshaking CS.HsEncryptedExtensionsReceived -> ()
+    | M.TlsHandshake (M.CertificateVerify _), CS.ControlHandshaking CS.HsCertificateValidated -> ()
+    | _ -> ()
+#pop-options
+
+(** CONSISTENCY EXCLUSION HELPER.  A CONSISTENT endpoint at `ControlClosing` /
+    `ControlClosed` (`CSL.lemma_connection_closing_closed_record_epochs_installed`,
+    the graceful-close brick) or `ControlApplicationData`
+    (`CSL.lemma_connection_appdata_keys_installed_for_role` +
+    `lemma_connection_application_ready_record_epochs_installed`) has BOTH record
+    epochs installed at `Application`.  In the coupling this excludes the
+    Close_notify / appdata / keyupdate / ignored-post-handshake `next_seq` arms
+    (which advance the write or read at those controls) against the Handshake-epoch
+    gates — the sub-case that makes the un-projected raw-seq coupling false. **)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
+let lemma_consistent_post_app_epochs (st:CS.connection_state)
+  : Lemma
+      (requires SMR.connection_state_consistent st)
+      (ensures
+        (CS.ControlClosing? st.CS.cs_model.CS.model_control \/
+         CS.ControlClosed? st.CS.cs_model.CS.model_control \/
+         st.CS.cs_model.CS.model_control == CS.ControlApplicationData)
+        ==> SMKM.application_record_epochs_installed_for_role
+              st.CS.cs_model.CS.model_config.CS.config_role st.CS.cs_model)
+  = let role = st.CS.cs_model.CS.model_config.CS.config_role in
+    if CS.ControlClosing? st.CS.cs_model.CS.model_control ||
+       CS.ControlClosed? st.CS.cs_model.CS.model_control then
+      CSL.lemma_connection_closing_closed_record_epochs_installed role st
+    else if st.CS.cs_model.CS.model_control = CS.ControlApplicationData then begin
+      CSL.lemma_connection_appdata_keys_installed_for_role role st;
+      CSL.lemma_connection_application_ready_record_epochs_installed role st
+    end else ()
+#pop-options
+
+(** THE COUPLING.  See the header comment above.  The proof is a per-constructor
+    decomposition on `sent`: EE/Cert/CV give +1 on both sides
+    (`lemma_hs_send_plus_one` / `lemma_hs_recv_plus_one`); Finished RECEIVE is
+    excluded by the POST Handshake-read gate (installs Application read); the
+    Close_notify / appdata / keyupdate / ignored-post-handshake arms advance the
+    write or read only at `ControlApplicationData` / `ControlClosing` / `ControlClosed`,
+    where `lemma_consistent_post_app_epochs` forces an Application epoch and the
+    Handshake gate excludes them; every remaining constructor leaves both handshake
+    projections unchanged (0 == 0). **)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 100 --split_queries always"
+let lemma_hs_send_recv_seq_couple
+  (snap:CS.connection_model)
+  (sender' rcv rcv':CS.connection_state)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message snap CL.Sent sent == Some sender'.CS.cs_model /\
+        CS.step_tls_message rcv.CS.cs_model CL.Received sent == Some rcv'.CS.cs_model /\
+        SMR.connection_state_consistent sender' /\
+        SMR.connection_state_consistent rcv /\
+        SMR.connection_state_consistent rcv' /\
+        R.Handshake? (ASP.m_wr sender'.CS.cs_model).R.epoch /\
+        R.Handshake? (ASP.m_rd rcv'.CS.cs_model).R.epoch)
+      (ensures
+        (ASP.m_wr sender'.CS.cs_model).R.seq + m_hrseq rcv.CS.cs_model
+          == m_hwseq snap + (ASP.m_rd rcv'.CS.cs_model).R.seq)
+  = let sm = sender'.CS.cs_model in
+    let rm = rcv.CS.cs_model in
+    let rm' = rcv'.CS.cs_model in
+    // snap has a Handshake write epoch
+    if not (M.TlsKeyUpdate? sent) then
+      lemma_hs_send_preserves_hs_write snap sm sent;
+    // rcv (pre) has a Handshake read epoch
+    lemma_recv_preserves_read_epoch_handshake rm rm' sent;
+    match sent with
+    | M.TlsHandshake hs ->
+        (match hs with
+         | M.EncryptedExtensions _ | M.Certificate _ | M.CertificateVerify _ ->
+             lemma_hs_send_plus_one snap sm sent;
+             lemma_ee_cert_cv_recv_not_cleartext sent;
+             lemma_hs_recv_ee_cert_cv_lands_hs rm rm' sent;
+             lemma_hs_recv_plus_one rm rm' sent
+         | M.Finished _ ->
+             lemma_hs_recv_finished_installs_app_read rm rm' sent
+         | M.ClientHello _ -> ()
+         | M.ServerHello _ -> ()
+         | M.HelloRetryRequest -> ())
+    | M.TlsApplicationData _ ->
+        lemma_consistent_post_app_epochs sender'; lemma_consistent_post_app_epochs rcv'
+    | M.TlsAlert _ ->
+        lemma_consistent_post_app_epochs sender'; lemma_consistent_post_app_epochs rcv'
+    | M.TlsChangeCipherSpec -> ()
+    | M.TlsIgnoredPostHandshake _ ->
+        lemma_consistent_post_app_epochs sender'; lemma_consistent_post_app_epochs rcv'
+    | M.TlsKeyUpdate _ ->
+        lemma_consistent_post_app_epochs sender'; lemma_consistent_post_app_epochs rcv'
+#pop-options
+
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_hsp_deliver_to_client
   (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
