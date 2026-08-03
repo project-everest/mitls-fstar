@@ -182,6 +182,23 @@ val lemma_connection_appdata_keys_installed_for_role
         st.cs_model.model_control == ControlApplicationData)
       (ensures application_record_keys_installed_for_role role st.cs_model)
 
+(** Graceful-close analogue of
+    [lemma_connection_application_ready_record_epochs_installed]: at any reachable
+    (consistent) endpoint at `ControlClosing` or `ControlClosed`, BOTH record
+    directions are at the `Application` epoch.  Contrapositive: a consistent
+    endpoint at a `Handshake` read/write epoch is NOT in `{Closing, Closed}`.
+    Established purely from reachability; no additional invariant is required. **)
+val lemma_connection_closing_closed_record_epochs_installed
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        (ControlClosing? st.cs_model.model_control \/
+         ControlClosed? st.cs_model.model_control))
+      (ensures application_record_epochs_installed_for_role role st.cs_model)
+
 (** A reachable SERVER endpoint at `HsServerFinishedSent` has not yet installed the
     client application (read) traffic secret. **)
 val lemma_server_finished_sent_no_client_application_traffic
