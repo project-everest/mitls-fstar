@@ -1648,6 +1648,16 @@ fn process_tls_record
   }
 }
 
+// The record-transition primitive: decode one record off the front of `raw`
+// and take the single semantic step it induces.  Private since Phase 9 -- the
+// only client receive primitive in `TLS13.Impl.Client.fsti` is
+// `process_coalesced_network_bytes`, so the interface itself witnesses that
+// there is one receive path.  This function serves the records whose semantics
+// is a single `ConnNetworkEvent`: alerts, change-cipher-spec, application data,
+// post-handshake messages, and the two cleartext handshake messages covered by
+// the documented Phase 6 exception (`ServerHello`, `HelloRetryRequest`).
+// Protected handshake records do not come here; they enter the internal-event
+// pipeline in `process_coalesced_network_bytes`.
 fn process_network_bytes
   (c:client)
   (raw:array U8.t)
@@ -2047,7 +2057,13 @@ fn process_network_bytes
   }
 }
 
-fn process_legacy_coalesced_fallback
+// `process_network_bytes` restated in invariant-carrying form.  The body is a
+// call plus two assertions: `coalesced_network_bytes_end_to_end_correct` and
+// `client_end_to_end_invariant` are both derivable from
+// `network_bytes_end_to_end_correct`, so this is an adapter, not a second
+// semantics.  It exists because the record primitive is proved without the
+// end-to-end invariant while every caller of the receive primitive carries it.
+fn process_direct_record
   (c:client)
   (raw:array U8.t)
   (raw_len:SZ.t)
@@ -2184,11 +2200,11 @@ fn process_coalesced_network_bytes
   let decoded = P.decode_network_buffer c raw raw_len;
   match decoded {
     L.NetworkBufferNeedMoreInput -> {
-      process_legacy_coalesced_fallback
+      process_direct_record
         c raw raw_len network_out network_out_len app_out app_out_len
     }
     L.NetworkBufferDecodeError -> {
-      process_legacy_coalesced_fallback
+      process_direct_record
         c raw raw_len network_out network_out_len app_out app_out_len
     }
     L.NetworkBufferOk decoded_buffer -> {
@@ -2215,7 +2231,7 @@ fn process_coalesced_network_bytes
             L.free_tls_message already_parsed;
             V.free decoded_buffer.L.decoded_buffer_fragment;
             V.free decoded_buffer.L.decoded_buffer_raw_record;
-            process_legacy_coalesced_fallback
+            process_direct_record
               c raw raw_len network_out network_out_len app_out app_out_len
           }
           None -> {
@@ -2234,7 +2250,7 @@ fn process_coalesced_network_bytes
                 V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
                 V.free decoded_buffer.L.decoded_buffer_fragment;
                 V.free decoded_buffer.L.decoded_buffer_raw_record;
-                process_legacy_coalesced_fallback
+                process_direct_record
                   c raw raw_len
                   network_out network_out_len
                   app_out app_out_len
@@ -2252,137 +2268,117 @@ fn process_coalesced_network_bytes
                 // ConnProtectedHandshake steps whether or not it actually
                 // coalesces several messages: since Phase 2b the head step may
                 // saturate its fragment, so a single-message record takes this
-                // same route rather than the legacy ConnNetworkEvent one.  The
-                // test is therefore vacuous (parse_handshake_prefix cannot
-                // report consuming more than the fragment holds); it is kept
-                // explicit so the `else` branch below stays well-typed, and is
-                // removed in the Phase 9 cleanup.
-                let head_shaped =
-                  SZ.lte
+                // same route.  There is no second shape and hence no guard:
+                // `parse_handshake_prefix` already establishes
+                // `consumed <= B.length fragment`.
+                V.to_array_pts_to
+                  decoded_buffer.L.decoded_buffer_raw_record;
+                V.to_array_pts_to
+                  parsed_prefix.L.parsed_handshake_fragment;
+                let handled =
+                  try_process_protected_handshake_head
+                    c
+                    decoded_buffer.L.decoded_buffer_content_type
+                    parsed_prefix.L.parsed_handshake_message
                     parsed_prefix.L.parsed_handshake_consumed
-                    decoded_buffer.L.decoded_buffer_fragment_len;
-                if head_shaped {
-                  V.to_array_pts_to
-                    decoded_buffer.L.decoded_buffer_raw_record;
-                  V.to_array_pts_to
-                    parsed_prefix.L.parsed_handshake_fragment;
-                  let handled =
-                    try_process_protected_handshake_head
-                      c
-                      decoded_buffer.L.decoded_buffer_content_type
-                      parsed_prefix.L.parsed_handshake_message
-                      parsed_prefix.L.parsed_handshake_consumed
-                      (V.vec_to_array
-                        decoded_buffer.L.decoded_buffer_raw_record)
-                      decoded_buffer.L.decoded_buffer_raw_record_len
-                      (V.vec_to_array
-                        parsed_prefix.L.parsed_handshake_fragment)
-                      (V.vec_to_array
-                        decoded_buffer.L.decoded_buffer_fragment)
-                      decoded_buffer.L.decoded_buffer_fragment_len
-                      network_out
-                      network_out_len
-                      app_out
-                      app_out_len;
-                  match handled {
-                    None -> {
-                      with returned_msg. assert (
-                        L.is_valid_tls_message
-                          parsed_prefix.L.parsed_handshake_message
-                          (M.TlsHandshake returned_msg));
-                      L.free_tls_message
-                        parsed_prefix.L.parsed_handshake_message;
-                      V.to_vec_pts_to
-                        parsed_prefix.L.parsed_handshake_fragment;
-                      V.free
-                        parsed_prefix.L.parsed_handshake_fragment;
-                      V.to_vec_pts_to
-                        decoded_buffer.L.decoded_buffer_fragment;
-                      V.free
-                        decoded_buffer.L.decoded_buffer_fragment;
-                      V.to_vec_pts_to
-                        decoded_buffer.L.decoded_buffer_raw_record;
-                      V.free
-                        decoded_buffer.L.decoded_buffer_raw_record;
-                      process_legacy_coalesced_fallback
-                        c raw raw_len
-                        network_out network_out_len
-                        app_out app_out_len
-                    }
-                    Some resp -> {
-                      with st1. assert (
-                        CR.connection_exactly c st1 **
-                        pure (
-                          (exists step.
-                            CT.protected_handshake_step_correct
-                              'st0
-                              st1
-                              resp
-                              step
-                              raw_record_bytes
-                              'old_network_out
-                              'old_app_out) /\
-                          CT.client_end_to_end_invariant st1));
-                      V.to_vec_pts_to
-                        parsed_prefix.L.parsed_handshake_fragment;
-                      V.free
-                        parsed_prefix.L.parsed_handshake_fragment;
-                      V.to_vec_pts_to
-                        decoded_buffer.L.decoded_buffer_fragment;
-                      V.free
-                        decoded_buffer.L.decoded_buffer_fragment;
-                      V.to_vec_pts_to
-                        decoded_buffer.L.decoded_buffer_raw_record;
-                      V.free
-                        decoded_buffer.L.decoded_buffer_raw_record;
-                      let buffer_resp = {
-                        CT.response = resp;
-                        CT.consumed_len =
-                          decoded_buffer.L.decoded_buffer_consumed_len;
-                      };
-                      assert (pure (Seq.equal
-                        raw_record_bytes
-                        (CT.network_consumed_prefix
-                          (Ghost.reveal 'raw_bytes)
-                          decoded_buffer.L.decoded_buffer_consumed_len)));
-                      Seq.lemma_eq_elim
-                        raw_record_bytes
-                        (CT.network_consumed_prefix
-                          (Ghost.reveal 'raw_bytes)
-                          decoded_buffer.L.decoded_buffer_consumed_len);
-                      Seq.lemma_eq_intro
-                        'old_network_out
-                        'old_network_out;
-                      Seq.lemma_eq_intro 'old_app_out 'old_app_out;
-                      assert (pure (
-                        CT.coalesced_network_bytes_end_to_end_correct
-                          'st0
-                          st1
-                          buffer_resp
-                          (Ghost.reveal 'raw_bytes)
-                          'old_network_out
-                          'old_network_out
-                          'old_app_out
-                          'old_app_out));
-                      assert (pure (
-                        buffer_resp.CT.response.CT.status == CT.StepOk));
-                      assert (pure (
-                        0 < SZ.v buffer_resp.CT.consumed_len));
-                      buffer_resp
-                    }
+                    (V.vec_to_array
+                      decoded_buffer.L.decoded_buffer_raw_record)
+                    decoded_buffer.L.decoded_buffer_raw_record_len
+                    (V.vec_to_array
+                      parsed_prefix.L.parsed_handshake_fragment)
+                    (V.vec_to_array
+                      decoded_buffer.L.decoded_buffer_fragment)
+                    decoded_buffer.L.decoded_buffer_fragment_len
+                    network_out
+                    network_out_len
+                    app_out
+                    app_out_len;
+                match handled {
+                  None -> {
+                    with returned_msg. assert (
+                      L.is_valid_tls_message
+                        parsed_prefix.L.parsed_handshake_message
+                        (M.TlsHandshake returned_msg));
+                    L.free_tls_message
+                      parsed_prefix.L.parsed_handshake_message;
+                    V.to_vec_pts_to
+                      parsed_prefix.L.parsed_handshake_fragment;
+                    V.free
+                      parsed_prefix.L.parsed_handshake_fragment;
+                    V.to_vec_pts_to
+                      decoded_buffer.L.decoded_buffer_fragment;
+                    V.free
+                      decoded_buffer.L.decoded_buffer_fragment;
+                    V.to_vec_pts_to
+                      decoded_buffer.L.decoded_buffer_raw_record;
+                    V.free
+                      decoded_buffer.L.decoded_buffer_raw_record;
+                    process_direct_record
+                      c raw raw_len
+                      network_out network_out_len
+                      app_out app_out_len
                   }
-                } else {
-                  L.free_tls_message
-                    parsed_prefix.L.parsed_handshake_message;
-                  V.free parsed_prefix.L.parsed_handshake_fragment;
-                  V.to_vec_pts_to
-                    decoded_buffer.L.decoded_buffer_fragment;
-                  V.free decoded_buffer.L.decoded_buffer_fragment;
-                  V.free decoded_buffer.L.decoded_buffer_raw_record;
-                  process_legacy_coalesced_fallback
-                    c raw raw_len
-                    network_out network_out_len
-                    app_out app_out_len
+                  Some resp -> {
+                    with st1. assert (
+                      CR.connection_exactly c st1 **
+                      pure (
+                        (exists step.
+                          CT.protected_handshake_step_correct
+                            'st0
+                            st1
+                            resp
+                            step
+                            raw_record_bytes
+                            'old_network_out
+                            'old_app_out) /\
+                        CT.client_end_to_end_invariant st1));
+                    V.to_vec_pts_to
+                      parsed_prefix.L.parsed_handshake_fragment;
+                    V.free
+                      parsed_prefix.L.parsed_handshake_fragment;
+                    V.to_vec_pts_to
+                      decoded_buffer.L.decoded_buffer_fragment;
+                    V.free
+                      decoded_buffer.L.decoded_buffer_fragment;
+                    V.to_vec_pts_to
+                      decoded_buffer.L.decoded_buffer_raw_record;
+                    V.free
+                      decoded_buffer.L.decoded_buffer_raw_record;
+                    let buffer_resp = {
+                      CT.response = resp;
+                      CT.consumed_len =
+                        decoded_buffer.L.decoded_buffer_consumed_len;
+                    };
+                    assert (pure (Seq.equal
+                      raw_record_bytes
+                      (CT.network_consumed_prefix
+                        (Ghost.reveal 'raw_bytes)
+                        decoded_buffer.L.decoded_buffer_consumed_len)));
+                    Seq.lemma_eq_elim
+                      raw_record_bytes
+                      (CT.network_consumed_prefix
+                        (Ghost.reveal 'raw_bytes)
+                        decoded_buffer.L.decoded_buffer_consumed_len);
+                    Seq.lemma_eq_intro
+                      'old_network_out
+                      'old_network_out;
+                    Seq.lemma_eq_intro 'old_app_out 'old_app_out;
+                    assert (pure (
+                      CT.coalesced_network_bytes_end_to_end_correct
+                        'st0
+                        st1
+                        buffer_resp
+                        (Ghost.reveal 'raw_bytes)
+                        'old_network_out
+                        'old_network_out
+                        'old_app_out
+                        'old_app_out));
+                    assert (pure (
+                      buffer_resp.CT.response.CT.status == CT.StepOk));
+                    assert (pure (
+                      0 < SZ.v buffer_resp.CT.consumed_len));
+                    buffer_resp
+                  }
                 }
               }
             }
@@ -2395,13 +2391,13 @@ fn process_coalesced_network_bytes
             L.free_tls_message parsed;
             V.free decoded_buffer.L.decoded_buffer_fragment;
             V.free decoded_buffer.L.decoded_buffer_raw_record;
-            process_legacy_coalesced_fallback
+            process_direct_record
               c raw raw_len network_out network_out_len app_out app_out_len
           }
           None -> {
             V.free decoded_buffer.L.decoded_buffer_fragment;
             V.free decoded_buffer.L.decoded_buffer_raw_record;
-            process_legacy_coalesced_fallback
+            process_direct_record
               c raw raw_len network_out network_out_len app_out app_out_len
           }
         }

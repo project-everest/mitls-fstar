@@ -1566,6 +1566,86 @@ all five sample directories, and `make test` depends on it. This closes the
 "extend the root gate to cover the sample protocols" exit criterion: a future
 change to `Common.ProtocolImplementation` can no longer silently break a sample.
 
+### Phase 9 as built (cleanup) — the interface is the audit artefact
+
+**The vacuous guard is gone.** `process_coalesced_network_bytes` carried
+
+```fstar
+let head_shaped =
+  SZ.lte parsed_prefix.parsed_handshake_consumed
+         decoded_buffer.decoded_buffer_fragment_len;
+if head_shaped { ... } else { ...free everything and fall back... }
+```
+
+The test could not fail: `parse_handshake_prefix`'s postcondition already
+contains `SZ.v parsed_handshake_consumed <= B.length input_bytes`. It existed
+only so the `else` branch stayed well-typed during the migration. Guard and
+dead branch deleted; the module reverifies unchanged.
+
+**The aliases are resolved, not deleted.** The Phase 3 plan said "delete the
+coalesced/pending aliases". What the code actually wanted was different, and
+better. Three functions were involved:
+
+| Function | Fate |
+|---|---|
+| `process_network_bytes` | the record-transition primitive. **Removed from `TLS13.Impl.Client.fsti`** — private |
+| `process_legacy_coalesced_fallback` | **renamed** `process_direct_record` |
+| `process_coalesced_network_bytes` | unchanged; the one exported receive primitive |
+
+Making the record primitive private is the real deliverable. Grepping showed it
+had **no caller outside the module**: all three production client callers
+(`Driver.BufferedNetwork`, `Client.Engine`, `Client.CanonicalProtocol`) already
+go through `process_coalesced_network_bytes`. So the interface can state the
+property directly — *there is one client receive entry point* — instead of the
+audit relying on a convention. This survives extraction: KaRaMeL emits both
+`process_network_bytes` and `process_direct_record` as `static` in
+`TLS13_Impl_Client.c`, so even the C ABI cannot bypass the pipeline. The public
+header now exposes exactly `TLS13_Impl_Client_process_coalesced_network_bytes`
+(network), `_process_pending_protected_handshake` (internal) and
+`_process_local_event` (local).
+
+The name `process_legacy_coalesced_fallback` was actively misleading: it is not
+legacy, it is not a fallback, and it is the *normal* path for alerts,
+change-cipher-spec, application data, post-handshake messages and the two
+cleartext handshake messages. `process_direct_record` says what it is — a record
+whose semantics is a single direct `ConnNetworkEvent`. Both private helpers now
+carry comments saying which records they serve and why the second exists (it is
+`process_network_bytes` restated in invariant-carrying form; the body is a call
+plus two assertions, because `coalesced_network_bytes_end_to_end_correct` and
+`client_end_to_end_invariant` are both derivable from
+`network_bytes_end_to_end_correct`).
+
+`process_pending_protected_handshake` is **not** an alias and stays exported: it
+is the internal-event primitive, used by `Drain`, `DrainLoop`, `Engine` and
+`CanonicalProtocol`.
+
+**Extraction surface audit.** `BUNDLE_IMPL_MODULES` was checked against the
+modules added by this work. `TLS13.Impl.Client.DrainLoop` is executable and is
+in the bundle; `TLS13.Impl.Client.Drain`, `.DrainProgress`,
+`TLS13.System.Internal` and `TLS13.Spec.Client.CleartextNoTail` are lemma-only
+and correctly absent. No `noextract` annotations needed adding.
+
+**The C gate, re-measured after cleanup.** `runtime/*.c` + `c_stubs/*.c` =
+**2718 lines**, exactly the Phase 0 baseline; `runtime/tls13_client_engine.c` =
+**443**, unchanged. `grep -rniE 'handshake|record_|0x16|content_type' runtime/*.c
+c_stubs/*.c` returns nothing: no C-side record parsing, no C-side handshake
+sequencing, no C-side scheduling decision. All interop tests pass
+(`test-openssl-echo`, `test-client-engine-openssl-echo`,
+`test-chromium-client-demo`, `test-openssl-http-preconnect`,
+`test-openssl-sclient`, `test-extracted-server-openssl-client`).
+
+**Documentation.** `ARCH_AUDIT.md` gains an "Internal events: one client receive
+path" section with the audit-surface table; `BUFFERING_DESIGN.md` documents the
+drain as step 6 of `BufferedNetwork.process` and separates the two senses of
+"coalesced" (transport-level, unchanged; record-level, the new pipeline);
+`PAIRING_THEOREM.md` explains why the pairing statement is unchanged and what
+the settled form adds.
+
+**Known stale artefact, deliberately untouched.** `test/unit/test_connection_bindings.c`
+calls `process_network_bytes` unqualified and is referenced by no Makefile,
+script or workflow. It does not compile today and is not in any gate. Deleting
+someone else's test is out of scope for this work; recording it here instead.
+
 ---
 
 ## 8. Proof obligations

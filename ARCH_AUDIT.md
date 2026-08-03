@@ -312,6 +312,63 @@ driver predicates do not expose canonical endpoint ownership.  Consequently, an
 auditor still has to distinguish the endpoint-centered C path from the older
 direct verified driver workflows.
 
+## Internal events: one client receive path
+
+Before the internal-event refactor (`INTERNAL_EVENT_PLAN.md`) the client had a
+**semantic fork**: a protected TLS record carrying several coalesced handshake
+messages was described spec-side by a chain of `ConnProtectedHandshake` events,
+while a record carrying exactly one message was described by a single
+`ConnNetworkEvent`. Two spec shapes for one physical event forced two receive
+paths in the implementation, and every proof downstream had to case-split on
+which shape applied.
+
+The fork is gone. The current shape is:
+
+- **Every** client-received protected handshake record enters the same pipeline:
+  the record transition installs a pending plaintext, then a finite sequence of
+  *internal events* consumes it one handshake message at a time.
+- An internal event is an ordinary `LocalEvent`, distinguished only by the
+  syntactic classifier `pi_internal` and the state predicate
+  `pi_internal_pending` (decision S1). There is no new `event` constructor and
+  no new move family in `Common.MachineProduct` / `Common.SystemProduct`, so
+  `TLS13.System` needed no new inductive argument — internal steps travel on
+  `mp_client_local`, which already exists and already requires
+  `so_wire_outputs == []`.
+- Cleartext handshake records (`ServerHello`, `HelloRetryRequest`) keep the
+  direct `ConnNetworkEvent` shape. This is a *theorem*, not an exception of
+  convenience: `TLS13.Spec.Client.CleartextNoTail` proves that a cleartext
+  handshake message occupies its record fragment exactly, so the coalescing
+  shape is uninhabited there. If a future extension makes a cleartext record
+  carry a tail, that lemma stops verifying.
+
+Audit surface:
+
+| Concern | Where |
+|---|---|
+| Generic class fields | `common/Common.ProtocolImplementation.fst` — `pi_internal`, `pi_internal_pending`, `pi_process_internal`, `internal_status` |
+| No-internal protocols | same file — `no_internal_events`, `nothing_pending`, `no_internal_frame_pre/post`, `quiescent_process_internal`. All five sample protocols use these |
+| Client receive primitive | `TLS13.Impl.Client.process_coalesced_network_bytes` — the **only** receive `fn` exported by `TLS13.Impl.Client.fsti` |
+| Client internal primitive | `TLS13.Impl.Client.process_pending_protected_handshake` |
+| Drain theory | `TLS13.Impl.Client.Drain` (`drain_step`, `drained`, `lemma_drained_facts`), `TLS13.Impl.Client.DrainProgress`, `TLS13.Impl.Client.DrainLoop` |
+| System level | `TLS13.System.Internal` — `tls_settled`, `lemma_drain_to_settled`, `lemma_flagship_settled_record_material_agreement` |
+
+The interface itself is now the audit artefact for "one receive path": the
+record-transition primitive `process_network_bytes` is private to
+`TLS13.Impl.Client.fst`, so no caller outside the module can take a receive step
+that bypasses the pipeline. The three production callers
+(`Client.Driver.BufferedNetwork`, `Client.Engine`, `Client.CanonicalProtocol`)
+all go through the same pair of primitives and differ only in *drain schedule*:
+the driver owns the socket and drains to completion; the Engine is
+transport-neutral and takes one drain step per `poll`. `TLS13.System.Internal`
+proves both realise the same relation.
+
+The C boundary is unchanged in responsibility: `runtime/` plus `c_stubs/` remain
+at their pre-refactor size, `runtime/tls13_client_engine.c` still only marshals
+into `TLS13_Impl_Client_Engine_poll` / `_feed_network`, and there is no C-side
+record loop, handshake sequencing or scheduling decision. `EngineReady` now
+additionally means `~(internal_pending st)` — the antecedent of the settled
+pairing theorem.
+
 ## Architectural gaps and audit risks
 
 1. **Two verified stories.**  The endpoint layer is a generic, uniform executable

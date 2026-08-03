@@ -373,63 +373,6 @@ fn copy_certificate_verify_signature
                     (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
-fn process_network_bytes
-  (c:client)
-  (raw:array U8.t)
-  (raw_len:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires CR.connection_exactly c 'st0 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns buffer_resp: CT.client_buffer_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          CR.connection_exactly c st1 **
-          pts_to raw 'raw_bytes **
-          pts_to network_out network_out_bytes **
-          pts_to app_out app_out_bytes **
-          pure (B.length network_out_bytes == SZ.v network_out_len /\
-                B.length app_out_bytes == SZ.v app_out_len /\
-                CT.network_bytes_end_to_end_correct
-                  'st0
-                  st1
-                  buffer_resp
-                  (Ghost.reveal 'raw_bytes)
-                  'old_network_out
-                  network_out_bytes
-                  'old_app_out
-                  app_out_bytes /\
-                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 CT.response_stuttered
-                   'st0
-                   st1
-                   buffer_resp.CT.response
-                   'old_network_out
-                   network_out_bytes
-                   'old_app_out
-                   app_out_bytes) /\
-                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 buffer_resp.CT.consumed_len == 0sz /\
-                 WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
-                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
-                (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-                 0 < SZ.v buffer_resp.CT.consumed_len) /\
-                (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
-                 buffer_resp.CT.consumed_len == 0sz) /\
-                (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
-                 buffer_resp.CT.consumed_len == 0sz) /\
-                (SZ.v buffer_resp.CT.response.CT.app_out_len > 0 ==>
-                 buffer_resp.CT.response.CT.status == CT.StepOk /\
-                 buffer_resp.CT.response.CT.network_out_len == 0sz) /\
-                (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
-
 fn process_coalesced_network_bytes
   (c:client)
   (raw:array U8.t)

@@ -56,6 +56,44 @@ See `src/impl/TLS13.Impl.Driver.Pairing.fst:1046-1086`. The proof body is
 therefore intentionally small; most of the proof is in the helper theorem it
 calls and in pure connection-state lemmas.
 
+## Internal events and the settled form of the theorem
+
+The client receive path processes a protected handshake record in two stages:
+the record transition installs a pending plaintext, and a sequence of *internal
+events* — ordinary `LocalEvent`s classified by `pi_internal`, emitting no wire
+output — consume it one handshake message at a time. See `INTERNAL_EVENT_PLAN.md`
+for the design and `TLS13.Impl.Client.Drain` for the drain theory.
+
+This does not change the statement above. The pairing argument is over wire
+logs, and an internal step by construction appends nothing to them
+(`internal_step_output` is `step_output [] []`). What it does change is *when*
+the hypotheses hold: immediately after a record is delivered, the client's
+semantic state has not yet absorbed the messages that record carried, so
+`client_received` and the connection state can disagree until the pending
+plaintext is drained.
+
+`TLS13.System.Internal` therefore states the theorem in a **settled** form:
+
+```fstar
+val lemma_flagship_settled_record_material_agreement : ...
+  (requires ... /\ ~(tls_internal_pending s) /\ ...)
+```
+
+`tls_settled` says no internal step is enabled. `lemma_drain_to_settled` shows
+every reachable state reaches a settled one by a finite chain of internal steps
+that preserves `combined_inv` (via `RTC.stable_on_closure`), so the settled form
+is not a weakening in practice — it is a scheduling side condition that the
+drivers discharge.
+
+The original `lemma_flagship_record_material_agreement` is retained unchanged
+alongside it: adding `~(tls_internal_pending s)` to the antecedent weakens the
+lemma, so keeping both costs nothing and preserves every existing caller.
+
+At the C boundary the side condition is observable: `TLS13.Impl.Client.Engine.poll`
+returns `EngineReady` only when `~(D.internal_pending st1)`, which is literally
+the settled antecedent. A caller that has been told the connection is ready is
+entitled to the agreement conclusion.
+
 ## Main statement, fully expanded
 
 ### Parameters
