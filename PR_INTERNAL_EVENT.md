@@ -260,21 +260,54 @@ key schedule binding test passed
 Expect roughly 15–20 min for `verify` and 5–10 min for the test phase on a
 64-way machine, from a warm `_cache`.
 
-## One thing left open — stated, not hidden
+## The last open item, and the bug it turned up
 
-**1. `tls_application_ready s ==> tls_settled s` is not proved at the spec level.**
+`INTERNAL_EVENT_PLAN.md` §8 has **no unticked boxes**. The last one —
+`tls_application_ready s ==> tls_settled s` — is now
+`TLS13.System.Internal.lemma_application_ready_settled`. Getting there found a
+real defect, so it is worth reading rather than skimming.
 
-It is discharged *operationally* instead: `TLS13.Impl.Client.Engine.poll` carries
-`EngineReady ==> ~(D.internal_pending st1)` in its postcondition, and
-`lemma_settled_of_client_quiescent` lifts that to `tls_settled`. So the C API's
-Ready signal is literally the antecedent of the flagship theorem.
+The statement was **false as originally written**, and the earlier attempt to
+prove it was looking for an argument that cannot exist. The claim was that
+application readiness implies no internal step is enabled. But:
 
-The purely spec-level derivation was attempted and abandoned: the query crashed
-Z3 with an internal assertion failure in `lar_solver.cpp`, and a real proof needs
-a replay-level argument that the pending buffer is empty at the completion
-boundary. It is not required — the flagship takes `tls_settled` as a hypothesis
-and every production caller discharges it — so I recorded it as open rather than
-forcing it. It is the **one unticked box** in `INTERNAL_EVENT_PLAN.md` §8.
+- the client reaches `ControlApplicationData` by *sending* its own Finished —
+  `step_handshake_message`, case `CL.Sent, M.Finished _, ControlHandshaking
+  HsServerFinishedVerified` — which is a local event with no precondition on the
+  pending protected-handshake buffer; and
+- `legal_protected_handshake_step` deliberately does *not* require a record's
+  plaintext to be drained to the end. A head step may take delivery of a record
+  and leave a remainder; that permissiveness is what removed the receive-path
+  fork in the first place.
+
+Composing the two: a client that is handed a coalesced record, drains as far as
+the server Finished, and then sends its own Finished, is application-ready with
+protected-handshake plaintext still buffered — that is, with an internal step
+still enabled. No replay-level argument could have closed that, because there
+was nothing to close; the predicate was simply too weak.
+
+The fix is at the producer, and it is also the operationally right behaviour.
+`driver_handshake` previously reported `DriverWorkflowOk` on a control-tag
+snapshot alone. It now additionally requires the pending buffer to be drained,
+using the pre-existing `protected_handshake_buffer_empty_runtime` query, and
+`client_driver_application_ready` carries `CS.protected_handshake_buffer_empty`
+as a conjunct. "Ready" now means the client has genuinely finished, not merely
+that it arrived at the right control state.
+
+Two things make this cheap to review:
+
+- **No consumer had to change.** Every other mention of
+  `client_driver_application_ready` in the tree is in hypothesis position, so
+  strengthening it only weakens those lemmas' preconditions. The only proof
+  obligations were in `Driver.Core`, `Driver.Connect` and `Driver`.
+- **The interop tests are the evidence it is satisfiable.** If real handshakes
+  did not drain the buffer, the driver would now loop to fuel exhaustion instead
+  of reporting Ok. The OpenSSL echo, extracted-server, client-engine and
+  Chromium async HTTPS tests all still pass, so they do drain.
+
+The operational route is unchanged and still available:
+`TLS13.Impl.Client.Engine.poll` carries `EngineReady ==> ~(D.internal_pending
+st1)`, which `lemma_settled_of_client_quiescent` lifts to `tls_settled`.
 
 ### Also in this PR: one stale test deleted
 

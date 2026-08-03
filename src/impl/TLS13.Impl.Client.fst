@@ -1227,6 +1227,17 @@ fn control_snapshot
   CQ.get_control_snapshot c
 }
 
+fn protected_handshake_buffer_empty
+  (c:client)
+  requires CR.connection_exactly c 'st0
+  returns empty:bool
+  ensures CR.connection_exactly c 'st0 **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty 'st0.CS.cs_model)
+{
+  CQ.protected_handshake_buffer_empty_runtime c
+}
+
 fn next_local_action
   (c:client)
   (network_out_len:SZ.t)

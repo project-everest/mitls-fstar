@@ -40,11 +40,21 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 noextract
+(** The client has finished the handshake and can carry application data.
+
+    The buffer-emptiness conjunct is what makes this mean *finished* rather than
+    merely *at ControlApplicationData*.  Nothing in the state machine forces a
+    protected-handshake record to be drained before the client sends its own
+    Finished, so `model_control == ControlApplicationData` is reachable with
+    plaintext still pending -- i.e. with an internal step still enabled.  Ruling
+    that out here is what lets `TLS13.System.Internal.tls_settled` be derived
+    from readiness; see `lemma_application_ready_settled`. *)
 let client_driver_application_ready
   (st:CS.connection_state)
   : prop =
   CT.client_end_to_end_invariant st /\
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  CS.protected_handshake_buffer_empty st.CS.cs_model /\
   CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
 
 noextract

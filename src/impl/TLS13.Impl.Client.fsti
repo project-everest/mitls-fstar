@@ -245,6 +245,20 @@ fn control_snapshot
   ensures CR.connection_exactly c 'st0 **
           pure (CR.control_snapshot_matches snapshot 'st0)
 
+(** Does the client still hold undrained protected-handshake plaintext?
+
+    [true] means the pending buffer is empty, so no internal step is enabled.
+    The driver uses this to distinguish "the handshake reached
+    [ControlApplicationData]" from "the handshake is finished": reaching
+    application data with plaintext still buffered leaves internal work to do. *)
+fn protected_handshake_buffer_empty
+  (c:client)
+  requires CR.connection_exactly c 'st0
+  returns empty:bool
+  ensures CR.connection_exactly c 'st0 **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty 'st0.CS.cs_model)
+
 fn next_local_action
   (c:client)
   (network_out_len:SZ.t)

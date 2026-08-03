@@ -1797,17 +1797,42 @@ no window in which the pending buffer is non-empty with `offset == 0`.
 - [x] Internal steps discharge it without changing wire accounting. —
       `lemma_drain_step_wire_log`, `lemma_drain_step_is_client_local` (which
       requires `so_wire_outputs == []`).
-- [ ] Application readiness implies `~(pi_internal_pending st)`. — **discharged
-      operationally, not spec-level.** `TLS13.Impl.Client.Engine.poll`'s
-      postcondition carries `EngineReady ==> ~(D.internal_pending st1)`, and
-      `lemma_settled_of_client_quiescent` lifts that to `tls_settled`. The purely
-      spec-level derivation `tls_application_ready s ==> tls_settled s` was
-      attempted and abandoned: the query crashed Z3 (internal assertion failure
-      in `lar_solver.cpp`), and a real proof would need a replay-level argument
-      that the pending buffer is empty at the completion boundary. It is not
-      required — the flagship theorem takes `tls_settled` as a hypothesis and
-      every production caller discharges it — so it is recorded as open rather
-      than forced. This is the one box in this document that is not ticked.
+- [x] Application readiness implies `~(pi_internal_pending st)`. —
+      `TLS13.System.Internal.lemma_application_ready_settled`:
+      `tls_quiescent s /\ tls_application_ready s ==> tls_settled s`.
+
+      The first attempt at this proof was aimed at the wrong target, and the
+      reason is worth keeping. `tls_application_ready` was taken to be a strong
+      enough antecedent already, so the work was framed as finding a
+      replay-level argument that the pending buffer is empty at
+      `ControlApplicationData`. No such argument exists, because **the
+      implication was false as stated**:
+
+      - the client reaches `ControlApplicationData` by *sending* its Finished
+        (`step_handshake_message`, case `CL.Sent, M.Finished _,
+        ControlHandshaking HsServerFinishedVerified`), a local event with no
+        precondition on the pending buffer; and
+      - `legal_protected_handshake_step` deliberately does not require a
+        record's plaintext to be drained to the end — a head step may take
+        delivery and leave a remainder.
+
+      So a state that is application-ready with an internal step still enabled
+      is reachable. The fix belongs at the producer, and is also the
+      operationally correct behaviour: `driver_handshake` now reports
+      `DriverWorkflowOk` only when the pending buffer is drained *as well as*
+      the control state reached (via the pre-existing
+      `protected_handshake_buffer_empty_runtime` query), and
+      `client_driver_application_ready` carries
+      `CS.protected_handshake_buffer_empty` as a conjunct. Readiness now means
+      the client has genuinely finished rather than merely arrived, and the
+      lemma follows definitionally.
+
+      The strengthening is free for consumers: every other mention of
+      `client_driver_application_ready` in the tree is in hypothesis position.
+      It is validated end to end — the OpenSSL echo, extracted-server,
+      client-engine and Chromium async HTTPS interop tests all still complete,
+      which is the evidence that real handshakes do drain the buffer and the
+      driver does not spin.
 - [x] Delivery-completes-next still holds as channel quiescence. — unchanged;
       `tls_quiescent` is untouched and `tls_settled` is defined on top of it.
 - [x] The temporal theorem is re-established at unchanged scope. —
@@ -1943,13 +1968,13 @@ baseline.
 
 ### Residual work, honestly stated
 
-One item is open. It is not required by the completion criteria and it is not
-hidden:
+None. Every box in this document is ticked.
 
-1. **`tls_application_ready s ==> tls_settled s`** is not proved at the spec
-      level (§8). It is discharged operationally at the C boundary. See the
-      unticked box in §8 for why it was abandoned rather than forced.
+Two items were recorded here previously and have since been closed:
 
-(The second item recorded here previously — the orphaned
-`test/unit/test_connection_bindings.c` — has since been deleted along with its
-`.gitignore` entry and its `arch.dot`/`arch.svg` node.)
+1. **`tls_application_ready s ==> tls_settled s`** — proved, as
+   `TLS13.System.Internal.lemma_application_ready_settled`. It turned out to be
+   false as originally stated; §8 records the reachable counterexample and the
+   producer-side strengthening that fixed it.
+2. The orphaned `test/unit/test_connection_bindings.c` — deleted, along with its
+   `.gitignore` entry and its `arch.dot`/`arch.svg` node.
