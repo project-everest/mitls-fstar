@@ -24,6 +24,7 @@ module MP   = Common.MachineProduct
 module SY   = TLS13.System
 module SMCan = TLS13.Spec.StateMachine.Canonical
 module CSL  = TLS13.ConnectionState.Lemmas
+module RKE  = TLS13.ConnectionState.RecordKeyEpoch
 module W    = TLS13.Wire.Spec
 module T    = TLS13.Types
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
@@ -43,6 +44,7 @@ module HANR = TLS13.ConnectionState.HandshakeAgreementNonReady
 module WFL  = TLS13.Spec.WireFormatLemmas
 module SLM  = TLS13.System.SlotMono
 module ASP  = TLS13.System.AppSeqPairing
+module HSP  = TLS13.System.HsSeqPairing
 module HMF  = TLS13.System.HsMaterialFamilies
 module AMF  = TLS13.System.AppMaterialFamilies
 module ORD  = TLS13.System.Ordering
@@ -131,6 +133,25 @@ let lemma_recv_finished_installs_app_read
         CS.step_tls_message m CL.Received msg == Some m' /\
         M.TlsHandshake? msg /\ M.Finished? (M.TlsHandshake?._0 msg))
       (ensures R.Application? m'.CS.model_record.CS.record_read.R.epoch)
+  = ()
+#pop-options
+
+(** A successful PROTECTED-message decode forces the reader's record READ key to
+    be present.  [SMCan.received_single_protected_message_decode] existentially
+    opens the record via [R.open_record record_read ...], which returns [Some]
+    ONLY in its [Some key, Some iv] branch (Record.Spec.fst:47).  Hence any peer
+    that faithfully decodes an in-flight protected record HAS a read key — which,
+    composed with [RKE.lemma_connection_consistent_read_key_present_not_initial],
+    excludes the [Initial] read epoch UNIFORMLY (including at [ControlFailed],
+    where the control-gated key-schedule projection is vacuous).  This is the fact
+    that lets the SF/CF delivery arms fire their handshake-sealed bridge without a
+    (false) single-endpoint control->key brick. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_protected_decode_read_key_present
+  (model:CS.connection_model) (msg:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires SMCan.received_single_protected_message_decode model msg raw)
+      (ensures Some? model.CS.model_record.CS.record_read.R.key)
   = ()
 #pop-options
 
