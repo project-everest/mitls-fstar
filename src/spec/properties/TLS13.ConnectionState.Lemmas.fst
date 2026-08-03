@@ -11984,3 +11984,147 @@ let lemma_consistent_server_x25519_shared_secret_projection
 =
   lemma_connection_state_consistent_server_x25519_reachable_shape st
 #pop-options
+
+(* ================================================================== *)
+(* PHASE 1A : PERSISTENCE of the CLIENT handshake READ record<->slot   *)
+(* material link across ControlFailed.                                 *)
+(*                                                                     *)
+(* [model_record_keys_consistent_for_role] is VACUOUS at ControlFailed *)
+(* ([ControlFailed -> True] arm), so the record<->slot link is not      *)
+(* derivable from bare consistency at a failed client.  But the link   *)
+(* is CONTROL-FREE (reads only [model_record] + [hs_keys]) and BOTH     *)
+(* are frozen by [fail_model], so it PERSISTS: established at the live  *)
+(* install/handshake control (existing consistency producer) and       *)
+(* transferred verbatim across the fail step.  We prove it as a         *)
+(* reachable-shape [stable_on_closure], embedding the (already stable)  *)
+(* [record_keys_consistent_config_role_shape] so the NON-failed re-      *)
+(* derivation has consistency available and the FAILED transfer reads    *)
+(* the (control-ungated) link from the pre-state.                       *)
+(* ================================================================== *)
+
+let client_hs_read_slot_link (model:connection_model) : prop =
+  record_direction_material_matches_key_schedule_for_role
+    ClientEndpoint TrafficRead
+    (traffic_id TrafficHandshake ServerTraffic)
+    model
+
+let client_hs_read_link_shape (st:connection_state) : prop =
+  record_keys_consistent_config_role_shape st /\
+  ( (st.cs_model.model_config.config_role == ClientEndpoint /\
+     R.Handshake? st.cs_model.model_record.record_read.R.epoch) ==>
+    client_hs_read_slot_link st.cs_model )
+
+(* A legal step whose RESULT lands at [ControlFailed] preserves           *)
+(* [model_record] and the key schedule (fail is a pure control/failure    *)
+(* field update; [fail_model] at StateMachine.fst:303).                   *)
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+let lemma_step_failed_result_preserves_record_keys
+  (m m':connection_model) (ce:conn_event)
+  : Lemma
+      (requires
+        legal_event m ce /\ step_model m ce == Some m' /\
+        ControlFailed? m'.model_control)
+      (ensures
+        m'.model_record == m.model_record /\
+        m'.model_handshake.hs_keys == m.model_handshake.hs_keys)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_delta_client_hs_read_link_shape
+  (st0 st1:connection_state)
+  : Lemma
+      (requires
+        client_hs_read_link_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures client_hs_read_link_shape st1)
+=
+  eliminate exists delta. legal_connection_delta st0 delta st1
+  returns client_hs_read_link_shape st1
+  with _.
+  (
+    lemma_delta_record_keys_consistent_config_role_shape st0 st1;
+    lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    introduce
+      (st1.cs_model.model_config.config_role == ClientEndpoint /\
+       R.Handshake? st1.cs_model.model_record.record_read.R.epoch)
+      ==> client_hs_read_slot_link st1.cs_model
+    with _hyp.
+    (
+      if ControlFailed? st1.cs_model.model_control then
+      (
+        lemma_step_failed_result_preserves_record_keys
+          st0.cs_model st1.cs_model delta.delta_event;
+        assert (st1.cs_model.model_record == st0.cs_model.model_record);
+        assert (st1.cs_model.model_handshake.hs_keys ==
+                  st0.cs_model.model_handshake.hs_keys);
+        assert (R.Handshake? st0.cs_model.model_record.record_read.R.epoch);
+        assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+        assert (client_hs_read_slot_link st0.cs_model)
+      )
+      else
+      (
+        assert (record_keys_consistent_config_role_shape st1);
+        assert (model_record_keys_consistent_for_role
+                  st1.cs_model.model_config.config_role st1.cs_model);
+        assert (model_record_keys_consistent_for_role ClientEndpoint st1.cs_model);
+        lemma_handshake_record_direction_material_matches_key_schedule_for_role
+          ClientEndpoint TrafficRead st1.cs_model;
+        assert_norm
+          (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic)
+      )
+    )
+  )
+#pop-options
+
+let lemma_single_step_client_hs_read_link_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (client_hs_read_link_shape y);
+                    (connection_state_single_step x y)}
+          client_hs_read_link_shape x /\
+          connection_state_single_step x y ==>
+          client_hs_read_link_shape y)
+=
+  introduce forall (x:connection_state) (y:connection_state).
+    client_hs_read_link_shape x /\
+    connection_state_single_step x y ==>
+    client_hs_read_link_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_delta_client_hs_read_link_shape x y
+
+let lemma_initial_client_hs_read_link_shape (cfg:connection_config)
+  : Lemma (ensures client_hs_read_link_shape (initial cfg))
+=
+  lemma_initial_record_keys_consistent_config_role_shape cfg
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_client_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ClientEndpoint TrafficRead
+          (traffic_id TrafficHandshake ServerTraffic)
+          st.cs_model)
+=
+  lemma_initial_client_hs_read_link_shape st.cs_model.model_config;
+  lemma_single_step_client_hs_read_link_shape ();
+  let p = client_hs_read_link_shape in
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure connection_state_single_step p stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+#pop-options

@@ -99,3 +99,39 @@ val lemma_handshake_client_traffic_key_schedule_material_agrees_nonready_cf
       (ensures
         key_schedule_traffic_record_material_agrees
           (traffic_id TrafficHandshake ClientTraffic) client server)
+
+(* ControlFailed-AWARE SERVER-traffic slot-level agreement.  The symmetric      *)
+(* mirror of [lemma_handshake_client_traffic_key_schedule_material_agrees_       *)
+(* nonready_cf], for the TrafficHandshake SERVER direction.  Control-free for    *)
+(* the same reason: the SLOT-level agreement depends only on the x25519 key-     *)
+(* share projection (which survives ControlFailed via server_x25519_reachable_   *)
+(* shape's disjunction), NOT on record-key consistency.  Both handshake traffic  *)
+(* secrets derive at the SAME DeriveHandshakeTraffic (TH_SH) checkpoint, so the   *)
+(* checkpoint hypothesis is identical to the client-traffic variant --- and it    *)
+(* is available pre-flag from CLEARTEXT hello raw bytes alone via                 *)
+(* [lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw]         *)
+(* (WireFormatLemmas.fsti), not from [paired_handshake_events].                   *)
+(*                                                                                *)
+(* Consumed to force FAITHFUL DECODE of an in-flight server Finished by the       *)
+(* client (client handshake READ material == server handshake WRITE material for  *)
+(* ServerTraffic), which excludes the alert-decode arm and is the load-bearing    *)
+(* step behind [finished_delivered_appread_coupling]'s server->client half.       *)
+(* Reusable for the reverse direction (the mirror flip at StateMachine.fst:738).  *)
+val lemma_handshake_server_traffic_key_schedule_material_agrees_nonready_cf
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic)
+      (ensures
+        key_schedule_traffic_record_material_agrees
+          (traffic_id TrafficHandshake ServerTraffic) client server)

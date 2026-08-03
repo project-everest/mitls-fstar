@@ -1146,3 +1146,24 @@ val lemma_consistent_server_x25519_shared_secret_projection
            server_x25519_key_share_projection st
          | _ ->
            stable_server_x25519_key_share_projection st))
+
+(* PHASE 1A : PERSISTENCE of the client handshake READ record<->slot link.  *)
+(* At a reachable CLIENT with a Handshake read epoch — INCLUDING             *)
+(* ControlFailed — the record read (key,iv) matches the handshake            *)
+(* server-traffic key-schedule slot.  Derivable from bare consistency at a   *)
+(* live control; carried across the fail step (which freezes model_record +  *)
+(* hs_keys) by a reachable-shape stable_on_closure.  This is what lets the   *)
+(* server->client faithful-decode bridge fire at a FAILED reader, and lets   *)
+(* [hs_channel_seal_ok] drop its [~terminal(client)] workaround gate.        *)
+val lemma_client_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ClientEndpoint TrafficRead
+          (traffic_id TrafficHandshake ServerTraffic)
+          st.cs_model)

@@ -402,3 +402,45 @@ let lemma_handshake_client_traffic_key_schedule_material_agrees_nonready_cf
   assert (traffic_material_matches_expected_derived_material tid server);
   lemma_local_key_schedule_traffic_record_material_agrees_from_expected tid client server
 #pop-options
+
+(* ControlFailed-AWARE SERVER-traffic slot-level agreement.  Symmetric mirror of *)
+(* [lemma_handshake_client_traffic_key_schedule_material_agrees_nonready_cf].     *)
+(* Both handshake traffic secrets derive at the same DeriveHandshakeTraffic       *)
+(* (TH_SH) checkpoint (Correspondence.derivation_checkpoint_inputs_agree on a     *)
+(* TrafficKey reduces to key_checkpoint_for_epoch TrafficHandshake ==            *)
+(* DeriveHandshakeTraffic), so the checkpoint hypothesis is unchanged from the    *)
+(* client variant.  Only [tid] and the two slot-presence gates flip to           *)
+(* ServerTraffic / ks_server_handshake_traffic.  See the .fsti for the consumer.  *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
+let lemma_handshake_server_traffic_key_schedule_material_agrees_nonready_cf
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent client /\
+        connection_state_consistent server /\
+        client.cs_model.model_config.config_role == ClientEndpoint /\
+        server.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        paired_cleartext_hello_key_shares client server /\
+        same_key_derivation_checkpoint DeriveHandshakeTraffic client server /\
+        Some? client.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic /\
+        Some? server.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic)
+      (ensures
+        key_schedule_traffic_record_material_agrees
+          (traffic_id TrafficHandshake ServerTraffic) client server)
+=
+  let tid = traffic_id TrafficHandshake ServerTraffic in
+  assert (tid == traffic_id TrafficHandshake ServerTraffic);
+  lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage client;
+  lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage server;
+  lemma_paired_x25519_key_shares_nonready_cf client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees (TrafficKey tid) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees (TrafficIV tid) client server;
+  lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected client;
+  lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected server;
+  assert (traffic_material_matches_expected_derived_material tid client);
+  assert (traffic_material_matches_expected_derived_material tid server);
+  lemma_local_key_schedule_traffic_record_material_agrees_from_expected tid client server
+#pop-options

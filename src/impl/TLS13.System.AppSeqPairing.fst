@@ -1336,6 +1336,53 @@ let inflight_single_record (s:SY.tls_system_state) : prop =
   | MP.ToClient p -> CS.protected_record_count CL.Sent p.SY.pl_sent == 1
   | MP.Quiet -> True
 
+(** (3) IN-FLIGHT RAW DELTA LEGALITY — the in-flight wire bytes `pl_raw` are a
+    LEGAL ENCODING of the sent message `pl_sent` under the sealing snapshot
+    `pl_snap`, i.e. the canonical send-side relation
+    `network_message_raw_delta_legal pl_snap {Sent; pl_sent} pl_raw`.  This is the
+    RELATION the spec already defines (StateMachine.fst:1493-1507), TOTAL over both
+    record classes (cleartext and protected) — NOT a projection of one branch (an
+    earlier `~cleartext`-gated `raw_records_exactly` projection was silently vacuous
+    on the cleartext branch, which is exactly the load-bearing CCS case).  A
+    genuinely DIFFERENT object from `inflight_single_record`, which is about the
+    abstract message `pl_sent`, not the wire bytes `pl_raw`.
+
+    This is EXACTLY the send-time fact — it is a conjunct of the send's
+    `legal_connection_delta` — so it is definitional at the send and vacuous on
+    `Quiet`; carried because nothing in `tls_system_inv` transports the in-flight
+    `raw`'s record shape to the delivery (`channel_consistent` is cleartext-hellos
+    only).
+
+    WHAT IT GIVES AT A DELIVERY (both branches of `network_message_raw_delta_legal`,
+    StateMachine.fst:1493-1507):
+      * NON-cleartext `pl_sent`: the else-branch is `raw_records_exactly pl_raw
+        Application_data (protected_record_count Sent pl_sent)`, so `pl_raw` parses
+        as an `Application_data` record — this is the CCS EXCLUSION for a protected
+        handshake payload (`lemma_recv_msg_not_cleartext` needs ONLY this outer type,
+        no key/iv material, no seal, no faithful decode; then the option-0 gate
+        closes the `+1` enumeration over {EE,Cert,CV}, see `HSP.lemma_hs_recv_plus_one`).
+      * cleartext `pl_sent` (e.g. a `ChangeCipherSpec` in flight at a Handshake
+        write epoch — model-legal at any `ControlHandshaking`, StateMachine.fst:1432):
+        the cleartext branch pins `pl_raw` to the `Change_cipher_spec`-typed record,
+        which at the delivery forces the received message to be CCS too (a `+0`
+        step), so the send `+0` and receive `+0` MATCH.  Without this branch a
+        `~cleartext`-decoded receive of a cleartext-sent record could not be
+        excluded.  (Upgraded from a `~cleartext`-gated `raw_records_exactly` to the
+        full delta-legal for exactly this cleartext-CCS case.)
+
+    WHY CARRIED (replaces the deleted `HSP.hs_channel_seal_ok` seal): the outer type
+    is a SEND-time fact; at a delivery it is otherwise recoverable only by the full
+    segmented-replay decomposition of the sender's `raw_sent` log. **)
+let inflight_raw_delta_legal (s:SY.tls_system_state) : prop =
+  match s.channel with
+  | MP.ToServer p ->
+      CS.network_message_raw_delta_legal p.SY.pl_snap
+        ({ CL.message_direction = CL.Sent; CL.message_value = p.SY.pl_sent }) p.SY.pl_raw
+  | MP.ToClient p ->
+      CS.network_message_raw_delta_legal p.SY.pl_snap
+        ({ CL.message_direction = CL.Sent; CL.message_value = p.SY.pl_sent }) p.SY.pl_raw
+  | MP.Quiet -> True
+
 (** The full STAGE (b)+(c) extras carried on top of the stream bundle.  Defined
     here (rather than next to the STAGE-(b) send families) because it now folds in
     the two carried in-flight payload facts above. **)
@@ -1424,14 +1471,95 @@ let client_hs_write_record_slot_link (s:SY.tls_system_state) : prop =
       CS.ClientEndpoint CS.TrafficWrite
       (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) s.client.CS.cs_model
 
+(** GATE conjunct 10 — the FINISHED-DELIVERED application-read coupling: the
+    server->client mirror that `channel_seal_ok`'s ToClient FORWARD arm needs, and
+    the client->server direction the ToServer forward arm needs.  At a `Quiet`
+    channel, if an endpoint has PRODUCED its Finished (a monotone `option`-witness
+    on `model_handshake`) then its PEER holds the application READ epoch.
+
+    ANTECEDENT = "peer sent its Finished", NOT "peer holds the App WRITE epoch".
+    The App-write gate (the earlier `appwrite_delivered_coupling` shape) is VACUOUS
+    exactly at the flip where establishment must happen — the peer's App-write
+    installs strictly later (server: the lagging local install at
+    `HsServerFinishedSent`, StateMachine.fst:1181; client: atomic at the CF send,
+    :809-818) than its Finished-send, so an App-write gate cannot be established at
+    the delivery flip.  The `Some? hs_{server,client}_finished` witness IS true at
+    the flip and is STRICTLY STRONGER: `App (wr server) ==> Some? hs_server_finished`
+    (server installs App-write only at `HsServerFinishedSent`, reached by the SF
+    send at StateMachine.fst:685 which sets `hs_server_finished = Some fin`), and
+    `App (wr client) ==> Some? hs_client_finished` (atomic — the CF send arm at
+    :809-818 sets `hs_client_finished` and installs App-write in ONE transition).
+    So this conjunct implies the App-write-gated `channel_seal` forward arms.
+
+    WHY IT HOLDS (the load-bearing step a future reader will challenge).  Consider
+    the first half at its establishment, the `deliver_to_client` flip (server SF ->
+    client):
+      * Finished arm (StateMachine.fst:738): installs `App (rd client)` directly.
+      * ALERT arm (:968, the third vector): the ONLY route to a `Quiet` post-state
+        with the client NOT on app-read while the server's SF is out.  Excluded by
+        FAITHFUL DECODE: the CF ServerTraffic material agreement
+        (`HANR.lemma_handshake_server_traffic_key_schedule_material_agrees_nonready_cf`)
+        forces the client handshake-READ material == server handshake-WRITE
+        material, so the sealed SF opens (open-after-seal, same key) to a Finished,
+        never an alert.  This is the sharpened law: the state machine blocks a
+        Finished into a failed peer, but only key agreement stops a peer mis-
+        decoding an in-flight Finished as an alert.
+      * SF into a `ControlFailed` client (failed for other reasons first): the CF
+        agreement STILL holds (it is control-free), so the wire still decodes to a
+        Finished, and a Finished into `ControlFailed` BLOCKS (:822 fallthrough) ->
+        delivery incomplete -> channel stays `ToClient` -> not `Quiet` -> vacuous.
+      * `ks_master_secret == None`: the Finished arm blocks (:738 install-or-block)
+        -> not `Quiet` -> vacuous.
+      * After establishment: App-read epochs are MONOTONE under `tls_no_rekeying`;
+        `fail_model` preserves `model_record` (epochs) and `model_handshake`
+        (witnesses).  So no reachable `Quiet` state violates it.
+
+    ROLE RESTRICTIONS ARE LOAD-BEARING for the two LOCAL families.  The witness
+    `s.server.hs_server_finished` is set only by the server SEND (:685); the local-
+    verify route (:556, `LocalVerifyFinished`) that also sets `hs_server_finished`
+    is CLIENT-ROLE-ONLY (`config_role == ClientEndpoint`, StateMachine.fst:1272), so
+    a `server_local` cannot flip it and a `client_local` touches only client fields.
+    Symmetrically `s.client.hs_client_finished` is set only by the client SEND
+    (:818); the local-verify route (:567, `LocalVerifyClientFinished`) is SERVER-
+    ROLE-ONLY (:1279), so a `client_local` cannot flip it.  (The non-atomic verify
+    routes at `HsServerFinishedReceived`/`HsClientFinishedReceived` reach the flip
+    stage WITHOUT installing app-read, but those stages have NO transition into them
+    and are dead; we do not rely on that reachability grep — the role restriction
+    kills the arm outright.)
+
+    PER-HALF IN-FLIGHT GATING (not a plain `Quiet ==>`).  Each half is gated to
+    exclude ONLY the channel direction that carries ITS OWN sender's in-flight
+    Finished: the first half (server SF -> client) is gated `~ToClient`, the second
+    (client CF -> server) `~ToServer`.  A plain `Quiet` gate makes the WHOLE
+    conjunct vacuous at every in-flight state, so at a `deliver_to_client`
+    (`ToClient -> Quiet`) the PASSIVE second half could not be carried from the
+    pre-state.  With per-half gating, at a delivery the passive half is ACTIVE in
+    the pre-state (a `ToClient` pre-state satisfies `~ToServer`, keeping the second
+    half live) and is preserved verbatim, while the delivery's OWN half is
+    established fresh by faithful decode.  This is strictly STRONGER than the
+    `Quiet`-gated form and COINCIDES with it at `Quiet` (where both `~ToClient` and
+    `~ToServer` hold), so every consumer — which reads the conjunct only at `Quiet`
+    send pre-states — is unaffected.  Each half genuinely holds in its active region:
+    it fails only while its sender's Finished is in flight, which is exactly the
+    excluded direction. **)
+let finished_delivered_appread_coupling (s:SY.tls_system_state) : prop =
+  ( ~(MP.ToClient? s.channel) ==>
+      (Some? s.server.CS.cs_model.CS.model_handshake.CS.hs_server_finished ==>
+         R.Application? (rd s.client).R.epoch) ) /\
+  ( ~(MP.ToServer? s.channel) ==>
+      (Some? s.client.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
+         R.Application? (rd s.server).R.epoch) )
+
 let app_extras (s:SY.tls_system_state) : prop =
   app_seq_pairing s /\
   app_material_agreement s /\ channel_seal_ok s /\
   inflight_sender_stepped s /\ inflight_single_record s /\
+  inflight_raw_delta_legal s /\
   read_write_coupling s /\
   quiet_appdata_write_coupling s /\
   hs_material_agreement s /\
-  client_hs_write_record_slot_link s
+  client_hs_write_record_slot_link s /\
+  finished_delivered_appread_coupling s
 
 (** Initial state: both record epochs are `Initial`, so `cf_delivered` is false
     and the agreement is vacuous; `app_seq_pairing` was shown initial above; and
@@ -1445,7 +1573,8 @@ let lemma_initial_app_extras (cfg_c cfg_s:CS.connection_config)
     post-states are `Quiet`). **)
 let lemma_quiet_inflight_vacuous (s:SY.tls_system_state)
   : Lemma (requires MP.Quiet? s.channel)
-          (ensures inflight_sender_stepped s /\ inflight_single_record s)
+          (ensures inflight_sender_stepped s /\ inflight_single_record s /\
+                   inflight_raw_delta_legal s)
   = ()
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -1501,6 +1630,25 @@ let lemma_send_single_record_count
     | _ -> ()
 #pop-options
 
+(** ESTABLISHMENT of `inflight_raw_delta_legal`'s outer-type fact.  For a NON-cleartext
+    send, `network_message_raw_delta_legal m {Sent; sent} raw` IS (by the else-branch,
+    StateMachine.fst:1503-1507) `raw_records_exactly raw Application_data
+    (protected_record_count Sent sent)`, so the guarded conclusion is definitional. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_send_record_shape
+  (m:CS.connection_model) (sent:M.tls_message) (w:CW.wire_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        Seq.equal raw (CW.wire_serialize w) /\
+        CS.network_message_raw_delta_legal m
+          ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw)
+      (ensures
+        ~(CS.network_message_is_cleartext CL.Sent sent) ==>
+          CS.raw_records_exactly raw T.Application_data
+            (CS.protected_record_count CL.Sent sent))
+  = ()
+#pop-options
+
 (** Extract the count-1 fact from a CLIENT send: `client_step`'s
     `canonical_wire_step` carries a `legal_connection_delta` whose Sent-arm gives
     `network_message_raw_delta_legal` on the emitted `raw_sent`, which equals the
@@ -1517,13 +1665,25 @@ let lemma_client_send_count
         EC.client_step st0 (SM.LocalEvent local) c' out /\
         out.SM.so_wire_outputs == [w] /\
         c'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent])
-      (ensures CS.protected_record_count CL.Sent sent == 1)
+      (ensures CS.protected_record_count CL.Sent sent == 1 /\
+               (~(CS.network_message_is_cleartext CL.Sent sent) ==>
+                  CS.raw_records_exactly (SY.emitted_raw out) T.Application_data
+                    (CS.protected_record_count CL.Sent sent)) /\
+               CS.network_message_raw_delta_legal st0.CS.cs_model
+                 ({ CL.message_direction = CL.Sent; CL.message_value = sent })
+                 (SY.emitted_raw out))
   = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
       EC.client_representation_matches st0 local conn_ev /\
       EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
       SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty
-    returns CS.protected_record_count CL.Sent sent == 1
+    returns CS.protected_record_count CL.Sent sent == 1 /\
+            (~(CS.network_message_is_cleartext CL.Sent sent) ==>
+               CS.raw_records_exactly (SY.emitted_raw out) T.Application_data
+                 (CS.protected_record_count CL.Sent sent)) /\
+            CS.network_message_raw_delta_legal st0.CS.cs_model
+              ({ CL.message_direction = CL.Sent; CL.message_value = sent })
+              (SY.emitted_raw out)
     with _pf.
     (
       L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
@@ -1533,7 +1693,8 @@ let lemma_client_send_count
       SY.lemma_serialize_all_single w;
       Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
       Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
-      lemma_send_single_record_count st0.CS.cs_model sent w raw_sent
+      lemma_send_single_record_count st0.CS.cs_model sent w raw_sent;
+      lemma_send_record_shape st0.CS.cs_model sent w raw_sent
     )
 #pop-options
 
@@ -1550,13 +1711,25 @@ let lemma_server_send_count
         ES.server_step st0 (SM.LocalEvent local) s' out /\
         out.SM.so_wire_outputs == [w] /\
         s'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent])
-      (ensures CS.protected_record_count CL.Sent sent == 1)
+      (ensures CS.protected_record_count CL.Sent sent == 1 /\
+               (~(CS.network_message_is_cleartext CL.Sent sent) ==>
+                  CS.raw_records_exactly (SY.emitted_raw out) T.Application_data
+                    (CS.protected_record_count CL.Sent sent)) /\
+               CS.network_message_raw_delta_legal st0.CS.cs_model
+                 ({ CL.message_direction = CL.Sent; CL.message_value = sent })
+                 (SY.emitted_raw out))
   = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
       ES.server_representation_matches local conn_ev /\
       ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
       SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty
-    returns CS.protected_record_count CL.Sent sent == 1
+    returns CS.protected_record_count CL.Sent sent == 1 /\
+            (~(CS.network_message_is_cleartext CL.Sent sent) ==>
+               CS.raw_records_exactly (SY.emitted_raw out) T.Application_data
+                 (CS.protected_record_count CL.Sent sent)) /\
+            CS.network_message_raw_delta_legal st0.CS.cs_model
+              ({ CL.message_direction = CL.Sent; CL.message_value = sent })
+              (SY.emitted_raw out)
     with _pf.
     (
       L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
@@ -1566,7 +1739,8 @@ let lemma_server_send_count
       SY.lemma_serialize_all_single w;
       Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
       Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format [w]) (CW.wire_serialize w);
-      lemma_send_single_record_count st0.CS.cs_model sent w raw_sent
+      lemma_send_single_record_count st0.CS.cs_model sent w raw_sent;
+      lemma_send_record_shape st0.CS.cs_model sent w raw_sent
     )
 #pop-options
 
@@ -1583,7 +1757,8 @@ let lemma_asp_client_send_inflight (a b:SY.tls_system_state)
       (requires
         SY.tls_system_inv a /\ MP.Quiet? a.channel /\
         SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
-      (ensures inflight_sender_stepped b /\ inflight_single_record b)
+      (ensures inflight_sender_stepped b /\ inflight_single_record b /\
+               inflight_raw_delta_legal b)
   = SY.lemma_client_send_shape a b;
     eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
@@ -1592,7 +1767,8 @@ let lemma_asp_client_send_inflight (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns inflight_sender_stepped b /\ inflight_single_record b
+    returns inflight_sender_stepped b /\ inflight_single_record b /\
+            inflight_raw_delta_legal b
     with _pf.
     (
       assert (SMCorr.connection_state_no_key_update_trace c');
@@ -1613,7 +1789,8 @@ let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
       (requires
         SY.tls_system_inv a /\ MP.Quiet? a.channel /\
         SY.tls_step_server_send a b /\ SY.tls_no_rekeying b)
-      (ensures inflight_sender_stepped b /\ inflight_single_record b)
+      (ensures inflight_sender_stepped b /\ inflight_single_record b /\
+               inflight_raw_delta_legal b)
   = SY.lemma_server_send_shape a b;
     eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
@@ -1622,7 +1799,8 @@ let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns inflight_sender_stepped b /\ inflight_single_record b
+    returns inflight_sender_stepped b /\ inflight_single_record b /\
+            inflight_raw_delta_legal b
     with _pf.
     (
       assert (SMCorr.connection_state_no_key_update_trace s');
