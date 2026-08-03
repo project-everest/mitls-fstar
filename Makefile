@@ -380,6 +380,7 @@ PULSE_RUNTIME_MODULES = \
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
+  TLS13.Impl.Client.DrainLoop \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
@@ -467,6 +468,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client \
+  TLS13.Impl.Client.DrainLoop \
   TLS13.Impl.Client.Engine \
   TLS13.Impl.Client.Driver.State \
   TLS13.Impl.Client.Driver.BufferedNetwork \

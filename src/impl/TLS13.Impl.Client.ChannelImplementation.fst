@@ -14,6 +14,7 @@ module CPI = Common.ProtocolImplementation
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.Spec.StateMachine.Log
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module DS = TLS13.Impl.Client.Driver.State
 module ID = FStar.IndefiniteDescription
 module IO = Common.TCP
@@ -412,13 +413,18 @@ let lemma_network_response_app_out_length
   (network_input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.coalesced_network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1 buffer_resp network_input
           old_network_out network_out old_app_out app_out)
       (ensures
         B.length (CT.response_app_out buffer_resp.CT.response app_out) ==
           SZ.v buffer_resp.CT.response.CT.app_out_len)
 =
+  let st_mid =
+    D.drained_network_middle
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out in
+  let st1 = st_mid in
   let resp = buffer_resp.CT.response in
   assert (CT.network_bytes_step_correct
     st0 st1 buffer_resp network_input
@@ -469,7 +475,7 @@ let lemma_receive_observation_app_out_length
 =
   if obs.DS.client_receive_observed_status == DS.DriverWorkflowOk then (
     assert (exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
-      CT.coalesced_network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.DS.client_receive_observed_response
@@ -484,7 +490,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         CS.connection_state
         (fun st_before -> exists st_network input old_network_out network_out old_app_out observed_app_out.
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -499,7 +505,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun input -> exists st_network old_network_out network_out old_app_out observed_app_out.
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -514,7 +520,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun old_network_out -> exists st_network network_out old_app_out observed_app_out.
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -529,7 +535,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun network_out -> exists st_network old_app_out observed_app_out.
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -544,7 +550,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun old_app_out -> exists st_network observed_app_out.
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -559,7 +565,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun observed_app_out -> exists st_network.
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -571,7 +577,7 @@ let lemma_receive_observation_app_out_length
           st_network == st1 /\
           Seq.equal observed_app_out app_out) in
     assert (exists st_network.
-      CT.coalesced_network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.DS.client_receive_observed_response
@@ -586,7 +592,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         CS.connection_state
         (fun st_network ->
-          CT.coalesced_network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -701,7 +707,59 @@ let lemma_optional_receive_local_application_log
   else
     assert (st1 == st0)
 
-let lemma_network_bytes_application_log
+(** ---------------------------------------------------------------------- *)
+(** Drain steps are application-invisible                                   *)
+(** ---------------------------------------------------------------------- *)
+
+/// A drain step carries a [ConnProtectedHandshake] event with no application
+/// bytes, so it leaves the channel's application log untouched.  This is the
+/// property that lets a drained receive call keep the channel specification it
+/// had before the drain was introduced.
+let lemma_drain_step_application_log (st0 st1:CS.connection_state)
+  : Lemma
+      (requires D.drain_step st0 st1)
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  let (resp, step) = D.drain_step_witness st0 st1 in
+  assert (B.length (CT.response_app_out resp B.empty) == 0);
+  lemma_legal_response_observable_receive_log
+    st0 st1 resp (CS.ConnProtectedHandshake step)
+    B.empty B.empty B.empty B.empty
+
+#push-options "--fuel 2 --ifuel 2"
+let rec lemma_drain_chain_application_log (n:nat) (st0 st1:CS.connection_state)
+  : Lemma
+      (requires D.drain_chain n st0 st1)
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+      (decreases n)
+=
+  if n = 0
+  then ()
+  else
+  let m : nat = n - 1 in
+    eliminate
+      (st1 == st0) \/ (exists st'. D.drain_step st0 st' /\ D.drain_chain m st' st1)
+    returns TChannel.application_log st1 == TChannel.application_log st0
+    with _. ()
+    and _.
+      (let st' =
+         ID.indefinite_description_ghost
+           CS.connection_state
+           (fun st' -> D.drain_step st0 st' /\ D.drain_chain m st' st1) in
+       lemma_drain_step_application_log st0 st';
+       lemma_drain_chain_application_log m st' st1)
+#pop-options
+
+let lemma_drained_application_log (st0 st1:CS.connection_state)
+  : Lemma
+      (requires D.drained st0 st1)
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  let n =
+    ID.indefinite_description_ghost nat (fun n -> D.drain_chain n st0 st1) in
+  lemma_drain_chain_application_log n st0 st1
+
+let lemma_network_bytes_application_log_undrained
   (st0 st1:CS.connection_state)
   (buffer_resp:CT.client_buffer_response)
   (network_input old_network_out network_out old_app_out app_out:B.bytes)
@@ -825,6 +883,35 @@ let lemma_network_bytes_application_log
   )
   )
 #pop-options
+
+/// The drained form.  The drain adds no application bytes, so the channel's
+/// application log after the whole call is the one the undrained step already
+/// characterised.
+let lemma_network_bytes_application_log
+  (st0 st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input old_network_out network_out old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        D.drained_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        (let output = CT.response_app_out buffer_resp.CT.response app_out in
+         TChannel.application_log st1 ==
+           (if B.length output == 0
+            then TChannel.application_log st0
+            else CI.append_received (TChannel.application_log st0) output)))
+=
+  let st_mid =
+    D.drained_network_middle
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out in
+  lemma_network_bytes_application_log_undrained
+    st0 st_mid buffer_resp network_input
+    old_network_out network_out old_app_out app_out;
+  lemma_drained_application_log st_mid st1
+
 
 
 ghost fn open_channel_invariant

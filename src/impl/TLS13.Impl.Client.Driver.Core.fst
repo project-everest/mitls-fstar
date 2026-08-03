@@ -19,6 +19,7 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module CTypes = TLS13.Impl.CanonicalTypes
 module EC = TLS13.Spec.Endpoint.Client
 module ID = FStar.IndefiniteDescription
@@ -135,7 +136,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   (input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.coalesced_network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0
           st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -150,7 +151,7 @@ let lemma_client_buffered_network_io_step_correct_intro
 =
   FStar.Classical.exists_intro
     (fun old_app_out' ->
-      CT.coalesced_network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st0 st1
         result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
         input old_network_out network_out old_app_out' app_out)
@@ -158,7 +159,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   FStar.Classical.exists_intro
     (fun old_network_out' ->
       exists old_app_out'.
-        CT.coalesced_network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
           input old_network_out' network_out old_app_out' app_out)
@@ -166,7 +167,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   FStar.Classical.exists_intro
     (fun input' ->
       exists old_network_out' old_app_out'.
-        CT.coalesced_network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
           input' old_network_out' network_out old_app_out' app_out)
@@ -174,7 +175,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   FStar.Classical.exists_intro
     (fun st_before ->
       exists input' old_network_out' old_app_out'.
-        CT.coalesced_network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
           input' old_network_out' network_out old_app_out' app_out)

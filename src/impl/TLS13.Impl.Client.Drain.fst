@@ -7,6 +7,7 @@ module CSL = TLS13.ConnectionState.Lemmas
 module Can = TLS13.Spec.StateMachine.Canonical
 module CT = TLS13.Impl.Client.Types
 module ID = FStar.IndefiniteDescription
+module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 
@@ -276,6 +277,70 @@ let lemma_drained_facts (st0 st1:CS.connection_state)
   lemma_drain_chain_facts n st0 st1
 
 (** ---------------------------------------------------------------------- *)
+(** Non-failure propagates backwards through a drain                        *)
+(** ---------------------------------------------------------------------- *)
+
+/// Consumers reason under a [connection_control_not_failed st1] hypothesis on
+/// the *final* state, but the interesting facts are proved at the intermediate
+/// state.  A drain step is a legal event, so non-failure travels backwards
+/// along it, and hence along a whole chain.
+let lemma_drain_step_nonfailed_previous (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drain_step st0 st1 /\ CT.connection_control_not_failed st1)
+      (ensures CT.connection_control_not_failed st0)
+=
+  let (resp, step) = drain_step_witness st0 st1 in
+  CT.lemma_legal_response_for_event_nonfailed_previous
+    st0 st1 resp (CS.ConnProtectedHandshake step) B.empty B.empty B.empty B.empty
+
+#push-options "--fuel 2 --ifuel 2"
+let rec lemma_drain_chain_nonfailed_previous (n:nat) (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drain_chain n st0 st1 /\ CT.connection_control_not_failed st1)
+      (ensures CT.connection_control_not_failed st0)
+      (decreases n)
+=
+  if n = 0
+  then ()
+  else
+  let m : nat = n - 1 in
+    eliminate
+      (st1 == st0) \/ (exists st'. drain_step st0 st' /\ drain_chain m st' st1)
+    returns CT.connection_control_not_failed st0
+    with _. ()
+    and _.
+      (let st' =
+         ID.indefinite_description_ghost
+           CS.connection_state
+           (fun st' -> drain_step st0 st' /\ drain_chain m st' st1) in
+       lemma_drain_chain_nonfailed_previous m st' st1;
+       lemma_drain_step_nonfailed_previous st0 st')
+#pop-options
+
+let lemma_drained_nonfailed_previous (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drained st0 st1 /\ CT.connection_control_not_failed st1)
+      (ensures CT.connection_control_not_failed st0)
+=
+  let n =
+    ID.indefinite_description_ghost nat (fun n -> drain_chain n st0 st1) in
+  lemma_drain_chain_nonfailed_previous n st0 st1
+
+/// Implication form, for use where the hypothesis is not available at the call
+/// site -- notably inside Pulse code, which has no [introduce].
+let lemma_drained_nonfailed_previous_imp (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drained st0 st1)
+      (ensures
+        CT.connection_control_not_failed st1 ==>
+          CT.connection_control_not_failed st0)
+=
+  introduce
+    CT.connection_control_not_failed st1 ==>
+      CT.connection_control_not_failed st0
+  with _. lemma_drained_nonfailed_previous st0 st1
+
+(** ---------------------------------------------------------------------- *)
 (** A network step followed by a drain                                      *)
 (** ---------------------------------------------------------------------- *)
 
@@ -465,3 +530,109 @@ let lemma_coalesced_implies_drained_network
           old_network_out network_out old_app_out app_out)
 =
   lemma_drained_refl st1
+
+(** ---------------------------------------------------------------------- *)
+(** A drain step cannot fail the connection                                 *)
+(** ---------------------------------------------------------------------- *)
+
+/// [step_handshake_message] moves to [ControlFailed] in exactly one place --
+/// a received [HelloRetryRequest] -- and [step_protected_handshake] admits
+/// only the four [protected_handshake_message_supported] messages, which
+/// excludes it.  [set_pending_protected_handshake] touches only the handshake
+/// buffers.  So a protected-handshake step never introduces a failure.
+#push-options "--fuel 1 --ifuel 2 --split_queries always --z3rlimit 30"
+let lemma_step_protected_handshake_not_failed
+      (model:CS.connection_model)
+      (step:CS.protected_handshake_step)
+      (model1:CS.connection_model)
+  : Lemma
+      (requires
+        CS.step_protected_handshake model step == Some model1 /\
+        (match model.CS.model_control with
+         | CS.ControlFailed _ -> False
+         | _ -> True))
+      (ensures
+        (match model1.CS.model_control with
+         | CS.ControlFailed _ -> False
+         | _ -> True))
+=
+  assert (CS.protected_handshake_message_supported step.CS.protected_handshake_message);
+  match step.CS.protected_handshake_message with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ -> ()
+  | _ -> assert False
+#pop-options
+
+let lemma_drain_step_not_failed (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drain_step st0 st1 /\ CT.connection_control_not_failed st0)
+      (ensures CT.connection_control_not_failed st1)
+=
+  let (resp, step) = drain_step_witness st0 st1 in
+  assert (CS.step_model st0.CS.cs_model (CS.ConnProtectedHandshake step)
+            == Some st1.CS.cs_model);
+  lemma_step_protected_handshake_not_failed
+    st0.CS.cs_model step st1.CS.cs_model
+
+#push-options "--fuel 2 --ifuel 2"
+let rec lemma_drain_chain_not_failed (n:nat) (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drain_chain n st0 st1 /\ CT.connection_control_not_failed st0)
+      (ensures CT.connection_control_not_failed st1)
+      (decreases n)
+=
+  if n = 0
+  then ()
+  else
+  let m : nat = n - 1 in
+    eliminate
+      (st1 == st0) \/ (exists st'. drain_step st0 st' /\ drain_chain m st' st1)
+    returns CT.connection_control_not_failed st1
+    with _. ()
+    and _.
+      (let st' =
+         ID.indefinite_description_ghost
+           CS.connection_state
+           (fun st' -> drain_step st0 st' /\ drain_chain m st' st1) in
+       lemma_drain_step_not_failed st0 st';
+       lemma_drain_chain_not_failed m st' st1)
+#pop-options
+
+let lemma_drained_not_failed (st0 st1:CS.connection_state)
+  : Lemma
+      (requires drained st0 st1 /\ CT.connection_control_not_failed st0)
+      (ensures CT.connection_control_not_failed st1)
+=
+  let n =
+    ID.indefinite_description_ghost nat (fun n -> drain_chain n st0 st1) in
+  lemma_drain_chain_not_failed n st0 st1
+
+/// Drained form of [CT.lemma_network_bytes_app_out_positive_not_failed].  A
+/// positive application-output length rules out the head disjunct (a protected
+/// handshake step produces no application bytes), so the intermediate state is
+/// reached by a genuine network step; the drain then carries non-failure
+/// forward.
+let lemma_drained_network_app_out_positive_not_failed
+      (st0 st1:CS.connection_state)
+      (buffer_resp:CT.client_buffer_response)
+      (network_input:B.bytes)
+      (old_network_out network_out:B.bytes)
+      (old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        drained_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out /\
+        SZ.v buffer_resp.CT.response.CT.app_out_len > 0)
+      (ensures CT.connection_control_not_failed st1)
+=
+  let st_mid =
+    drained_network_middle
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out in
+  CT.lemma_network_bytes_app_out_positive_not_failed
+    st0 st_mid buffer_resp network_input
+    old_network_out network_out old_app_out app_out;
+  lemma_drained_not_failed st_mid st1

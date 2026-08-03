@@ -1131,31 +1131,55 @@ small enough to avoid the Z3 crash above.
 Both modules verify with **no admits and no assumes**, and the full
 `make -j128 verify test` gate is green with them in the tree.
 
-**What remains for Phase 5b**, in order:
+### Phase 5b as built (part 2) — the drain wired into the buffered driver
 
-1. Wire `DL.drain_pending` into `BufferedNetwork.process`, immediately after
-   `C.process_coalesced_network_bytes` returns.  It needs a zero-length array
-   to pass as `empty`; `Client.Engine` keeps one as `engine_empty_payload`, and
-   `client_process_internal` allocates one per call with a 0-length
-   `V.alloc`/`V.free` pair.  Draining unconditionally is correct and simplest:
-   when nothing is pending the first call reports quiescence and `drained` holds
-   reflexively.
-2. Move `result_valid` (`BufferedNetwork.fst`), `completed_drive_correct`
-   (`BufferedNetwork.fsti`, both `DriveYield` and `DriveReject`) and
-   `client_receive_observation_network_correct` (`Driver.State.fst`) onto
-   `D.drained_network_bytes_end_to_end_correct`, then follow the errors out
-   through `Driver.Core.fst`, `Driver.Receive.fst` and
-   `ChannelImplementation.fst` -- about 43 textual sites in all.
+`BufferedNetwork.process` now calls `DL.drain_pending` immediately after
+`C.process_coalesced_network_bytes` returns and before it republishes the
+connection, so the buffered driver — the one the channel and the localhost
+client use — no longer leaves a coalesced record's tail messages stranded.  The
+driver's specification moved from `CT.coalesced_network_bytes_end_to_end_correct`
+to `D.drained_network_bytes_end_to_end_correct` at 38 sites across
+`Driver.State`, `Driver.Receive`, `Driver.Core` and `ChannelImplementation`.
 
-`lemma_coalesced_implies_drained_network` is what makes step 2 safe: the
-composite is strictly *weaker* than the coalesced predicate (take the
-intermediate state to be the final one and use reflexivity of `drained`).  So
-this is the same shape of change Phase 5a already carried out successfully --
-every existing proof that establishes the undrained predicate still establishes
-the composite, and only consumers need adjusting.  Each consumer is mechanical:
-call `drained_network_middle` to recover `st_mid`, apply the existing undrained
-lemma to `(st0, st_mid)`, and transport its conclusion to `st1` with
-`lemma_drained_facts`.
+Because the composite is provably *weaker*
+(`lemma_coalesced_implies_drained_network`), no producer needed a real change.
+Only five consumers did, and every one followed the same recipe: recover the
+intermediate state with `drained_network_middle`, apply the pre-existing
+undrained lemma at `(st0, st_mid)`, and transport its conclusion to `st1`.
+Transporting the conclusions needed four new facts about drains, all proved in
+`Drain.fst` (or, where they need channel vocabulary, next to their consumer):
+
+* **Progress** — `TLS13.Impl.Client.DrainProgress.fst` (new).  The driver's
+  monotonic ghost reference is ordered by `client_progress_preorder`, so
+  publishing the drained state requires the drain to be an edge of that
+  preorder.  It is, and cheaply: by decision S1 the internal event is an
+  ordinary local event, so `CP.lemma_internal_step_is_client_step` turns a drain
+  step into a `client_step` at `CP.client_internal_event`, which is exactly a
+  `client_canonical_step_rel` edge; `RTC.closure_step` plus induction over
+  `drain_chain` does the rest.  This module is deliberately separate from
+  `Drain.fst` so that `Drain.fst` keeps its seconds-long rebuild.
+* **Non-failure, backwards** — `lemma_drained_nonfailed_previous` (plus an
+  implication form for Pulse, which has no `introduce`).  Consumers reason under
+  a `connection_control_not_failed st1` hypothesis on the *final* state while
+  the facts are proved at the intermediate one.
+* **Non-failure, forwards** — `lemma_drained_not_failed`.  `step_handshake_message`
+  reaches `ControlFailed` in exactly one place, a received `HelloRetryRequest`,
+  and `step_protected_handshake` admits only the four
+  `protected_handshake_message_supported` messages, which excludes it.  So a
+  drain can never fail a live connection.  This is what lets
+  `lemma_drained_network_app_out_positive_not_failed` survive the drain.
+* **Application-invisibility** — `lemma_drained_application_log`
+  (in `ChannelImplementation.fst`, where `TChannel.application_log` is in
+  scope).  A drain step's event is a `ConnProtectedHandshake` with
+  `app_out_len == 0sz`, so the channel's application log is untouched.  This is
+  the formal statement of "handshake internal steps are application-invisible",
+  which §7 lists as a Phase 5 exit criterion.
+
+`TLS13.Impl.Client.DrainLoop` also had to be added to `BUNDLE_IMPL_MODULES` and
+`CLIENT_DRIVER_IMPL_MODULES` in the `Makefile`; without it the extracted C
+linked against an undefined `TLS13_Impl_Client_DrainLoop_drain_pending`.
+
+Gate green, `make admit-count` = 0.
 
 ### Phase 5a as built — coalesced vocabulary everywhere, one blocked switch
 
