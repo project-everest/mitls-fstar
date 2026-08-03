@@ -12,8 +12,8 @@
 <text text-anchor="middle" x="1239.5" y="-1253.6" font-family="Helvetica,sans-Serif" font-size="18.00">TLS 1.3 extracted client architecture and trusted boundaries</text>
 <g id="clust1" class="cluster">
 <title>cluster_driver</title>
-<path fill="#eeeeee" stroke="#777777" d="M12,-538C12,-538 219,-538 219,-538 225,-538 231,-544 231,-550 231,-550 231,-742 231,-742 231,-748 225,-754 219,-754 219,-754 12,-754 12,-754 6,-754 0,-748 0,-742 0,-742 0,-550 0,-550 0,-544 6,-538 12,-538"/>
-<text text-anchor="middle" x="115.5" y="-735.6" font-family="Helvetica,sans-Serif" font-size="18.00">External C driver / tests</text>
+<path fill="#eeeeee" stroke="#777777" d="M12,-575C12,-575 219,-575 219,-575 225,-575 231,-581 231,-587 231,-587 231,-711 231,-711 231,-717 225,-723 219,-723 219,-723 12,-723 12,-723 6,-723 0,-717 0,-711 0,-711 0,-587 0,-587 0,-581 6,-575 12,-575"/>
+<text text-anchor="middle" x="115.5" y="-704.6" font-family="Helvetica,sans-Serif" font-size="18.00">External C driver / tests</text>
 </g>
 <g id="clust2" class="cluster">
 <title>cluster_impl</title>
@@ -33,12 +33,12 @@
 <!-- Driver -->
 <g id="node1" class="node">
 <title>Driver</title>
-<path fill="#eeeeee" stroke="#777777" stroke-width="1.3" d="M174,-718C174,-718 57,-718 57,-718 51,-718 45,-712 45,-706 45,-706 45,-694 45,-694 45,-688 51,-682 57,-682 57,-682 174,-682 174,-682 180,-682 186,-688 186,-694 186,-694 186,-706 186,-706 186,-712 180,-718 174,-718"/>
-<text text-anchor="middle" x="115.5" y="-703" font-family="Helvetica,sans-Serif" font-size="10.00">network/application driver</text>
-<text text-anchor="middle" x="115.5" y="-692" font-family="Helvetica,sans-Serif" font-size="10.00">owns TCP reads/writes</text>
+<path fill="#eeeeee" stroke="#777777" stroke-width="1.3" d="M174,-687C174,-687 57,-687 57,-687 51,-687 45,-681 45,-675 45,-675 45,-663 45,-663 45,-657 51,-651 57,-651 57,-651 174,-651 174,-651 180,-651 186,-657 186,-663 186,-663 186,-675 186,-675 186,-681 180,-687 174,-687"/>
+<text text-anchor="middle" x="115.5" y="-672" font-family="Helvetica,sans-Serif" font-size="10.00">network/application driver</text>
+<text text-anchor="middle" x="115.5" y="-661" font-family="Helvetica,sans-Serif" font-size="10.00">owns TCP reads/writes</text>
 </g>
 <!-- Client -->
-<g id="node4" class="node">
+<g id="node3" class="node">
 <title>Client</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M389,-650C389,-650 290,-650 290,-650 284,-650 278,-644 278,-638 278,-638 278,-626 278,-626 278,-620 284,-614 290,-614 290,-614 389,-614 389,-614 395,-614 401,-620 401,-626 401,-626 401,-638 401,-638 401,-644 395,-650 389,-650"/>
 <text text-anchor="middle" x="339.5" y="-635" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.Client</text>
@@ -47,50 +47,37 @@
 <!-- Driver&#45;&gt;Client -->
 <g id="edge1" class="edge">
 <title>Driver&#45;&gt;Client</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M178.06,-681.94C195.22,-676.84 213.85,-671.26 231,-666 245.57,-661.53 261.23,-656.64 275.96,-651.99"/>
-<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="276.7,-654.14 282.21,-650.01 275.33,-649.8 276.7,-654.14"/>
-</g>
-<!-- BindingTest -->
-<g id="node2" class="node">
-<title>BindingTest</title>
-<path fill="#eeeeee" stroke="#777777" stroke-width="1.3" d="M176,-650C176,-650 55,-650 55,-650 49,-650 43,-644 43,-638 43,-638 43,-626 43,-626 43,-620 49,-614 55,-614 55,-614 176,-614 176,-614 182,-614 188,-620 188,-626 188,-626 188,-638 188,-638 188,-644 182,-650 176,-650"/>
-<text text-anchor="middle" x="115.5" y="-635" font-family="Helvetica,sans-Serif" font-size="10.00">test_connection_bindings.c</text>
-<text text-anchor="middle" x="115.5" y="-624" font-family="Helvetica,sans-Serif" font-size="10.00">deterministic API test</text>
-</g>
-<!-- BindingTest&#45;&gt;Client -->
-<g id="edge2" class="edge">
-<title>BindingTest&#45;&gt;Client</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M188.27,-632C214.9,-632 244.98,-632 271.19,-632"/>
-<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="271.27,-634.28 277.77,-632 271.27,-629.73 271.27,-634.28"/>
+<path fill="none" stroke="#555555" stroke-width="1.1" d="M186.13,-657.39C213.21,-652.88 244.12,-647.73 271,-643.25"/>
+<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="271.7,-645.44 277.74,-642.13 270.95,-640.95 271.7,-645.44"/>
 </g>
 <!-- OpenSSLEcho -->
-<g id="node3" class="node">
+<g id="node2" class="node">
 <title>OpenSSLEcho</title>
-<path fill="#eeeeee" stroke="#777777" stroke-width="1.3" d="M201,-582C201,-582 30,-582 30,-582 24,-582 18,-576 18,-570 18,-570 18,-558 18,-558 18,-552 24,-546 30,-546 30,-546 201,-546 201,-546 207,-546 213,-552 213,-558 213,-558 213,-570 213,-570 213,-576 207,-582 201,-582"/>
-<text text-anchor="middle" x="115.5" y="-567" font-family="Helvetica,sans-Serif" font-size="10.00">test_extracted_client_openssl_echo.c</text>
-<text text-anchor="middle" x="115.5" y="-556" font-family="Helvetica,sans-Serif" font-size="10.00">local OpenSSL interop</text>
+<path fill="#eeeeee" stroke="#777777" stroke-width="1.3" d="M201,-619C201,-619 30,-619 30,-619 24,-619 18,-613 18,-607 18,-607 18,-595 18,-595 18,-589 24,-583 30,-583 30,-583 201,-583 201,-583 207,-583 213,-589 213,-595 213,-595 213,-607 213,-607 213,-613 207,-619 201,-619"/>
+<text text-anchor="middle" x="115.5" y="-604" font-family="Helvetica,sans-Serif" font-size="10.00">test_extracted_client_openssl_echo.c</text>
+<text text-anchor="middle" x="115.5" y="-593" font-family="Helvetica,sans-Serif" font-size="10.00">local OpenSSL interop</text>
 </g>
 <!-- OpenSSLEcho&#45;&gt;Client -->
-<g id="edge3" class="edge">
+<g id="edge2" class="edge">
 <title>OpenSSLEcho&#45;&gt;Client</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M178.06,-582.06C195.22,-587.16 213.85,-592.74 231,-598 245.57,-602.47 261.23,-607.36 275.96,-612.01"/>
-<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="275.33,-614.2 282.21,-613.99 276.7,-609.86 275.33,-614.2"/>
+<path fill="none" stroke="#555555" stroke-width="1.1" d="M213.23,-614.51C232.79,-617.24 252.96,-620.05 271.24,-622.61"/>
+<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="271.13,-624.89 277.88,-623.54 271.76,-620.38 271.13,-624.89"/>
 </g>
 <!-- ClientTypes -->
-<g id="node5" class="node">
+<g id="node4" class="node">
 <title>ClientTypes</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M670,-480C670,-480 468,-480 468,-480 462,-480 456,-474 456,-468 456,-468 456,-456 456,-456 456,-450 462,-444 468,-444 468,-444 670,-444 670,-444 676,-444 682,-450 682,-456 682,-456 682,-468 682,-468 682,-474 676,-480 670,-480"/>
 <text text-anchor="middle" x="569" y="-465" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.Client.Types</text>
 <text text-anchor="middle" x="569" y="-454" font-family="Helvetica,sans-Serif" font-size="10.00">responses, local actions, legality predicates</text>
 </g>
 <!-- Client&#45;&gt;ClientTypes -->
-<g id="edge4" class="edge">
+<g id="edge3" class="edge">
 <title>Client&#45;&gt;ClientTypes</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M348.09,-613.8C360.61,-585.99 388.23,-533.07 428,-504 440.28,-495.02 454.48,-487.95 469.03,-482.38"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="469.97,-484.45 475.29,-480.08 468.4,-480.18 469.97,-484.45"/>
 </g>
 <!-- Mutations -->
-<g id="node6" class="node">
+<g id="node5" class="node">
 <title>Mutations</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M886.5,-768C886.5,-768 753.5,-768 753.5,-768 747.5,-768 741.5,-762 741.5,-756 741.5,-756 741.5,-728 741.5,-728 741.5,-722 747.5,-716 753.5,-716 753.5,-716 886.5,-716 886.5,-716 892.5,-716 898.5,-722 898.5,-728 898.5,-728 898.5,-756 898.5,-756 898.5,-762 892.5,-768 886.5,-768"/>
 <text text-anchor="middle" x="820" y="-756" font-family="Helvetica,sans-Serif" font-size="10.00">ConnectionState.Fail/Network</text>
@@ -99,509 +86,509 @@
 <text text-anchor="middle" x="820" y="-723" font-family="Helvetica,sans-Serif" font-size="10.00">state mutations / transitions</text>
 </g>
 <!-- Client&#45;&gt;Mutations -->
-<g id="edge5" class="edge">
+<g id="edge4" class="edge">
 <title>Client&#45;&gt;Mutations</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M358.14,-650.12C379.26,-670.49 416.73,-702.59 456,-717 546.96,-750.37 659.22,-752.73 734.61,-749.26"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="734.95,-751.52 741.34,-748.93 734.73,-746.97 734.95,-751.52"/>
 </g>
 <!-- Repr -->
-<g id="node7" class="node">
+<g id="node6" class="node">
 <title>Repr</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M1485,-633C1485,-633 1334,-633 1334,-633 1328,-633 1322,-627 1322,-621 1322,-621 1322,-609 1322,-609 1322,-603 1328,-597 1334,-597 1334,-597 1485,-597 1485,-597 1491,-597 1497,-603 1497,-609 1497,-609 1497,-621 1497,-621 1497,-627 1491,-633 1485,-633"/>
 <text text-anchor="middle" x="1409.5" y="-618" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.ConnectionState.Repr</text>
 <text text-anchor="middle" x="1409.5" y="-607" font-family="Helvetica,sans-Serif" font-size="10.00">storage + connection_exactly</text>
 </g>
 <!-- Client&#45;&gt;Repr -->
-<g id="edge6" class="edge">
+<g id="edge5" class="edge">
 <title>Client&#45;&gt;Repr</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M392.91,-614C468.02,-589.24 611.13,-545.93 737,-530 958.04,-502.02 1220.02,-562.12 1341.03,-595.17"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1340.52,-597.39 1347.39,-596.92 1341.73,-593 1340.52,-597.39"/>
 </g>
 <!-- Queries -->
-<g id="node8" class="node">
+<g id="node7" class="node">
 <title>Queries</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M1158,-684C1158,-684 992,-684 992,-684 986,-684 980,-678 980,-672 980,-672 980,-660 980,-660 980,-654 986,-648 992,-648 992,-648 1158,-648 1158,-648 1164,-648 1170,-654 1170,-660 1170,-660 1170,-672 1170,-672 1170,-678 1164,-684 1158,-684"/>
 <text text-anchor="middle" x="1075" y="-669" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.ConnectionState.Queries</text>
 <text text-anchor="middle" x="1075" y="-658" font-family="Helvetica,sans-Serif" font-size="10.00">runtime checks + copyouts</text>
 </g>
 <!-- Client&#45;&gt;Queries -->
-<g id="edge7" class="edge">
+<g id="edge6" class="edge">
 <title>Client&#45;&gt;Queries</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M401.15,-634.81C527.13,-640.65 818.28,-654.15 973.03,-661.32"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="973.25,-663.61 979.85,-661.64 973.46,-659.06 973.25,-663.61"/>
 </g>
 <!-- Handlers -->
-<g id="node10" class="node">
+<g id="node9" class="node">
 <title>Handlers</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M648,-701C648,-701 490,-701 490,-701 484,-701 478,-695 478,-689 478,-689 478,-677 478,-677 478,-671 484,-665 490,-665 490,-665 648,-665 648,-665 654,-665 660,-671 660,-677 660,-677 660,-689 660,-689 660,-695 654,-701 648,-701"/>
 <text text-anchor="middle" x="569" y="-686" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.Handle.*</text>
 <text text-anchor="middle" x="569" y="-675" font-family="Helvetica,sans-Serif" font-size="10.00">handshake/local/alert/app dispatch</text>
 </g>
 <!-- Client&#45;&gt;Handlers -->
-<g id="edge8" class="edge">
+<g id="edge7" class="edge">
 <title>Client&#45;&gt;Handlers</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M401.17,-645.6C425.66,-651.09 454.39,-657.53 481.03,-663.5"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="480.56,-665.73 487.4,-664.93 481.56,-661.29 480.56,-665.73"/>
 </g>
 <!-- StateSpec -->
-<g id="node34" class="node">
+<g id="node33" class="node">
 <title>StateSpec</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M1839.5,-256C1839.5,-256 1703.5,-256 1703.5,-256 1697.5,-256 1691.5,-250 1691.5,-244 1691.5,-244 1691.5,-232 1691.5,-232 1691.5,-226 1697.5,-220 1703.5,-220 1703.5,-220 1839.5,-220 1839.5,-220 1845.5,-220 1851.5,-226 1851.5,-232 1851.5,-232 1851.5,-244 1851.5,-244 1851.5,-250 1845.5,-256 1839.5,-256"/>
 <text text-anchor="middle" x="1771.5" y="-241" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Spec.ConnectionState</text>
 <text text-anchor="middle" x="1771.5" y="-230" font-family="Helvetica,sans-Serif" font-size="10.00">rich client state + legal deltas</text>
 </g>
 <!-- ClientTypes&#45;&gt;StateSpec -->
-<g id="edge25" class="edge">
+<g id="edge24" class="edge">
 <title>ClientTypes&#45;&gt;StateSpec</title>
-<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M578.39,-443.64C605.01,-388.48 693.24,-228 819,-228 819,-228 819,-228 1410.5,-228 1504.27,-228 1611.73,-231.43 1684.65,-234.27"/>
-<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1684.57,-236.55 1691.16,-234.53 1684.75,-232 1684.57,-236.55"/>
-<text text-anchor="middle" x="1075" y="-230.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">legal responses</text>
+<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M577,-443.93C600.98,-385.43 685.74,-205 819,-205 819,-205 819,-205 1410.5,-205 1504.63,-205 1612.02,-216.33 1684.83,-225.71"/>
+<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1684.59,-227.97 1691.33,-226.55 1685.18,-223.46 1684.59,-227.97"/>
+<text text-anchor="middle" x="1075" y="-207.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">legal responses</text>
 </g>
 <!-- Mutations&#45;&gt;Repr -->
-<g id="edge16" class="edge">
+<g id="edge15" class="edge">
 <title>Mutations&#45;&gt;Repr</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M898.78,-739.1C974.58,-734.9 1092.6,-724.69 1192,-700 1254.01,-684.6 1322.06,-655.77 1365.01,-635.99"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1366.22,-637.94 1371.16,-633.14 1364.31,-633.81 1366.22,-637.94"/>
 </g>
 <!-- Mutations&#45;&gt;Queries -->
-<g id="edge17" class="edge">
+<g id="edge16" class="edge">
 <title>Mutations&#45;&gt;Queries</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M898.65,-717.59C909.18,-714.33 919.85,-711.06 930,-708 954.37,-700.64 981.13,-692.78 1004.9,-685.87"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1005.59,-688.04 1011.2,-684.04 1004.32,-683.67 1005.59,-688.04"/>
 </g>
 <!-- Model -->
-<g id="node9" class="node">
+<g id="node8" class="node">
 <title>Model</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M1883,-684C1883,-684 1660,-684 1660,-684 1654,-684 1648,-678 1648,-672 1648,-672 1648,-660 1648,-660 1648,-654 1654,-648 1660,-648 1660,-648 1883,-648 1883,-648 1889,-648 1895,-654 1895,-660 1895,-660 1895,-672 1895,-672 1895,-678 1889,-684 1883,-684"/>
 <text text-anchor="middle" x="1771.5" y="-669" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.ConnectionState.Model/Bounds/Tags</text>
 <text text-anchor="middle" x="1771.5" y="-658" font-family="Helvetica,sans-Serif" font-size="10.00">pure model helpers + proof predicates</text>
 </g>
 <!-- Mutations&#45;&gt;Model -->
-<g id="edge18" class="edge">
+<g id="edge17" class="edge">
 <title>Mutations&#45;&gt;Model</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M898.53,-746.27C909.43,-746.45 920.5,-746.4 931,-746 1183.16,-736.35 1476.33,-703.43 1640.97,-682.95"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1641.58,-685.17 1647.74,-682.1 1641.01,-680.65 1641.58,-685.17"/>
 </g>
 <!-- ImplMessages -->
-<g id="node11" class="node">
+<g id="node10" class="node">
 <title>ImplMessages</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M1180,-820C1180,-820 970,-820 970,-820 964,-820 958,-814 958,-808 958,-808 958,-796 958,-796 958,-790 964,-784 970,-784 970,-784 1180,-784 1180,-784 1186,-784 1192,-790 1192,-796 1192,-796 1192,-808 1192,-808 1192,-814 1186,-820 1180,-820"/>
 <text text-anchor="middle" x="1075" y="-805" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.Messages</text>
 <text text-anchor="middle" x="1075" y="-794" font-family="Helvetica,sans-Serif" font-size="10.00">extractable L messages + validity predicates</text>
 </g>
 <!-- Mutations&#45;&gt;ImplMessages -->
-<g id="edge19" class="edge">
+<g id="edge18" class="edge">
 <title>Mutations&#45;&gt;ImplMessages</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M898.63,-760.41C927.93,-767.36 961.37,-775.29 991.14,-782.35"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="990.97,-784.65 997.82,-783.93 992.02,-780.22 990.97,-784.65"/>
 </g>
 <!-- X509ABI -->
-<g id="node17" class="node">
+<g id="node16" class="node">
 <title>X509ABI</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1128,-1132C1128,-1132 1022,-1132 1022,-1132 1016,-1132 1010,-1126 1010,-1120 1010,-1120 1010,-1108 1010,-1108 1010,-1102 1016,-1096 1022,-1096 1022,-1096 1128,-1096 1128,-1096 1134,-1096 1140,-1102 1140,-1108 1140,-1108 1140,-1120 1140,-1120 1140,-1126 1134,-1132 1128,-1132"/>
 <text text-anchor="middle" x="1075" y="-1117" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.X509.fsti</text>
 <text text-anchor="middle" x="1075" y="-1106" font-family="Helvetica,sans-Serif" font-size="10.00">certificate/signature ABI</text>
 </g>
 <!-- Mutations&#45;&gt;X509ABI -->
-<g id="edge28" class="edge">
+<g id="edge27" class="edge">
 <title>Mutations&#45;&gt;X509ABI</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M887.46,-768.27C893.41,-772.77 898.77,-777.98 903,-784 956.65,-860.23 909.79,-901 930,-992 938.9,-1032.07 928.65,-1051.31 958,-1080 970.32,-1092.04 986.67,-1099.86 1003.2,-1104.92"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1002.91,-1107.2 1009.78,-1106.79 1004.15,-1102.82 1002.91,-1107.2"/>
 </g>
 <!-- MachineTypes -->
-<g id="node18" class="node">
+<g id="node17" class="node">
 <title>MachineTypes</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1129.5,-1064C1129.5,-1064 1020.5,-1064 1020.5,-1064 1014.5,-1064 1008.5,-1058 1008.5,-1052 1008.5,-1052 1008.5,-1040 1008.5,-1040 1008.5,-1034 1014.5,-1028 1020.5,-1028 1020.5,-1028 1129.5,-1028 1129.5,-1028 1135.5,-1028 1141.5,-1034 1141.5,-1040 1141.5,-1040 1141.5,-1052 1141.5,-1052 1141.5,-1058 1135.5,-1064 1129.5,-1064"/>
 <text text-anchor="middle" x="1075" y="-1049" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.MachineTypes.fsti</text>
 <text text-anchor="middle" x="1075" y="-1038" font-family="Helvetica,sans-Serif" font-size="10.00">machine/runtime types</text>
 </g>
 <!-- Mutations&#45;&gt;MachineTypes -->
-<g id="edge29" class="edge">
+<g id="edge28" class="edge">
 <title>Mutations&#45;&gt;MachineTypes</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M886.03,-768.18C892.4,-772.72 898.25,-777.97 903,-784 967.49,-865.89 886.1,-936.53 958,-1012 969.69,-1024.27 985.56,-1032.19 1001.79,-1037.27"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1001.39,-1039.52 1008.27,-1039.15 1002.66,-1035.15 1001.39,-1039.52"/>
 </g>
 <!-- Mutations&#45;&gt;StateSpec -->
-<g id="edge24" class="edge">
+<g id="edge23" class="edge">
 <title>Mutations&#45;&gt;StateSpec</title>
-<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M839,-715.83C857.51,-687.82 885.96,-641.53 903,-598 922.3,-548.71 897.93,-524.11 930,-482 1018.57,-365.71 1080.57,-371.96 1219,-325 1303.57,-296.31 1552.12,-263.85 1684.78,-247.91"/>
-<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1685.21,-250.15 1691.39,-247.11 1684.67,-245.63 1685.21,-250.15"/>
-<text text-anchor="middle" x="1252.5" y="-327.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">legal deltas</text>
+<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M839.33,-715.95C858.1,-688.04 886.76,-641.84 903,-598 924.86,-538.99 893.6,-510.34 930,-459 1016.06,-337.62 1077.37,-335.61 1219,-290 1377.48,-238.96 1573.83,-233.17 1684.36,-234.77"/>
+<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1684.65,-237.05 1691.18,-234.88 1684.72,-232.5 1684.65,-237.05"/>
+<text text-anchor="middle" x="1252.5" y="-292.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">legal deltas</text>
 </g>
 <!-- Repr&#45;&gt;Model -->
-<g id="edge20" class="edge">
+<g id="edge19" class="edge">
 <title>Repr&#45;&gt;Model</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1497.19,-627.28C1540.31,-633.39 1593.3,-640.9 1641.11,-647.67"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1641.07,-649.96 1647.82,-648.62 1641.7,-645.46 1641.07,-649.96"/>
 </g>
 <!-- Repr&#45;&gt;StateSpec -->
-<g id="edge23" class="edge">
+<g id="edge22" class="edge">
 <title>Repr&#45;&gt;StateSpec</title>
-<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M1432.14,-596.79C1452.28,-579.34 1482.63,-551.78 1506,-525 1577.43,-443.13 1571.29,-402.95 1648,-326 1673.95,-299.97 1708.28,-276.02 1733.99,-259.7"/>
-<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1735.38,-261.52 1739.67,-256.14 1732.96,-257.67 1735.38,-261.52"/>
-<text text-anchor="middle" x="1577" y="-490.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">connection_exactly</text>
+<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M1426.52,-596.98C1445.88,-574.99 1479.2,-536.48 1506,-502 1572.68,-416.21 1566.27,-374.6 1648,-303 1668.78,-284.8 1695.54,-269.85 1718.75,-258.9"/>
+<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1719.94,-260.86 1724.88,-256.06 1718.03,-256.73 1719.94,-260.86"/>
+<text text-anchor="middle" x="1577" y="-465.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">connection_exactly</text>
 </g>
 <!-- Queries&#45;&gt;Repr -->
-<g id="edge21" class="edge">
+<g id="edge20" class="edge">
 <title>Queries&#45;&gt;Repr</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1170.39,-651.52C1215.77,-644.56 1270,-636.24 1315.24,-629.3"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1315.77,-631.53 1321.84,-628.29 1315.08,-627.03 1315.77,-631.53"/>
 </g>
 <!-- Queries&#45;&gt;Model -->
-<g id="edge22" class="edge">
+<g id="edge21" class="edge">
 <title>Queries&#45;&gt;Model</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1170.02,-666C1291.65,-666 1504.09,-666 1640.94,-666"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1641.31,-668.28 1647.81,-666 1641.31,-663.73 1641.31,-668.28"/>
 </g>
 <!-- Handlers&#45;&gt;Mutations -->
-<g id="edge9" class="edge">
+<g id="edge8" class="edge">
 <title>Handlers&#45;&gt;Mutations</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M646.06,-701.02C674.12,-707.67 706.06,-715.24 734.79,-722.05"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="734.41,-724.29 741.26,-723.58 735.45,-719.87 734.41,-724.29"/>
 </g>
 <!-- Handlers&#45;&gt;Repr -->
-<g id="edge10" class="edge">
+<g id="edge9" class="edge">
 <title>Handlers&#45;&gt;Repr</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M660.29,-668.71C738.76,-656.88 855.6,-640.64 958,-632 1081.26,-621.6 1224.03,-617.56 1315.24,-615.99"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1315.53,-618.26 1321.99,-615.88 1315.45,-613.71 1315.53,-618.26"/>
 </g>
 <!-- Handlers&#45;&gt;Queries -->
-<g id="edge11" class="edge">
+<g id="edge10" class="edge">
 <title>Handlers&#45;&gt;Queries</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M660.11,-679.96C748.17,-676.99 881.98,-672.48 973.46,-669.39"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="973.56,-671.66 979.97,-669.17 973.4,-667.12 973.56,-671.66"/>
 </g>
 <!-- Parser -->
-<g id="node12" class="node">
+<g id="node11" class="node">
 <title>Parser</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M867.5,-582C867.5,-582 772.5,-582 772.5,-582 766.5,-582 760.5,-576 760.5,-570 760.5,-570 760.5,-558 760.5,-558 760.5,-552 766.5,-546 772.5,-546 772.5,-546 867.5,-546 867.5,-546 873.5,-546 879.5,-552 879.5,-558 879.5,-558 879.5,-570 879.5,-570 879.5,-576 873.5,-582 867.5,-582"/>
 <text text-anchor="middle" x="820" y="-567" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.Parser</text>
 <text text-anchor="middle" x="820" y="-556" font-family="Helvetica,sans-Serif" font-size="10.00">verified parser facade</text>
 </g>
 <!-- Handlers&#45;&gt;Parser -->
-<g id="edge12" class="edge">
+<g id="edge11" class="edge">
 <title>Handlers&#45;&gt;Parser</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M660.04,-665.02C677.53,-659.1 695.05,-651.28 710,-641 726.19,-629.86 721.89,-618.56 737,-606 746.64,-597.99 758.05,-590.95 769.26,-585.03"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="770.35,-587.03 775.09,-582.04 768.27,-582.99 770.35,-587.03"/>
 </g>
 <!-- Serializer -->
-<g id="node13" class="node">
+<g id="node12" class="node">
 <title>Serializer</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M874.5,-480C874.5,-480 765.5,-480 765.5,-480 759.5,-480 753.5,-474 753.5,-468 753.5,-468 753.5,-456 753.5,-456 753.5,-450 759.5,-444 765.5,-444 765.5,-444 874.5,-444 874.5,-444 880.5,-444 886.5,-450 886.5,-456 886.5,-456 886.5,-468 886.5,-468 886.5,-474 880.5,-480 874.5,-480"/>
 <text text-anchor="middle" x="820" y="-465" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Impl.Serializer</text>
 <text text-anchor="middle" x="820" y="-454" font-family="Helvetica,sans-Serif" font-size="10.00">verified serializer facade</text>
 </g>
 <!-- Handlers&#45;&gt;Serializer -->
-<g id="edge13" class="edge">
+<g id="edge12" class="edge">
 <title>Handlers&#45;&gt;Serializer</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M589.26,-664.78C620.05,-635.78 682.46,-577.54 737,-530 754.79,-514.5 775.21,-497.56 791.22,-484.46"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="792.88,-486.05 796.48,-480.18 790,-482.52 792.88,-486.05"/>
 </g>
 <!-- KeySchedule -->
-<g id="node14" class="node">
+<g id="node13" class="node">
 <title>KeySchedule</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M874.5,-836C874.5,-836 765.5,-836 765.5,-836 759.5,-836 753.5,-830 753.5,-824 753.5,-824 753.5,-812 753.5,-812 753.5,-806 759.5,-800 765.5,-800 765.5,-800 874.5,-800 874.5,-800 880.5,-800 886.5,-806 886.5,-812 886.5,-812 886.5,-824 886.5,-824 886.5,-830 880.5,-836 874.5,-836"/>
 <text text-anchor="middle" x="820" y="-821" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.KeySchedule</text>
 <text text-anchor="middle" x="820" y="-810" font-family="Helvetica,sans-Serif" font-size="10.00">TLS 1.3 secret derivation</text>
 </g>
 <!-- Handlers&#45;&gt;KeySchedule -->
-<g id="edge15" class="edge">
+<g id="edge14" class="edge">
 <title>Handlers&#45;&gt;KeySchedule</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M597.05,-701.11C629.49,-722.41 685.91,-758.14 737,-784 746.22,-788.67 756.24,-793.22 766.01,-797.41"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="765.17,-799.52 772.05,-799.96 766.95,-795.33 765.17,-799.52"/>
 </g>
 <!-- Record -->
-<g id="node15" class="node">
+<g id="node14" class="node">
 <title>Record</title>
 <path fill="#e8f7e8" stroke="#2e8b57" stroke-width="1.3" d="M891,-904C891,-904 749,-904 749,-904 743,-904 737,-898 737,-892 737,-892 737,-880 737,-880 737,-874 743,-868 749,-868 749,-868 891,-868 891,-868 897,-868 903,-874 903,-880 903,-880 903,-892 903,-892 903,-898 897,-904 891,-904"/>
 <text text-anchor="middle" x="820" y="-889" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Record</text>
 <text text-anchor="middle" x="820" y="-878" font-family="Helvetica,sans-Serif" font-size="10.00">record&#45;state and AEAD wrapper</text>
 </g>
 <!-- Handlers&#45;&gt;Record -->
-<g id="edge14" class="edge">
+<g id="edge13" class="edge">
 <title>Handlers&#45;&gt;Record</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M583.77,-701.12C610.21,-734.83 671.29,-807.79 737,-852 744.23,-856.87 752.28,-861.24 760.42,-865.11"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="759.79,-867.32 766.65,-867.96 761.69,-863.19 759.79,-867.32"/>
 </g>
 <!-- Messages -->
-<g id="node26" class="node">
+<g id="node25" class="node">
 <title>Messages</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2309,-175C2309,-175 2239,-175 2239,-175 2233,-175 2227,-169 2227,-163 2227,-163 2227,-151 2227,-151 2227,-145 2233,-139 2239,-139 2239,-139 2309,-139 2309,-139 2315,-139 2321,-145 2321,-151 2321,-151 2321,-163 2321,-163 2321,-169 2315,-175 2309,-175"/>
 <text text-anchor="middle" x="2274" y="-154.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Messages</text>
 </g>
 <!-- ImplMessages&#45;&gt;Messages -->
-<g id="edge34" class="edge">
+<g id="edge33" class="edge">
 <title>ImplMessages&#45;&gt;Messages</title>
 <path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M1192.18,-801.48C1256.02,-801.24 1336.63,-801 1408.5,-801 1408.5,-801 1408.5,-801 2055,-801 2314.89,-801 2098.65,-471.38 2213,-238 2223.38,-216.82 2239.46,-195.49 2252.36,-180.04"/>
 <polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="2254.13,-181.47 2256.6,-175.04 2250.66,-178.53 2254.13,-181.47"/>
 <text text-anchor="middle" x="1771.5" y="-803.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">L/M validity</text>
 </g>
 <!-- WireSpec -->
-<g id="node27" class="node">
+<g id="node26" class="node">
 <title>WireSpec</title>
-<path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M1826,-378C1826,-378 1717,-378 1717,-378 1711,-378 1705,-372 1705,-366 1705,-366 1705,-354 1705,-354 1705,-348 1711,-342 1717,-342 1717,-342 1826,-342 1826,-342 1832,-342 1838,-348 1838,-354 1838,-354 1838,-366 1838,-366 1838,-372 1832,-378 1826,-378"/>
-<text text-anchor="middle" x="1771.5" y="-363" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Wire.Spec</text>
-<text text-anchor="middle" x="1771.5" y="-352" font-family="Helvetica,sans-Serif" font-size="10.00">pure wire parse/serialize</text>
+<path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M1826,-355C1826,-355 1717,-355 1717,-355 1711,-355 1705,-349 1705,-343 1705,-343 1705,-331 1705,-331 1705,-325 1711,-319 1717,-319 1717,-319 1826,-319 1826,-319 1832,-319 1838,-325 1838,-331 1838,-331 1838,-343 1838,-343 1838,-349 1832,-355 1826,-355"/>
+<text text-anchor="middle" x="1771.5" y="-340" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Wire.Spec</text>
+<text text-anchor="middle" x="1771.5" y="-329" font-family="Helvetica,sans-Serif" font-size="10.00">pure wire parse/serialize</text>
 </g>
 <!-- Parser&#45;&gt;WireSpec -->
-<g id="edge35" class="edge">
+<g id="edge34" class="edge">
 <title>Parser&#45;&gt;WireSpec</title>
-<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M842.43,-545.84C868.46,-524.15 911.2,-489.83 930,-482 1068.93,-424.15 1520.68,-380.99 1698.06,-365.87"/>
-<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1698.49,-368.12 1704.77,-365.3 1698.1,-363.59 1698.49,-368.12"/>
-<text text-anchor="middle" x="1252.5" y="-420.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">postconditions</text>
+<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M846.06,-545.83C863.06,-532.9 885.52,-514.6 903,-496 916.94,-481.17 912.56,-469.51 930,-459 1059.28,-381.11 1519.29,-349.78 1698.4,-340.35"/>
+<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1698.54,-342.62 1704.91,-340.01 1698.3,-338.08 1698.54,-342.62"/>
+<text text-anchor="middle" x="1252.5" y="-385.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">postconditions</text>
 </g>
 <!-- Serializer&#45;&gt;WireSpec -->
-<g id="edge36" class="edge">
+<g id="edge35" class="edge">
 <title>Serializer&#45;&gt;WireSpec</title>
-<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M846.02,-443.91C867.26,-429.6 899.12,-410.49 930,-401 1203.21,-317.01 1549.72,-337.45 1697.93,-351.76"/>
-<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1698.15,-354.06 1704.84,-352.43 1698.59,-349.54 1698.15,-354.06"/>
-<text text-anchor="middle" x="1252.5" y="-349.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">postconditions</text>
+<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M837.88,-443.85C857.77,-423.82 892.82,-392.48 930,-378 1197.27,-273.89 1548.94,-305.36 1698.36,-325.68"/>
+<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="1698.14,-327.94 1704.89,-326.58 1698.76,-323.44 1698.14,-327.94"/>
+<text text-anchor="middle" x="1252.5" y="-314.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">postconditions</text>
 </g>
 <!-- CryptoABI -->
-<g id="node16" class="node">
+<g id="node15" class="node">
 <title>CryptoABI</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1111,-1200C1111,-1200 1039,-1200 1039,-1200 1033,-1200 1027,-1194 1027,-1188 1027,-1188 1027,-1176 1027,-1176 1027,-1170 1033,-1164 1039,-1164 1039,-1164 1111,-1164 1111,-1164 1117,-1164 1123,-1170 1123,-1176 1123,-1176 1123,-1188 1123,-1188 1123,-1194 1117,-1200 1111,-1200"/>
 <text text-anchor="middle" x="1075" y="-1185" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Crypto.fsti</text>
 <text text-anchor="middle" x="1075" y="-1174" font-family="Helvetica,sans-Serif" font-size="10.00">crypto ABI</text>
 </g>
 <!-- KeySchedule&#45;&gt;CryptoABI -->
-<g id="edge27" class="edge">
+<g id="edge26" class="edge">
 <title>KeySchedule&#45;&gt;CryptoABI</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M885.04,-836.16C891.93,-840.39 898.18,-845.6 903,-852 935.02,-894.52 915.22,-1038.86 930,-1090 937.95,-1117.5 936.16,-1129.49 958,-1148 975.41,-1162.76 998.96,-1171.11 1020.3,-1175.84"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1020.01,-1178.1 1026.84,-1177.19 1020.93,-1173.65 1020.01,-1178.1"/>
 </g>
 <!-- Keys -->
-<g id="node33" class="node">
+<g id="node32" class="node">
 <title>Keys</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2076,-324C2076,-324 2032,-324 2032,-324 2026,-324 2020,-318 2020,-312 2020,-312 2020,-300 2020,-300 2020,-294 2026,-288 2032,-288 2032,-288 2076,-288 2076,-288 2082,-288 2088,-294 2088,-300 2088,-300 2088,-312 2088,-312 2088,-318 2082,-324 2076,-324"/>
 <text text-anchor="middle" x="2054" y="-303.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Keys</text>
 </g>
 <!-- KeySchedule&#45;&gt;Keys -->
-<g id="edge38" class="edge">
+<g id="edge37" class="edge">
 <title>KeySchedule&#45;&gt;Keys</title>
-<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M881.62,-799.82C889.5,-795.56 896.93,-790.35 903,-784 952.62,-732.05 920.59,-693.34 958,-632 997.46,-567.29 998.21,-507 1074,-507 1074,-507 1074,-507 1772.5,-507 1849.22,-507 1848.68,-448.18 1903,-394 1925.53,-371.53 1923.5,-357.61 1950,-340 1969.1,-327.3 1993.35,-318.99 2013.52,-313.76"/>
-<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="2014.15,-315.95 2019.91,-312.17 2013.05,-311.53 2014.15,-315.95"/>
-<text text-anchor="middle" x="1409.5" y="-509.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">secret specs</text>
+<path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M881.62,-799.82C889.5,-795.56 896.93,-790.35 903,-784 952.62,-732.05 923.18,-694.84 958,-632 998.51,-558.9 990.43,-484 1074,-484 1074,-484 1074,-484 1772.5,-484 1874.08,-484 1860.86,-388.72 1950,-340 1969.74,-329.21 1993.5,-321.08 2013.22,-315.49"/>
+<polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="2014.08,-317.61 2019.74,-313.69 2012.86,-313.22 2014.08,-317.61"/>
+<text text-anchor="middle" x="1409.5" y="-486.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">secret specs</text>
 </g>
 <!-- Record&#45;&gt;CryptoABI -->
-<g id="edge26" class="edge">
+<g id="edge25" class="edge">
 <title>Record&#45;&gt;CryptoABI</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M822.91,-904.31C828.93,-952.4 852.04,-1083.12 930,-1149 954.95,-1170.08 990.72,-1178.36 1020.37,-1181.35"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1020.3,-1183.63 1026.98,-1181.94 1020.71,-1179.09 1020.3,-1183.63"/>
 </g>
 <!-- RecordSpec -->
-<g id="node29" class="node">
+<g id="node28" class="node">
 <title>RecordSpec</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2094.5,-392C2094.5,-392 2013.5,-392 2013.5,-392 2007.5,-392 2001.5,-386 2001.5,-380 2001.5,-380 2001.5,-368 2001.5,-368 2001.5,-362 2007.5,-356 2013.5,-356 2013.5,-356 2094.5,-356 2094.5,-356 2100.5,-356 2106.5,-362 2106.5,-368 2106.5,-368 2106.5,-380 2106.5,-380 2106.5,-386 2100.5,-392 2094.5,-392"/>
 <text text-anchor="middle" x="2054" y="-371.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Record.Spec</text>
 </g>
 <!-- Record&#45;&gt;RecordSpec -->
-<g id="edge37" class="edge">
+<g id="edge36" class="edge">
 <title>Record&#45;&gt;RecordSpec</title>
 <path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M903.04,-885.02C952.55,-884.52 1016.9,-884 1074,-884 1074,-884 1074,-884 1772.5,-884 1996.73,-884 2042.99,-500.81 2051.33,-398.73"/>
 <polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="2053.61,-398.81 2051.85,-392.15 2049.07,-398.45 2053.61,-398.81"/>
 <text text-anchor="middle" x="1409.5" y="-886.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">seal/open spec</text>
 </g>
 <!-- CryptoC -->
-<g id="node19" class="node">
+<g id="node18" class="node">
 <title>CryptoC</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1461,-1200C1461,-1200 1358,-1200 1358,-1200 1352,-1200 1346,-1194 1346,-1188 1346,-1188 1346,-1176 1346,-1176 1346,-1170 1352,-1164 1358,-1164 1358,-1164 1461,-1164 1461,-1164 1467,-1164 1473,-1170 1473,-1176 1473,-1176 1473,-1188 1473,-1188 1473,-1194 1467,-1200 1461,-1200"/>
 <text text-anchor="middle" x="1409.5" y="-1185" font-family="Helvetica,sans-Serif" font-size="10.00">tls13_crypto_external.c</text>
 <text text-anchor="middle" x="1409.5" y="-1174" font-family="Helvetica,sans-Serif" font-size="10.00">HACL glue</text>
 </g>
 <!-- CryptoABI&#45;&gt;CryptoC -->
-<g id="edge30" class="edge">
+<g id="edge29" class="edge">
 <title>CryptoABI&#45;&gt;CryptoC</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1123.29,-1182C1179.71,-1182 1274.52,-1182 1339.21,-1182"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1339.27,-1184.28 1345.77,-1182 1339.27,-1179.73 1339.27,-1184.28"/>
 </g>
 <!-- CryptoSpec -->
-<g id="node30" class="node">
+<g id="node29" class="node">
 <title>CryptoSpec</title>
 <path fill="#fff4cc" stroke="#b8860b" stroke-width="1.3" d="M2323,-392C2323,-392 2225,-392 2225,-392 2219,-392 2213,-386 2213,-380 2213,-380 2213,-368 2213,-368 2213,-362 2219,-356 2225,-356 2225,-356 2323,-356 2323,-356 2329,-356 2335,-362 2335,-368 2335,-368 2335,-380 2335,-380 2335,-386 2329,-392 2323,-392"/>
 <text text-anchor="middle" x="2274" y="-371.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Crypto.Spec.fsti</text>
 </g>
 <!-- CryptoABI&#45;&gt;CryptoSpec -->
-<g id="edge39" class="edge">
+<g id="edge38" class="edge">
 <title>CryptoABI&#45;&gt;CryptoSpec</title>
 <path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M1123.25,-1172.42C1144.92,-1166.96 1170.51,-1158.98 1192,-1148 1300.45,-1092.57 1286.71,-980 1408.5,-980 1408.5,-980 1408.5,-980 2055,-980 2180.67,-980 2253.73,-512.74 2269.67,-398.82"/>
 <polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="2271.96,-398.89 2270.6,-392.14 2267.45,-398.26 2271.96,-398.89"/>
 <text text-anchor="middle" x="1771.5" y="-982.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">assumed behavior</text>
 </g>
 <!-- X509C -->
-<g id="node20" class="node">
+<g id="node19" class="node">
 <title>X509C</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1494,-1132C1494,-1132 1325,-1132 1325,-1132 1319,-1132 1313,-1126 1313,-1120 1313,-1120 1313,-1108 1313,-1108 1313,-1102 1319,-1096 1325,-1096 1325,-1096 1494,-1096 1494,-1096 1500,-1096 1506,-1102 1506,-1108 1506,-1108 1506,-1120 1506,-1120 1506,-1126 1500,-1132 1494,-1132"/>
 <text text-anchor="middle" x="1409.5" y="-1117" font-family="Helvetica,sans-Serif" font-size="10.00">tls13_openssl_stubs.c</text>
 <text text-anchor="middle" x="1409.5" y="-1106" font-family="Helvetica,sans-Serif" font-size="10.00">OpenSSL validation/signature checks</text>
 </g>
 <!-- X509ABI&#45;&gt;X509C -->
-<g id="edge31" class="edge">
+<g id="edge30" class="edge">
 <title>X509ABI&#45;&gt;X509C</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1140.11,-1114C1187.17,-1114 1252.05,-1114 1306.23,-1114"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1306.29,-1116.28 1312.79,-1114 1306.29,-1111.73 1306.29,-1116.28"/>
 </g>
 <!-- X509Spec -->
-<g id="node31" class="node">
+<g id="node30" class="node">
 <title>X509Spec</title>
 <path fill="#fff4cc" stroke="#b8860b" stroke-width="1.3" d="M2319.5,-290C2319.5,-290 2228.5,-290 2228.5,-290 2222.5,-290 2216.5,-284 2216.5,-278 2216.5,-278 2216.5,-266 2216.5,-266 2216.5,-260 2222.5,-254 2228.5,-254 2228.5,-254 2319.5,-254 2319.5,-254 2325.5,-254 2331.5,-260 2331.5,-266 2331.5,-266 2331.5,-278 2331.5,-278 2331.5,-284 2325.5,-290 2319.5,-290"/>
 <text text-anchor="middle" x="2274" y="-269.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.X509.Spec.fsti</text>
 </g>
 <!-- X509ABI&#45;&gt;X509Spec -->
-<g id="edge40" class="edge">
+<g id="edge39" class="edge">
 <title>X509ABI&#45;&gt;X509Spec</title>
 <path fill="none" stroke="#777777" stroke-width="1.1" stroke-dasharray="5,2" d="M1140.08,-1104.45C1187.74,-1097.44 1254.39,-1087.81 1313,-1080 1583.76,-1043.94 1670.01,-1108 1923,-1005 2044.6,-955.49 2092.88,-940.01 2158,-826 2210.39,-734.28 2174.11,-694.95 2186,-590 2198.58,-478.95 2167.91,-442.26 2213,-340 2220.57,-322.83 2234.1,-306.91 2246.39,-294.8"/>
 <polygon fill="#777777" stroke="#777777" stroke-width="1.1" points="2248.09,-296.32 2251.21,-290.18 2244.94,-293.04 2248.09,-296.32"/>
 <text text-anchor="middle" x="1771.5" y="-1068.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#333333">assumed behavior</text>
 </g>
 <!-- HACL -->
-<g id="node21" class="node">
+<g id="node20" class="node">
 <title>HACL</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1810,-1200C1810,-1200 1733,-1200 1733,-1200 1727,-1200 1721,-1194 1721,-1188 1721,-1188 1721,-1176 1721,-1176 1721,-1170 1727,-1164 1733,-1164 1733,-1164 1810,-1164 1810,-1164 1816,-1164 1822,-1170 1822,-1176 1822,-1176 1822,-1188 1822,-1188 1822,-1194 1816,-1200 1810,-1200"/>
 <text text-anchor="middle" x="1771.5" y="-1179.5" font-family="Helvetica,sans-Serif" font-size="10.00">HACL* C snapshot</text>
 </g>
 <!-- CryptoC&#45;&gt;HACL -->
-<g id="edge32" class="edge">
+<g id="edge31" class="edge">
 <title>CryptoC&#45;&gt;HACL</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1473.21,-1182C1541.28,-1182 1648.98,-1182 1714.36,-1182"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1714.45,-1184.28 1720.95,-1182 1714.45,-1179.73 1714.45,-1184.28"/>
 </g>
 <!-- OpenSSL -->
-<g id="node22" class="node">
+<g id="node21" class="node">
 <title>OpenSSL</title>
 <path fill="#ffe8e8" stroke="#c9342c" stroke-width="1.3" d="M1804.5,-1132C1804.5,-1132 1738.5,-1132 1738.5,-1132 1732.5,-1132 1726.5,-1126 1726.5,-1120 1726.5,-1120 1726.5,-1108 1726.5,-1108 1726.5,-1102 1732.5,-1096 1738.5,-1096 1738.5,-1096 1804.5,-1096 1804.5,-1096 1810.5,-1096 1816.5,-1102 1816.5,-1108 1816.5,-1108 1816.5,-1120 1816.5,-1120 1816.5,-1126 1810.5,-1132 1804.5,-1132"/>
 <text text-anchor="middle" x="1771.5" y="-1111.5" font-family="Helvetica,sans-Serif" font-size="10.00">OpenSSL library</text>
 </g>
 <!-- X509C&#45;&gt;OpenSSL -->
-<g id="edge33" class="edge">
+<g id="edge32" class="edge">
 <title>X509C&#45;&gt;OpenSSL</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1506.03,-1114C1574.69,-1114 1664.55,-1114 1719.86,-1114"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1719.93,-1116.28 1726.43,-1114 1719.93,-1111.73 1719.93,-1116.28"/>
 </g>
 <!-- Runtime -->
-<g id="node23" class="node">
+<g id="node22" class="node">
 <title>Runtime</title>
 <path fill="#eeeeee" stroke="#777777" stroke-width="1.3" d="M1134,-996C1134,-996 1016,-996 1016,-996 1010,-996 1004,-990 1004,-984 1004,-984 1004,-972 1004,-972 1004,-966 1010,-960 1016,-960 1016,-960 1134,-960 1134,-960 1140,-960 1146,-966 1146,-972 1146,-972 1146,-984 1146,-984 1146,-990 1140,-996 1134,-996"/>
 <text text-anchor="middle" x="1075" y="-981" font-family="Helvetica,sans-Serif" font-size="10.00">KaRaMeL/Pulse/C runtime,</text>
 <text text-anchor="middle" x="1075" y="-970" font-family="Helvetica,sans-Serif" font-size="10.00">allocator, compiler, libc</text>
 </g>
 <!-- Bytes -->
-<g id="node24" class="node">
+<g id="node23" class="node">
 <title>Bytes</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2451,-120C2451,-120 2402,-120 2402,-120 2396,-120 2390,-114 2390,-108 2390,-108 2390,-96 2390,-96 2390,-90 2396,-84 2402,-84 2402,-84 2451,-84 2451,-84 2457,-84 2463,-90 2463,-96 2463,-96 2463,-108 2463,-108 2463,-114 2457,-120 2451,-120"/>
 <text text-anchor="middle" x="2426.5" y="-99.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Bytes</text>
 </g>
 <!-- Types -->
-<g id="node25" class="node">
+<g id="node24" class="node">
 <title>Types</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2451,-188C2451,-188 2402,-188 2402,-188 2396,-188 2390,-182 2390,-176 2390,-176 2390,-164 2390,-164 2390,-158 2396,-152 2402,-152 2402,-152 2451,-152 2451,-152 2457,-152 2463,-158 2463,-164 2463,-164 2463,-176 2463,-176 2463,-182 2457,-188 2451,-188"/>
 <text text-anchor="middle" x="2426.5" y="-167.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Types</text>
 </g>
 <!-- Messages&#45;&gt;Bytes -->
-<g id="edge51" class="edge">
+<g id="edge50" class="edge">
 <title>Messages&#45;&gt;Bytes</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M2321.38,-140.05C2341.18,-132.82 2364.11,-124.43 2383.41,-117.38"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2384.22,-119.51 2389.54,-115.14 2382.66,-115.23 2384.22,-119.51"/>
 </g>
 <!-- Messages&#45;&gt;Types -->
-<g id="edge50" class="edge">
+<g id="edge49" class="edge">
 <title>Messages&#45;&gt;Types</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M2321.38,-161.01C2341.01,-162.7 2363.72,-164.66 2382.91,-166.32"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2382.87,-168.6 2389.54,-166.89 2383.26,-164.07 2382.87,-168.6"/>
 </g>
 <!-- WireSpec&#45;&gt;Messages -->
-<g id="edge47" class="edge">
+<g id="edge46" class="edge">
 <title>WireSpec&#45;&gt;Messages</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M1806.38,-341.89C1834.32,-325.91 1873.95,-300.72 1903,-272 1929.13,-246.17 1918.78,-223.37 1950,-204 1955.7,-200.46 2129.96,-176.41 2220.1,-164.15"/>
+<path fill="none" stroke="#555555" stroke-width="1.1" d="M1822.84,-318.97C1848.68,-308.06 1879.57,-292.31 1903,-272 1930.76,-247.94 1918.78,-223.37 1950,-204 1955.7,-200.46 2129.96,-176.41 2220.1,-164.15"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2220.57,-166.38 2226.71,-163.25 2219.96,-161.87 2220.57,-166.38"/>
 </g>
 <!-- HandshakeSpec -->
-<g id="node28" class="node">
+<g id="node27" class="node">
 <title>HandshakeSpec</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2104.5,-256C2104.5,-256 2003.5,-256 2003.5,-256 1997.5,-256 1991.5,-250 1991.5,-244 1991.5,-244 1991.5,-232 1991.5,-232 1991.5,-226 1997.5,-220 2003.5,-220 2003.5,-220 2104.5,-220 2104.5,-220 2110.5,-220 2116.5,-226 2116.5,-232 2116.5,-232 2116.5,-244 2116.5,-244 2116.5,-250 2110.5,-256 2104.5,-256"/>
 <text text-anchor="middle" x="2054" y="-235.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Handshake.Spec</text>
 </g>
 <!-- WireSpec&#45;&gt;HandshakeSpec -->
-<g id="edge49" class="edge">
+<g id="edge48" class="edge">
 <title>WireSpec&#45;&gt;HandshakeSpec</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M1805.55,-341.85C1840.71,-322.96 1898.3,-293.23 1950,-272 1961.87,-267.13 1974.71,-262.44 1987.18,-258.19"/>
-<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1988.22,-260.24 1993.65,-256 1986.76,-255.92 1988.22,-260.24"/>
+<path fill="none" stroke="#555555" stroke-width="1.1" d="M1820.56,-318.92C1856.19,-305.64 1905.99,-287.32 1950,-272 1963.26,-267.38 1977.54,-262.57 1991.11,-258.07"/>
+<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1991.84,-260.23 1997.3,-256.02 1990.41,-255.91 1991.84,-260.23"/>
 </g>
 <!-- WireSpec&#45;&gt;RecordSpec -->
-<g id="edge48" class="edge">
+<g id="edge47" class="edge">
 <title>WireSpec&#45;&gt;RecordSpec</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M1838.26,-363.28C1885.65,-365.65 1949.01,-368.81 1994.61,-371.09"/>
-<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1994.6,-373.36 2001.2,-371.41 1994.82,-368.82 1994.6,-373.36"/>
+<path fill="none" stroke="#555555" stroke-width="1.1" d="M1838.26,-345.67C1885.65,-351.92 1949.01,-360.28 1994.61,-366.3"/>
+<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1994.46,-368.57 2001.2,-367.17 1995.05,-364.06 1994.46,-368.57"/>
 </g>
 <!-- HandshakeSpec&#45;&gt;X509Spec -->
-<g id="edge53" class="edge">
+<g id="edge52" class="edge">
 <title>HandshakeSpec&#45;&gt;X509Spec</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M2116.6,-247.61C2145.74,-252.15 2180.51,-257.57 2209.85,-262.15"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2209.64,-264.42 2216.41,-263.17 2210.34,-259.92 2209.64,-264.42"/>
 </g>
 <!-- RecordSpec&#45;&gt;CryptoSpec -->
-<g id="edge52" class="edge">
+<g id="edge51" class="edge">
 <title>RecordSpec&#45;&gt;CryptoSpec</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M2106.66,-374C2136.4,-374 2174.1,-374 2206.09,-374"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2206.32,-376.28 2212.82,-374 2206.32,-371.73 2206.32,-376.28"/>
 </g>
 <!-- Transcript -->
-<g id="node32" class="node">
+<g id="node31" class="node">
 <title>Transcript</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2088,-52C2088,-52 2020,-52 2020,-52 2014,-52 2008,-46 2008,-40 2008,-40 2008,-28 2008,-28 2008,-22 2014,-16 2020,-16 2020,-16 2088,-16 2088,-16 2094,-16 2100,-22 2100,-28 2100,-28 2100,-40 2100,-40 2100,-46 2094,-52 2088,-52"/>
 <text text-anchor="middle" x="2054" y="-31.5" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.Transcript</text>
 </g>
 <!-- StateSpec&#45;&gt;Messages -->
-<g id="edge42" class="edge">
+<g id="edge41" class="edge">
 <title>StateSpec&#45;&gt;Messages</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1808.01,-219.96C1837.66,-205.83 1881.48,-187.09 1922,-178 2025.87,-154.7 2151.09,-153.4 2220.38,-154.94"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2220.36,-157.21 2226.91,-155.09 2220.47,-152.66 2220.36,-157.21"/>
 </g>
 <!-- StateSpec&#45;&gt;HandshakeSpec -->
-<g id="edge44" class="edge">
+<g id="edge43" class="edge">
 <title>StateSpec&#45;&gt;HandshakeSpec</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1851.76,-238C1893.56,-238 1944.35,-238 1984.45,-238"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1984.8,-240.28 1991.3,-238 1984.8,-235.73 1984.8,-240.28"/>
 </g>
 <!-- StateSpec&#45;&gt;RecordSpec -->
-<g id="edge43" class="edge">
+<g id="edge42" class="edge">
 <title>StateSpec&#45;&gt;RecordSpec</title>
-<path fill="none" stroke="#555555" stroke-width="1.1" d="M1799.86,-256.07C1833.95,-278.03 1894.51,-315.21 1950,-340 1964.29,-346.39 1980.16,-352.21 1995.08,-357.16"/>
-<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1994.52,-359.37 2001.41,-359.23 1995.93,-355.05 1994.52,-359.37"/>
+<path fill="none" stroke="#555555" stroke-width="1.1" d="M1814.23,-256.12C1840.45,-268.15 1874.56,-284.99 1903,-303 1925.46,-317.22 1926.58,-327.42 1950,-340 1963.94,-347.48 1979.82,-353.72 1994.86,-358.72"/>
+<polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1994.37,-360.95 2001.25,-360.78 1995.77,-356.62 1994.37,-360.95"/>
 </g>
 <!-- StateSpec&#45;&gt;Transcript -->
-<g id="edge45" class="edge">
+<g id="edge44" class="edge">
 <title>StateSpec&#45;&gt;Transcript</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1786.64,-219.89C1814.38,-185.51 1879.42,-110.43 1950,-68 1965.6,-58.62 1984.11,-51.48 2001.1,-46.22"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2002.2,-48.26 2007.77,-44.22 2000.9,-43.9 2002.2,-48.26"/>
 </g>
 <!-- StateSpec&#45;&gt;Keys -->
-<g id="edge46" class="edge">
+<g id="edge45" class="edge">
 <title>StateSpec&#45;&gt;Keys</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1846.93,-256.04C1900.35,-268.99 1970.24,-285.94 2013.35,-296.39"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2012.92,-298.62 2019.77,-297.94 2013.99,-294.2 2012.92,-298.62"/>
 </g>
 <!-- ConnLog -->
-<g id="node35" class="node">
+<g id="node34" class="node">
 <title>ConnLog</title>
 <path fill="#e8f1ff" stroke="#4f7ccf" stroke-width="1.3" d="M2146,-120C2146,-120 1962,-120 1962,-120 1956,-120 1950,-114 1950,-108 1950,-108 1950,-96 1950,-96 1950,-90 1956,-84 1962,-84 1962,-84 2146,-84 2146,-84 2152,-84 2158,-90 2158,-96 2158,-96 2158,-108 2158,-108 2158,-114 2152,-120 2146,-120"/>
 <text text-anchor="middle" x="2054" y="-105" font-family="Helvetica,sans-Serif" font-size="10.00">TLS13.ConnectionLog</text>
 <text text-anchor="middle" x="2054" y="-94" font-family="Helvetica,sans-Serif" font-size="10.00">raw/record/message/app&#45;log vocabulary</text>
 </g>
 <!-- StateSpec&#45;&gt;ConnLog -->
-<g id="edge41" class="edge">
+<g id="edge40" class="edge">
 <title>StateSpec&#45;&gt;ConnLog</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M1797.06,-219.84C1825.81,-199.23 1875.45,-165.68 1922,-144 1939.99,-135.62 1960.11,-128.26 1979.07,-122.13"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="1979.95,-124.24 1985.46,-120.1 1978.57,-119.9 1979.95,-124.24"/>
 </g>
 <!-- ConnLog&#45;&gt;Bytes -->
-<g id="edge55" class="edge">
+<g id="edge54" class="edge">
 <title>ConnLog&#45;&gt;Bytes</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M2158.2,-102C2232.33,-102 2328.42,-102 2382.88,-102"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2383.14,-104.28 2389.64,-102 2383.14,-99.73 2383.14,-104.28"/>
 </g>
 <!-- ConnLog&#45;&gt;Messages -->
-<g id="edge54" class="edge">
+<g id="edge53" class="edge">
 <title>ConnLog&#45;&gt;Messages</title>
 <path fill="none" stroke="#555555" stroke-width="1.1" d="M2126.38,-120.01C2156.96,-127.72 2192.04,-136.57 2220.22,-143.68"/>
 <polygon fill="#555555" stroke="#555555" stroke-width="1.1" points="2220,-145.97 2226.86,-145.36 2221.11,-141.56 2220,-145.97"/>
