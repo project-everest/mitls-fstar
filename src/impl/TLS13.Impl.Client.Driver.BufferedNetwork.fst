@@ -678,6 +678,11 @@ fn process
     // the receive primitive applies only the head one.  Unlike the engine,
     // which drains across successive polls, this driver owns the socket and so
     // must run the internal drain to completion here.
+    // NB: the empty payload is heap-allocated rather than a 0-length stack
+    // array.  `let mut p = [| 0uy; 0sz |]` verifies and extracts, but KaRaMeL
+    // emits `uint8_t p[0U]`, which is a GNU extension rather than ISO C.  A
+    // zero-length `V.alloc` costs one portable `calloc(0)` per record and is
+    // the idiom the engine already uses for `engine_empty_payload`.
     let empty_payload = V.alloc 0uy 0sz;
     V.to_array_pts_to empty_payload;
     rewrite

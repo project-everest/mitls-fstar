@@ -11,6 +11,7 @@ module C = TLS13.Impl.Client
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module L = TLS13.Impl.Messages
 module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
@@ -249,7 +250,8 @@ fn poll
                  engine_waiting_for_certificate_signature st1) /\
                 (result.engine_step_action == EngineReady ==>
                  st1.CS.cs_model.CS.model_control ==
-                   CS.ControlApplicationData))
+                   CS.ControlApplicationData /\
+                 ~(D.internal_pending st1)))
 
 fn feed_network
   (e:client_engine)

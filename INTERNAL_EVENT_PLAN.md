@@ -1417,6 +1417,86 @@ Exit: one client driver state and scheduler; Chromium, localhost and generic
 channel users share it; `test-client-engine-openssl-echo`,
 `test-chromium-client-demo` and `test-openssl-http-preconnect` pass; full gate.
 
+### Phase 8 as built — the C gate, measured; Ready means settled
+
+**The measured gate (S6/D6), against the Phase 0 baseline.**
+
+| Measure | Phase 0 | Phase 8 |
+|---|---|---|
+| `runtime/*.c` + `c_stubs/*.c` | 2718 | **2718** |
+| `runtime/tls13_client_engine.c` | 443 | **443** |
+
+Not merely equal in size — equal in responsibility, checked rather than
+asserted:
+
+- `grep -rni 'handshake|record_|0x16|content_type' runtime/*.c c_stubs/*.c`
+  returns **nothing**. No C-side record parsing, no C loop over handshake
+  messages, no C-side content-type dispatch.
+- `runtime/tls13_client_engine.c` calls only `TLS13_Impl_Client_Engine_*`
+  entry points plus two enum translations (`engine_action` and
+  `endpoint_status` to C codes). No direct call into an inner endpoint API.
+- `runtime/tls13_client_driver.c` likewise calls only
+  `TLS13_Impl_Client_Driver_*`.
+- The Chromium shim (`runtime/chromium/tls13_client_socket.cc`) mentions
+  neither handshake nor record; it drives `poll` / `feed_network` and
+  dispatches on the action enum.
+
+The scheduling decision is therefore entirely inside verified code, which is
+what the gate was for.
+
+**One receive primitive, one internal primitive — the actual call graph.**
+Across `src/`, the production callers are:
+
+| Caller | Receive | Internal |
+|---|---|---|
+| `Driver.BufferedNetwork` (localhost, generic channel) | `C.process_coalesced_network_bytes` | `DrainLoop.drain_pending` |
+| `Client.Engine` (Chromium, transport-neutral) | `C.process_coalesced_network_bytes` | `C.process_pending_protected_handshake` |
+| `Client.CanonicalProtocol` (the `ProtocolImplementation` class) | `C.process_coalesced_network_bytes` | `C.process_pending_protected_handshake` |
+
+There is no second receive function. The Engine was not rewritten as a facade
+over `BufferedNetwork`, and deliberately so: the two differ only in their
+*drain schedule*, and the difference is required, not accidental. The buffered
+driver owns the socket, so it drains to completion inside one quiet window
+(`drain_pending`, fuel 16384). The Engine is transport-neutral and must return
+control to its caller, so it drains one step per `poll`. `drain_pending` is a
+bounded loop over the very primitive the Engine calls; forcing the Engine
+through the loop would take scheduling away from the embedder for no
+semantic gain. Phase 7 proves both schedules realise the same relation: each
+is a `D.drain_chain`, and `lemma_drained_reachable` lifts either to the same
+`T.reachable tls_sys_step`.
+
+**`EngineReady` now means settled.** `TLS13.Impl.Client.Engine.poll` gained one
+postcondition clause:
+
+```
+result.engine_step_action == EngineReady ==>
+  st1...model_control == CS.ControlApplicationData /\ ~(D.internal_pending st1)
+```
+
+`EngineReady` is produced at exactly one place — the branch where the internal
+primitive answered `None` — so `D.lemma_pending_none_quiescent` discharges it.
+`TLS13.System.Internal.lemma_settled_of_client_quiescent` closes the loop: with
+an empty channel this *is* `tls_settled`, the antecedent of the Phase-7
+flagship theorem.
+
+This is the phase's real payoff. The Ready signal that `runtime/` marshals to
+Chromium is no longer a control-state heuristic; it is the exact hypothesis
+under which the two endpoints are proved to agree on the application
+record-key material. Before Phase 7 that clause could not even be stated.
+
+**Deliberately not done: removing the 0-length allocation.** The drain call
+site in `BufferedNetwork` allocates a zero-length `V.vec` for the internal
+event's (unused) payload. Replacing it with `let mut p = [| 0uy; 0sz |]` was
+tried and *does* verify and extract — but KaRaMeL emits `uint8_t p[0U]`, a GNU
+extension rather than ISO C. One portable `calloc(0)` per record is the better
+trade, and it is the idiom the Engine already uses for
+`engine_empty_payload`. The call site now carries this rationale as a comment
+so it is not re-attempted.
+
+Gate: `make -j128 verify test` green (including `test-client-engine-openssl-echo`,
+`test-chromium-client-demo`, the extracted-server interop);
+`make admit-count` = 0.
+
 ### Phase 9 — Cleanup, samples and audit
 - Delete the coalesced/pending aliases and obsolete head/tail predicates.
 - Migrate the five sample protocols (`calc`, `ftp`, `http`, `tftp`, `ymodem`)

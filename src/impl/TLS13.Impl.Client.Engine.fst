@@ -11,6 +11,7 @@ module C = TLS13.Impl.Client
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module L = TLS13.Impl.Messages
 module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
@@ -271,7 +272,8 @@ fn poll
                  engine_waiting_for_certificate_signature st1) /\
                 (result.engine_step_action == EngineReady ==>
                  st1.CS.cs_model.CS.model_control ==
-                   CS.ControlApplicationData))
+                   CS.ControlApplicationData /\
+                 ~(D.internal_pending st1)))
 {
   Trace.emit Trace.engine_poll_begin 0UL 0UL 0UL;
   unfold (engine_live e 'st0);
@@ -357,6 +359,11 @@ fn poll
     match pending {
       None -> {
         assert (pure (st_pending == 'st0));
+        // `EngineReady` is produced only here, and only after the internal
+        // primitive has reported that nothing is pending.  That is exactly the
+        // client half of `TLS13.System.Internal.tls_settled`, so the C API's
+        // Ready signal is the antecedent of the Phase-7 flagship theorem.
+        D.lemma_pending_none_quiescent 'st0 st_pending;
         rewrite
           (CR.connection_exactly e.engine_client st_pending)
           as

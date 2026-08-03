@@ -79,6 +79,21 @@ let lemma_settled_quiescent (s:tls_system_state)
   : Lemma (requires tls_settled s) (ensures tls_quiescent s)
 = ()
 
+(**
+  The bridge from the running client to the settled predicate.
+
+  `TLS13.Impl.Client.Engine.poll` reports `EngineReady` only after the internal
+  primitive has answered `None`, and its contract therefore carries
+  `~(D.internal_pending st1)`.  With an empty channel that is exactly
+  `tls_settled`, so the C API's Ready signal is the antecedent of the flagship
+  theorem rather than a weaker heuristic.
+ **)
+let lemma_settled_of_client_quiescent (s:tls_system_state)
+  : Lemma
+      (requires tls_quiescent s /\ ~(D.internal_pending s.client))
+      (ensures tls_settled s)
+= DP.lemma_internal_pending_agrees s.client
+
 (** ─────────────────────────────────────────────────────────────────────────
     (1) A drain step is a client-local move -- no new move family.
     ───────────────────────────────────────────────────────────────────────── **)
