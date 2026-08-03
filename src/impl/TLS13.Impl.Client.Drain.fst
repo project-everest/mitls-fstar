@@ -636,3 +636,25 @@ let lemma_drained_network_app_out_positive_not_failed
     st0 st_mid buffer_resp network_input
     old_network_out network_out old_app_out app_out;
   lemma_drained_not_failed st_mid st1
+
+(** ---------------------------------------------------------------------- *)
+(** Internal work still pending                                             *)
+(** ---------------------------------------------------------------------- *)
+
+/// Unprocessed plaintext remains in the pending protected-handshake buffer.
+/// Stated here, rather than reused from
+/// [TLS13.Impl.Client.CanonicalProtocol.client_internal_pending], so that the
+/// drain loop does not have to depend on the canonical-protocol module;
+/// [TLS13.Impl.Client.DrainProgress.lemma_internal_pending_agrees] ties the two
+/// together for the callers that need the canonical form.
+let internal_pending (st:CS.connection_state) : prop =
+  st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed <
+  B.length
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes
+
+/// The drain primitive reports [None] exactly at quiescence.
+let lemma_pending_none_quiescent (st0 st1:CS.connection_state)
+  : Lemma
+      (requires CT.pending_protected_handshake_result_correct st0 st1 None)
+      (ensures ~ (internal_pending st1))
+= ()

@@ -66,3 +66,11 @@ let lemma_drained_progress (st0 st1:CS.connection_state)
   let n =
     ID.indefinite_description_ghost nat (fun n -> D.drain_chain n st0 st1) in
   lemma_drain_chain_progress n st0 st1
+
+/// The drain loop's local notion of "internal work pending" is the canonical
+/// one; both are the same inequality on the pending protected-handshake
+/// buffer.  Stated so that a driver holding [D.internal_pending] can feed the
+/// scheduling obligations phrased over [CP.client_internal_pending].
+let lemma_internal_pending_agrees (st:CS.connection_state)
+  : Lemma (D.internal_pending st <==> CP.client_internal_pending st)
+= ()

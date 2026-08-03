@@ -688,9 +688,10 @@ fn process
       (CR.connection_exactly
         e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
         st1);
-    DL.drain_pending
-      e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
-      (V.vec_to_array empty_payload);
+    let drain_quiescent =
+      DL.drain_pending
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        (V.vec_to_array empty_payload);
     with st1d. assert (
       CR.connection_exactly
         e.endpoint_driver.top_buffered_driver_core.buffered_driver_client

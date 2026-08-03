@@ -39,24 +39,28 @@ fn drain_pending (c:C.client) (empty:array U8.t)
            pts_to empty 'empty_bytes **
            pure (Seq.equal (Ghost.reveal 'empty_bytes) B.empty /\
                  CT.client_end_to_end_invariant 'st0)
-  returns _:unit
+  returns quiet:bool
   ensures exists* st1.
           CR.connection_exactly c st1 **
           pts_to empty 'empty_bytes **
           pure (D.drained (Ghost.reveal 'st0) st1 /\
-                CT.client_end_to_end_invariant st1)
+                CT.client_end_to_end_invariant st1 /\
+                (quiet ==> ~ (D.internal_pending st1)))
 {
   D.lemma_drained_refl (Ghost.reveal 'st0);
   let mut remaining = drain_fuel;
   let mut keep_going = true;
+  let mut quiescent = false;
   while (!keep_going)
-  invariant exists* st_cur rv kv.
+  invariant exists* st_cur rv kv qv.
     CR.connection_exactly c st_cur **
     pts_to empty 'empty_bytes **
     R.pts_to remaining rv **
     R.pts_to keep_going kv **
+    R.pts_to quiescent qv **
     pure (D.drained (Ghost.reveal 'st0) st_cur /\
-          CT.client_end_to_end_invariant st_cur)
+          CT.client_end_to_end_invariant st_cur /\
+          (qv ==> ~ (D.internal_pending st_cur)))
   {
     with st_cur. assert (CR.connection_exactly c st_cur);
     let r = !remaining;
@@ -66,6 +70,8 @@ fn drain_pending (c:C.client) (empty:array U8.t)
       with st_next. assert (CR.connection_exactly c st_next);
       match pending {
         None -> {
+          D.lemma_pending_none_quiescent st_cur st_next;
+          quiescent := true;
           keep_going := false
         }
         Some resp -> {
@@ -77,16 +83,21 @@ fn drain_pending (c:C.client) (empty:array U8.t)
             assert (pure (D.drained (Ghost.reveal 'st0) st_cur));
             D.lemma_drained_snoc (Ghost.reveal 'st0) st_cur st_next;
             assert (pure (D.drained (Ghost.reveal 'st0) st_next));
-            assert (pure (CT.client_end_to_end_invariant st_next))
+            assert (pure (CT.client_end_to_end_invariant st_next));
+            quiescent := false
           } else {
             assert (pure (st_next == st_cur));
+            quiescent := false;
             keep_going := false
           }
         }
       }
     } else {
+      quiescent := false;
       keep_going := false
     }
-  }
+  };
+  let q = !quiescent;
+  q
 }
 #pop-options

@@ -1181,76 +1181,44 @@ linked against an undefined `TLS13_Impl_Client_DrainLoop_drain_pending`.
 
 Gate green, `make admit-count` = 0.
 
-### Phase 5a as built — coalesced vocabulary everywhere, one blocked switch
+### Phase 5 as built (part 3) — the schedule, and why `InternalBlocked` is moot
 
-Phase 5a weakened the whole client driver stack from
-`CT.network_bytes_end_to_end_correct` to
-`CT.coalesced_network_bytes_end_to_end_correct`, so every predicate and lemma
-on the receive path now speaks the vocabulary that admits a head
-protected-handshake step.  Concretely:
+§5's schedule is realised by `BufferedNetwork.process`, which is the TLS
+client's `BS.bse_process`:
 
-* `TLS13.Impl.Client.CanonicalProtocol` gained six coalesced-variant lemmas
-  (`lemma_client_coalesced_head_step`,
-  `..._head_raw_record_parse_success`, `..._network_bytes_step_correct`,
-  `..._preserves_config`, `..._head_wire_logs`, `..._network_progress`).
-* `Driver.State` gained `lemma_coalesced_logged_received_exact_when_nonfailed`,
-  and `lemma_network_bytes_wire_lengths` /
-  `lemma_network_bytes_logged_received_accounted` were weakened to depend only
-  on `CT.network_bytes_step_correct`, which the head disjunct satisfies.  This
-  avoided touching `Client.Types.fst` at all.
-* `Driver.BufferedNetwork` (`result_valid`, `lemma_result_valid_preserves`,
-  `completed_drive_correct`), `Driver.Receive`, `Driver.Core` and
-  `ChannelImplementation` were all renamed to the coalesced predicate.
+* **Steps 1-2 (attempt internal progress, repeat)** — `DL.drain_pending`, run
+  unconditionally after the record step and bounded by `drain_fuel = 16384`.
+  When nothing is pending the first call reports quiescence and `drained` holds
+  reflexively, so the unconditional call costs one predicate test.
+* **Step 3 (`InternalFailed`)** — the loop stops on any non-`StepOk` response
+  and leaves the state where it was; the failure is already reported through
+  the response the record step returned.
+* **Step 4 (`InternalBlocked`)** — **cannot arise for TLS.**
+  `CanonicalProtocol` builds exactly three internal results,
+  `internal_noop_result` (`InternalQuiescent`), `internal_progress_result`
+  (`InternalProgress`) and `internal_failed_result` (`InternalFailed`).  The
+  protected-handshake pipeline never needs a local action to unblock it, so the
+  fourth status is discharged by construction rather than by a scheduling rule.
+  It stays in `Common.ProtocolImplementation` because it is generic: decision
+  D2 keeps the distinction in the class, not in TLS.
+* **Steps 5-6 (quiescent: process a complete frame, else read)** — unchanged
+  `BufferedStream` behaviour, but now *justified*.  `drain_pending` returns a
+  `quiet` flag with
 
-Three facts made the weakening cheap and are worth recording:
+  ```
+  quiet ==> ~ (D.internal_pending st1)
+  ```
 
-1. The head-protected disjunct forces `StepOk` (`protected_handshake_step_correct`
-   pins `status == StepOk`, `network_out_len == 0sz`, `app_out_len == 0sz`).  So
-   any other status pins the strong predicate —
-   `lemma_client_coalesced_not_step_ok_is_strong` proves this with an empty
-   body, and every non-`StepOk` branch of every affected proof delegates to the
-   pre-existing argument unchanged.
-2. `NeedMoreInput ==> consumed_len == 0sz` contradicts the head disjunct's
-   `0 < consumed_len`, so SMT usually excludes the head disjunct unaided.
-3. The head disjunct satisfies `network_bytes_step_correct`, witnessed by
-   `ev = ConnProtectedHandshake step`, `raw_sent = B.empty`,
-   `raw_received = prefix` (recall
-   `raw_received_matches_network_input r n = Seq.equal r B.empty \/ Seq.equal r n`).
+  and `DrainProgress.lemma_internal_pending_agrees` identifies
+  `D.internal_pending` with `CP.client_internal_pending`.  So when the drain
+  reports quiescence the driver has a *proof* that no internal work is
+  outstanding, which is exactly the side condition "do not read the socket
+  while internal work is pending" that step 4 exists to enforce.
 
-#### The switch that is deliberately *not* taken yet
+Phase 5's remaining exit criteria were already met: 5a removed the alternate
+receive function, the only new loop is fuel-bounded, and
+`lemma_drained_application_log` (part 2) is the application-invisibility proof.
 
-`TLS13.Impl.Client.CanonicalProtocol.client_process_network` — the canonical
-`ProtocolImplementation` instance — calls
-`C.process_coalesced_network_bytes` (Phase 4).  The buffered production driver
-`TLS13.Impl.Client.Driver.BufferedNetwork.process` still calls
-`C.process_network_bytes`, and the call site carries a comment saying why.
-
-The reason is functional, not a proof obstacle: `process_coalesced_network_bytes`
-stops after the head protected-handshake step and leaves the remainder of the
-record in the connection's pending plaintext buffer.  Draining that buffer is
-`process_pending_protected_handshake`, and a grep of every `Client.Driver.*`
-module and `ChannelImplementation` shows **no driver calls it** — only
-`Client.Engine.fst` and the canonical instance drain.  Switching the buffered
-driver without a drain would stall against any peer that coalesces a handshake
-flight into a single record.
-
-That the root gate stayed green either way is not evidence to the contrary.  A
-traced run (`make ATLAS_LOGGING=1 test-openssl-echo`) emits no
-`client_protected_head` (event 2030) event at all: the head route is reachable
-only when `decode_network_buffer` returns `decoded_buffer_parsed == None`, which
-is exactly the coalesced case, and OpenSSL in that test sends each
-handshake message in its own record.  The head route is therefore currently
-unexercised by the test suite, which is precisely why the hazard has to be
-closed by construction rather than by testing.
-
-**Phase 5b must therefore land the drain before the switch.**  The shape is:
-`BufferedNetwork.process` performs the network step, then drains pending
-internal steps to completion under a fuel bound, and `result_valid` /
-`completed_drive_correct` relate `before.endpoint_connection` to
-`after.endpoint_connection` through *network step followed by internal steps*
-rather than through a single network step.  All the coalesced-vocabulary
-plumbing above is already in place for it; the switch itself is a one-line
-change once the drain exists.
 
 ### Phase 5 — BufferedStream and Channel
 Files: TLS buffered driver modules, client/server ChannelImplementation.
