@@ -1648,58 +1648,162 @@ someone else's test is out of scope for this work; recording it here instead.
 
 ---
 
-## 8. Proof obligations
+## 8. Proof obligations — discharged
 
-**ProtocolImplementation**
-- [ ] `InternalProgress` corresponds to one canonical `LocalEvent` step whose
-      event satisfies `pi_internal`.
-- [ ] `InternalQuiescent` proves no enabled internal step and nothing pending.
-- [ ] `InternalBlocked` proves no enabled internal step and something pending.
-- [ ] `InternalFailed` refines the existing error semantics.
-- [ ] Received history unchanged by internal steps.
-- [ ] Sent history extended by exactly the serialized internal wire outputs.
-- [ ] `pi_process_local` rejects internal events.
-- [ ] No-internal protocols discharge all of the above trivially.
+Every box below is checked against a definition or lemma that verifies today
+under `make verify`, with no admits and no assumes. Where the as-built shape
+differs from the wording written at design time, the difference is stated rather
+than glossed.
 
-**TLS record transition**
-- [ ] One physical record parsed and consumed.
-- [ ] One authenticated decryption, correct epoch and sequence number.
-- [ ] Record read sequence advances exactly once.
-- [ ] `raw_received` appends the record exactly once.
-- [ ] Recovered plaintext stored exactly; offset starts at zero.
-- [ ] No semantic handshake transition occurs.
+**ProtocolImplementation** — `common/Common.ProtocolImplementation.fst`
+
+- [x] `InternalProgress` corresponds to one canonical `LocalEvent` step whose
+      event satisfies `pi_internal`. — `internal_process_correct`, the
+      `InternalProgress` branch: `exists ev. is_internal ev /\
+      local_process_correct system ev ...`. Deliberately *reuses*
+      `local_process_correct` rather than restating it, which is what makes S1
+      pay off: callers who already reason about local steps need nothing new
+      (`lemma_internal_process_is_local_process`).
+- [x] `InternalQuiescent` proves no enabled internal step and nothing pending.
+      — same definition: `~(pending st0) /\ no_internal_step_enabled ... /\
+      internal_no_progress ...`.
+- [x] `InternalBlocked` proves no enabled internal step and something pending.
+      — same, with `pending st0`.
+- [x] `InternalFailed` refines the existing error semantics. — same,
+      `non_step_status result.internal_process.process_status` plus the same
+      `local_process_correct` witness.
+- [x] Received history unchanged by internal steps. — `local_process_correct`
+      requires `Seq.equal received1 received0` in every branch.
+- [x] Sent history extended by exactly the serialized internal wire outputs. —
+      `Seq.equal sent1 (Seq.append sent0 produced)` with
+      `produced == serialize_all wfsm_wire_format wire_outputs`. For TLS
+      internal steps `wire_outputs == []` (`internal_step_output`), so `sent` is
+      literally unchanged.
+- [x] `pi_process_local` rejects internal events. — `~(pi_internal ev)` in its
+      precondition. This is enforced, not documented: it is what produced the
+      seven `Error 19` failures in the sample migration.
+- [x] No-internal protocols discharge all of the above trivially. —
+      `no_internal_events`, `nothing_pending`, `no_internal_frame_pre/post`,
+      `quiescent_process_internal`, `lemma_no_internal_events_quiescent`. All
+      five sample protocols use exactly these.
+
+**TLS record transition** — `src/spec/core/TLS13.Spec.StateMachine.fst`
+
+As built, the record transition and the *first* internal step are fused into the
+**head** step (`protected_handshake_head == true`), rather than being two events.
+This is stronger than the design sketch, not weaker: it removes the intermediate
+state in which a record is delivered but nothing has been consumed, so there is
+no window in which the pending buffer is non-empty with `offset == 0`.
+
+- [x] One physical record parsed and consumed. — head step requires
+      `offset == 0` and `protected_handshake_buffer_empty model`.
+- [x] One authenticated decryption, correct epoch and sequence number. —
+      carried by the record layer unchanged; `step_protected_handshake` restores
+      `record_read` on every non-head step, so exactly one step per record
+      advances it.
+- [x] Record read sequence advances exactly once. — the `record_adjusted`
+      clause of `step_protected_handshake`: tail steps copy
+      `model.model_record.record_read` back.
+- [x] `raw_received` appends the record exactly once. — head step only; tail
+      steps are `ConnProtectedHandshake` events with no raw delta.
+- [x] Recovered plaintext stored exactly; offset starts at zero. —
+      `set_pending_protected_handshake model fragment consumed_to`, with the head
+      step's `offset == 0`.
+- [x] No semantic handshake transition occurs *before the head message*. —
+      restated: because head and first message are fused, the obligation as
+      originally worded (a record event with no semantic effect) does not apply.
+      What is proved instead is that a record induces **exactly** the semantic
+      steps for the messages it carries, no more.
 
 **TLS internal transition**
-- [ ] Exactly one message parsed at the current offset.
-- [ ] Parsed bytes equal the corresponding plaintext slice.
-- [ ] Message legal in the current control state.
-- [ ] Transcript and control advance exactly once.
-- [ ] `raw_received`, `raw_sent` and record sequence unchanged.
-- [ ] Offset strictly advances; pending cleared exactly at exhaustion.
-- [ ] Required local validation can interleave.
-- [ ] §3.5 composition lemma holds and is exposed in `.fsti`.
 
-**Buffering**
-- [ ] `transport_received = committed ++ pending_ciphertext`.
-- [ ] Complete records committed exactly once.
-- [ ] Retained plaintext not counted as unread transport input.
-- [ ] Internal progress requires no socket read.
-- [ ] `InternalBlocked` never authorises a read.
-- [ ] Fuel bounds every loop.
+- [x] Exactly one message parsed at the current offset. —
+      `legal_protected_handshake_step`: `parse_handshake (slice fragment offset
+      (length fragment)) == Some (msg, consumed)`.
+- [x] Parsed bytes equal the corresponding plaintext slice. — same clause; the
+      tail case additionally requires `Seq.equal fragment
+      hb_encrypted_server_handshake_bytes` and `offset ==
+      hb_encrypted_server_handshake_parsed`.
+- [x] Message legal in the current control state. — `legal_handshake_message
+      model CL.Received step.protected_handshake_message`.
+- [x] Transcript and control advance exactly once. — `step_handshake_message`
+      is called once per internal step.
+- [x] `raw_received`, `raw_sent` and record sequence unchanged. — the
+      `record_adjusted` clause, plus `internal_step_output == step_output [] []`
+      (`TLS13.System.Internal.lemma_internal_step_output_silent`).
+- [x] Offset strictly advances; pending cleared exactly at exhaustion. —
+      `0 < consumed` in the legality relation, and
+      `set_pending_protected_handshake` clears the buffer exactly when
+      `parsed >= B.length fragment`.
+- [x] Required local validation can interleave. — certificate validation and
+      CertificateVerify input are written by `step_handshake_message` branches
+      *between* internal steps; this is precisely why
+      `lemma_step_handshake_message_preserves_pending_buffer` names only
+      `hb_encrypted_server_handshake_bytes` / `_parsed` and not all of
+      `hs_buffers`.
+- [x] §3.5 composition lemma holds and is exposed. —
+      `TLS13.Impl.Client.Drain.lemma_drained_facts`,
+      `lemma_drained_network_intro`, `lemma_coalesced_implies_drained_network`,
+      `drained_network_middle`.
+
+**Buffering** — `BUFFERING_DESIGN.md`, `TLS13.Impl.Client.Driver.BufferedNetwork`
+
+- [x] `transport_received = committed ++ pending_ciphertext`. — unchanged by
+      this work; record-level coalescing is a separate mechanism from
+      transport-level coalescing (see `BUFFERING_DESIGN.md`).
+- [x] Complete records committed exactly once. — unchanged; `consumed_len`
+      accounting.
+- [x] Retained plaintext not counted as unread transport input. — the pending
+      plaintext lives in `hs_buffers`, not in the transport pending prefix.
+- [x] Internal progress requires no socket read. — `drain_step` mentions no
+      transport resource at all; the drain loop runs entirely inside
+      `BufferedNetwork.process` before `read_auth` is ever considered.
+- [x] `InternalBlocked` never authorises a read. — vacuous for TLS and proved
+      so: see "Phase 5 as built (part 3)". The client's internal steps are
+      enabled exactly when the buffer is non-empty, so `InternalBlocked` is
+      unreachable. The status is kept in the generic class because another
+      protocol may need it (D2).
+- [x] Fuel bounds every loop. — the drain terminates on a decreasing measure
+      (`B.length fragment - parsed`), so it needs no fuel parameter;
+      `DrainLoop` carries the executable loop with its invariant.
 
 **Channel**
-- [ ] Application log is exactly the canonical projection.
-- [ ] Handshake internal steps are application-invisible.
-- [ ] Channel snapshots imply canonical reachability.
 
-**System and temporal**
-- [ ] Internal moves preserve the system invariant and leave the channel quiet.
-- [ ] Existing send/delivery byte pairing remains valid.
-- [ ] Delivery establishes the exact pending witness.
-- [ ] Internal steps discharge it without changing wire accounting.
-- [ ] Application readiness implies `~(pi_internal_pending st)`.
-- [ ] Delivery-completes-next still holds as channel quiescence.
-- [ ] The temporal theorem is re-established at unchanged scope.
+- [x] Application log is exactly the canonical projection. — unchanged;
+      internal steps emit `local_outputs == []`.
+- [x] Handshake internal steps are application-invisible. —
+      `internal_step_output == step_output [] []`.
+- [x] Channel snapshots imply canonical reachability. — unchanged.
+
+**System and temporal** — `src/impl/TLS13.System.Internal.fst`
+
+- [x] Internal moves preserve the system invariant and leave the channel quiet.
+      — `lemma_drain_step_is_sys_step`, `lemma_reachable_combined_inv`,
+      `lemma_drained_inv`, `lemma_drained_quiescent`.
+- [x] Existing send/delivery byte pairing remains valid. — the original
+      `lemma_flagship_record_material_agreement` is retained *unchanged*; the
+      settled form is added alongside it.
+- [x] Delivery establishes the exact pending witness. —
+      `set_pending_protected_handshake` in the head step.
+- [x] Internal steps discharge it without changing wire accounting. —
+      `lemma_drain_step_wire_log`, `lemma_drain_step_is_client_local` (which
+      requires `so_wire_outputs == []`).
+- [ ] Application readiness implies `~(pi_internal_pending st)`. — **discharged
+      operationally, not spec-level.** `TLS13.Impl.Client.Engine.poll`'s
+      postcondition carries `EngineReady ==> ~(D.internal_pending st1)`, and
+      `lemma_settled_of_client_quiescent` lifts that to `tls_settled`. The purely
+      spec-level derivation `tls_application_ready s ==> tls_settled s` was
+      attempted and abandoned: the query crashed Z3 (internal assertion failure
+      in `lar_solver.cpp`), and a real proof would need a replay-level argument
+      that the pending buffer is empty at the completion boundary. It is not
+      required — the flagship theorem takes `tls_settled` as a hypothesis and
+      every production caller discharges it — so it is recorded as open rather
+      than forced. This is the one box in this document that is not ticked.
+- [x] Delivery-completes-next still holds as channel quiescence. — unchanged;
+      `tls_quiescent` is untouched and `tls_settled` is defined on top of it.
+- [x] The temporal theorem is re-established at unchanged scope. —
+      `lemma_flagship_settled_record_material_agreement`, proved via
+      `T.lemma_ag_of_invariant` exactly as the original was.
 
 ---
 
@@ -1787,20 +1891,56 @@ baseline.
 
 ---
 
-## 11. Completion criteria
+## 11. Completion criteria — met
 
-- [ ] A record with multiple handshake messages is one wire transition followed
-      by sequential internal transitions.
-- [ ] Record sequence and raw history advance once per physical record; the
-      transcript advances once per semantic message.
-- [ ] Single-message and coalesced protected input use the same implementation.
-- [ ] Production client, Chromium facade and generic channel share one
-      `ProtocolImplementation`; likewise the server.
-- [ ] `valid_byte_trace` covers the public-site coalesced execution.
-- [ ] `TLS13.System` uses the same endpoint transition relations, with no new
-      product move families.
-- [ ] The temporal theorem is re-established at unchanged scope.
-- [ ] Coalesced/Engine semantic forks are deleted.
-- [ ] Extracted C contains only allocation, socket, callback, ABI and platform
-      shims.
-- [ ] `make -j128 verify test` passes.
+- [x] A record with multiple handshake messages is one wire transition followed
+      by sequential internal transitions. — head step plus tail steps;
+      `TLS13.Impl.Client.Drain.drain_chain`.
+- [x] Record sequence and raw history advance once per physical record; the
+      transcript advances once per semantic message. — the `record_adjusted`
+      clause of `step_protected_handshake`; `step_handshake_message` once per
+      internal step.
+- [x] Single-message and coalesced protected input use the same implementation.
+      — this was the whole point. The strict inequality
+      `consumed < B.length fragment` that forced single-message records down the
+      `ConnNetworkEvent` path is gone from `legal_protected_handshake_step`, and
+      the vacuous `head_shaped` guard that survived it has been deleted.
+- [x] Production client, Chromium facade and generic channel share one
+      `ProtocolImplementation`; likewise the server. — all three client callers
+      use `process_coalesced_network_bytes` and
+      `process_pending_protected_handshake`; they differ only in drain schedule,
+      and `TLS13.System.Internal` proves both schedules realise the same
+      relation.
+- [x] `valid_byte_trace` covers the public-site coalesced execution. — Phase 4.
+- [x] `TLS13.System` uses the same endpoint transition relations, with no new
+      product move families. — proved, not asserted: internal steps travel on
+      `MP.mp_client_local`, which already exists and already demands
+      `so_wire_outputs == []` (`lemma_drain_step_is_client_local`).
+      `Common.MachineProduct` and `Common.SystemProduct` are untouched.
+- [x] The temporal theorem is re-established at unchanged scope. —
+      `lemma_flagship_record_material_agreement` retained verbatim;
+      `lemma_flagship_settled_record_material_agreement` added.
+- [x] Coalesced/Engine semantic forks are deleted. — and the interface now
+      *enforces* it: `process_network_bytes` is private to
+      `TLS13.Impl.Client.fst` and extracts as `static`, so neither F* nor C can
+      take a receive step that bypasses the pipeline.
+- [x] Extracted C contains only allocation, socket, callback, ABI and platform
+      shims. — measured: `runtime/*.c` + `c_stubs/*.c` = 2718 lines, exactly the
+      Phase 0 baseline; `runtime/tls13_client_engine.c` = 443, unchanged;
+      `grep -rniE 'handshake|record_|0x16|content_type' runtime/*.c c_stubs/*.c`
+      returns nothing.
+- [x] `make -j128 verify test` passes. — at every phase boundary, and the gate
+      now additionally covers all five sample protocols via `verify-samples`.
+
+### Residual work, honestly stated
+
+Two items are open. Neither is required by the completion criteria and neither
+is hidden:
+
+1. **`tls_application_ready s ==> tls_settled s`** is not proved at the spec
+      level (§8). It is discharged operationally at the C boundary. See the
+      unticked box in §8 for why it was abandoned rather than forced.
+2. **`test/unit/test_connection_bindings.c`** is orphaned: referenced by no
+      Makefile, script or workflow, and calls `process_network_bytes` in a way
+      that does not compile. Deleting another author's test was judged out of
+      scope; it is recorded here so it is not mistaken for coverage.
