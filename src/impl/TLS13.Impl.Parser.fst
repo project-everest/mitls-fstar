@@ -5800,6 +5800,13 @@ fn parse_handshake_message
             assert (pure (Some? (WS.synth_client_hello (Ghost.reveal ch_body))));
             assert (pure (Some? (RV.handshake_synth (Ghost.reveal gv))));
             assert (pure (M.ClientHello? (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+            (* Prime the third precondition of [lemma_handshake_wire_success_fixed]
+               in its own query, exactly as the ServerHello arm does.  `Some?` on
+               its own leaves Z3 to re-derive `synth gv == Some (Some?.v (synth gv))`
+               inside the (slprop-bloated) call-site query; stating it here keeps
+               the lemma call itself trivial. *)
+            assert (pure (RV.handshake_synth (Ghost.reveal gv) ==
+                          Some (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
             lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
               (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
             let lch = ({ L.client_hello_random = randvec;

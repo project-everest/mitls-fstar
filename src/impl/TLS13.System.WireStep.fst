@@ -14,6 +14,7 @@ module TLS13.System.WireStep
 **)
 
 module CS  = TLS13.Spec.StateMachine
+module WSS = TLS13.System.WireStep.StartShape
 module M   = TLS13.Messages
 module CL  = TLS13.ConnectionLog
 module B   = TLS13.Bytes
@@ -2258,13 +2259,8 @@ let lemma_cleartext_client_hello_raw_count_zero (ch:GCH.clientHello) (raw:B.byte
     handshake-start parameters, they match the (immutable) config.  Set exactly
     at `LocalStartHandshake` whose legality forces `start_matches_config`, and
     preserved elsewhere (config is immutable). **)
-let client_start_shape (m:CS.connection_model) : prop =
-  m.CS.model_config.CS.config_role == CS.ClientEndpoint ==>
-  (match m.CS.model_handshake.CS.hs_start with
-   | Some start -> CS.start_matches_config m.CS.model_config start
-   | None -> True)
+let client_start_shape (m:CS.connection_model) : prop = WSS.client_start_shape m
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 (** A single legal step preserves `client_start_shape`. **)
 let lemma_step_model_preserves_client_start_shape
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
@@ -2272,8 +2268,7 @@ let lemma_step_model_preserves_client_start_shape
       (requires
         CS.legal_event m ev /\ CS.step_model m ev == Some m' /\ client_start_shape m)
       (ensures client_start_shape m')
-  = ()
-#pop-options
+  = WSS.lemma_step_model_preserves_client_start_shape m ev m'
 
 #push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
 (** A client that STAYS pre-application-data can only have SENT a cleartext

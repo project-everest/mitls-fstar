@@ -37,6 +37,9 @@ Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse
 export PATH := $(Z3_DIR):$(PATH)
 
+# Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
+Z3_VERSION ?= 4.15.3
+
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
@@ -55,6 +58,7 @@ INCLUDES = \
   --include $(IMPL_DIR)
 
 FSTAR_FLAGS = \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \

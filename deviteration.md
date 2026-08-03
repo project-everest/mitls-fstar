@@ -126,6 +126,93 @@ include .depend
 endif
 ```
 
+## Diagnose with `--query_stats` before theorising
+
+A cancelled (resource-exhausted) query reports whatever proof obligation it
+happened to be working on when the budget ran out. That message is frequently
+unrelated to the real problem.
+
+A real example: `HTTP.Wire.Length.fst` reported
+
+```
+Subtyping check failed; expected type `uint_t 16`, got `Prims.nat`
+```
+
+which looks like a missing bound on a `pow2 16` term. Two fixes aimed at
+`pow2` normalisation were wasted. `--query_stats` showed the truth in one line:
+
+```
+failed {reason-unknown=unknown because canceled} ... rlimit 5 (used rlimit 5.000)
+```
+
+The definition was simply still at F*'s default `rlimit 5`, while every
+neighbour in the same file ran at 20–300.
+
+**Rule: run `--query_stats` first, always.** It tells you (a) which query,
+(b) whether it *failed* or was *cancelled*, and (c) how much budget it actually
+used. Only (b) distinguishes "my proof is wrong" from "my proof is too big",
+and the two need opposite responses.
+
+## SMT context weight: when splitting *does* help
+
+The measurements above show that splitting a file rarely helps, because the
+*fixed* cost (elaboration, loading deps) is small. That is still true. But there
+is a second effect they do not capture: **every preceding definition in a module
+is in the SMT context of the queries that follow it.**
+
+Observed repeatedly during the Z3 4.15.3 upgrade: a lemma with an empty (`()`)
+proof verified in 25s–1m34s in a standalone probe module, yet was cancelled at
+the same rlimit inside its 2300–4200-line home module. Nothing about the lemma
+changed; only the ambient context did.
+
+The effect is sharper than "big file, slow proof" suggests. When
+`lemma_client_control_change_progress` was moved into a new module, it *still*
+failed — until the one neighbouring lemma that had been moved with it was left
+behind. A single extra lemma **statement** in scope was the difference between
+proved and cancelled.
+
+So the two diagnoses are distinguished as follows:
+
+| Symptom | Diagnosis | Fix |
+|---|---|---|
+| High `--admit_smt_queries true` time | Heavy dependencies | Trim `open`s / split the file |
+| Definition proves standalone, is cancelled in place | SMT context weight | Move that definition, **and only its minimal prerequisites**, into a new small module |
+| Definition cancelled at `rlimit 5` while neighbours use 20+ | Never given a budget | Match the file's own convention |
+
+When factoring for context weight, move the *minimum*. Carrying a neighbour
+along can defeat the whole exercise.
+
+## Solver upgrades: watch for divergence, not just failure
+
+When changing Z3 versions, the dangerous regression is not a proof that fails —
+it is a proof that **never returns**.
+
+`rlimit` bounds Z3's search, but the counter does not advance in every solver
+phase. A query that sends Z3's arithmetic solver into a non-terminating
+search is therefore *never cancelled*: the build hangs indefinitely rather than
+reporting an error. During the 4.15.3 upgrade one 151-line Pulse module
+(`Calc.Impl.Peek`) went from 14.8s to over 49 minutes with no output, holding up
+the entire sample build. `--query_stats` under a `timeout` identified the query
+immediately: the last one printed is the one that hung.
+
+Two practical consequences:
+
+- **A hanging build is a proof bug, not a slow machine.** Check for it with
+  `ps -eo pid,etime,args | grep -E 'fstar.exe|z3-'`. A single `z3-<version>`
+  process with a large elapsed time names the file, and `--query_stats` under
+  `timeout` names the query.
+- **Non-linear arithmetic is the usual culprit.** The fix is the one the F*
+  manual already recommends: get the arithmetic out of the big VC. Prove it as a
+  standalone pure lemma, one substitution per step, and call that lemma. In the
+  case above, hoisting a big-endian decode (`be_to_n (slice b 1 5) == U32.v v`)
+  out of a Pulse `fn` into a pure lemma in a small module took the module from
+  a 49-minute hang to 5.8s.
+
+**`.checked` files do not record the Z3 version.** Changing `--z3version` alone
+does not invalidate the cache, so an incremental build will pass instantly while
+still trusting proofs certified by the *old* solver. Wipe every `_cache` (the
+root one and each sample's) before believing a solver-upgrade result.
+
 ## Things that did not work
 
 Recording these so they are not re-tried.

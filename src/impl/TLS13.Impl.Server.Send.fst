@@ -1013,6 +1013,12 @@ fn process_send_server_hello
   resp
 }
 
+(* Runs at a modest rlimit rather than F*'s default 5: several of this
+   function's sub-queries are cheap (~1.5s) but sat right at the default budget,
+   and under Z3 4.15.3 they no longer fit.  15 leaves headroom without hiding a
+   proof-engineering problem; the heavy lifting is done by the explicit-witness
+   lemma below rather than by the budget. *)
+#push-options "--z3rlimit 15"
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
@@ -1236,6 +1242,20 @@ fn process_send_server_hello_serialized
     'st0.CS.cs_model
     (Ghost.reveal ev)
     network_out_bytes));
+  (* Supply the existential witness explicitly rather than leaving Z3 to
+     rediscover (ev, network_out_bytes, B.empty) inside this heavily loaded
+     query; see `lemma_server_local_event_end_to_end_correct_intro`. *)
+  ST.lemma_server_local_event_end_to_end_correct_intro
+    'st0
+    (CM.sent_server_hello_state 'st0 sh network_out_bytes)
+    resp
+    ST.LocalSendServerHello
+    B.empty
+    (Ghost.reveal ev)
+    network_out_bytes
+    B.empty
+    network_out_bytes
+    'old_app_out;
   assert (pure (ST.server_local_event_end_to_end_correct
     'st0
     (CM.sent_server_hello_state 'st0 sh network_out_bytes)
@@ -1246,6 +1266,7 @@ fn process_send_server_hello_serialized
     'old_app_out));
   resp
 }
+#pop-options
 
 fn build_server_hello_from_arrays
   (server_random:array U8.t)

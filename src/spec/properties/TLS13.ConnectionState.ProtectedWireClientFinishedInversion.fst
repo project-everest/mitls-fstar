@@ -242,10 +242,30 @@ let lemma_step_preserves_secrets
           m.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
         Some? m1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
 =
+  (* The case split is written out one constructor at a time rather than left to
+     a `| _ -> ()` catch-all: under Z3 4.15.3 the single catch-all query no
+     longer closes within rlimit 100 at ifuel 4, because it has to invert
+     `local_event` (13 constructors) inside `conn_event` in one go.  Enumerating
+     the arms gives the solver the inversion for free, and each arm is then a
+     small, independent query. *)
   match ev with
+  | CS.ConnNetworkEvent _ -> ()
   | CS.ConnProtectedHandshake _ -> ()
-  | CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> ()
-  | _ -> ()
+  | CS.ConnLocalEvent lev ->
+    match lev with
+    | CS.LocalStartHandshake _ -> ()
+    | CS.LocalStartServer -> ()
+    | CS.LocalSelectServerParameters _ -> ()
+    | CS.LocalDeriveSharedSecret _ -> ()
+    | CS.LocalInstallTrafficKeys _ -> ()
+    | CS.LocalInstallTrafficKeysForRole _ -> ()
+    | CS.LocalValidateCertificate _ -> ()
+    | CS.LocalVerifyCertificateSignature _ -> ()
+    | CS.LocalSignCertificateVerify _ -> ()
+    | CS.LocalVerifyFinished _ -> ()
+    | CS.LocalVerifyClientFinished _ -> ()
+    | CS.LocalDeliverApplicationData _ -> ()
+    | CS.LocalFail _ -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"

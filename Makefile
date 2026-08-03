@@ -25,11 +25,19 @@ QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
 LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 
 # F* locates Z3 by looking for `z3-<version>` on PATH.  The EverParse toolchain
-# ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.13.3); make them visible
+# ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.15.3); make them visible
 # to every F* invocation (this Makefile and the generated/ sub-make) instead of
 # relying on the caller having sourced tools/everparse/env.sh.
 Z3_DIR         ?= $(EVERPARSE_HOME)/opt/z3
 export PATH := $(Z3_DIR):$(PATH)
+
+# Z3 version used by every F* invocation.  F* defaults to 4.13.3, which has an
+# internal assertion failure in the LP arithmetic solver (lar_solver.cpp:1066)
+# that aborts the solver on some of our arithmetic-heavy system-level queries.
+# 4.15.3 fixes it.  Override on the command line to A/B a proof against another
+# version, e.g. `make verify Z3_VERSION=4.13.3`.
+Z3_VERSION     ?= 4.15.3
+export Z3_VERSION
 
 GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
@@ -75,6 +83,7 @@ endif
 
 FSTAR_FLAGS = \
   $(OTHERFLAGS) \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
@@ -89,6 +98,7 @@ FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 FSTAR_EXTRACT_FLAGS = \
   $(OTHERFLAGS) \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
@@ -133,7 +143,8 @@ GENERATED_MAKE_VARS = \
   EVERPARSE_HOME='$(realpath $(EVERPARSE_HOME))' \
   FSTAR_EXE='$(FSTAR_EXE)' \
   KRML_EXE='$(KRML_EXE)' \
-  KRML_HOME='$(KRML_HOME)'
+  KRML_HOME='$(KRML_HOME)' \
+  Z3_VERSION='$(Z3_VERSION)'
 
 # Committed generated sources and a stamp marking that their (gitignored)
 # .checked files have been produced.  The main build's `.depend` consumes the
@@ -1577,6 +1588,11 @@ check-toolchain:
 	fi
 	@if [ ! -x "$(QD_EXE)" ] && ! command -v "$(QD_EXE)" >/dev/null 2>&1; then \
 	  echo "QuackyDucky not found at $(QD_EXE).  Build EverParse with ./setup.sh (or set QD_EXE)."; \
+	  exit 1; \
+	fi
+	@if ! command -v "z3-$(Z3_VERSION)" >/dev/null 2>&1; then \
+	  echo "Z3 $(Z3_VERSION) not found (F* looks for a binary named 'z3-$(Z3_VERSION)' on PATH)."; \
+	  echo "Install it with scripts/install-z3.sh, or pick another version with Z3_VERSION=<v>."; \
 	  exit 1; \
 	fi
 

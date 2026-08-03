@@ -166,6 +166,11 @@ let parse_request_line_m (input:TCP.bytes) : GTot (option (TCP.bytes & TCP.bytes
        then Some (meth, target)
        else None)
 
+(* This definition had been left at F*'s default rlimit of 5, which it only just
+   fit under Z3 4.13.3; under 4.15.3 the query is cancelled and the first
+   unproved obligation surfaces as a subtyping failure on `U16.uint_to_t code`.
+   Nothing is wrong with the proof — it just needs a realistic budget. *)
+#push-options "--z3rlimit 20"
 let parse_response (input:TCP.bytes) : GTot (WF.parse_result http_message) =
   if Seq.length input < 9 then None else
   let rest0 = Seq.slice input 9 (Seq.length input) in
@@ -185,6 +190,7 @@ let parse_response (input:TCP.bytes) : GTot (WF.parse_result http_message) =
   if 100 <= code && code < 1000 && len < W.max_len8 && W.bseq_eq tl cl_tail_post
   then Some (Msg_response (U16.uint_to_t code) len, Seq.empty)
   else None
+#pop-options
 
 let parse_body (input:TCP.bytes) : GTot (WF.parse_result http_message) =
   if body_ok input then Some (Msg_body input, Seq.empty) else None
@@ -287,6 +293,9 @@ let ser_response_var (code:status_code) (len:nat) : TCP.bytes =
       (Seq.append cl_tail_pre
         (Seq.append (W.enc_dec_var len) cl_tail_post)))
 
+(* Same story as `parse_response` above: left at the default rlimit of 5, which
+   it only just fit under Z3 4.13.3. *)
+#push-options "--z3rlimit 20"
 let parse_response_var (input:TCP.bytes) : GTot (option (status_code & nat)) =
   if Seq.length input < 9 then None else
   if not (W.bseq_eq (Seq.slice input 0 9) resp_prefix) then None else
@@ -308,6 +317,7 @@ let parse_response_var (input:TCP.bytes) : GTot (option (status_code & nat)) =
   if 100 <= code && code < 1000 && W.bseq_eq tl cl_tail_post
   then Some (U16.uint_to_t code, len)
   else None
+#pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
 let lemma_parse_ser_response_var (code:status_code) (len:nat)

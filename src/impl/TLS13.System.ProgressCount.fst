@@ -27,6 +27,10 @@ module TLS13.System.ProgressCount
 **)
 
 module CS  = TLS13.Spec.StateMachine
+
+(* The client progress count and its two step lemmas live here; re-exported so
+   this module's clients see the same names they always did. *)
+include TLS13.System.ProgressCount.ClientCount
 module CL  = TLS13.ConnectionLog
 module M   = TLS13.Messages
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
@@ -34,41 +38,6 @@ module SWR = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
 module L   = FStar.List.Tot
 module B   = TLS13.Bytes
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
-
-(** Control stages strictly before application data (and before any close). **)
-let pre_appdata_control (c:CS.connection_control_state) : bool =
-  match c with
-  | CS.ControlApplicationData
-  | CS.ControlClosing
-  | CS.ControlClosed
-  | CS.ControlFailed _ -> false
-  | _ -> true
-
-(** All five key-schedule slots empty. **)
-let keys_all_none (keys:CS.key_schedule_state) : prop =
-  keys.CS.ks_shared_secret == None /\
-  keys.CS.ks_client_handshake_traffic == None /\
-  keys.CS.ks_server_handshake_traffic == None /\
-  keys.CS.ks_client_application_traffic == None /\
-  keys.CS.ks_server_application_traffic == None
-
-(** ─────────────────────────────────────────────────────────────────────────
-    Client count.
-    ───────────────────────────────────────────────────────────────────────── **)
-
-let client_progress (m:CS.connection_model) : int =
-  match m.CS.model_control with
-  | CS.ControlNew -> 0
-  | CS.ControlHandshaking _ -> 14 - PNI.client_application_progress_rank m
-  | _ -> 0
-
-(** The one client region-entry shape fact: at ControlNew the key schedule is
-    empty (no install can have fired before leaving ControlNew).  Every other
-    client boundary is handshake-stage -> handshake-stage, handled uniformly by
-    the rank step lemma. **)
-let client_micro_shape (m:CS.connection_model) : prop =
-  CS.ControlNew? m.CS.model_control ==>
-    keys_all_none m.CS.model_handshake.CS.hs_keys
 
 (** A legal client-role step raises `client_progress` by at most one across the
     pre-application-data region. **)
@@ -470,21 +439,6 @@ let lemma_client_appdata_appkeys_delta
     rules out the window `Sent`/deliver control changes whose progress step is not
     a strict +1; those are guarded by `server_advances` (unchanged), not the local
     guard, so this restriction loses nothing. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
-let lemma_client_control_change_progress
-  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
-  : Lemma (requires
-            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-            CS.legal_event m ev /\
-            CS.step_model m ev == Some m' /\
-            pre_appdata_control m.CS.model_control /\
-            pre_appdata_control m'.CS.model_control /\
-            client_micro_shape m /\
-            ~(m'.CS.model_control == m.CS.model_control))
-          (ensures client_progress m' > client_progress m)
-  = ()
-#pop-options
-
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
 let lemma_server_control_change_progress
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)

@@ -1238,6 +1238,72 @@ let server_local_event_end_to_end_correct
         else True
       | CS.ConnLocalEvent _ -> True))
 
+(**
+  Introduce `server_local_event_end_to_end_correct` from an *explicit* witness
+  for its existential.
+
+  The definition's second disjunct is `exists ev raw_sent raw_received. ...`.
+  Callers (the Pulse send paths) have already established every conjunct for a
+  specific triple, but leaving Z3 to rediscover that triple by existential
+  instantiation is fragile: under Z3 4.15.3 it no longer succeeds inside the
+  ambient context of `TLS13.Impl.Server.Send`.  Supplying the witness here makes
+  the step deterministic and keeps the callers at the default rlimit.
+ **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_server_local_event_end_to_end_correct_intro
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        server_end_to_end_invariant st0 /\
+        server_end_to_end_invariant st1 /\
+        legal_handled_local_response st0 st1 resp kind payload network_out app_out /\
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out /\
+        TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
+          ev raw_sent raw_received /\
+        TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
+          st0.CS.cs_model ev raw_sent /\
+        (match ev with
+         | CS.ConnNetworkEvent msg ->
+            if msg.CL.message_direction = CL.Sent &&
+              CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value = false
+           then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
+                  CS.ServerEndpoint
+                  st0.CS.cs_model
+           else True
+         | CS.ConnLocalEvent _ -> True))
+      (ensures
+        server_local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
+= introduce
+    exists (ev':CS.conn_event) (raw_sent':B.bytes) (raw_received':B.bytes).
+      legal_local_response
+        st0 st1 resp kind payload ev' raw_sent' raw_received' network_out app_out /\
+      TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
+        ev' raw_sent' raw_received' /\
+      TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
+        st0.CS.cs_model ev' raw_sent' /\
+      (match ev' with
+       | CS.ConnNetworkEvent msg ->
+          if msg.CL.message_direction = CL.Sent &&
+            CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value = false
+         then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
+                CS.ServerEndpoint
+                st0.CS.cs_model
+         else True
+       | CS.ConnLocalEvent _ -> True)
+  with ev raw_sent raw_received
+  and ()
+#pop-options
+
 let lemma_legal_local_response_select_payload_irrelevant
   (st0:CS.connection_state)
   (st1:CS.connection_state)
