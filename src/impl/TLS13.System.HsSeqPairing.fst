@@ -198,12 +198,19 @@ let cs_hs_seq_ok (s:SY.tls_system_state) : prop =
         "alignment proves decode proves alignment".
 
     Because establishment goes decode-free at the send, there is NO real
-    circularity, and the `~terminal` gate is in principle DROPPABLE (the falsity it
-    dodges is machine-checked dead in `lemma_condition1_sc_delivery_excluded`
-    above).  NOTE — the gate is RETAINED in the definition below pending completion
-    of the delivery-arm extension (the terminal-`c'` case needs the send/receive
-    seq-coupling `write-delta == read-delta` decomposed per message constructor;
-    the base fact is Condition-1-clean but not a single-VC `()`).
+    circularity, and the `~terminal` gate is DROPPED (the falsity it dodged is
+    machine-checked dead in `lemma_condition1_sc_delivery_excluded` above).  The
+    delivery-arm extension that closes the terminal-`c'` case is now COMPLETE:
+    `lemma_hsp_deliver_to_client` discharges it with the send/receive seq-coupling
+    `lemma_hs_send_recv_seq_couple` (write-delta == read-delta, decomposed per
+    message constructor), composed with the pre-state in-flight alignment
+    `snap_hs_wseq p == hs_rseq client`.  The coupling subsumes BOTH the terminal
+    and non-terminal `c'` cases uniformly (0-delta on both sides in the terminal
+    protected-alert case), so no `~terminal` guard is needed.  The terminal-`c'`
+    case is genuinely REACHABLE (a protected fatal alert sealed under handshake
+    write keys, fail_model on both sides, leaving `c'` terminal with read epoch
+    still Handshake), so the coupling does real work there — it does not close an
+    empty case.
 
     BLOCKED-CHANNEL (Condition 3).  A failed-reader Quiet `_` arm is reachable via
     `LocalFail` at a Quiet state (read and write seq both frozen and already equal,
@@ -219,12 +226,10 @@ let cs_hs_seq_ok (s:SY.tls_system_state) : prop =
 let sc_hs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
-      (R.Handshake? (ASP.snap_wr p).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch /\
-       not (terminal_control s.client.CS.cs_model.CS.model_control)) ==>
+      (R.Handshake? (ASP.snap_wr p).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch) ==>
          snap_hs_wseq p == hs_rseq s.client
   | _ ->
-      (R.Handshake? (ASP.wr s.server).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch /\
-       not (terminal_control s.client.CS.cs_model.CS.model_control)) ==>
+      (R.Handshake? (ASP.wr s.server).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch) ==>
          hs_wseq s.server == hs_rseq s.client
 
 (** The handshake-epoch record-seq pairing invariant. **)
@@ -2502,7 +2507,6 @@ let lemma_hsp_client_local (a b:SY.tls_system_state)
       with _pe.
       (
       lemma_client_local_record_effect a.client.CS.cs_model c'.CS.cs_model ce;
-      lemma_step_terminal_control_absorbing a.client.CS.cs_model c'.CS.cs_model ce;
       WStep.lemma_step_model_preserves_config a.client.CS.cs_model ce c'.CS.cs_model;
       if c'.CS.cs_model.CS.model_record = a.client.CS.cs_model.CS.model_record then
         ()
@@ -3639,7 +3643,13 @@ let lemma_hs_send_plus_one
     (`WStep.lemma_cleartext_recv_not_appdata`); ServerHello pins `raw` to the
     serialized Handshake record (whose `parse_record_wire` is `Handshake`, not
     `Application_data`, or — if oversize — empty, contradicting the nonempty parse);
-    HRR steps to `fail_model` (terminal, excluded by `~terminal`). **)
+    HRR pins `raw` to a single `Handshake`-typed record
+    (`cleartext_tls_message_raw` -> `raw_records_exactly raw Handshake 1`), whose
+    `parse_record_wire` is `Handshake` — contradicting the `Application_data`-typed
+    premise.  This is CONTROL-FREE: no `~terminal` is needed (the earlier version
+    excluded HRR via its `fail_model` step; the raw-type contradiction is stronger
+    and survives a terminal receiver, which is what the terminal-`c'` delivery arm
+    needs). **)
 #push-options "--fuel 2 --ifuel 5 --z3rlimit 50 --split_queries always"
 let lemma_hsp_client_recv_not_cleartext
   (client:CS.connection_state) (msg:M.tls_message) (m':CS.connection_model) (raw:B.bytes)
@@ -3650,8 +3660,7 @@ let lemma_hsp_client_recv_not_cleartext
           ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw /\
         (match W.parse_record_wire raw with
          | Some (ct, _, _) -> ct == T.Application_data
-         | None -> False) /\
-        not (terminal_control m'.CS.model_control))
+         | None -> False))
       (ensures CS.network_message_is_cleartext CL.Received msg == false)
   = if CS.network_message_is_cleartext CL.Received msg then
       (match msg with
@@ -3678,9 +3687,11 @@ let lemma_hsp_client_recv_not_cleartext
                   W.lemma_parse_record_wire_some_consumed_positive raw ct f consumed
               | None -> ())
        | _ ->
-           // HelloRetryRequest: the ONLY `Received` arm steps to `fail_model`
-           // (ControlFailed — terminal), contradicting `~terminal`.
-           ())
+           // HelloRetryRequest: cleartext-received raw is `raw_records_exactly raw
+           // Handshake 1`, so `parse_record_wire raw` is `Handshake` — contradicting
+           // the `Application_data`-typed premise.  Control-free, no `~terminal`.
+           CSL.lemma_raw_records_exactly_one_parse_record raw T.Handshake;
+           W.lemma_parse_record_implies_parse_record_wire raw)
     else ()
 #pop-options
 
@@ -3961,8 +3972,7 @@ let lemma_hsp_deliver_to_client
       // it — protocol-faithful, since a handshake-keyed record is undecodable to a
       // peer that has left the handshake read epoch.
       introduce (R.Handshake? (ASP.wr a.server).R.epoch /\
-                 R.Handshake? (ASP.rd c').R.epoch /\
-                 not (terminal_control c'.CS.cs_model.CS.model_control))
+                 R.Handshake? (ASP.rd c').R.epoch)
                 ==> hs_wseq a.server == hs_rseq c'
       with _g.
       (
@@ -3978,9 +3988,6 @@ let lemma_hsp_deliver_to_client
         lemma_hs_send_preserves_hs_write snap a.server.CS.cs_model sent;
         assert (R.Handshake? snap.CS.model_record.CS.record_write.R.epoch);
         assert (R.Handshake? (ASP.snap_wr p).R.epoch);
-        // (2) The pre-state client is non-terminal (terminal set is absorbing).
-        lemma_step_terminal_control_absorbing a.client.CS.cs_model c'.CS.cs_model conn_ev;
-        assert (not (terminal_control a.client.CS.cs_model.CS.model_control));
         if CS.network_message_is_cleartext CL.Sent sent then
         (
           // CLEARTEXT in-flight send: `sent` is ClientHello / ServerHello / CCS, and
@@ -3992,9 +3999,9 @@ let lemma_hsp_deliver_to_client
           // parse_record_wire raw is NOT Application_data-typed.
           if R.Handshake? (ASP.rd a.client).R.epoch then
           (
-            // With snap_wr Handshake + rd a.client Handshake + ~terminal a.client the
-            // gate fires: the seal claims `raw` parses as an Application_data record,
-            // contradicting the cleartext (non-Application_data) record above.
+            // With snap_wr Handshake + rd a.client Handshake the gate fires: the seal
+            // claims `raw` parses as an Application_data record, contradicting the
+            // cleartext (non-Application_data) record above.
             assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
             assert (SMCan.sent_single_protected_message_seal snap sent raw);
             W.lemma_parse_record_implies_parse_record_wire raw;
@@ -4028,36 +4035,46 @@ let lemma_hsp_deliver_to_client
                     ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
           lemma_hsp_client_recv_not_cleartext a.client msg c'.CS.cs_model raw;
           assert (CS.network_message_is_cleartext CL.Received msg == false);
-          // (4) The receive is a `+1` handshake receive: pre Handshake read,
-          //     ControlHandshaking post, read seq advanced by exactly one.
-          assert (SMR.connection_state_consistent a.client);
-          lemma_hs_recv_plus_one_gated a.client c' msg;
+          // (4) The client is at a Handshake read epoch (receive preserves it), so the
+          //     pre-state in-flight `sc` clause fires: snap handshake write == client read.
+          lemma_recv_preserves_read_epoch_handshake a.client.CS.cs_model c'.CS.cs_model msg;
           assert (R.Handshake? (ASP.rd a.client).R.epoch);
-          assert ((ASP.rd c').R.seq == (ASP.rd a.client).R.seq + 1);
-          // (5) With snap_wr Handshake + rd a.client Handshake + ~terminal a.client,
-          //     `hs_channel_seal_ok a` fires: the faithful-decode bridge holds.
+          assert (SMR.connection_state_consistent a.client);
+          // (5) With snap_wr Handshake + rd a.client Handshake, `hs_channel_seal_ok a`
+          //     fires: the faithful-decode bridge holds.
           assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
           assert (SMCan.sent_single_protected_message_seal snap sent raw);
-          // (6) Fire the pre-state in-flight `sc` clause: snap handshake write ==
-          //     a.client handshake read seq.
+          // (6) Fire the pre-state in-flight `sc` clause (now ~terminal-free).
           assert (snap_hs_wseq p == hs_rseq a.client);
-          assert (snap.CS.model_record.CS.record_write.R.seq ==
-                  a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
-          // (7) FAITHFUL DECODE: the client decodes raw to `sent`.
+          // (7) FAITHFUL DECODE: the client decodes raw to `sent`, so `msg == sent`.
           CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
             snap a.client.CS.cs_model sent raw;
           assert (SMCan.received_single_protected_message_decode a.client.CS.cs_model sent raw);
           assert (SMCan.received_single_protected_message_decode a.client.CS.cs_model msg raw);
           ASP.lemma_decode_functional a.client.CS.cs_model msg sent raw;
           assert (msg == sent);
-          // (8) `sent` (== msg) is EE / Cert / CV, so the matching SEND advances the
-          //      server's handshake write seq by exactly one.
-          lemma_hs_recv_is_ee_cert_cv a.client c' msg;
-          lemma_hs_send_plus_one snap a.server.CS.cs_model sent;
-          assert (a.server.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
-                  snap.CS.model_record.CS.record_write.R.seq + 1);
-          // (9) Chain: hs_wseq a.server == snap.write.seq + 1
-          //                            == a.client.read.seq + 1 == c'.read.seq == hs_rseq c'.
+          assert (CS.step_tls_message a.client.CS.cs_model CL.Received sent == Some c'.CS.cs_model);
+          // (8) THE COUPLING subsumes both the terminal and non-terminal `c'` cases.
+          //     Establish consistency of the sender and receiver post-states.
+          assert (SMR.connection_state_consistent a.server);
+          let cfg = a.client.CS.cs_model.CS.model_config in
+          WStep.lemma_client_reachable_step
+            (CS.initial cfg) a.client c' (SM.WireEvent wire) out;
+          lemma_client_step_single_step a.client (SM.WireEvent wire) c' out;
+          lemma_step_preserves_consistent a.client c';
+          assert (SMR.connection_state_consistent c');
+          lemma_hs_send_recv_seq_couple snap a.server a.client c' sent;
+          // coupling:  (m_wr a.server).seq + m_hrseq a.client
+          //              == m_hwseq snap + (m_rd c').seq
+          //   i.e.  hs_wseq a.server + hs_rseq a.client == snap_hs_wseq p + hs_rseq c'
+          //   compose with (6)  snap_hs_wseq p == hs_rseq a.client:
+          //         hs_wseq a.server == hs_rseq c'.
+          assert (m_hwseq snap == snap_hs_wseq p);
+          assert (m_hrseq a.client.CS.cs_model == hs_rseq a.client);
+          assert (R.Handshake? (ASP.m_wr a.server.CS.cs_model).R.epoch);
+          assert (R.Handshake? (ASP.m_rd c'.CS.cs_model).R.epoch);
+          assert (hs_wseq a.server == (ASP.m_wr a.server.CS.cs_model).R.seq);
+          assert (hs_rseq c' == (ASP.m_rd c'.CS.cs_model).R.seq);
           assert (hs_wseq a.server == hs_rseq c')
         )
       );
