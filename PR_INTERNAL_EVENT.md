@@ -25,7 +25,9 @@ internal event is an ordinary `LocalEvent` distinguished only by a syntactic
 classifier — no new event constructor, no new product move family.
 
 The design contract is `INTERNAL_EVENT_PLAN.md`, which is included in the diff
-and records the decisions, every phase "as built", and the two items left open.
+and records the decisions and every phase "as built". Nothing in it is left
+open; the last item, and the latent defect that closing it exposed, is described
+under "The last open item" below.
 
 ## The one-line change at the centre of it
 
@@ -48,21 +50,38 @@ path.
 
 ## Scope
 
-`c7bec267b..87bbd2670`, 30 commits.
+`c7bec267b..e1f47d5d3`, 34 commits.
 
 ```
- 64 files changed, 8530 insertions(+), 700 deletions(-)
+ 88 files changed, 9674 insertions(+), 2221 deletions(-)
 ```
 
 | Area | Files | +/- |
 |---|---|---|
-| `src/spec` | 22 | +2266 / −275 |
-| `src/impl` | 23 | +3264 / −406 |
-| `docs` (incl. the plan) | 5 | +2238 / −2 |
+| `src/spec` | 22 | +2288 / −277 |
+| `src/impl` | 29 | +3576 / −466 |
+| `docs` (incl. the plan) | 8 | +2831 / −143 |
 | `common` | 2 | +586 / −2 |
-| samples | 10 | +104 / −10 |
-| `Makefile` | 1 | +71 / −5 |
+| samples | 20 | +221 / −25 |
+| `Makefile` | 1 | +89 / −7 |
+| `scripts/`, `setup.sh`, `generated/` | 4 | +82 / −3 |
 | **`runtime/` + `c_stubs/` (C)** | **0** | **0 / 0** |
+
+The deletion count is dominated by the stale `test/unit/test_connection_bindings.c`
+(1297 lines) described below.
+
+Two of the 34 commits are not part of the refactor proper and can be reviewed
+independently:
+
+- **`Upgrade the toolchain to Z3 4.15.3`.** Z3 4.13.3 aborts with an internal
+  assertion failure in `lar_solver.cpp` on arithmetic-heavy queries, which F*
+  surfaces only as `Failure("Parse error: </labels> not found")`. The upgrade is
+  wired through `Z3_VERSION` in the Makefiles and `scripts/install-z3.sh`; A/B
+  against the old solver with `make verify Z3_VERSION=4.13.3`. It carries nine
+  proof repairs — all resource exhaustion rather than genuine failures, so all
+  fixed by making the obligation smaller. Note `.checked` files do not record
+  the solver version, so any re-measurement needs the caches wiped.
+- **`Delete the stale test/unit/test_connection_bindings.c`.**
 
 ### The C is untouched — literally
 
