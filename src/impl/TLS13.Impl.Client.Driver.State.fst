@@ -43,12 +43,14 @@ noextract
 (** The client has finished the handshake and can carry application data.
 
     The buffer-emptiness conjunct is what makes this mean *finished* rather than
-    merely *at ControlApplicationData*.  Nothing in the state machine forces a
-    protected-handshake record to be drained before the client sends its own
-    Finished, so `model_control == ControlApplicationData` is reachable with
-    plaintext still pending -- i.e. with an internal step still enabled.  Ruling
-    that out here is what lets `TLS13.System.Internal.tls_settled` be derived
-    from readiness; see `lemma_application_ready_settled`. *)
+    merely *at ControlApplicationData*, and it is the conjunct
+    `TLS13.System.Internal.lemma_application_ready_settled` consumes to derive
+    `tls_settled` from readiness.
+
+    The state machine now also forbids the client from sending its Finished
+    while protected-handshake plaintext is pending (see `legal_handshake_message`),
+    so the two agree; that guard is what rules out the client wedging in
+    `ControlApplicationData` holding bytes no legal step can ever drain. *)
 let client_driver_application_ready
   (st:CS.connection_state)
   : prop =

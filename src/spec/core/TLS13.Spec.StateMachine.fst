@@ -1362,6 +1362,12 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     True
   | _, _ ->
     False
+let protected_handshake_buffer_empty (model:connection_model) : prop =
+  Seq.equal
+    model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes
+    B.empty /\
+  model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed == 0
+
 let legal_handshake_message
   (model:connection_model)
   (dir:direction)
@@ -1443,6 +1449,13 @@ let legal_handshake_message
     Some? hs.hs_keys.ks_master_secret
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
+    // The client may not declare the handshake finished while it still holds
+    // unconsumed protected-handshake plaintext.  Without this guard the client
+    // reaches ControlApplicationData with a non-empty pending buffer, and
+    // because legal_handshake_message admits no message at all in
+    // ControlApplicationData that plaintext can never be drained: the endpoint
+    // is wedged permanently unsettled.  See TLS13.System.Internal.
+    protected_handshake_buffer_empty model /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
     Some? hs.hs_keys.ks_server_application_traffic
@@ -1496,11 +1509,6 @@ let legal_tls_message
     True
   | _, _ ->
     False
-let protected_handshake_buffer_empty (model:connection_model) : prop =
-  Seq.equal
-    model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes
-    B.empty /\
-  model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed == 0
 let legal_protected_handshake_step
   (model:connection_model)
   (step:protected_handshake_step)

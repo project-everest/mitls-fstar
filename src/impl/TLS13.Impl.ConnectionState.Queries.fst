@@ -5724,6 +5724,11 @@ fn can_send_client_finished_runtime
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            // The client must not send its Finished while protected-handshake
+            // plaintext is still pending; legal_handshake_message now requires
+            // this, and without it the client would wedge in
+            // ControlApplicationData holding bytes it can never drain.
+            CS.protected_handshake_buffer_empty st0.CS.cs_model /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
@@ -5736,6 +5741,8 @@ fn can_send_client_finished_runtime
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <= max_transcript_len /\
             58 <= SZ.v network_out_len)
 {
+  let buffer_drained = protected_handshake_buffer_empty_runtime c;
+
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
@@ -5839,6 +5846,7 @@ fn can_send_client_finished_runtime
     role_ok &&
     tag_ok &&
     stage_ok &&
+    buffer_drained &&
     client_finished_absent &&
     client_hs_present &&
     client_app_present &&
@@ -5852,6 +5860,7 @@ fn can_send_client_finished_runtime
   assert (pure (ok ==> U8.v stage == 10));
   assert (pure (ok ==> st0.CS.cs_model.CS.model_control ==
     CS.ControlHandshaking CS.HsServerFinishedVerified));
+  assert (pure (ok ==> CS.protected_handshake_buffer_empty st0.CS.cs_model));
   assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));

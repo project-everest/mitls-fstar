@@ -1817,22 +1817,42 @@ no window in which the pending buffer is non-empty with `offset == 0`.
         delivery and leave a remainder.
 
       So a state that is application-ready with an internal step still enabled
-      is reachable. The fix belongs at the producer, and is also the
-      operationally correct behaviour: `driver_handshake` now reports
-      `DriverWorkflowOk` only when the pending buffer is drained *as well as*
-      the control state reached (via the pre-existing
-      `protected_handshake_buffer_empty_runtime` query), and
-      `client_driver_application_ready` carries
-      `CS.protected_handshake_buffer_empty` as a conjunct. Readiness now means
-      the client has genuinely finished rather than merely arrived, and the
-      lemma follows definitionally.
+      is reachable — and it is *stuck*. `legal_handshake_message` admits no
+      message at all in `ControlApplicationData` (it falls through to
+      `| _, _, _ -> False`), so the leftover plaintext can never be consumed by
+      any legal step. A server that appends trailing bytes after its Finished in
+      the same record parks the client permanently unsettled. Both halves were
+      machine-checked before the fix was written: the `Sent Finished` transition
+      provably carries a non-empty buffer into `ControlApplicationData`, and in
+      `ControlApplicationData` `legal_protected_handshake_step` is provably false
+      for every step. `client_end_to_end_invariant` does not exclude it either.
 
-      The strengthening is free for consumers: every other mention of
-      `client_driver_application_ready` in the tree is in hypothesis position.
-      It is validated end to end — the OpenSSL echo, extracted-server,
-      client-engine and Chromium async HTTPS interop tests all still complete,
-      which is the evidence that real handshakes do drain the buffer and the
-      driver does not spin.
+      **The fix is in the state machine**, not only in the readiness predicate.
+      `legal_handshake_message` now requires `protected_handshake_buffer_empty`
+      on the client's `Sent Finished` case, and `can_send_client_finished_runtime`
+      checks it (reusing `protected_handshake_buffer_empty_runtime`), which
+      discharges the resulting obligation in `try_send_client_finished`. The
+      wedged state is unreachable by construction.
+
+      An earlier revision strengthened only `client_driver_application_ready`.
+      That made the lemma provable, but it excluded the bad state *by
+      hypothesis* rather than making it unreachable, and it quietly weakened
+      every theorem taking readiness as an antecedent. The conjunct is retained
+      — it is the honest reading of "has finished reacting", and it is what the
+      lemma consumes — but it is no longer load-bearing for masking a model
+      defect.
+
+      Absorbing the guard cost exactly two proof failures tree-wide, both where
+      the obligation should land: the Finished send path, and
+      `lemma_client_step_preserves_stage_ok`, which was pure resource cost
+      (`--query_stats`: one of seven split queries cancelled at rlimit 100 while
+      its neighbours used 0.08–24) and was fixed by splitting the network arm on
+      message direction, not by raising a limit.
+
+      It is validated end to end — the guard is now a runtime precondition on
+      sending Finished, so if real servers left trailing bytes the handshake
+      would fail outright. The OpenSSL echo, extracted-server, client-engine and
+      Chromium async HTTPS interop tests all still complete.
 - [x] Delivery-completes-next still holds as channel quiescence. — unchanged;
       `tls_quiescent` is untouched and `tls_settled` is defined on top of it.
 - [x] The temporal theorem is re-established at unchanged scope. —
@@ -1974,7 +1994,15 @@ Two items were recorded here previously and have since been closed:
 
 1. **`tls_application_ready s ==> tls_settled s`** — proved, as
    `TLS13.System.Internal.lemma_application_ready_settled`. It turned out to be
-   false as originally stated; §8 records the reachable counterexample and the
-   producer-side strengthening that fixed it.
+   false as originally stated, and for a worse reason than a merely weak
+   predicate: the client could reach `ControlApplicationData` still holding
+   protected-handshake plaintext, and since `legal_handshake_message` admits no
+   message at all in that control state, the plaintext could never be drained —
+   the endpoint was permanently unsettled. The fix is in the state machine:
+   `legal_handshake_message` now requires `protected_handshake_buffer_empty` on
+   the client's `Sent Finished` transition, and
+   `can_send_client_finished_runtime` checks it. An earlier revision strengthened
+   only `client_driver_application_ready`, which made the lemma provable but
+   excluded the bad state by hypothesis rather than making it unreachable.
 2. The orphaned `test/unit/test_connection_bindings.c` — deleted, along with its
    `.gitignore` entry and its `arch.dot`/`arch.svg` node.

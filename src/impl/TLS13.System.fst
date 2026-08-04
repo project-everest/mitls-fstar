@@ -123,11 +123,9 @@ let tls_quiescent (s:tls_system_state) : prop = MP.Quiet? s.channel
     Per endpoint this is the driver's readiness predicate, which carries the
     end-to-end invariant, `ControlApplicationData`, and the application record
     keys.  On the client it additionally carries
-    `CS.protected_handshake_buffer_empty`: reaching `ControlApplicationData` is
-    not by itself the end of the handshake, because the client gets there by
-    *sending* its own Finished and a coalesced record can leave protected
-    plaintext still buffered.  That conjunct is what makes readiness imply
-    `TLS13.System.Internal.tls_settled`; see `lemma_application_ready_settled`.
+    `CS.protected_handshake_buffer_empty`, which is what makes readiness imply
+    `TLS13.System.Internal.tls_settled`; see `lemma_application_ready_settled`
+    for why the state machine's `Sent Finished` guard was needed as well.
 
     NOTE: this predicate does *not* pin the event log to any particular length.
     An earlier version of this comment claimed it pinned each side to exactly 16
@@ -2868,7 +2866,14 @@ let lemma_client_step_preserves_stage_ok
     with _pf.
       (match d.CS.delta_event with
        | CS.ConnLocalEvent _ -> ()
-       | CS.ConnNetworkEvent _ -> ()
+       | CS.ConnNetworkEvent dm ->
+         // Split on the direction: the network arm carries every control
+         // advance the client makes, and since the client-Finished send became
+         // guarded on the pending buffer the combined query no longer fits in
+         // the rlimit.  Each direction on its own is cheap.
+         (match dm.CL.message_direction with
+          | CL.Sent -> ()
+          | CL.Received -> ())
        | CS.ConnProtectedHandshake _ -> ())
 #pop-options
 

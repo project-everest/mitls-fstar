@@ -305,24 +305,64 @@ protected-handshake plaintext still buffered — that is, with an internal step
 still enabled. No replay-level argument could have closed that, because there
 was nothing to close; the predicate was simply too weak.
 
-The fix is at the producer, and it is also the operationally right behaviour.
-`driver_handshake` previously reported `DriverWorkflowOk` on a control-tag
-snapshot alone. It now additionally requires the pending buffer to be drained,
-using the pre-existing `protected_handshake_buffer_empty_runtime` query, and
-`client_driver_application_ready` carries `CS.protected_handshake_buffer_empty`
-as a conjunct. "Ready" now means the client has genuinely finished, not merely
-that it arrived at the right control state.
+### It is worse than a weak predicate: the state was wedged
 
-Two things make this cheap to review:
+`legal_handshake_message` admits **no** message at all in
+`ControlApplicationData` — it falls through to `| _, _, _ -> False`. So the
+leftover plaintext in that state can never be consumed by any legal step. A
+server that appends trailing bytes after its Finished in the same record parks
+the client permanently unsettled: `tls_internal_pending` holds forever, and no
+drain can clear it.
 
-- **No consumer had to change.** Every other mention of
-  `client_driver_application_ready` in the tree is in hypothesis position, so
-  strengthening it only weakens those lemmas' preconditions. The only proof
-  obligations were in `Driver.Core`, `Driver.Connect` and `Driver`.
-- **The interop tests are the evidence it is satisfiable.** If real handshakes
-  did not drain the buffer, the driver would now loop to fuel exhaustion instead
-  of reporting Ok. The OpenSSL echo, extracted-server, client-engine and
-  Chromium async HTTPS tests all still pass, so they do drain.
+This is a liveness defect rather than an injection one — nothing can be smuggled
+in, precisely because nothing at all is legal post-handshake — but it is a real
+defect in the model, not merely an inconvenience for one proof.
+
+Both halves of that were machine-checked before the fix was written:
+
+- the `Sent Finished` transition provably carries a **non-empty** buffer through
+  into `ControlApplicationData`; and
+- in `ControlApplicationData`, `legal_protected_handshake_step` is provably
+  false for **every** step.
+
+`client_end_to_end_invariant` does not exclude the state either — the obvious
+`Lemma` attempting to derive buffer-emptiness from it does not go through.
+
+### The fix, at the state machine
+
+An earlier revision of this branch strengthened only
+`client_driver_application_ready`, adding the buffer conjunct so the lemma went
+through. That made the lemma true but left the model unchanged — it excluded the
+bad state by hypothesis instead of making it unreachable, and quietly weakened
+every theorem that takes readiness as an antecedent. Review caught it. The fix
+now lands where the defect is:
+
+- **`legal_handshake_message`** requires `protected_handshake_buffer_empty` on
+  the client's `CL.Sent, M.Finished _, ControlHandshaking
+  HsServerFinishedVerified` case. The client may not declare the handshake
+  finished while holding unconsumed protected-handshake plaintext. (There is
+  precedent for strengthening this predicate — see the existing notes in
+  `TLS13.Impl.Server.fst` and `…ConnectionState.Queries.fst`.)
+- **`can_send_client_finished_runtime`** checks it, reusing the existing
+  `protected_handshake_buffer_empty_runtime` query, which is what discharges the
+  new obligation in `try_send_client_finished`.
+- **`client_driver_application_ready`** keeps the conjunct. That is not
+  redundancy: it is the honest reading of "has finished reacting" rather than
+  "has arrived", and it is the conjunct the lemma consumes.
+
+The whole tree absorbed this in **two** proof failures, both exactly where the
+obligation should land: the client's Finished send path, and
+`lemma_client_step_preserves_stage_ok` in `TLS13.System.fst`. The latter was
+pure resource cost — `--query_stats` showed one of seven split queries going
+`reason-unknown=canceled` at the full rlimit 100 while its neighbours used
+0.08–24 — and was fixed by splitting the network arm on the message direction,
+which brought it to 0.4 and 21.9. No rlimit was raised.
+
+**The interop tests are the evidence the guard is satisfiable.** It is now a
+runtime precondition on sending Finished: if real servers left trailing bytes
+after their Finished, `can_send_client_finished_runtime` would return false and
+the handshake would fail outright. The OpenSSL echo, extracted-server,
+client-engine and Chromium async HTTPS tests all still pass.
 
 The operational route is unchanged and still available:
 `TLS13.Impl.Client.Engine.poll` carries `EngineReady ==> ~(D.internal_pending

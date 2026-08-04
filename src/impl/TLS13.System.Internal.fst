@@ -101,22 +101,31 @@ let lemma_settled_of_client_quiescent (s:tls_system_state)
   recording why it needs `client_driver_application_ready` to carry
   `protected_handshake_buffer_empty` rather than being derivable without it.
 
-  `model_control == ControlApplicationData` alone does *not* imply that no
-  internal step is enabled.  The client reaches that control state by *sending*
-  its own Finished (`TLS13.Spec.StateMachine.step_handshake_message`, the
-  `CL.Sent, M.Finished, ControlHandshaking HsServerFinishedVerified` case),
-  which is a local event and carries no precondition on the pending buffer.
-  Meanwhile `legal_protected_handshake_step` deliberately does not require a
-  record's plaintext to be consumed to the end -- a head step may take delivery
-  of a record and leave a remainder.  So a state with `ControlApplicationData`
-  and a non-empty pending buffer is reachable, and for such a state
-  `tls_internal_pending` holds.
+  This needed a fix to the state machine, not just to the predicate.
 
-  The fix belongs at the producer, not here: the driver now reports
-  `DriverWorkflowOk` only when the pending buffer is drained as well as the
-  control state reached, so `client_driver_application_ready` means the client
-  has genuinely finished rather than merely arrived.  Given that, readiness plus
-  an empty channel is settledness, with no proof obligation left over.
+  `legal_protected_handshake_step` deliberately does not require a record's
+  plaintext to be consumed to the end -- that permissiveness is what let the
+  receive-path fork be removed -- so a head step may take delivery of a record
+  and leave a remainder.  The client then reaches `ControlApplicationData` by
+  *sending* its own Finished, and that transition used to carry no precondition
+  on the pending buffer.  The resulting state was not merely inconvenient for
+  this proof, it was WEDGED: `legal_handshake_message` admits no message at all
+  in `ControlApplicationData`, so the leftover plaintext could never be drained
+  and `tls_internal_pending` held forever.  A server that appended trailing
+  bytes after its Finished in the same record could park the client there
+  permanently.
+
+  So `legal_handshake_message` now requires `protected_handshake_buffer_empty`
+  on the client's `Sent Finished` transition, and
+  `can_send_client_finished_runtime` checks it, which is what discharges the
+  obligation in `TLS13.Impl.ConnectionState.LocalSend.try_send_client_finished`.
+  The wedged state is unreachable by construction.
+
+  `client_driver_application_ready` keeps the buffer conjunct as well.  That is
+  not redundancy: it is the honest reading of "has finished reacting" rather
+  than "has arrived at the right control state", and it is the conjunct this
+  lemma actually consumes.  Given it, readiness plus an empty channel is
+  settledness, with no proof obligation left over.
  **)
 let lemma_application_ready_settled (s:tls_system_state)
   : Lemma

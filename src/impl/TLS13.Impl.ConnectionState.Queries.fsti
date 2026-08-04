@@ -972,6 +972,11 @@ fn can_send_client_finished_runtime
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            // The client must not send its Finished while protected-handshake
+            // plaintext is still pending; legal_handshake_message now requires
+            // this, and without it the client would wedge in
+            // ControlApplicationData holding bytes it can never drain.
+            CS.protected_handshake_buffer_empty st0.CS.cs_model /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
