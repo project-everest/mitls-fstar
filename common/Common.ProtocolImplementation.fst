@@ -1121,6 +1121,16 @@ let lemma_internal_no_progress_preserves_state
 (* below, and its behaviour is unchanged.                             *)
 (* ---------------------------------------------------------------- *)
 
+(* [inline_for_extraction] matters here.  This is a classifier that ignores
+   its argument and returns a constant, but it returns [bool] rather than a
+   ghost type, so without this KaRaMeL emits a monomorphized definition per
+   instantiation whose parameter type is the protocol's local-event type.
+   That type is specification-only and is not in any extraction bundle, so the
+   emitted C referred to an undeclared type and failed to compile — see the
+   TFTP and YMODEM verified-loop bundles, which do extract
+   [Common.ProtocolImplementation].  Inlining folds the constant into any call
+   site and emits nothing otherwise. *)
+inline_for_extraction
 let no_internal_events (#local_event:Type0) (_:local_event) : bool = false
 
 let nothing_pending (#state:Type0) (_:state) : prop = False
