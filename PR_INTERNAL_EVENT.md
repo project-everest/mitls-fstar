@@ -1,9 +1,3 @@
-# Remove the client receive-path semantic fork: internal events
-
-Draft PR description for `chromium` → `agentic`. Not yet opened.
-
----
-
 ## Summary
 
 A protected TLS record can carry several coalesced handshake messages. Before
@@ -50,10 +44,10 @@ path.
 
 ## Scope
 
-`c7bec267b..e1f47d5d3`, 34 commits.
+`c7bec267b..91ad0eafa`, 38 commits.
 
 ```
- 88 files changed, 9674 insertions(+), 2221 deletions(-)
+ 91 files changed, 9846 insertions(+), 2242 deletions(-)
 ```
 
 | Area | Files | +/- |
@@ -70,7 +64,7 @@ path.
 The deletion count is dominated by the stale `test/unit/test_connection_bindings.c`
 (1297 lines) described below.
 
-Two of the 34 commits are not part of the refactor proper and can be reviewed
+Three of the 38 commits are not part of the refactor proper and can be reviewed
 independently:
 
 - **`Upgrade the toolchain to Z3 4.15.3`.** Z3 4.13.3 aborts with an internal
@@ -82,6 +76,11 @@ independently:
   fixed by making the obligation smaller. Note `.checked` files do not record
   the solver version, so any re-measurement needs the caches wiped.
 - **`Delete the stale test/unit/test_connection_bindings.c`.**
+- **`Key the CI devcontainer cache on the Z3 install script`.** The cached
+  devcontainer image contains the solver, but `scripts/install-z3.sh` was not in
+  the cache key, so a later Z3 bump would have silently reused an image with the
+  old solver. Same staleness class as `.checked` files not recording the solver
+  version.
 
 ### The C is untouched — literally
 
@@ -257,7 +256,7 @@ sample. `admit-count` / `check-admits` were widened from
 
 ## Verification
 
-No admits. No assumes. Green at every one of the 30 commits' phase boundaries,
+No admits. No assumes. Green at every one of the 38 commits' phase boundaries,
 and at the tip:
 
 ```
@@ -386,12 +385,11 @@ look separately — they are equally unreferenced by the build.
 ## Note on the merge direction
 
 `origin/agentic` has not moved since 2026‑07‑30 (`93e13a73`), which is the merge
-base for this branch. `chromium` is 58 commits ahead and 0 behind, and every
+base for this branch. `chromium` is 66 commits ahead and 0 behind, and every
 `agentic_*` sibling branch is also an ancestor of this tip.
 
-If this PR is opened as `chromium` → `agentic` it will therefore carry **58**
-commits, not the 30 described above. The other 28 are pre-existing chromium-branch
-work that landed before the refactor began:
+This PR therefore carries **66** commits, not the 38 described above. The other
+28 are pre-existing chromium-branch work that landed before the refactor began:
 
 - commits 1–11: the transport-neutral client engine, its stable C API, the
   Chromium-style async HTTPS demo and provider integration;
@@ -400,6 +398,6 @@ work that landed before the refactor began:
 - commits 25–28: browser failure reporting, public browsing, ATLAS protocol tracing.
 
 Those account for essentially all of the `runtime/` and `c_stubs/` growth in the
-full 58-commit range (+3479 and +229 lines). It may be worth landing them
+full 66-commit range (+3479 and +229 lines). It may be worth landing them
 separately so this PR's "zero C change" property is visible in the diff rather
 than only in the phase range.
