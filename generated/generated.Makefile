@@ -33,7 +33,12 @@ FSTAR_OPTIONS += $(LAX_OPT) --ext 'optimize_let_vc=false' --warn_error @272 --wa
 
 # Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
 # Exported by the root Makefile when this is run as a sub-make.
-Z3_VERSION ?= 4.15.3
+# Pinned in scripts/z3-version.txt at the repo root (single source of truth).
+Z3_VERSION_FILE ?= ../scripts/z3-version.txt
+Z3_VERSION ?= $(strip $(shell cat $(Z3_VERSION_FILE)))
+ifeq ($(Z3_VERSION),)
+$(error Could not read the pinned Z3 version from $(Z3_VERSION_FILE))
+endif
 FSTAR_OPTIONS += --z3version $(Z3_VERSION)
 
 export LOWPARSE_HOME

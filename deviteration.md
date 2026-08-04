@@ -213,6 +213,41 @@ does not invalidate the cache, so an incremental build will pass instantly while
 still trusting proofs certified by the *old* solver. Wipe every `_cache` (the
 root one and each sample's) before believing a solver-upgrade result.
 
+Verified by A/B on a warm cache: the same `fstar.exe` invocation with
+`--z3version 4.15.3`, with `--z3version 4.13.3`, and with no `--z3version` at
+all loads the identical `.checked` file without complaint. Do not put the solver
+version into a `.checked` cache key — it buys nothing and only causes misses.
+
+## Cache a derived artefact under a hash of the artefact, not of its source
+
+A `.checked` file is validated against the **digest of the `.fst`/`.fsti` it was
+produced from**. Under `--already_cached` a mismatch is not a silent re-check,
+it is a hard build failure:
+
+```
+Warning 241: ... .checked is stale (digest mismatch for <source>)
+Error 317:   Expected <source> to already be checked.
+```
+
+Read that pair literally. `digest mismatch for <source>` names the file whose
+*content* differs from what the cache recorded — it is not a statement about
+flags, the solver, or the F* version (those produce a different message,
+"has incorrect version").
+
+CI caches the verification of the committed `generated/TLS13.Wire.Generated.*`
+modules. The key originally hashed `tls.qd.rfc`, the QuackyDucky input those
+modules are generated *from*. That is one level too high: regeneration is not
+bit-reproducible across EverParse builds, and a merge can take `generated/` from
+one side while `tls.qd.rfc` matches the other. `agentic` and `chromium` ended up
+with byte-identical `tls.qd.rfc` and *different* `OfferedVersion.fsti`, so a PR
+from `chromium` restored `agentic`'s tarball under a colliding key and died on
+Error 317 — with no local repro, because locally the cache is always self-made.
+
+The rule: **key the cache on the exact bytes the cached artefact was derived
+from.** Here that is `hashFiles('generated/**')` plus the toolchain pin. If the
+sources are committed, hash the sources; hash the upstream generator input only
+when nothing downstream of it is committed.
+
 ## Things that did not work
 
 Recording these so they are not re-tried.

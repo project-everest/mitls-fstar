@@ -36,7 +36,18 @@ export PATH := $(Z3_DIR):$(PATH)
 # that aborts the solver on some of our arithmetic-heavy system-level queries.
 # 4.15.3 fixes it.  Override on the command line to A/B a proof against another
 # version, e.g. `make verify Z3_VERSION=4.13.3`.
-Z3_VERSION     ?= 4.15.3
+#
+# The pinned value lives in scripts/z3-version.txt, which is the single source
+# of truth shared with scripts/install-z3.sh, the sample Makefiles and the CI
+# dev-container cache key.  Keeping it in one file stops the eight places that
+# used to spell "4.15.3" from drifting apart.  Note that a .checked file does
+# NOT record the solver version, so changing this alone will not invalidate a
+# warm cache -- wipe _cache before believing an A/B result.
+Z3_VERSION_FILE := scripts/z3-version.txt
+Z3_VERSION     ?= $(strip $(shell cat $(Z3_VERSION_FILE)))
+ifeq ($(Z3_VERSION),)
+$(error Could not read the pinned Z3 version from $(Z3_VERSION_FILE))
+endif
 export Z3_VERSION
 
 GENERATED_DIR   = generated

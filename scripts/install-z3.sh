@@ -14,7 +14,20 @@
 # fixes it.
 set -euo pipefail
 
-Z3_VERSION="${Z3_VERSION:-4.15.3}"
+# Single source of truth, shared with the Makefiles and the CI dev-container
+# cache key.
+z3_version_file="$(dirname "$0")/z3-version.txt"
+if [ -z "${Z3_VERSION:-}" ]; then
+  if [ ! -r "$z3_version_file" ]; then
+    echo "Cannot read the pinned Z3 version from $z3_version_file" >&2
+    exit 1
+  fi
+  Z3_VERSION="$(tr -d '[:space:]' < "$z3_version_file")"
+fi
+if [ -z "$Z3_VERSION" ]; then
+  echo "Pinned Z3 version is empty ($z3_version_file)" >&2
+  exit 1
+fi
 # Which prebuilt release archive to fetch.  Z3 publishes per-glibc builds; this
 # one matches the devcontainer base image.
 Z3_ARCHIVE="${Z3_ARCHIVE:-z3-${Z3_VERSION}-x64-glibc-2.39.zip}"
