@@ -413,6 +413,170 @@ let lemma_fdac_server_send (a b:SY.tls_system_state)
     )
 #pop-options
 
+(** A CLIENT network RECEIVE preserves the client's `hs_client_finished` witness.
+    The ONLY `step_tls_message` `Received` arm that writes `hs_client_finished` is
+    the SERVER CF-receive at `HsServerFinishedSent` (StateMachine.fst:788), whose
+    legality REQUIRES `ServerEndpoint` (legal_handshake_message, :1377); so a legal
+    CLIENT receive cannot be at that control, and every other `Received` arm leaves
+    the field untouched.  ROLE + LEGALITY are load-bearing (they exclude the
+    server-only arm, exactly as `lemma_client_local_preserves_client_finished` uses
+    them for the LocalVerifyClientFinished arm).  Used at fdac's `deliver_to_client`
+    SECOND half to forward `Some? hs_client_finished` unchanged across the receive. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 100 --split_queries always"
+let lemma_recv_preserves_client_finished
+  (st st':CS.connection_state) (msg:M.tls_message)
+  : Lemma
+      (requires
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        CS.legal_tls_message st.CS.cs_model CL.Received msg /\
+        CS.step_tls_message st.CS.cs_model CL.Received msg == Some st'.CS.cs_model)
+      (ensures
+        st'.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+        st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    fdac DELIVER-TO-CLIENT — THE FIRST CRUX.
+
+    `deliver_to_client` consumes the in-flight `ToClient` payload (sealed by the
+    SERVER) and steps the CLIENT; channel `ToClient -> Quiet`, so BOTH halves of
+    fdac are active at `b` (`b.client = c'`, `b.server = a.server` frozen).
+
+    SECOND half (passive): `Some? c'.hs_client_finished ==> App(rd a.server)`.  A
+    client RECEIVE never touches `hs_client_finished`
+    (`lemma_recv_preserves_client_finished`), so `c'.hs_client_finished ==
+    a.client.hs_client_finished`; then `fdac a`'s second half (a is `ToClient`, so
+    `~ToServer`) carries `App(rd a.server) = App(rd b.server)` (server frozen).
+
+    FIRST half (the crux): `Some? a.server.hs_server_finished ==> App(rd c')`.  Case
+    split on the PRE-state client READ epoch `R.Application? (rd a.client)`:
+      * APP case: the receive is monotone — `lemma_recv_app_preserves_record_material`
+        (needs `~KeyUpdate`, from `lemma_recv_not_key_update`) forwards `App(rd c')`
+        unconditionally (does not even use the antecedent).
+      * ~APP case (RECORD-LEVEL faithful decode, mirror of
+        `HSP.lemma_hsp_deliver_to_client`'s non-cleartext branch): under the
+        antecedent, `sf_inflight_finished a` (ToClient, `~App(rd a.client)`, `Some?
+        hs_server_finished`) pins `sent` to a Finished.  A Finished is a non-cleartext
+        `TlsHandshake`, so the CARRIED clause `inflight_snap_handshake_write a` hands
+        the SLOT->RECORD SNAPSHOT gate `Handshake?(snap_wr p)` (established at the
+        send, consumed here — see the clause's ordering note).  `inflight_raw_delta_legal`
+        + `inflight_single_record` make `raw` a single `Application_data` record, so
+        the received `msg` is not cleartext (`HSP.lemma_hsp_client_recv_not_cleartext`,
+        control/epoch-free), whence the projection yields
+        `received_single_protected_message_decode a.client msg raw`.  From that
+        decode `lemma_protected_decode_read_key_present` gives `Some? (rd a.client).key`,
+        and `RKE.lemma_connection_consistent_read_key_present_not_initial` gives
+        `~Initial(rd a.client)`; with the ~App case that is `Handshake?(rd a.client)`
+        — the RECORD-level read gate.  Both gate halves in hand, `hs_channel_seal_ok a`
+        fires the bridge and `sc_hs_seq_ok a` (now ~terminal-free) supplies the
+        cross-endpoint seq alignment `snap.write.seq == a.client.read.seq`; the
+        peer-decode lemma then pins `msg == sent = Finished`, and
+        `lemma_recv_finished_installs_app_read` (role-free) lands `App(rd c')`.  The
+        `ControlFailed` sub-case is subsumed by that last lemma (a Finished into a
+        failed peer blocks, contradicting `step == Some c'`). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\ sf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        SY.tls_step_deliver_to_client a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.finished_delivered_appread_coupling b)
+  = SY.lemma_deliver_to_client_shape a b;
+    assert (ASP.finished_delivered_appread_coupling a);
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      b == { a with client = c'; channel = MP.Quiet }
+    returns ASP.finished_delivered_appread_coupling b
+    with _pf.
+    (
+      let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+      assert (a.channel == MP.ToClient p);
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+            { CL.message_direction = CL.Received; CL.message_value = msg } in
+         SMCan.canonical_wire_step a.client c' conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (CW.wire_serialize wire) /\
+         EC.network_input_message_projection a.client wire msg /\
+         EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns ASP.finished_delivered_appread_coupling b
+      with _pd.
+      (
+        let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+        assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
+        // SECOND half (passive): a client RECEIVE preserves `hs_client_finished`, so
+        // `fdac a`'s second half transfers (server frozen).  ROLE + LEGALITY (from
+        // `canonical_wire_step`) exclude the server-only CF-receive arm.
+        assert (a.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+        assert (CS.legal_tls_message a.client.CS.cs_model CL.Received msg);
+        lemma_recv_preserves_client_finished a.client c' msg;
+        // FIRST half (crux).
+        introduce
+          Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_server_finished
+          ==> R.Application? (ASP.rd c').R.epoch
+        with _hsf.
+        (
+          if R.Application? (ASP.rd a.client).R.epoch then
+          (
+            // APP case: monotone forward, unconditional.
+            ASP.lemma_recv_not_key_update c' msg;
+            ASP.lemma_recv_app_preserves_record_material a.client c' msg
+          )
+          else
+          (
+            // ~APP case: RECORD-LEVEL faithful decode.
+            // sf_inflight_finished a (ToClient, ~App(rd a.client), Some? hs_server_finished):
+            assert (M.TlsHandshake? sent /\ M.Finished? (M.TlsHandshake?._0 sent));
+            // A Finished is a non-cleartext TlsHandshake -> the carried snapshot gate.
+            assert (~(CS.network_message_is_cleartext CL.Sent sent));
+            assert (ASP.inflight_snap_handshake_write a);
+            assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+            // `raw` is a single Application_data record (send-side, non-cleartext).
+            assert (ASP.inflight_raw_delta_legal a /\ ASP.inflight_single_record a);
+            assert (CS.network_message_raw_delta_legal snap
+                      ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+            assert (CS.raw_records_exactly raw T.Application_data 1);
+            HSP.lemma_rre_nonempty raw;
+            CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+            W.lemma_parse_record_implies_parse_record_wire raw;
+            // received `msg` is not cleartext (control/epoch-free helper).
+            assert (CS.network_message_raw_delta_legal a.client.CS.cs_model
+                      ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
+            HSP.lemma_hsp_client_recv_not_cleartext a.client msg c'.CS.cs_model raw;
+            assert (CS.network_message_is_cleartext CL.Received msg == false);
+            // projection (~cleartext branch) -> the decode.
+            assert (SMCan.received_single_protected_message_decode a.client.CS.cs_model msg raw);
+            // RECORD-level read gate: decode -> key present -> ~Initial -> (with ~App) Handshake.
+            lemma_protected_decode_read_key_present a.client.CS.cs_model msg raw;
+            RKE.lemma_connection_consistent_read_key_present_not_initial a.client;
+            assert (R.Handshake? (ASP.rd a.client).R.epoch);
+            // Fire the bridge (hs_channel_seal_ok a) and the seq alignment (sc_hs_seq_ok a).
+            assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
+            assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.client);
+            assert (snap.CS.model_record.CS.record_write.R.seq ==
+                    a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+            // FAITHFUL DECODE: msg == sent = Finished.
+            CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+              snap a.client.CS.cs_model sent raw;
+            ASP.lemma_decode_functional a.client.CS.cs_model msg sent raw;
+            assert (msg == sent);
+            // Finished receive installs App read epoch (role-free; ControlFailed blocks).
+            lemma_recv_finished_installs_app_read a.client.CS.cs_model c'.CS.cs_model msg
+          )
+        )
+      )
+    )
+#pop-options
+
 (** ─────────────────────────────────────────────────────────────────────────
     Application WRITE epoch FORWARD across a LOCAL step (empty byte-delta).
 

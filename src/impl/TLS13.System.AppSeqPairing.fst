@@ -64,6 +64,7 @@ module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
 module HANR = TLS13.ConnectionState.HandshakeAgreementNonReady
 module WFL  = TLS13.Spec.WireFormatLemmas
 module SLM  = TLS13.System.SlotMono
+module RKE  = TLS13.ConnectionState.RecordKeyEpoch
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -1550,11 +1551,51 @@ let finished_delivered_appread_coupling (s:SY.tls_system_state) : prop =
       (Some? s.client.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==>
          R.Application? (rd s.server).R.epoch) )
 
+(** (12) IN-FLIGHT SNAPSHOT HANDSHAKE-WRITE EPOCH — for a PROTECTED (non-cleartext)
+    handshake message in flight TO THE CLIENT, the sealing snapshot's write record is
+    at the `Handshake` epoch.
+
+    WHY IT IS A CARRIED FACT (establish-then-consume, like `inflight_raw_delta_legal`
+    and the seq-alignment arm): `Handshake?(snap_wr)` is PROVABLE AT THE SEND but
+    UNDERIVABLE AT THE DELIVERY.  At the send the pre-send server `= pl_snap` sits at
+    `HsServerHelloSent` (EE) / `HsServerEncryptedFlightSent` (Cert/CV/SF) — inside the
+    `lemma_server_handshake_write_record_has_keys` region — so has-keys (=> `Some?
+    write.key`) + `lemma_server_handshake_send_write_epoch_not_application` (=> `~App`)
+    + `RKE.lemma_connection_consistent_write_key_present_not_initial` (=> `~Initial`)
+    give `Handshake?`.  At the DELIVERY the snapshot's `connection_state` is
+    unreconstructable — the payload carries only `pl_snap : connection_model`, no
+    `raw_sent` (System.fst:87; see the `read_write_coupling` doc comment) — and the
+    model-level facts permit a `~Handshake(snap_wr)` "garbage-raw" reading (the
+    protected branch of `network_message_raw_delta_legal` is only `raw_records_exactly
+    raw Application_data count`, tying `raw` to no seal), so the fact MUST be carried,
+    not re-derived.
+
+    NON-CIRCULAR: established at the send with NO appeal to decode; consumed at the
+    delivery to DISCHARGE the `Handshake?(snap_wr)` half of `hs_channel_seal_ok`'s
+    bridge gate (the receiver-read half comes from `RKE` off the delivery's own
+    protected-decode).  Guard is `TlsHandshake?` AND `~cleartext`: a
+    ClientHello/ServerHello send is cleartext (Initial write, excluded); an
+    app-data/KeyUpdate send is not `TlsHandshake?` (its App/Application write is
+    excluded) — leaving exactly the EE/Cert/CV/Finished flight, all at Handshake write.
+
+    TOSERVER ARM: `True` for now; the symmetric client-Finished establishment
+    (pre-send client at `HsServerFinishedVerified`, via
+    `lemma_client_finished_verified_write_epoch_handshake`) lands with
+    `lemma_fdac_deliver_to_server`. **)
+let inflight_snap_handshake_write (s:SY.tls_system_state) : prop =
+  match s.channel with
+  | MP.ToClient p ->
+      (M.TlsHandshake? p.SY.pl_sent /\
+       ~(CS.network_message_is_cleartext CL.Sent p.SY.pl_sent)) ==>
+        R.Handshake? (snap_wr p).R.epoch
+  | _ -> True
+
 let app_extras (s:SY.tls_system_state) : prop =
   app_seq_pairing s /\
   app_material_agreement s /\ channel_seal_ok s /\
   inflight_sender_stepped s /\ inflight_single_record s /\
   inflight_raw_delta_legal s /\
+  inflight_snap_handshake_write s /\
   read_write_coupling s /\
   quiet_appdata_write_coupling s /\
   hs_material_agreement s /\
@@ -1812,6 +1853,56 @@ let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
            CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm
        | _ -> ());
       lemma_server_send_count a.server s' local out w sent
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    ESTABLISHMENT of `inflight_snap_handshake_write` at the SERVER send (ToClient
+    arm).  Same eliminate shape as `lemma_asp_server_send_inflight`.  For a
+    non-cleartext handshake message (EE/Cert/CV/Finished) the pre-send server sits
+    at `HsServerHelloSent` (EE) or `HsServerEncryptedFlightSent` (Cert/CV/SF) — both
+    in the `has_keys` region — so has-keys + not-application + `RKE` give the
+    `Handshake?` write epoch.  ServerHello is cleartext (guard false); no Sent HRR
+    arm exists (the step would be `None`, contradicting `Some s'`).
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+let lemma_asp_server_send_snap_handshake_write (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+        SY.tls_step_server_send a b /\ SY.tls_no_rekeying b)
+      (ensures inflight_snap_handshake_write b)
+  = SY.lemma_server_send_shape a b;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
+    returns inflight_snap_handshake_write b
+    with _pf.
+    (
+      lemma_server_send_pins_model a.server s' local out sent;
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Sent sent == Some s'.CS.cs_model);
+      (match sent with
+       | M.TlsHandshake hm ->
+           (match hm with
+            | M.EncryptedExtensions _
+            | M.Certificate _
+            | M.CertificateVerify _
+            | M.Finished _ ->
+                CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm;
+                assert (a.server.CS.cs_model.CS.model_control ==
+                          CS.ControlHandshaking CS.HsServerHelloSent \/
+                        a.server.CS.cs_model.CS.model_control ==
+                          CS.ControlHandshaking CS.HsServerEncryptedFlightSent);
+                assert (Some? a.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+                CSL.lemma_server_handshake_write_record_has_keys a.server;
+                assert (Some? a.server.CS.cs_model.CS.model_record.CS.record_write.R.key);
+                RKE.lemma_connection_consistent_write_key_present_not_initial a.server
+            | _ -> ())
+       | _ -> ())
     )
 #pop-options
 
