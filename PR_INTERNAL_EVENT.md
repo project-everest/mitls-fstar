@@ -44,27 +44,27 @@ path.
 
 ## Scope
 
-`c7bec267b..91ad0eafa`, 38 commits.
+`c7bec267b..chromium`, 42 commits.
 
 ```
- 91 files changed, 9846 insertions(+), 2242 deletions(-)
+ 92 files changed, 9994 insertions(+), 2249 deletions(-)
 ```
 
 | Area | Files | +/- |
 |---|---|---|
-| `src/spec` | 22 | +2288 / −277 |
-| `src/impl` | 29 | +3576 / −466 |
-| `docs` (incl. the plan) | 8 | +2831 / −143 |
-| `common` | 2 | +586 / −2 |
-| samples | 20 | +221 / −25 |
-| `Makefile` | 1 | +89 / −7 |
-| `scripts/`, `setup.sh`, `generated/` | 4 | +82 / −3 |
+| `src/spec` | 22 | +2301 / −282 |
+| `src/impl` | 31 | +3635 / −476 |
+| `docs` (incl. the plan) | 8 | +2963 / −143 |
+| `common` | 2 | +596 / −2 |
+| samples | 20 | +256 / −25 |
+| `Makefile` | 1 | +100 / −7 |
+| `scripts/`, `setup.sh`, `generated/`, CI | 6 | +143 / −17 |
 | **`runtime/` + `c_stubs/` (C)** | **0** | **0 / 0** |
 
 The deletion count is dominated by the stale `test/unit/test_connection_bindings.c`
 (1297 lines) described below.
 
-Three of the 38 commits are not part of the refactor proper and can be reviewed
+Five of the 42 commits are not part of the refactor proper and can be reviewed
 independently:
 
 - **`Upgrade the toolchain to Z3 4.15.3`.** Z3 4.13.3 aborts with an internal
@@ -79,8 +79,20 @@ independently:
 - **`Key the CI devcontainer cache on the Z3 install script`.** The cached
   devcontainer image contains the solver, but `scripts/install-z3.sh` was not in
   the cache key, so a later Z3 bump would have silently reused an image with the
-  old solver. Same staleness class as `.checked` files not recording the solver
-  version.
+  old solver.
+- **`Inline no_internal_events so it never reaches extraction`.** The
+  no-internal-events compatibility classifier returns `bool`, so KaRaMeL
+  monomorphized it per instantiation and the dead result named a spec-only type
+  that is in no extraction bundle. Broke the TFTP and YMODEM C builds;
+  `inline_for_extraction` removes it from extraction entirely.
+- **`Key the generated-parser CI cache on the sources it caches`.** The cache
+  holds `.checked` files for the committed `generated/**` modules but was keyed
+  on `tls.qd.rfc`, the QuackyDucky input they are generated *from*. `agentic`
+  and `chromium` share a `tls.qd.rfc` while their committed `generated/` sources
+  differ, so this PR restored `agentic`'s entry and `--already_cached` turned
+  the digest mismatch into `Error 317`. Now keyed on `generated/**` itself.
+  Also collapses the eight independent spellings of the pinned Z3 version into
+  `scripts/z3-version.txt`.
 
 ### The C is untouched — literally
 
@@ -256,7 +268,7 @@ sample. `admit-count` / `check-admits` were widened from
 
 ## Verification
 
-No admits. No assumes. Green at every one of the 38 commits' phase boundaries,
+No admits. No assumes. Green at every one of the 42 commits' phase boundaries,
 and at the tip:
 
 ```
@@ -385,10 +397,10 @@ look separately — they are equally unreferenced by the build.
 ## Note on the merge direction
 
 `origin/agentic` has not moved since 2026‑07‑30 (`93e13a73`), which is the merge
-base for this branch. `chromium` is 66 commits ahead and 0 behind, and every
+base for this branch. `chromium` is 70 commits ahead and 0 behind, and every
 `agentic_*` sibling branch is also an ancestor of this tip.
 
-This PR therefore carries **66** commits, not the 38 described above. The other
+This PR therefore carries **70** commits, not the 42 described above. The other
 28 are pre-existing chromium-branch work that landed before the refactor began:
 
 - commits 1–11: the transport-neutral client engine, its stable C API, the
