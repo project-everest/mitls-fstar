@@ -1390,7 +1390,36 @@ let legal_handshake_message
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
-    Some? hs.hs_keys.ks_server_application_traffic
+    Some? hs.hs_keys.ks_server_application_traffic /\
+    // Stream-integrity fix (RECORD level, not slot level).  The three conjuncts
+    // above are SLOT-level (key-schedule slots); they say nothing about the
+    // RECORD layer.  The client's handshake-WRITE record install is an OPTIONAL
+    // local (`traffic_install_allowed_at_stage_for_role` only *permits* it at
+    // `HsServerHelloReceived`; nothing compels it), so without this conjunct a
+    // client could legally send its Finished with
+    // `model_record.record_write.epoch == Initial` and no write key.  `Sent,
+    // Finished` is not cleartext, so the protected branch of
+    // `network_message_raw_delta_legal` would then tie the wire bytes to no seal
+    // at all -- a "garbage protected" record -- which makes the ToServer
+    // handshake-seal bridge genuinely FALSE, not merely underivable.  The server
+    // side has no such hole because its handshake-write install is control-forced
+    // (`lemma_server_handshake_write_record_has_keys`).
+    //
+    // This is the same move as the `Received, Finished, HsServerFinishedSent` arm
+    // immediately above, one level down.  It is faithful to TLS 1.3: a client
+    // cannot send an encrypted Finished without its handshake write keys.  The
+    // Pulse client driver selects `LocalInstallClientHandshakeTrafficKeys`
+    // (TrafficHandshake + TrafficWrite) at `HsServerHelloReceived`, well before
+    // the Finished send, so the guard is always satisfied by the implementation.
+    //
+    // WEAKEST SUFFICIENT GUARD: only `Some? key` is demanded, not `Some?
+    // static_iv` and not an epoch pin.  Under `connection_state_consistent`,
+    // `Some? key` already excludes `R.Initial` (the Initial arm forces
+    // `key == None`) and the committed negative-epoch lemmas exclude
+    // `R.Application`, so `lemma_client_finished_verified_write_epoch_handshake`
+    // yields `epoch == R.Handshake`; consistency's Handshake arm then supplies
+    // the full traffic-material match, hence `static_iv` too.
+    Some? model.model_record.record_write.R.key
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
     model.model_config.config_role == ClientEndpoint /\
     True

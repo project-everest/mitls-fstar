@@ -163,12 +163,10 @@ let terminal_control (c:CS.connection_control_state) : bool =
 let cs_hs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToServer p ->
-      (R.Handshake? (ASP.snap_wr p).R.epoch /\ R.Handshake? (ASP.rd s.server).R.epoch /\
-       not (terminal_control s.server.CS.cs_model.CS.model_control)) ==>
+      (R.Handshake? (ASP.snap_wr p).R.epoch /\ R.Handshake? (ASP.rd s.server).R.epoch) ==>
          snap_hs_wseq p == hs_rseq s.server
   | _ ->
-      (R.Handshake? (ASP.wr s.client).R.epoch /\ R.Handshake? (ASP.rd s.server).R.epoch /\
-       not (terminal_control s.server.CS.cs_model.CS.model_control)) ==>
+      (R.Handshake? (ASP.wr s.client).R.epoch /\ R.Handshake? (ASP.rd s.server).R.epoch) ==>
          hs_wseq s.client == hs_rseq s.server
 
 (** ── S -> C direction (server writes, client reads). ──
@@ -238,29 +236,45 @@ let hs_seq_pairing (s:SY.tls_system_state) : prop =
 
 (** The HANDSHAKE-epoch in-flight SEAL + faithful-decode conjunct.
 
-    This carries ONLY the `ToClient` (server->client) handshake faithful-decode
-    bridge: an in-flight server->client PROTECTED-HANDSHAKE record, sealed under
-    the server's handshake WRITE material, is faithfully decodable by the client's
-    handshake READ material (key/iv agreement + single-record seal + roundtrip).
-    The `ToServer` arm is `True`: the client never sends a protected
-    handshake-WRITE record (its only handshake-stage send is the cleartext
-    ClientHello, and its Finished is sent under app-write keys), so the server
-    never receives a protected-handshake payload that stays handshake-read
-    post-step.
+    This carries BOTH handshake faithful-decode bridges: an in-flight PROTECTED
+    record, sealed under the sender's handshake WRITE material, is faithfully
+    decodable by the receiver's handshake READ material (key/iv agreement +
+    single-record seal + roundtrip).  `ToClient` is the server->client direction
+    (EE/Cert/CV/SF); `ToServer` is the client->server direction (the client
+    Finished).
 
     The gate MIRRORS `sc_hs_seq_ok`'s in-flight arm: BOTH the sealing snapshot's
-    write epoch AND the receiver's read epoch must be `Handshake`, and the
-    receiver must be non-terminal.  `~terminal(client)` is BACKWARD-MONOTONE
-    (terminal is absorbing).  The `Handshake?(rd client)` conjunct is LOAD-BEARING:
-    without it a server at handshake-write sending a protected `Close_notify` to a
-    live non-terminal client already collapsed to `Application` read would falsify
-    the bridge (handshake-write vs app-read material). **)
+    write epoch AND the receiver's read epoch must be `Handshake`.  The
+    `Handshake?(rd receiver)` conjunct is LOAD-BEARING: without it a server at
+    handshake-write sending a protected `Close_notify` to a live client already
+    collapsed to `Application` read would falsify the bridge (handshake-write vs
+    app-read material).
+
+    The `ToServer` arm is the exact mirror, added once the client's Finished send
+    was made RECORD-KEY-SAFE.  Before that spec strengthening the arm would have
+    been genuinely FALSE, not merely underivable: `legal_tls_message`'s
+    `Sent/Finished/HsServerFinishedVerified` arm was SLOT-level only, so a client
+    could legally emit a protected Finished with `record_write.epoch == Initial`
+    and no write key at all — a "garbage protected" record for which no key/iv
+    agreement can hold.  The arm now demands `Some? record_write.R.key`
+    (StateMachine.fst), which is what makes this mirror true.
+
+    The gate is IDENTICAL in shape on both arms and the SNAPSHOT half is
+    LOAD-BEARING for the same reason: `Handshake?(snap_wr p)` confines the
+    key/iv agreement demand to the window where the sender's write epoch and the
+    receiver's read epoch actually match.  Dropping it would assert agreement
+    across the alert-inflation window (a handshake-keyed alert in flight to a peer
+    that has already collapsed to `Application` read), which is false. **)
 let hs_channel_seal_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
       (R.Handshake? (ASP.snap_wr p).R.epoch /\
        R.Handshake? (ASP.rd s.client).R.epoch) ==>
         ASP.inflight_bridge_ready p.SY.pl_snap s.client.CS.cs_model p.SY.pl_sent p.SY.pl_raw
+  | MP.ToServer p ->
+      (R.Handshake? (ASP.snap_wr p).R.epoch /\
+       R.Handshake? (ASP.rd s.server).R.epoch) ==>
+        ASP.inflight_bridge_ready p.SY.pl_snap s.server.CS.cs_model p.SY.pl_sent p.SY.pl_raw
   | _ -> True
 
 module SMR  = TLS13.Spec.StateMachine.Reachability
@@ -2893,12 +2907,19 @@ let lemma_send_seal (model:CS.connection_model) (sent:M.tls_message) (raw:B.byte
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
 (* Client: at pre-handshake-write-key controls, write epoch is Initial. *)
+(* `HsClientHelloSent` is included: the client's handshake WRITE key install is
+   legal ONLY at `HsServerHelloReceived` (`traffic_install_allowed_at_stage`), and
+   the CH send that enters `HsClientHelloSent` does not touch `record_write`, so
+   the write epoch is still `Initial` there.  Consumed by
+   `lemma_client_hs_send_hellos` to exclude the one `client_stage_ok` control that
+   lower-bounds only `hs_client_hello`. *)
 let cinit_shape (model:CS.connection_model) : prop =
   model.CS.model_config.CS.config_role == CS.ClientEndpoint ==>
   (match model.CS.model_control with
    | CS.ControlNew
    | CS.ControlHandshaking CS.HsNotStarted
-   | CS.ControlHandshaking CS.HsStarted ->
+   | CS.ControlHandshaking CS.HsStarted
+   | CS.ControlHandshaking CS.HsClientHelloSent ->
      model.CS.model_record.CS.record_write.R.epoch == R.Initial
    | _ -> True)
 
@@ -3487,80 +3508,6 @@ let lemma_server_hs_read_recv_count_zero
     )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
-let lemma_hsp_deliver_to_server
-  (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
-  (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
-  (snap:CS.connection_model) (sent:M.tls_message)
-  : Lemma
-      (requires
-        SY.tls_system_inv a /\ ASP.app_extras a /\ hs_seq_pairing a /\
-        a.channel == SY.tls_to_server raw snap sent /\
-        Seq.equal (CW.wire_serialize wire) raw /\
-        ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
-        SY.tls_no_rekeying ({ a with server = s'; channel = MP.Quiet }))
-      (ensures hs_seq_pairing ({ a with server = s'; channel = MP.Quiet }))
-  = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
-    let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
-    assert (cs_hs_seq_ok a /\ sc_hs_seq_ok a);
-    assert (a.channel == MP.ToServer p);
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent
-          { CL.message_direction = CL.Received; CL.message_value = msg } in
-       SMCan.canonical_wire_step a.server s' conn_ev
-         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
-         (CW.wire_serialize wire) /\
-       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns hs_seq_pairing b
-    with _pd.
-    (
-      let conn_ev = CS.ConnNetworkEvent
-        { CL.message_direction = CL.Received; CL.message_value = msg } in
-      Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
-      assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
-      // server WRITE frozen by the receive: full slot equality (epoch + seq).
-      lemma_recv_preserves_wr_full a.server.CS.cs_model s'.CS.cs_model msg;
-      // SC arm (EASY): server writes, client reads; the client is untouched, and
-      // the frozen server write transfers the pre-state Quiet-analog `sc` clause.
-      assert (sc_hs_seq_ok b);
-      // CS arm (SUBSTANTIVE, but 0==0 here — this model has no client auth, so
-      // the client never advances a protected HANDSHAKE-write while the server is
-      // at a Handshake READ, and the server never advances a Handshake READ at all;
-      // the CF-window client HANDSHAKE-write-1 is rescued because delivering it
-      // moves the server to the post-CF (App-read) region, killing the gate).
-      introduce (R.Handshake? (ASP.wr a.client).R.epoch /\
-                 R.Handshake? (ASP.rd s').R.epoch /\
-                 not (terminal_control s'.CS.cs_model.CS.model_control))
-                ==> hs_wseq a.client == hs_rseq s'
-      with _g.
-      (
-        let cfg_s = a.server.CS.cs_model.CS.model_config in
-        // s' is reachable and consistent (one legal server step from a.server).
-        WStep.lemma_server_reachable_step
-          (CS.initial cfg_s) a.server s' (SM.WireEvent wire) out;
-        lemma_server_step_single_step a.server (SM.WireEvent wire) s' out;
-        lemma_step_preserves_consistent a.server s';
-        WStep.lemma_step_model_preserves_config a.server.CS.cs_model conn_ev s'.CS.cs_model;
-        // BYTE EQUALITY  a.client.raw_sent == s'.raw_received.
-        //   canonical_wire_step:  s'.raw_received == a.server.raw_received ++ raw
-        //   byte_pairing (ToServer p):  a.client.raw_sent == a.server.raw_received ++ raw
-        assert (Seq.equal s'.CS.cs_wire_log.CL.raw_received
-                  (B.append a.server.CS.cs_wire_log.CL.raw_received raw));
-        assert (Seq.equal a.client.CS.cs_wire_log.CL.raw_sent
-                  (B.append a.server.CS.cs_wire_log.CL.raw_received raw));
-        Seq.lemma_eq_elim a.client.CS.cs_wire_log.CL.raw_sent
-                          s'.CS.cs_wire_log.CL.raw_received;
-        // The server, at a Handshake READ epoch (non-terminal), has received ZERO
-        // ApplicationData-typed records.
-        lemma_server_hs_read_recv_count_zero cfg_s s';
-        WStep.lemma_raw_appdata_count_seq_equal
-          s'.CS.cs_wire_log.CL.raw_received a.client.CS.cs_wire_log.CL.raw_sent;
-        // Both cs-direction handshake projections collapse to 0.
-        lemma_cs_zero_from_counts a.client s'
-      );
-      assert (cs_hs_seq_ok b)
-    )
-#pop-options
 
 (** SEND write-epoch monotonicity (the piece that dissolves the "snapshot NOT
     handshake write" branch).  A non-`KeyUpdate` `Sent` step NEVER installs a
@@ -3924,6 +3871,155 @@ let lemma_hs_send_recv_seq_couple
 #pop-options
 
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_hsp_deliver_to_server
+  (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
+  (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+  (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\ hs_seq_pairing a /\
+        a.channel == SY.tls_to_server raw snap sent /\
+        Seq.equal (CW.wire_serialize wire) raw /\
+        ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        hs_channel_seal_ok a /\
+        SY.tls_no_rekeying ({ a with server = s'; channel = MP.Quiet }))
+      (ensures hs_seq_pairing ({ a with server = s'; channel = MP.Quiet }))
+  = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
+    let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    assert (cs_hs_seq_ok a /\ sc_hs_seq_ok a);
+    assert (a.channel == MP.ToServer p);
+    eliminate exists (msg:M.tls_message).
+      (let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+       SMCan.canonical_wire_step a.server s' conn_ev
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+         (CW.wire_serialize wire) /\
+       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    returns hs_seq_pairing b
+    with _pd.
+    (
+      let conn_ev = CS.ConnNetworkEvent
+        { CL.message_direction = CL.Received; CL.message_value = msg } in
+      Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
+      // server WRITE frozen by the receive: full slot equality (epoch + seq).
+      lemma_recv_preserves_wr_full a.server.CS.cs_model s'.CS.cs_model msg;
+      // SC arm (EASY): server writes, client reads; the client is untouched, and
+      // the frozen server write transfers the pre-state Quiet-analog `sc` clause.
+      assert (sc_hs_seq_ok b);
+      // CS arm (SUBSTANTIVE): EXACT MIRROR of `lemma_hsp_deliver_to_client`'s SC
+      // arm, now that the `~terminal` gate is gone from `cs_hs_seq_ok`.  The old
+      // counts-collapse route is no longer AVAILABLE: it went through
+      // `lemma_server_hs_read_recv_count_zero`, which is TRUE AS STATED but carries
+      // `not (terminal_control ...)` as an explicit hypothesis — precisely the fact
+      // the gate used to supply.  It cannot be generalized by dropping that
+      // hypothesis, because its CONCLUSION genuinely fails at a `ControlFailed`
+      // server: such a server may have received a protected — hence
+      // `Application_data`-typed — alert while still at a Handshake read, so its
+      // received app-data count need not be 0.  (That lemma is consequently now
+      // unused; it is retained as documentation of the dead route.)
+      // Closed instead via FAITHFUL DECODE of the in-flight client handshake record
+      // (`msg == sent`), from `hs_channel_seal_ok a`'s ToServer bridge plus the
+      // cross-endpoint alignment carried by `cs_hs_seq_ok a`, composed with the
+      // send/receive seq coupling — which subsumes the terminal and non-terminal
+      // `s'` cases uniformly.
+      introduce (R.Handshake? (ASP.wr a.client).R.epoch /\
+                 R.Handshake? (ASP.rd s').R.epoch)
+                ==> hs_wseq a.client == hs_rseq s'
+      with _g.
+      (
+        // Expose the carried in-flight facts from `app_extras`.
+        assert (ASP.inflight_sender_stepped a /\ ASP.inflight_raw_delta_legal a /\
+                ASP.inflight_single_record a);
+        // (0) The frozen SENDER stepped from the snapshot.
+        assert (CS.step_tls_message snap CL.Sent sent == Some a.client.CS.cs_model);
+        assert (~(M.TlsKeyUpdate? sent));
+        // (1) POST Handshake write (gate) forces a PRE (snapshot) Handshake write.
+        lemma_hs_send_preserves_hs_write snap a.client.CS.cs_model sent;
+        assert (R.Handshake? snap.CS.model_record.CS.record_write.R.epoch);
+        assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+        if CS.network_message_is_cleartext CL.Sent sent then
+        (
+          assert (CS.network_message_raw_delta_legal snap
+                    ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+          assert (CS.cleartext_tls_message_raw sent raw);
+          lemma_cleartext_sent_raw_not_appdata sent raw;
+          if R.Handshake? (ASP.rd a.server).R.epoch then
+          (
+            // Gate fires: the seal claims `raw` parses as an Application_data
+            // record, contradicting the cleartext record above.
+            assert (ASP.inflight_bridge_ready snap a.server.CS.cs_model sent raw);
+            assert (SMCan.sent_single_protected_message_seal snap sent raw);
+            W.lemma_parse_record_implies_parse_record_wire raw;
+            assert (hs_wseq a.client == hs_rseq s')
+          )
+          else
+          (
+            // A network receive never installs a Handshake read epoch, so `rd s'`
+            // is not Handshake either — contradicting the gate.
+            lemma_recv_preserves_read_epoch_handshake
+              a.server.CS.cs_model s'.CS.cs_model msg;
+            assert (hs_wseq a.client == hs_rseq s')
+          )
+        )
+        else
+        (
+          // NON-cleartext in-flight send: `pl_raw` is a single Application_data record.
+          assert (CS.protected_record_count CL.Sent sent == 1);
+          assert (CS.network_message_raw_delta_legal snap
+                    ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+          assert (CS.raw_records_exactly raw T.Application_data 1);
+          lemma_rre_nonempty raw;
+          assert (B.length raw > 0);
+          CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+          W.lemma_parse_record_implies_parse_record_wire raw;
+          // (3) The received message is NOT cleartext.  The hinge is ROLE-FREE and
+          //     CONTROL-FREE (it reads only the model + raw), so the client-named
+          //     lemma applies verbatim to the server receiver.
+          assert (CS.network_message_raw_delta_legal a.server.CS.cs_model
+                    ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
+          lemma_hsp_client_recv_not_cleartext a.server msg s'.CS.cs_model raw;
+          assert (CS.network_message_is_cleartext CL.Received msg == false);
+          // (4) The server is at a Handshake read epoch (receive preserves it).
+          lemma_recv_preserves_read_epoch_handshake a.server.CS.cs_model s'.CS.cs_model msg;
+          assert (R.Handshake? (ASP.rd a.server).R.epoch);
+          assert (SMR.connection_state_consistent a.server);
+          // (5) `hs_channel_seal_ok a`'s ToServer arm fires: the bridge holds.
+          assert (ASP.inflight_bridge_ready snap a.server.CS.cs_model sent raw);
+          assert (SMCan.sent_single_protected_message_seal snap sent raw);
+          // (6) Fire the pre-state in-flight `cs` clause (now ~terminal-free).
+          assert (snap_hs_wseq p == hs_rseq a.server);
+          // (7) FAITHFUL DECODE: `msg == sent`.
+          CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+            snap a.server.CS.cs_model sent raw;
+          assert (SMCan.received_single_protected_message_decode a.server.CS.cs_model sent raw);
+          assert (SMCan.received_single_protected_message_decode a.server.CS.cs_model msg raw);
+          ASP.lemma_decode_functional a.server.CS.cs_model msg sent raw;
+          assert (msg == sent);
+          assert (CS.step_tls_message a.server.CS.cs_model CL.Received sent == Some s'.CS.cs_model);
+          // (8) THE COUPLING subsumes both the terminal and non-terminal `s'` cases.
+          assert (SMR.connection_state_consistent a.client);
+          let cfg_s = a.server.CS.cs_model.CS.model_config in
+          WStep.lemma_server_reachable_step
+            (CS.initial cfg_s) a.server s' (SM.WireEvent wire) out;
+          lemma_server_step_single_step a.server (SM.WireEvent wire) s' out;
+          lemma_step_preserves_consistent a.server s';
+          assert (SMR.connection_state_consistent s');
+          lemma_hs_send_recv_seq_couple snap a.client a.server s' sent;
+          assert (m_hwseq snap == snap_hs_wseq p);
+          assert (m_hrseq a.server.CS.cs_model == hs_rseq a.server);
+          assert (R.Handshake? (ASP.m_wr a.client.CS.cs_model).R.epoch);
+          assert (R.Handshake? (ASP.m_rd s'.CS.cs_model).R.epoch);
+          assert (hs_wseq a.client == (ASP.m_wr a.client.CS.cs_model).R.seq);
+          assert (hs_rseq s' == (ASP.m_rd s'.CS.cs_model).R.seq);
+          assert (hs_wseq a.client == hs_rseq s')
+        )
+      );
+      assert (cs_hs_seq_ok b)
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
 let lemma_hsp_deliver_to_client
   (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -4105,25 +4201,8 @@ let lemma_sent_step_not_failed
   = ()
 #pop-options
 
-(** VACUOUS — CLIENT SEND (post channel `MP.ToServer` -> `_ -> True`). **)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
-let lemma_hscs_client_send (a b:SY.tls_system_state)
-  : Lemma
-      (requires
-        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
-        SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
-      (ensures hs_channel_seal_ok b)
-  = SY.lemma_client_send_shape a b;
-    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
-                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
-                     (sent:M.tls_message).
-      EC.client_step a.client (SM.LocalEvent local) c' out /\
-      out.SM.so_wire_outputs == [w] /\
-      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
-      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns hs_channel_seal_ok b
-    with _pf. ()
-#pop-options
+(** SUBSTANTIVE — CLIENT SEND (post channel `MP.ToServer`).  Proved below, after
+    the ToServer bridge machinery; see `lemma_hscs_client_send`. **)
 
 (** VACUOUS — SERVER LOCAL (channel unchanged = `MP.Quiet`). **)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
@@ -4555,6 +4634,324 @@ let lemma_hscs_bridge_material (client server:CS.connection_state)
       (SMKI.traffic_id CS.TrafficHandshake CS.ServerTraffic) client server
 #pop-options
 
+(* ══════════════════════════════════════════════════════════════════════════
+   ToSERVER MIRROR MACHINERY (client-write / server-read handshake bridge).
+
+   Everything below mirrors, one for one, the ToClient machinery above, with the
+   roles swapped and the traffic label `ServerTraffic -> ClientTraffic`.  Four
+   pieces are needed that the ToClient direction did not have:
+
+     (A) `lemma_consistent_client_ctrl_hellos_lb` — the monotone control-keyed
+         hello lower bound, standing alone (the ToClient route only ever used it
+         inside `client_read_hellos_shape`).
+     (B) `lemma_client_hs_send_hellos` — the CLIENT-side mirror of
+         `lemma_server_hs_send_hellos`: hellos at a protected client SEND.
+     (C) `sr_ctrl_shape` — the SERVER mirror of `cr_ctrl_shape`: a non-failed
+         server on a `Handshake` READ epoch sits at one of exactly three controls.
+     (D) `server_read_hellos_shape` / `lemma_server_hs_read_hellos_cf` — the
+         SERVER mirror of `lemma_client_hs_read_hellos_cf`, CF-tolerant.
+   ══════════════════════════════════════════════════════════════════════════ *)
+
+(* (A) — `client_ctrl_hellos_lb` is self-inductive (`lemma_step_client_ctrl_hellos_lb`);
+   lift it to a standalone reachable fact. *)
+let conn_client_ctrl_hellos_lb (st:CS.connection_state) : prop =
+  client_ctrl_hellos_lb st.CS.cs_model
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_client_ctrl_hellos_lb (st0 st1:CS.connection_state)
+  : Lemma
+      (requires conn_client_ctrl_hellos_lb st0 /\ SMR.connection_state_single_step st0 st1)
+      (ensures conn_client_ctrl_hellos_lb st1)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    lemma_step_client_ctrl_hellos_lb st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+#pop-options
+
+let lemma_single_step_client_ctrl_hellos_lb (_:unit)
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (conn_client_ctrl_hellos_lb y); (SMR.connection_state_single_step x y)}
+          conn_client_ctrl_hellos_lb x /\ SMR.connection_state_single_step x y ==>
+            conn_client_ctrl_hellos_lb y)
+  = introduce forall x y.
+      conn_client_ctrl_hellos_lb x /\ SMR.connection_state_single_step x y ==>
+        conn_client_ctrl_hellos_lb y
+    with introduce _ ==> _ with _.
+      lemma_delta_client_ctrl_hellos_lb x y
+
+let lemma_initial_client_ctrl_hellos_lb (cfg:CS.connection_config)
+  : Lemma (ensures conn_client_ctrl_hellos_lb (CS.initial cfg))
+  = ()
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_consistent_client_ctrl_hellos_lb (st:CS.connection_state)
+  : Lemma
+      (requires SMR.connection_state_consistent st)
+      (ensures conn_client_ctrl_hellos_lb st)
+  = lemma_initial_client_ctrl_hellos_lb st.CS.cs_model.CS.model_config;
+    lemma_single_step_client_ctrl_hellos_lb ();
+    let p = conn_client_ctrl_hellos_lb in
+    let stable :
+      squash (forall (x:CS.connection_state) (y:CS.connection_state).
+        {:pattern (p y); (SMR.connection_state_single_step x y)}
+        p x /\ SMR.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure SMR.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (SMR.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+#pop-options
+
+(** (B) CLIENT hellos at a protected-handshake SEND — mirror of
+    `lemma_server_hs_send_hellos`.  `~ControlFailed` excludes the failed control;
+    `cinit_shape` (write epoch `Handshake`) excludes `ControlNew`/`HsNotStarted`/
+    `HsStarted`/`HsClientHelloSent`, i.e. every control at which `client_stage_ok`
+    fails to lower-bound BOTH hellos; `client_stage_ok = False` rules out the
+    server-only controls.  The remaining controls split into the client
+    handshake-flight controls through `ControlApplicationData` (via
+    `client_stage_ok`) and the closing region (via `client_ctrl_hellos_lb`). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_client_hs_send_hellos (st:CS.connection_state)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        ~(CS.ControlFailed? st.CS.cs_model.CS.model_control) /\
+        R.Handshake? st.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+        SY.client_stage_ok st)
+      (ensures
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_hello)
+  = lemma_consistent_cinit_shape st;
+    lemma_consistent_client_ctrl_hellos_lb st
+#pop-options
+
+(** (C) SERVER read-control shape — mirror of `cr_ctrl_shape`.  The server's
+    handshake READ key installs only at `HsServerHelloSent`
+    (`traffic_install_allowed_at_stage_for_role`, `TrafficHandshake`/`TrafficRead`),
+    so before that the read epoch is `Initial`; and the read epoch leaves
+    `Handshake` (to `Application`) atomically at the client-Finished receive
+    (StateMachine.fst's unique successful `Received Finished` arm installs the
+    application read key in the SAME step), which lands the server at
+    `HsClientFinishedReceived`.  Hence read stays `Handshake` exactly across the
+    three controls below.  Role-gated (immutable) so client states are vacuous. **)
+let server_read_hs_control (st:CS.handshake_stage) : bool =
+  match st with
+  | CS.HsServerHelloSent | CS.HsServerEncryptedFlightSent
+  | CS.HsServerFinishedSent -> true
+  | _ -> false
+
+let sr_ctrl_shape (model:CS.connection_model) : prop =
+  (model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+   R.Handshake? model.CS.model_record.CS.record_read.R.epoch /\
+   ~(CS.ControlFailed? model.CS.model_control)) ==>
+    (match model.CS.model_control with
+     | CS.ControlHandshaking st -> server_read_hs_control st
+     | _ -> False)
+
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_step_sr_ctrl_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
+  : Lemma
+      (requires sr_ctrl_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
+      (ensures sr_ctrl_shape model')
+  = ()
+#pop-options
+
+let conn_sr_ctrl_shape (st:CS.connection_state) : prop = sr_ctrl_shape st.CS.cs_model
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_sr_ctrl_shape (st0 st1:CS.connection_state)
+  : Lemma
+      (requires conn_sr_ctrl_shape st0 /\ SMR.connection_state_single_step st0 st1)
+      (ensures conn_sr_ctrl_shape st1)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    lemma_step_sr_ctrl_shape st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+#pop-options
+
+let lemma_single_step_sr_ctrl_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (conn_sr_ctrl_shape y); (SMR.connection_state_single_step x y)}
+          conn_sr_ctrl_shape x /\ SMR.connection_state_single_step x y ==> conn_sr_ctrl_shape y)
+  = introduce forall x y.
+      conn_sr_ctrl_shape x /\ SMR.connection_state_single_step x y ==> conn_sr_ctrl_shape y
+    with introduce _ ==> _ with _.
+      lemma_delta_sr_ctrl_shape x y
+
+let lemma_initial_sr_ctrl_shape (cfg:CS.connection_config)
+  : Lemma (ensures conn_sr_ctrl_shape (CS.initial cfg))
+  = ()
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_consistent_sr_ctrl_shape (st:CS.connection_state)
+  : Lemma
+      (requires SMR.connection_state_consistent st)
+      (ensures conn_sr_ctrl_shape st)
+  = lemma_initial_sr_ctrl_shape st.CS.cs_model.CS.model_config;
+    lemma_single_step_sr_ctrl_shape ();
+    let p = conn_sr_ctrl_shape in
+    let stable :
+      squash (forall (x:CS.connection_state) (y:CS.connection_state).
+        {:pattern (p y); (SMR.connection_state_single_step x y)}
+        p x /\ SMR.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure SMR.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (SMR.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+#pop-options
+
+(** (D) CF-TOLERANT SERVER hellos from a `Handshake` READ epoch — mirror of
+    `lemma_client_hs_read_hellos_cf`.  `sr_ctrl_shape` pins the NON-failed control
+    to one of the three server read-handshake controls, each of which
+    `server_hellos_shape` lower-bounds with both hellos; the epoch-gated conjunct
+    BRIDGES the fail step (`fail_model` preserves `model_handshake` and
+    `model_record` wholesale, `lemma_step_failed_preserves_hs_record`). **)
+let server_read_hellos_shape (st:CS.connection_state) : prop =
+  conn_sr_ctrl_shape st /\
+  conn_server_hellos_shape st /\
+  ( (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+     R.Handshake? st.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
+    ==> hellos_present st.CS.cs_model )
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_delta_server_read_hellos_shape (st0 st1:CS.connection_state)
+  : Lemma
+      (requires server_read_hellos_shape st0 /\ SMR.connection_state_single_step st0 st1)
+      (ensures server_read_hellos_shape st1)
+  = let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    WStep.lemma_step_model_preserves_config
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model;
+    lemma_delta_sr_ctrl_shape st0 st1;
+    lemma_delta_server_hellos_shape st0 st1;
+    introduce
+      (st1.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+       R.Handshake? st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
+      ==> hellos_present st1.CS.cs_model
+    with _hyp.
+    (
+      if CS.ControlFailed? st1.CS.cs_model.CS.model_control then
+      (
+        lemma_step_failed_preserves_hs_record
+          st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model;
+        assert (st1.CS.cs_model.CS.model_handshake == st0.CS.cs_model.CS.model_handshake);
+        assert (st1.CS.cs_model.CS.model_record == st0.CS.cs_model.CS.model_record);
+        assert (hellos_present st0.CS.cs_model)
+      )
+      else
+      (
+        assert (conn_sr_ctrl_shape st1);
+        assert (conn_server_hellos_shape st1)
+      )
+    )
+#pop-options
+
+let lemma_single_step_server_read_hellos_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (server_read_hellos_shape y); (SMR.connection_state_single_step x y)}
+          server_read_hellos_shape x /\ SMR.connection_state_single_step x y ==>
+            server_read_hellos_shape y)
+  = introduce forall x y.
+      server_read_hellos_shape x /\ SMR.connection_state_single_step x y ==>
+        server_read_hellos_shape y
+    with introduce _ ==> _ with _.
+      lemma_delta_server_read_hellos_shape x y
+
+let lemma_initial_server_read_hellos_shape (cfg:CS.connection_config)
+  : Lemma (ensures server_read_hellos_shape (CS.initial cfg))
+  = lemma_initial_sr_ctrl_shape cfg;
+    lemma_initial_server_hellos_shape cfg
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_server_hs_read_hellos_cf (st:CS.connection_state)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        R.Handshake? st.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
+      (ensures
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_hello)
+  = lemma_initial_server_read_hellos_shape st.CS.cs_model.CS.model_config;
+    lemma_single_step_server_read_hellos_shape ();
+    let p = server_read_hellos_shape in
+    let stable :
+      squash (forall (x:CS.connection_state) (y:CS.connection_state).
+        {:pattern (p y); (SMR.connection_state_single_step x y)}
+        p x /\ SMR.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure SMR.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (SMR.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+#pop-options
+
+(** (E) COMP 1 assembly for the ToSERVER direction — the client-write/server-read
+    handshake key/iv material agreement, packaged as `peer_record_material_agrees`
+    for `ClientTraffic`.  Mirror of `lemma_hscs_bridge_material`: the two
+    record->slot LINKS give the `record_direction_material_matches_key_schedule_
+    for_role` inputs (and, as a by-product, the presence of the two
+    `ks_client_handshake_traffic` slots), and `HANR`'s ControlFailed-aware
+    client-traffic slot-agreement producer supplies the slot-level agreement.
+    The SENDER (client) link uses the plain consistency producer (`~ControlFailed`
+    holds at a send); the RECEIVER (server) link uses the PERSISTENCE producer, so
+    it survives a failed server. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_hscs_bridge_material_cs (client server:CS.connection_state)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent client /\
+        SMR.connection_state_consistent server /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        R.Handshake? client.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+        R.Handshake? server.CS.cs_model.CS.model_record.CS.record_read.R.epoch /\
+        ~(CS.ControlFailed? client.CS.cs_model.CS.model_control) /\
+        Some? client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        Some? server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+        WFL.paired_cleartext_hello_key_shares client server /\
+        SMCorr.same_key_derivation_checkpoint SMKI.DeriveHandshakeTraffic client server)
+      (ensures
+        SMKM.peer_record_material_agrees
+          (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) client server)
+  = // record-keys consistency for the client (at its config role).
+    CSL.lemma_connection_state_consistent_record_keys_consistent_for_config_role client;
+    assert (SMKM.model_record_keys_consistent_for_role CS.ClientEndpoint client.CS.cs_model);
+    // WRITE link (client, non-failed) and READ link (server, via PERSISTENCE —
+    // holds even at ControlFailed), both at the Handshake epoch.
+    CSL.lemma_handshake_record_direction_material_matches_key_schedule_for_role
+      CS.ClientEndpoint CS.TrafficWrite client.CS.cs_model;
+    CSL.lemma_server_hs_read_slot_link_persist server;
+    assert (SMKI.traffic_id CS.TrafficHandshake
+              (CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficWrite)
+              == SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic);
+    assert (SMKI.traffic_id CS.TrafficHandshake
+              (CS.traffic_label_for_endpoint_direction CS.ServerEndpoint CS.TrafficRead)
+              == SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic);
+    // slot presence falls out of the two links (traffic_material_for_label match).
+    assert (Some? client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+    assert (Some? server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+    // slot-level agreement (ControlFailed-aware, client-traffic).
+    HANR.lemma_handshake_client_traffic_key_schedule_material_agrees_nonready_cf client server;
+    // inputs assembled -> peer_record_material_agrees.
+    assert (SMKM.peer_record_material_inputs_agree
+              (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) client server);
+    CSL.lemma_peer_record_material_agrees
+      (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) client server
+#pop-options
+
 (** SUBSTANTIVE — SERVER SEND.  Enters `MP.ToClient p` with `p.pl_snap ==
     a.server.cs_model`, `p.pl_sent == sent`, `p.pl_raw == emitted_raw out`, and
     `b.client == a.client`.  Under the post-state gate the sealing snapshot's
@@ -4609,6 +5006,67 @@ let lemma_hscs_server_send (a b:SY.tls_system_state)
         lemma_hscs_bridge_material a.client a.server;
         assert (SMKM.peer_record_material_agrees
                   (SMKI.traffic_id CS.TrafficHandshake CS.ServerTraffic) a.client a.server)
+      )
+    )
+#pop-options
+
+(** SUBSTANTIVE — CLIENT SEND.  Mirror of `lemma_hscs_server_send`.  Enters
+    `MP.ToServer p` with `p.pl_snap == a.client.cs_model`, `p.pl_sent == sent`,
+    `p.pl_raw == emitted_raw out`, and `b.server == a.server`.  Under the
+    post-state gate the sealing snapshot's write epoch and the server's read epoch
+    are `Handshake`; the bridge (key/iv agreement + single-record seal + roundtrip)
+    is assembled from `tls_system_inv a`.
+
+    The SENDER (client) is `~ControlFailed` (`lemma_sent_step_not_failed`); the
+    RECEIVER (server) may be `ControlFailed` — the persistence producer
+    `lemma_server_hs_read_slot_link_persist` supplies its record<->slot READ link
+    regardless, exactly as the client-side persistence lemma does on the ToClient
+    arm. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_hscs_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
+      (ensures hs_channel_seal_ok b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns hs_channel_seal_ok b
+    with _pf.
+    (
+      ASP.lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      introduce
+        (R.Handshake? a.client.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+         R.Handshake? (ASP.rd a.server).R.epoch) ==>
+          ASP.inflight_bridge_ready a.client.CS.cs_model a.server.CS.cs_model sent
+            (SY.emitted_raw out)
+      with _g.
+      (
+        // ~ControlFailed on the CLIENT (sender); the SERVER may be ControlFailed.
+        lemma_sent_step_not_failed a.client.CS.cs_model c'.CS.cs_model sent;
+        assert (~(CS.ControlFailed? a.client.CS.cs_model.CS.model_control));
+        // COMP 2 + COMP 3 — seal + roundtrip.
+        lemma_client_send_seal_rt a.client c' local out w sent;
+        // FOUR HELLOS — server hellos via the CF-tolerant reachable shape.
+        assert (SY.client_stage_ok a.client);
+        lemma_server_hs_read_hellos_cf a.server;
+        lemma_client_hs_send_hellos a.client;
+        assert (WFL.paired_cleartext_hello_key_shares a.client a.server);
+        lemma_hscs_checkpoint a;
+        // shared secret both.
+        lemma_consistent_hs_write_shared_secret a.client;
+        lemma_consistent_hs_read_shared_secret a.server;
+        // COMP 1 — key/iv material agreement.
+        lemma_hscs_bridge_material_cs a.client a.server;
+        assert (SMKM.peer_record_material_agrees
+                  (SMKI.traffic_id CS.TrafficHandshake CS.ClientTraffic) a.client a.server)
       )
     )
 #pop-options

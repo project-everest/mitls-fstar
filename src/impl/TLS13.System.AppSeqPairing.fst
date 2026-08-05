@@ -1578,13 +1578,30 @@ let finished_delivered_appread_coupling (s:SY.tls_system_state) : prop =
     app-data/KeyUpdate send is not `TlsHandshake?` (its App/Application write is
     excluded) — leaving exactly the EE/Cert/CV/Finished flight, all at Handshake write.
 
-    TOSERVER ARM: `True` for now; the symmetric client-Finished establishment
-    (pre-send client at `HsServerFinishedVerified`, via
-    `lemma_client_finished_verified_write_epoch_handshake`) lands with
-    `lemma_fdac_deliver_to_server`. **)
+    TOSERVER ARM (symmetric).  The client's ONLY protected handshake send is its
+    Finished, from `ControlHandshaking HsServerFinishedVerified` (ClientHello and
+    CCS are cleartext, hence excluded by the `~cleartext` guard; every other client
+    `Sent` handshake message has no legal arm).  Establishment at that send is the
+    exact mirror of the server side, and rests on the RECORD-LEVEL conjunct
+    `Some? model_record.record_write.R.key` that the `Sent/Finished/
+    HsServerFinishedVerified` arm of `legal_tls_message` now demands (see the
+    "Stream-integrity fix (RECORD level, not slot level)" comment there).  That
+    conjunct is LOAD-BEARING here and cannot be replaced by the arm's SLOT-level
+    `Some? ks_client_handshake_traffic`: the client's handshake-WRITE record
+    install is an OPTIONAL local, so slot presence does not imply record-key
+    presence (the SLOT vs RECORD law).  With it,
+    `lemma_client_finished_verified_write_epoch_handshake` (which needs exactly
+    `Some? record_write.key`) plus
+    `RKE.lemma_connection_consistent_write_key_present_not_initial` give
+    `Handshake?` on the snapshot write.  Consumed at the delivery to discharge the
+    snapshot half of `hs_channel_seal_ok`'s ToServer bridge gate. **)
 let inflight_snap_handshake_write (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
+      (M.TlsHandshake? p.SY.pl_sent /\
+       ~(CS.network_message_is_cleartext CL.Sent p.SY.pl_sent)) ==>
+        R.Handshake? (snap_wr p).R.epoch
+  | MP.ToServer p ->
       (M.TlsHandshake? p.SY.pl_sent /\
        ~(CS.network_message_is_cleartext CL.Sent p.SY.pl_sent)) ==>
         R.Handshake? (snap_wr p).R.epoch
@@ -1853,6 +1870,57 @@ let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
            CSL.lemma_server_handshake_send_write_epoch_not_application a.server s' hm
        | _ -> ());
       lemma_server_send_count a.server s' local out w sent
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    ESTABLISHMENT of `inflight_snap_handshake_write` at the CLIENT send (ToServer
+    arm).  Mirror of the server lemma below.  The client's only NON-cleartext
+    handshake send is its Finished: `ClientHello` is cleartext (guard false),
+    `ServerHello` is cleartext too, `EncryptedExtensions`/`Certificate`/
+    `CertificateVerify` have only `ServerEndpoint` `Sent` arms, and `Sent`
+    `HelloRetryRequest` has no arm at all (the step would be `None`, contradicting
+    `Some c'`).  So the pre-send client sits at `ControlHandshaking
+    HsServerFinishedVerified`, where the RECORD-LEVEL legality conjunct hands us
+    `Some? record_write.R.key` directly; `lemma_client_finished_verified_write_
+    epoch_handshake` then gives `Handshake?`.  (`RKE` and the not-application
+    lemma are cited for symmetry with the server route and to keep the proof
+    robust to the exact shape of the client-Finished epoch lemma.)
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+let lemma_asp_client_send_snap_handshake_write (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+        SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
+      (ensures inflight_snap_handshake_write b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns inflight_snap_handshake_write b
+    with _pf.
+    (
+      lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      (match sent with
+       | M.TlsHandshake hm ->
+           (match hm with
+            | M.Finished _ ->
+                CSL.lemma_client_handshake_send_write_epoch_not_application a.client c' hm;
+                assert (a.client.CS.cs_model.CS.model_control ==
+                          CS.ControlHandshaking CS.HsServerFinishedVerified);
+                // RECORD level (not slot level): supplied by the strengthened
+                // `Sent/Finished/HsServerFinishedVerified` arm of `legal_tls_message`.
+                assert (Some? a.client.CS.cs_model.CS.model_record.CS.record_write.R.key);
+                RKE.lemma_connection_consistent_write_key_present_not_initial a.client;
+                CSL.lemma_client_finished_verified_write_epoch_handshake a.client
+            | _ -> ())
+       | _ -> ())
     )
 #pop-options
 

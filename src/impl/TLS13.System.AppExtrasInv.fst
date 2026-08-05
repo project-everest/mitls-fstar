@@ -577,6 +577,162 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
     )
 #pop-options
 
+(** A SERVER network RECEIVE preserves the server's `hs_server_finished` witness.
+    Mirror of `lemma_recv_preserves_client_finished`: the ONLY `step_tls_message`
+    `Received` arm that writes `hs_server_finished` is the CLIENT SF-receive, whose
+    legality REQUIRES `ClientEndpoint`; so a legal SERVER receive cannot be at that
+    control, and every other `Received` arm leaves the field untouched.  ROLE +
+    LEGALITY are load-bearing.  Used at fdac's `deliver_to_server` FIRST half to
+    forward `Some? hs_server_finished` unchanged across the receive. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 100 --split_queries always"
+let lemma_recv_preserves_server_finished
+  (st st':CS.connection_state) (msg:M.tls_message)
+  : Lemma
+      (requires
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        CS.legal_tls_message st.CS.cs_model CL.Received msg /\
+        CS.step_tls_message st.CS.cs_model CL.Received msg == Some st'.CS.cs_model)
+      (ensures
+        st'.CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+        st.CS.cs_model.CS.model_handshake.CS.hs_server_finished)
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    fdac DELIVER-TO-SERVER — THE SECOND CRUX (mirror of `lemma_fdac_deliver_to_client`).
+
+    `deliver_to_server` consumes the in-flight `ToServer` payload (sealed by the
+    CLIENT) and steps the SERVER; channel `ToServer -> Quiet`, so BOTH halves of
+    fdac are active at `b` (`b.server = s'`, `b.client = a.client` frozen).
+
+    FIRST half (passive): `Some? a.server.hs_server_finished ==> App(rd a.client)`.
+    A server RECEIVE never touches `hs_server_finished`
+    (`lemma_recv_preserves_server_finished`), so `s'.hs_server_finished ==
+    a.server.hs_server_finished`; then `fdac a`'s first half (a is `ToServer`, so
+    `~ToClient`) carries `App(rd a.client) = App(rd b.client)` (client frozen).
+
+    SECOND half (the crux): `Some? a.client.hs_client_finished ==> App(rd s')`.
+    Case split on the PRE-state server READ epoch `R.Application? (rd a.server)`:
+      * APP case: the receive is monotone — `lemma_recv_app_preserves_record_material`
+        (needs `~KeyUpdate`, from `lemma_recv_not_key_update`) forwards `App(rd s')`
+        unconditionally.
+      * ~APP case (RECORD-LEVEL faithful decode): under the antecedent,
+        `cf_inflight_finished a` (ToServer, `~App(rd a.server)`, `Some?
+        hs_client_finished`) pins `sent` to a Finished.  A Finished is a
+        non-cleartext `TlsHandshake`, so the CARRIED clause
+        `inflight_snap_handshake_write a` — whose ToServer arm rests on the
+        RECORD-LEVEL `Some? record_write.R.key` conjunct of `legal_tls_message`'s
+        client-Finished send arm — hands the SNAPSHOT gate `Handshake?(snap_wr p)`.
+        `inflight_raw_delta_legal` + `inflight_single_record` make `raw` a single
+        `Application_data` record, so the received `msg` is not cleartext
+        (`HSP.lemma_hsp_client_recv_not_cleartext`, which is role- and control-free),
+        whence the projection yields `received_single_protected_message_decode
+        a.server msg raw`.  From that decode `lemma_protected_decode_read_key_present`
+        gives `Some? (rd a.server).key`, and
+        `RKE.lemma_connection_consistent_read_key_present_not_initial` gives
+        `~Initial(rd a.server)`; with the ~App case that is `Handshake?(rd a.server)`
+        — the RECORD-level read gate.  Both gate halves in hand,
+        `hs_channel_seal_ok a`'s ToServer arm fires the bridge and `cs_hs_seq_ok a`
+        (now ~terminal-free) supplies the cross-endpoint seq alignment; the
+        peer-decode lemma pins `msg == sent = Finished`, and
+        `lemma_recv_finished_installs_app_read` (role-free) lands `App(rd s')`. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_fdac_deliver_to_server (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        SY.tls_step_deliver_to_server a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.finished_delivered_appread_coupling b)
+  = SY.lemma_deliver_to_server_shape a b;
+    assert (ASP.finished_delivered_appread_coupling a);
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      b == { a with server = s'; channel = MP.Quiet }
+    returns ASP.finished_delivered_appread_coupling b
+    with _pf.
+    (
+      let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+      assert (a.channel == MP.ToServer p);
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+            { CL.message_direction = CL.Received; CL.message_value = msg } in
+         SMCan.canonical_wire_step a.server s' conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (CW.wire_serialize wire) /\
+         ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns ASP.finished_delivered_appread_coupling b
+      with _pd.
+      (
+        let conn_ev = CS.ConnNetworkEvent
+          { CL.message_direction = CL.Received; CL.message_value = msg } in
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+        assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
+        // FIRST half (passive): a server RECEIVE preserves `hs_server_finished`.
+        assert (a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+        assert (CS.legal_tls_message a.server.CS.cs_model CL.Received msg);
+        lemma_recv_preserves_server_finished a.server s' msg;
+        // SECOND half (crux).
+        introduce
+          Some? b.client.CS.cs_model.CS.model_handshake.CS.hs_client_finished
+          ==> R.Application? (ASP.rd s').R.epoch
+        with _hcf.
+        (
+          if R.Application? (ASP.rd a.server).R.epoch then
+          (
+            // APP case: monotone forward, unconditional.
+            ASP.lemma_recv_not_key_update s' msg;
+            ASP.lemma_recv_app_preserves_record_material a.server s' msg
+          )
+          else
+          (
+            // ~APP case: RECORD-LEVEL faithful decode.
+            assert (M.TlsHandshake? sent /\ M.Finished? (M.TlsHandshake?._0 sent));
+            assert (~(CS.network_message_is_cleartext CL.Sent sent));
+            assert (ASP.inflight_snap_handshake_write a);
+            assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+            // `raw` is a single Application_data record (send-side, non-cleartext).
+            assert (ASP.inflight_raw_delta_legal a /\ ASP.inflight_single_record a);
+            assert (CS.network_message_raw_delta_legal snap
+                      ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+            assert (CS.raw_records_exactly raw T.Application_data 1);
+            HSP.lemma_rre_nonempty raw;
+            CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+            W.lemma_parse_record_implies_parse_record_wire raw;
+            // received `msg` is not cleartext (role- and control-free helper).
+            assert (CS.network_message_raw_delta_legal a.server.CS.cs_model
+                      ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
+            HSP.lemma_hsp_client_recv_not_cleartext a.server msg s'.CS.cs_model raw;
+            assert (CS.network_message_is_cleartext CL.Received msg == false);
+            // projection (~cleartext branch) -> the decode.
+            assert (SMCan.received_single_protected_message_decode a.server.CS.cs_model msg raw);
+            // RECORD-level read gate: decode -> key present -> ~Initial -> (with ~App) Handshake.
+            lemma_protected_decode_read_key_present a.server.CS.cs_model msg raw;
+            RKE.lemma_connection_consistent_read_key_present_not_initial a.server;
+            assert (R.Handshake? (ASP.rd a.server).R.epoch);
+            // Fire the bridge (hs_channel_seal_ok a) and the seq alignment (cs_hs_seq_ok a).
+            assert (ASP.inflight_bridge_ready snap a.server.CS.cs_model sent raw);
+            assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.server);
+            assert (snap.CS.model_record.CS.record_write.R.seq ==
+                    a.server.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+            // FAITHFUL DECODE: msg == sent = Finished.
+            CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+              snap a.server.CS.cs_model sent raw;
+            ASP.lemma_decode_functional a.server.CS.cs_model msg sent raw;
+            assert (msg == sent);
+            // Finished receive installs App read epoch (role-free; ControlFailed blocks).
+            lemma_recv_finished_installs_app_read a.server.CS.cs_model s'.CS.cs_model msg
+          )
+        )
+      )
+    )
+#pop-options
+
 (** ─────────────────────────────────────────────────────────────────────────
     Application WRITE epoch FORWARD across a LOCAL step (empty byte-delta).
 

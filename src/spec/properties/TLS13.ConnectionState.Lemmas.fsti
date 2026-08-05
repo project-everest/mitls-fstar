@@ -1184,3 +1184,23 @@ val lemma_client_hs_read_slot_link_persist
           ClientEndpoint TrafficRead
           (traffic_id TrafficHandshake ServerTraffic)
           st.cs_model)
+
+(* PHASE 1A MIRROR: persistence of the SERVER handshake READ record<->slot  *)
+(* material link across ControlFailed.  Exact mirror of                     *)
+(* [lemma_client_hs_read_slot_link_persist] for the server's read direction  *)
+(* (label [ClientTraffic]); same proof shape (control-free link + fail_model *)
+(* freezing model_record and hs_keys, lifted by a reachable-shape            *)
+(* stable_on_closure).  This is what lets the client->server faithful-decode *)
+(* bridge ([hs_channel_seal_ok]'s ToServer arm) fire at a FAILED server.     *)
+val lemma_server_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ServerEndpoint TrafficRead
+          (traffic_id TrafficHandshake ClientTraffic)
+          st.cs_model)
