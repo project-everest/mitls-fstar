@@ -253,18 +253,17 @@ when nothing downstream of it is committed.
 `tools/everparse` is gitignored, so nothing forces it to agree with the commit
 pinned in `scripts/build-everparse.sh`. When the pin was bumped, a checkout that
 already had a toolchain kept the old one, and every local proof was checked
-against the wrong F*/Pulse. This is invisible by inspection:
+against the wrong F*/Pulse, for weeks, with no signal of any kind.
 
-```
-$ tools/everparse/opt/FStar/bin/fstar.exe --version   # drifted build
-F* 2026.07.12~dev
-$ tools/everparse/opt/FStar/bin/fstar.exe --version   # pinned build
-F* 2026.07.12~dev
-```
+Nothing in the build notices. `--version` reports a coarse date tag
+(`F* 2026.07.19~dev`) that says nothing about which commit was built and is
+identical across every commit of a given day, so it neither confirms nor refutes
+that a tree matches the pin. The `.checked` cache does record the F* build, but
+it reacts to a mismatch by silently re-verifying rather than warning. And the
+sources under `tools/everparse` look right, because they *are* a consistent
+checkout -- just of the wrong commit.
 
-The version string is a release marker, not a build identity; two F* builds
-months apart in behaviour report the same one. The only reliable check is the
-commit:
+The only reliable identity for an F* build is the commit it was built from:
 
 ```
 git -C tools/everparse rev-parse HEAD
@@ -273,9 +272,9 @@ git -C tools/everparse/opt/FStar rev-parse HEAD
 
 The symptom was a CI failure in a single module that would not reproduce
 locally, on any branch, from a cold cache. Hours went into hunting a phantom
-OOM and a phantom cache bug before the toolchain itself was suspected. Note that
-the `.checked` cache does *not* protect you either way: it records the F* build,
-so switching toolchains silently re-verifies everything rather than warning.
+OOM and a phantom cache bug before the toolchain itself was suspected. The
+lesson generalises past this one pin: when CI and a local tree disagree about a
+*proof*, suspect the prover before the proof.
 
 `make check-toolchain` now asserts `EVERPARSE_HOME` is at the pinned commit and
 fails the build otherwise (`CHECK_EVERPARSE_PIN=0` to bypass deliberately). When

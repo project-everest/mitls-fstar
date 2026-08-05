@@ -44,27 +44,27 @@ path.
 
 ## Scope
 
-`c7bec267b..chromium`, 42 commits.
+`c7bec267b..chromium`, 45 commits.
 
 ```
- 92 files changed, 9994 insertions(+), 2249 deletions(-)
+ 92 files changed, 10143 insertions(+), 2255 deletions(-)
 ```
 
 | Area | Files | +/- |
 |---|---|---|
 | `src/spec` | 22 | +2301 / −282 |
-| `src/impl` | 31 | +3635 / −476 |
-| `docs` (incl. the plan) | 8 | +2963 / −143 |
+| `src/impl` | 31 | +3645 / −476 |
+| `docs` (incl. the plan) | 8 | +3047 / −143 |
 | `common` | 2 | +596 / −2 |
 | samples | 20 | +256 / −25 |
-| `Makefile` | 1 | +100 / −7 |
-| `scripts/`, `setup.sh`, `generated/`, CI | 6 | +143 / −17 |
+| `Makefile` | 1 | +126 / −7 |
+| `scripts/`, `setup.sh`, `generated/`, CI | 6 | +171 / −22 |
 | **`runtime/` + `c_stubs/` (C)** | **0** | **0 / 0** |
 
 The deletion count is dominated by the stale `test/unit/test_connection_bindings.c`
 (1297 lines) described below.
 
-Five of the 42 commits are not part of the refactor proper and can be reviewed
+Six of the 45 commits are not part of the refactor proper and can be reviewed
 independently:
 
 - **`Upgrade the toolchain to Z3 4.15.3`.** Z3 4.13.3 aborts with an internal
@@ -93,6 +93,19 @@ independently:
   the digest mismatch into `Error 317`. Now keyed on `generated/**` itself.
   Also collapses the eight independent spellings of the pinned Z3 version into
   `scripts/z3-version.txt`.
+- **`Give the drain loop a termination measure, and pin the toolchain`.**
+  `tools/everparse` is gitignored, so a checkout that already had a toolchain
+  kept it when the pin in `scripts/build-everparse.sh` moved. All local
+  verification was therefore running against an older F*/Pulse, with no signal:
+  `fstar.exe --version` is a date tag that does not identify the build, and the
+  `.checked` cache reacts to a different F* by silently re-verifying rather than
+  warning. Under the pinned Pulse a `while` loop's `decreases` clause decides
+  its effect — measured is `stt`, unmeasured is `stt_div` and legal only in a
+  `divergent fn` — so `drain_pending`'s unmeasured loop could not compose with
+  the statement after it. The loop is bounded by `drain_fuel` and so is
+  genuinely terminating; it gets the measure rather than the divergent
+  annotation. `make check-toolchain` now asserts `EVERPARSE_HOME` is at the
+  pinned commit, since the git commit is an F* build's only reliable identity.
 
 ### The C is untouched — literally
 
@@ -268,7 +281,7 @@ sample. `admit-count` / `check-admits` were widened from
 
 ## Verification
 
-No admits. No assumes. Green at every one of the 42 commits' phase boundaries,
+No admits. No assumes. Green at every one of the 45 commits' phase boundaries,
 and at the tip:
 
 ```
@@ -397,10 +410,10 @@ look separately — they are equally unreferenced by the build.
 ## Note on the merge direction
 
 `origin/agentic` has not moved since 2026‑07‑30 (`93e13a73`), which is the merge
-base for this branch. `chromium` is 70 commits ahead and 0 behind, and every
+base for this branch. `chromium` is 73 commits ahead and 0 behind, and every
 `agentic_*` sibling branch is also an ancestor of this tip.
 
-This PR therefore carries **70** commits, not the 42 described above. The other
+This PR therefore carries **73** commits, not the 45 described above. The other
 28 are pre-existing chromium-branch work that landed before the refactor began:
 
 - commits 1–11: the transport-neutral client engine, its stable C API, the

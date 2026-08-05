@@ -26,10 +26,11 @@ LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 
 # The exact EverParse commit this project is verified against, read from the
 # build script so there is a single source of truth.  `check-toolchain` asserts
-# that $(EVERPARSE_HOME) is actually at this commit: F* reports the same
-# --version string across many months of development, so a toolchain that has
-# drifted from the pin is otherwise completely invisible, and proofs checked
-# against the wrong F*/Pulse will not reproduce in CI.
+# that $(EVERPARSE_HOME) is actually at this commit, because nothing else does:
+# tools/everparse is gitignored, `fstar.exe --version` is a date tag that does
+# not identify the build, and a .checked cache reacts to a different F* by
+# silently re-verifying rather than warning.  A drifted toolchain therefore
+# verifies happily against the wrong F*/Pulse and does not reproduce in CI.
 EVERPARSE_COMMIT := $(shell sed -n 's/.*EVERPARSE_COMMIT:-\([0-9a-f]*\).*/\1/p' \
                       $(CURDIR)/scripts/build-everparse.sh | head -1)
 
