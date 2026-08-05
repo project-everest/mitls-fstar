@@ -269,3 +269,121 @@ let lemma_consistent_server_not_shsfv (st:CS.connection_state)
     assert (SMR.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
     assert (p st)
 #pop-options
+
+(** ========================================================================
+    THIRD EXCLUSION: a consistent connection is never at
+    `ControlHandshaking HsClientFinishedVerified`.
+
+    Like `HsClientFinishedReceived`, this stage is produced by NO arm at all.  The
+    obvious candidate producer, `LocalVerifyClientFinished` at
+    `HsClientFinishedReceived` (StateMachine.fst:561), sets `model_control :=
+    ControlApplicationData` — it SKIPS the "verified" stage, exactly as the server's
+    atomic client-Finished receive skips `HsClientFinishedReceived`.  The constructor
+    therefore survives only as a datatype inhabitant.  Being produced by no arm, the
+    predicate is single-step stable UNCONDITIONALLY (the `p x` hypothesis is unused)
+    and role-free, and it holds at `initial` (`ControlNew`).
+
+    CONSUMER: the `HsClientFinishedVerified` branch of
+    `AppExtrasInv.lemma_qawc_conjunct2_from_inv`.  `SY.server_post_cf`
+    (System.fst:580) allows `{HsClientFinishedReceived, HsClientFinishedVerified,
+    ControlApplicationData, ControlClosing, ControlClosed, ControlFailed}`; the first
+    two are the unreachable pair, excluded here and by `lemma_consistent_not_cfr`,
+    which is what makes the per-control case split over `server_post_cf` finite in
+    practice.  NOTE the level: this is a CONTROL-reachability fact, not a key-material
+    fact — it says the state does not exist, so nothing is claimed about record keys
+    there. **)
+
+let ctrl_not_cfv_m (m:CS.connection_model) : prop =
+  m.CS.model_control =!= CS.ControlHandshaking CS.HsClientFinishedVerified
+
+let ctrl_not_cfv (st:CS.connection_state) : prop =
+  ctrl_not_cfv_m st.CS.cs_model
+
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+let lemma_step_handshake_not_cfv
+  (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg) (m':CS.connection_model)
+  : Lemma
+      (requires ctrl_not_cfv_m m /\ CS.step_handshake_message m dir hm == Some m')
+      (ensures ctrl_not_cfv_m m')
+  = ()
+#pop-options
+
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+let lemma_step_tls_not_cfv
+  (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma
+      (requires ctrl_not_cfv_m m /\ CS.step_tls_message m dir msg == Some m')
+      (ensures ctrl_not_cfv_m m')
+  = match msg with
+    | M.TlsHandshake hm -> lemma_step_handshake_not_cfv m dir hm m'
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+let lemma_step_local_not_cfv
+  (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
+  : Lemma
+      (requires ctrl_not_cfv_m m /\ CS.step_local_event m lev == Some m')
+      (ensures ctrl_not_cfv_m m')
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_step_model_not_cfv
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+      (requires ctrl_not_cfv_m m /\ CS.step_model m ev == Some m')
+      (ensures ctrl_not_cfv_m m')
+  = match ev with
+    | CS.ConnNetworkEvent dm ->
+      lemma_step_tls_not_cfv m dm.CL.message_direction dm.CL.message_value m'
+    | CS.ConnLocalEvent lev ->
+      lemma_step_local_not_cfv m lev m'
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_not_cfv (st0 st1:CS.connection_state)
+  : Lemma
+      (requires ctrl_not_cfv st0 /\ SMR.connection_state_single_step st0 st1)
+      (ensures ctrl_not_cfv st1)
+  = assert (exists delta. CS.legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        CS.connection_delta
+        (fun delta -> CS.legal_connection_delta st0 delta st1) in
+    let delta : CS.connection_delta = delta_w in
+    assert (CS.legal_connection_delta st0 delta st1);
+    lemma_step_model_not_cfv
+      st0.CS.cs_model delta.CS.delta_event st1.CS.cs_model
+#pop-options
+
+let lemma_single_step_not_cfv (_:unit)
+  : Lemma
+      (ensures
+        forall (x:CS.connection_state) (y:CS.connection_state).
+          {:pattern (ctrl_not_cfv y); (SMR.connection_state_single_step x y)}
+          ctrl_not_cfv x /\ SMR.connection_state_single_step x y ==>
+          ctrl_not_cfv y)
+  = introduce forall x y.
+      ctrl_not_cfv x /\ SMR.connection_state_single_step x y ==> ctrl_not_cfv y
+    with introduce _ ==> _ with _.
+      lemma_delta_not_cfv x y
+
+(** THE EXCLUSION: a consistent connection is never at `HsClientFinishedVerified`. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_consistent_not_cfv (st:CS.connection_state)
+  : Lemma
+      (requires SMR.connection_state_consistent st)
+      (ensures
+        st.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsClientFinishedVerified)
+  = lemma_single_step_not_cfv ();
+    let p = ctrl_not_cfv in
+    let stable :
+      squash (forall (x:CS.connection_state) (y:CS.connection_state).
+        {:pattern (p y); (SMR.connection_state_single_step x y)}
+        p x /\ SMR.connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure SMR.connection_state_single_step p stable;
+    assert (p (CS.initial st.CS.cs_model.CS.model_config));
+    assert (SMR.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
+    assert (p st)
+#pop-options

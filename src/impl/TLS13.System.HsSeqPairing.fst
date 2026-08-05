@@ -2458,6 +2458,28 @@ let lemma_step_terminal_control_absorbing
   = ()
 #pop-options
 
+(** `ControlFailed` ALONE IS ABSORBING (a strictly finer fact than
+    `lemma_step_terminal_control_absorbing` above).  That lemma proves the WHOLE
+    terminal set `{Failed, Closing, Closed}` is forward-closed, which does NOT
+    give `ControlFailed` on its own: a priori a `ControlFailed` endpoint could
+    step to `ControlClosing`.  It cannot — every arm live at `ControlFailed` is
+    either `None` or routes through `fail_model` (StateMachine.fst:303), which
+    lands in `ControlFailed`.  Hence `~(ControlFailed? ...)` is BACKWARD-monotone
+    and is a LEGAL invariant gate (gate-monotonicity law, see the `cs_hs_seq_ok`
+    doc comment above).  Consumer: the `ControlFailed?` gate on
+    `quiet_appdata_write_coupling`'s conjunct 2 (AppSeqPairing.fst), which keeps
+    the working `Closing`/`Closed` branches that the coarser `not terminal_control`
+    gate would have thrown away. **)
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_step_control_failed_absorbing
+  (m m':CS.connection_model) (ce:CS.conn_event)
+  : Lemma
+      (requires CS.legal_event m ce /\ CS.step_model m ce == Some m')
+      (ensures
+        CS.ControlFailed? m.CS.model_control ==> CS.ControlFailed? m'.CS.model_control)
+  = ()
+#pop-options
+
 (** Establishment bundle: at a Quiet state where the CLIENT has sent AND received
     zero ApplicationData records, all four handshake projections (of both
     endpoints) are 0.  Proven in isolation so its VC localizes. **)

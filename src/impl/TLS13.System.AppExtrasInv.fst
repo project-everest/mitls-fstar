@@ -48,6 +48,7 @@ module HSP  = TLS13.System.HsSeqPairing
 module HMF  = TLS13.System.HsMaterialFamilies
 module AMF  = TLS13.System.AppMaterialFamilies
 module ORD  = TLS13.System.Ordering
+module SNCFR = TLS13.System.ServerNotCFR
 module ID   = FStar.IndefiniteDescription
 module RTC  = FStar.ReflexiveTransitiveClosure
 
@@ -905,6 +906,56 @@ let lemma_server_local_cad_backward
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
+    qawc CONJUNCT 2 FROM THE INVARIANT ALONE (no carried clause).
+
+    At a `Quiet` channel with the CLIENT at `ControlApplicationData` and the server
+    NOT `ControlFailed`, the server's application WRITE record epoch (RECORD level,
+    not slot level) is installed.  Route — entirely from machinery that already
+    existed:
+      * `CSL.lemma_connection_appdata_keys_installed_for_role ClientEndpoint` turns
+        the client's control into `SY.client_ready` (the `client_e2e` conjunct of
+        `tls_system_inv` supplies the driver half);
+      * `SY.client_clean` (a conjunct of `tls_system_inv`) + `Quiet` then gives
+        `SY.server_post_cf` — the server has already stepped on the client's
+        Finished;
+      * per surviving server control: `ControlApplicationData` →
+        appdata-keys + `lemma_connection_application_ready_record_epochs_installed`;
+        `ControlClosing`/`ControlClosed` →
+        `lemma_connection_closing_closed_record_epochs_installed`;
+        `HsClientFinishedReceived`/`Verified` → these two controls are
+        CANONICALLY UNREACHABLE (no arm of the state machine ever produces them —
+        the server's client-Finished receive and `LocalVerifyClientFinished` both
+        jump straight to `ControlApplicationData`), excluded by
+        `SNCFR.lemma_consistent_not_cfr` / `lemma_consistent_not_cfv`.  That is a
+        CONTROL-reachability fact, not a key-material one.
+    `ControlFailed` is excluded by the conjunct's own gate (see the
+    `quiet_appdata_write_coupling` doc comment in ASP for why it is TRUE but
+    UNDERIVABLE there). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_qawc_conjunct2_from_inv (s:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv s /\ MP.Quiet? s.channel /\
+        CS.ControlApplicationData? (SY.ctrl s.client) /\
+        ~(CS.ControlFailed? (SY.ctrl s.server)))
+      (ensures R.Application? (ASP.wr s.server).R.epoch)
+  = CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client;
+    assert (SY.client_ready s);
+    assert (SY.server_post_cf s);
+    SNCFR.lemma_consistent_not_cfr s.server;
+    SNCFR.lemma_consistent_not_cfv s.server;
+    match SY.ctrl s.server with
+    | CS.ControlApplicationData ->
+        CSL.lemma_connection_appdata_keys_installed_for_role CS.ServerEndpoint s.server;
+        CSL.lemma_connection_application_ready_record_epochs_installed CS.ServerEndpoint s.server
+    | CS.ControlClosing ->
+        CSL.lemma_connection_closing_closed_record_epochs_installed CS.ServerEndpoint s.server
+    | CS.ControlClosed ->
+        CSL.lemma_connection_closing_closed_record_epochs_installed CS.ServerEndpoint s.server
+    | _ -> ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
     qawc LOCAL families.  Channel stays `Quiet`.  For a client local (server
     frozen): conjunct 1 `CAD(server) ==> App(wr client)` — the antecedent is frozen
     (server), `qawc a` gives `App(wr a.client)`, forwarded by the write-monotone
@@ -970,9 +1021,16 @@ let lemma_qawc_server_local (a b:SY.tls_system_state)
       with _pe.
       (
         introduce
-          CS.ControlApplicationData? (SY.ctrl b.client)
+          CS.ControlApplicationData? (SY.ctrl b.client) /\
+          ~(CS.ControlFailed? (SY.ctrl b.server))
           ==> R.Application? (ASP.wr b.server).R.epoch
-        with _. lemma_server_local_preserves_app_write a.server s' ce;
+        with _.
+        (
+          // Gate transfer: `ControlFailed` alone is absorbing, so `~Failed(b.server)`
+          // pushes back to `~Failed(a.server)`, re-enabling `qawc a`'s conjunct 2.
+          HSP.lemma_step_control_failed_absorbing a.server.CS.cs_model s'.CS.cs_model ce;
+          lemma_server_local_preserves_app_write a.server s' ce
+        );
         lemma_server_local_cad_backward a.server s' ce
       )
     )

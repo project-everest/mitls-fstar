@@ -1443,12 +1443,37 @@ let read_write_coupling (s:SY.tls_system_state) : prop =
     arms) — no step ever un-installs an `Application` epoch.  So the consequent is
     MONOTONE and survives the closure region, which is exactly what lets the two
     LOCAL families preserve it for free and lets the closure-region sends discharge
-    it (they leave `ControlApplicationData`, weakening the antecedent). **)
+    it (they leave `ControlApplicationData`, weakening the antecedent).
+
+    WHY CONJUNCT 2 IS GATED ON `~(ControlFailed? (ctrl s.server))`.  Conjunct 2 is
+    (I believe) TRUE at a failed server — it is UNDERIVABLE, not false, and the
+    distinction matters.  The truth argument: if the client is at
+    `ControlApplicationData` and the channel is `Quiet`, the client's Finished was
+    SUCCESSFULLY DELIVERED, which required the server to step on it at
+    `HsServerFinishedSent` — landing it at `ControlApplicationData` with its
+    application WRITE epoch installed (RECORD level).  Only AFTERWARDS can it fail,
+    and `fail_model` (StateMachine.fst:303) preserves `model_record` wholesale.  So
+    the `Application` write epoch was already installed before the failure and
+    survives it.  What is missing is a HISTORY fact — "the server passed through
+    `ControlApplicationData`" — which no conjunct of the invariant currently
+    carries; `model_record_keys_consistent_for_role` is `| ControlFailed _ -> True`
+    (vacuous), so consistency alone gives nothing at a failed server.  Hence the
+    gate, which is LEGAL by the gate-monotonicity law because `ControlFailed` alone
+    is absorbing (`HSP.lemma_step_control_failed_absorbing`); the finer
+    `ControlFailed`-only gate is used in preference to `not terminal_control`
+    precisely so the `Closing`/`Closed` branches — which ARE derivable, via
+    `CSL.lemma_connection_closing_closed_record_epochs_installed` — are kept.
+    The obvious candidate counterexample (deliver the client Finished to an
+    ALREADY-`ControlFailed` server) does NOT exist: that delivery hits
+    `| _, _ -> None` (StateMachine.fst:970 pre-fix numbering), so the step cannot
+    occur and the channel never returns to `Quiet`.  A future strengthening that
+    carries the history fact could remove this gate. **)
 let quiet_appdata_write_coupling (s:SY.tls_system_state) : prop =
   MP.Quiet? s.channel ==>
     ( (CS.ControlApplicationData? (SY.ctrl s.server) ==>
          R.Application? (wr s.client).R.epoch) /\
-      (CS.ControlApplicationData? (SY.ctrl s.client) ==>
+      (CS.ControlApplicationData? (SY.ctrl s.client) /\
+       ~(CS.ControlFailed? (SY.ctrl s.server)) ==>
          R.Application? (wr s.server).R.epoch) )
 
 (** GATE 2a conjunct 1 — both-slots gate: the missing `server_clean` mirror of

@@ -966,7 +966,36 @@ let step_tls_message
      | CL.Sent -> None
      | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsAlert alert, _ ->
-    Some (fail_model model (T.AlertError alert))
+    // Stream-integrity fix (RECORD level).  This catch-all used to be
+    // DIRECTION-BLIND: `Some (fail_model ...)` for BOTH directions, at EVERY
+    // remaining control.  That made a `CL.Sent` alert a legal transition at, e.g.,
+    // `ControlNew` / `HsClientHelloSent`, where `record_write.R.epoch == R.Initial`
+    // and `record_write.R.key == None`.  Since `network_message_is_cleartext`
+    // (below) classifies EVERY alert as NON-cleartext, the protected branch of
+    // `network_message_raw_delta_legal` then permitted a "garbage protected"
+    // `Application_data` record sealed under no key at all.  Consequences:
+    //   * protected-record COUNTS stopped witnessing "the peer sent its Finished"
+    //     (an alert inflates the count identically), which killed every counting
+    //     route to the cross-endpoint handshake facts; and
+    //   * `~cleartext sent` no longer implied `~(R.Initial? (snap_wr p).R.epoch)`,
+    //     so the ToServer handshake-seal bridge could not be fired for a payload
+    //     whose message identity was not already known.
+    // The fix COMPLETES the pattern the `ControlFailed` arm immediately above
+    // already uses (:961-967): make the catch-all direction-explicit and REFUSE
+    // the send.  It is faithful — an endpoint's own failure is modelled by the
+    // `LocalFail` local event, which emits nothing on the wire; the only alert any
+    // endpoint ever SENDS is `Close_notify`, whose `CL.Sent` arm is live exactly at
+    // `ControlApplicationData` (:929) and is `None` at `ControlClosing` (:949).
+    // Because a consistent endpoint at `ControlApplicationData` has both
+    // application record epochs installed
+    // (`lemma_connection_appdata_keys_installed_for_role` then
+    // `lemma_connection_application_ready_record_epochs_installed`), "non-cleartext
+    // SEND ==> write key present ==> ~Initial write epoch" is now DERIVABLE rather
+    // than assumed.  Removing a transition only SHRINKS the reachable set, so no
+    // invariant preservation can be made harder by this change.
+    (match dir with
+     | CL.Sent -> None
+     | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->
     Some model
   | _, _ ->
