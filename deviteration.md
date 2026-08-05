@@ -248,6 +248,77 @@ from.** Here that is `hashFiles('generated/**')` plus the toolchain pin. If the
 sources are committed, hash the sources; hash the upstream generator input only
 when nothing downstream of it is committed.
 
+## A green local build proves nothing if the toolchain has drifted
+
+`tools/everparse` is gitignored, so nothing forces it to agree with the commit
+pinned in `scripts/build-everparse.sh`. When the pin was bumped, a checkout that
+already had a toolchain kept the old one, and every local proof was checked
+against the wrong F*/Pulse. This is invisible by inspection:
+
+```
+$ tools/everparse/opt/FStar/bin/fstar.exe --version   # drifted build
+F* 2026.07.12~dev
+$ tools/everparse/opt/FStar/bin/fstar.exe --version   # pinned build
+F* 2026.07.12~dev
+```
+
+The version string is a release marker, not a build identity; two F* builds
+months apart in behaviour report the same one. The only reliable check is the
+commit:
+
+```
+git -C tools/everparse rev-parse HEAD
+git -C tools/everparse/opt/FStar rev-parse HEAD
+```
+
+The symptom was a CI failure in a single module that would not reproduce
+locally, on any branch, from a cold cache. Hours went into hunting a phantom
+OOM and a phantom cache bug before the toolchain itself was suspected. Note that
+the `.checked` cache does *not* protect you either way: it records the F* build,
+so switching toolchains silently re-verifies everything rather than warning.
+
+`make check-toolchain` now asserts `EVERPARSE_HOME` is at the pinned commit and
+fails the build otherwise (`CHECK_EVERPARSE_PIN=0` to bypass deliberately). When
+the pin moves, rebuild **and delete every `_cache`, `generated/*.checked` and
+`generated/.checked.stamp`** — the stamp in particular will otherwise convince
+make that the generated modules are still verified.
+
+## Pulse: an unmeasured `while` is divergent
+
+Pulse `while` loops now take an optional `decreases` measure, and the choice is
+not cosmetic — it decides the loop's *effect*:
+
+| Loop | Effect | Allowed in |
+|---|---|---|
+| `while` with `decreases` | `stt` | plain `fn` |
+| `while` without `decreases` | `stt_div` | `divergent fn` only |
+
+An unmeasured loop inside a plain `fn` fails, but the message names neither
+`while` nor `decreases`:
+
+```
+* Error 228 at ...(54,2-99,3):
+  - Tactic failed
+  - Cannot compose computations in this divergent block:
+  - This computation has effect: 'stt_div'
+  - The continuation has effect: 'stt'
+```
+
+The range is the whole `while`; `stt_div` is the loop and `stt` is whatever
+follows it. Pulse *can* lift the continuation to `stt_div`, but refuses when a
+post-hint is present — so the error appears exactly on functions that carry an
+`ensures`, i.e. all of ours. `divergent fn` silences it; adding the measure is
+better, because a fuel-bounded loop is terminating and there is no reason to put
+its callers on the divergent fragment.
+
+One constraint on the measure: **it may not contain an `if`.** The purifier that
+rewrites `!r` into its ghost value descends into applications but not into match
+branches, so `decreases (if !keep_going then SZ.v !remaining + 1 else 0)` leaves
+the reads unelaborated and fails with a confusing "`!remaining` has type `fn
+requires ... returns ...`". Restructure instead so the measure is a plain read:
+in `TLS13.Impl.Client.DrainLoop`, dropping the separate `keep_going` flag and
+having every exit path zero the fuel made the measure just `SZ.v !remaining`.
+
 ## Things that did not work
 
 Recording these so they are not re-tried.

@@ -24,6 +24,15 @@ KRML_EXE   ?= $(KRML_HOME)/out/bin/krml
 QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
 LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 
+# The exact EverParse commit this project is verified against, read from the
+# build script so there is a single source of truth.  `check-toolchain` asserts
+# that $(EVERPARSE_HOME) is actually at this commit: F* reports the same
+# --version string across many months of development, so a toolchain that has
+# drifted from the pin is otherwise completely invisible, and proofs checked
+# against the wrong F*/Pulse will not reproduce in CI.
+EVERPARSE_COMMIT := $(shell sed -n 's/.*EVERPARSE_COMMIT:-\([0-9a-f]*\).*/\1/p' \
+                      $(CURDIR)/scripts/build-everparse.sh | head -1)
+
 # F* locates Z3 by looking for `z3-<version>` on PATH.  The EverParse toolchain
 # ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.15.3); make them visible
 # to every F* invocation (this Makefile and the generated/ sub-make) instead of
@@ -1605,6 +1614,23 @@ check-toolchain:
 	  echo "Z3 $(Z3_VERSION) not found (F* looks for a binary named 'z3-$(Z3_VERSION)' on PATH)."; \
 	  echo "Install it with scripts/install-z3.sh, or pick another version with Z3_VERSION=<v>."; \
 	  exit 1; \
+	fi
+	@if [ "$(CHECK_EVERPARSE_PIN)" != "0" ] && [ -n "$(EVERPARSE_COMMIT)" ] && \
+	    [ -d "$(EVERPARSE_HOME)/.git" ]; then \
+	  have=$$(git -C "$(EVERPARSE_HOME)" rev-parse HEAD 2>/dev/null || echo unknown); \
+	  if [ "$$have" != "$(EVERPARSE_COMMIT)" ]; then \
+	    echo "EverParse toolchain at $(EVERPARSE_HOME) is at $$have,"; \
+	    echo "but scripts/build-everparse.sh pins $(EVERPARSE_COMMIT)."; \
+	    echo ""; \
+	    echo "A drifted toolchain verifies against a different F*/Pulse than CI, so"; \
+	    echo "a green local build proves nothing.  F* reports the same --version for"; \
+	    echo "both, so this check is the only way to notice."; \
+	    echo ""; \
+	    echo "Rebuild it with:  bash scripts/build-everparse.sh"; \
+	    echo "then delete every _cache (the old F* invalidates all .checked files)."; \
+	    echo "Set CHECK_EVERPARSE_PIN=0 to bypass this check deliberately."; \
+	    exit 1; \
+	  fi; \
 	fi
 
 check-deps:

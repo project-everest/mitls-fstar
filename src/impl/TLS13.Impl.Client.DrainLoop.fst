@@ -29,6 +29,19 @@ module U8 = FStar.UInt8
   [max_handshake_flight_len] bytes cannot contain more messages than that;
   the bound is therefore never reached in practice and exists only to make
   progress manifest.
+
+  That bound is discharged by the loop's [decreases] measure, so the drain is
+  proved terminating and [drain_pending] is an [stt] (not [stt_div]) function.
+  A [while] with no measure is divergent in Pulse and would force both this
+  function and every caller onto the divergent fragment.
+
+  The fuel is therefore the loop's *only* control: every exit path zeroes
+  [remaining] rather than clearing a separate flag, which keeps the measure a
+  single reference read.  (Pulse's specification purifier does not descend into
+  the branches of an [if], so a measure of the form
+  [if !keep_going then ... else ...] cannot be elaborated.)  Fuel exhaustion and
+  a completed drain are still distinguished, by [quiescent]: it is set only when
+  the client reports no pending message.
 **)
 
 let drain_fuel : SZ.t = 16384sz
@@ -49,52 +62,49 @@ fn drain_pending (c:C.client) (empty:array U8.t)
 {
   D.lemma_drained_refl (Ghost.reveal 'st0);
   let mut remaining = drain_fuel;
-  let mut keep_going = true;
   let mut quiescent = false;
-  while (!keep_going)
-  invariant exists* st_cur rv kv qv.
+  while (
+    let r = !remaining;
+    SZ.gt r 0sz
+  )
+  invariant exists* st_cur rv qv.
     CR.connection_exactly c st_cur **
     pts_to empty 'empty_bytes **
     R.pts_to remaining rv **
-    R.pts_to keep_going kv **
     R.pts_to quiescent qv **
     pure (D.drained (Ghost.reveal 'st0) st_cur /\
           CT.client_end_to_end_invariant st_cur /\
           (qv ==> ~ (D.internal_pending st_cur)))
+  decreases (SZ.v !remaining)
   {
     with st_cur. assert (CR.connection_exactly c st_cur);
     let r = !remaining;
-    if (SZ.gt r 0sz) {
-      remaining := SZ.sub r 1sz;
-      let pending = C.process_pending_protected_handshake c empty;
-      with st_next. assert (CR.connection_exactly c st_next);
-      match pending {
-        None -> {
-          D.lemma_pending_none_quiescent st_cur st_next;
-          quiescent := true;
-          keep_going := false
-        }
-        Some resp -> {
-          if (resp.CT.status = CT.StepOk) {
-            assert (pure (CT.pending_protected_handshake_result_correct
-              st_cur st_next (Some resp)));
-            assert (pure (resp.CT.status == CT.StepOk));
-            assert (pure (D.drain_step st_cur st_next));
-            assert (pure (D.drained (Ghost.reveal 'st0) st_cur));
-            D.lemma_drained_snoc (Ghost.reveal 'st0) st_cur st_next;
-            assert (pure (D.drained (Ghost.reveal 'st0) st_next));
-            assert (pure (CT.client_end_to_end_invariant st_next));
-            quiescent := false
-          } else {
-            assert (pure (st_next == st_cur));
-            quiescent := false;
-            keep_going := false
-          }
+    remaining := SZ.sub r 1sz;
+    let pending = C.process_pending_protected_handshake c empty;
+    with st_next. assert (CR.connection_exactly c st_next);
+    match pending {
+      None -> {
+        D.lemma_pending_none_quiescent st_cur st_next;
+        quiescent := true;
+        remaining := 0sz
+      }
+      Some resp -> {
+        if (resp.CT.status = CT.StepOk) {
+          assert (pure (CT.pending_protected_handshake_result_correct
+            st_cur st_next (Some resp)));
+          assert (pure (resp.CT.status == CT.StepOk));
+          assert (pure (D.drain_step st_cur st_next));
+          assert (pure (D.drained (Ghost.reveal 'st0) st_cur));
+          D.lemma_drained_snoc (Ghost.reveal 'st0) st_cur st_next;
+          assert (pure (D.drained (Ghost.reveal 'st0) st_next));
+          assert (pure (CT.client_end_to_end_invariant st_next));
+          quiescent := false
+        } else {
+          assert (pure (st_next == st_cur));
+          quiescent := false;
+          remaining := 0sz
         }
       }
-    } else {
-      quiescent := false;
-      keep_going := false
     }
   };
   let q = !quiescent;
