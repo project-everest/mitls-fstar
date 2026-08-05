@@ -245,6 +245,7 @@ let log_shape (m:CS.connection_model) (log:list CS.conn_event) : prop =
 (* The exact canonical shape invariant                                 *)
 (* ================================================================== *)
 
+#restart-solver
 let server_canonical_shape (st:CS.connection_state) : prop =
   st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint ==>
   log_shape st.CS.cs_model st.CS.cs_event_log
@@ -460,6 +461,7 @@ let has_read_snoc_mono (region:list CS.conn_event) (x:CS.conn_event)
 
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
+#restart-solver
 let lemma_chr_log
   (m:CS.connection_model) (log:list CS.conn_event)
   (sel:CS.server_handshake_selection) (shared:C.x25519_shared_secret)
@@ -664,6 +666,7 @@ let step_from_sefs (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
        | _ -> ())
     | _ -> ()
 
+#restart-solver
 let step_from_sfs (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
       (requires hpre st0 s' conn_ev /\
@@ -869,6 +872,7 @@ let rec lemma_trace_log_extends
 
 (* Lemma C: model_config is preserved along a trace. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+#restart-solver
 let rec lemma_trace_config
   (init st0 st1:CS.connection_state)
   (trace:list (SM.transition CS.connection_state CW.wire_message

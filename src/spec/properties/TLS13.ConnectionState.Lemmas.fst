@@ -798,6 +798,7 @@ let lemma_same_key_schedule_reachable_shape
 =
   ()
 
+#restart-solver
 let lemma_supported_profile_base_lineage_or_empty_to_lineage
   (keys:key_schedule_state)
   : Lemma
@@ -1690,6 +1691,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
          assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
          assert (client_x25519_reachable_shape st1))
 
+#restart-solver
 let lemma_connection_delta_server_x25519_reachable_shape
   (st0:connection_state)
   (st1:connection_state)
@@ -2510,6 +2512,7 @@ let client_application_record_epoch_reachable_shape
   | _ ->
     True
 
+#restart-solver
 let server_application_record_epoch_reachable_shape
   (model:connection_model)
   : prop =
@@ -3316,6 +3319,7 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
      | _, _, _, _ -> assert False)
   | _, _, _, _ -> assert False
 
+#restart-solver
 let lemma_shared_secret_lineage_base_secret_agree
   (base_id:base_secret_id)
   (client:connection_state)
@@ -4129,6 +4133,7 @@ let rec lemma_app_received_messages_snoc
       (app_received_messages tl)
       (conn_event_app_received_delta ev)
 
+#restart-solver
 let rec lemma_transcript_bytes_snoc
   (events:list conn_event)
   (ev:conn_event)
@@ -4487,7 +4492,7 @@ let lemma_step_model_preserves_config
 =
   ()
 
-#push-options "--split_queries always --z3rlimit 10 --z3refresh"
+#push-options "--split_queries always --z3rlimit 10"
 
 let state_of_model_for_first_epoch_application_material
   (model:connection_model)
@@ -5031,6 +5036,7 @@ let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_
      | _, _, _ ->
       assert False)
 
+#restart-solver
 let lemma_application_traffic_install_for_role_material_matches_expected
   (role:endpoint_role)
   (model0:connection_model)
@@ -5858,6 +5864,7 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
   | ConnProtectedHandshake step ->
     assert (model.model_config.config_role == ClientEndpoint)
 
+#restart-solver
 let lemma_connection_delta_server_certificate_verify_body_empty_reachable_shape
   (st0:connection_state)
   (st1:connection_state)
@@ -6784,6 +6791,7 @@ let lemma_step_model_record_layer_delta
      | _, _ ->
        assert False))
 
+#restart-solver
 let lemma_step_model_pending_application_delta
   (model0:connection_model)
   (ev:conn_event)
@@ -7602,6 +7610,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
     with outer_fragment (sent_tls_inner_plaintext_fragment msg) plaintext
     and () )
 
+#restart-solver
 let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
   (sender:connection_model)
   (receiver:connection_model)
@@ -8460,6 +8469,7 @@ let lemma_conn_events_protected_raw_segmented_replay_cons
     raw_received
     final_model)
 
+#restart-solver
 let rec lemma_conn_events_raw_replay_protected_segmented
   (model:connection_model)
   (events:list conn_event)
@@ -9370,6 +9380,7 @@ let rec lemma_conn_events_sent_seal_replay_snoc
       (B.append tail_sent delta_sent)
       (B.append tail_received delta_received)
 
+#restart-solver
 let lemma_conn_events_received_decode_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -10171,6 +10182,7 @@ let lemma_initial_raw_to_message_replay_consistent
   lemma_initial_received_decode_replay_consistent cfg;
   lemma_initial_received_decode_key_schedule_replay_consistent cfg
 
+#restart-solver
 let lemma_connection_state_raw_to_message_replay
   (st:connection_state)
   : Lemma

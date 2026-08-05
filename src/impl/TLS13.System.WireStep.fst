@@ -803,6 +803,7 @@ let raw_has_appdata_record (raw:B.bytes) : prop =
     list_has_appdata msgs
 
 (** `raw_has_appdata_record` transports across byte-equal logs. **)
+#restart-solver
 let lemma_raw_has_appdata_record_seq_equal (raw1 raw2:B.bytes)
   : Lemma
       (requires Seq.equal raw1 raw2 /\ raw_has_appdata_record raw1)
@@ -1614,6 +1615,7 @@ let lemma_client_step_into_appdata_emits
     trace, the config is preserved and EITHER the trace already emitted an
     ApplicationData record, OR the endpoint is not (yet) at the application-data
     control, OR it started there. **)
+#restart-solver
 let rec lemma_client_trace_emits_appdata
   (init st0 st1:CS.connection_state)
   (trace:list (SM.transition CS.connection_state CW.wire_message
@@ -2420,6 +2422,7 @@ let lemma_client_step_sent_zero
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
 (** `~pre_appdata` is forward-closed along a reachable client trace. **)
+#restart-solver
 let rec lemma_client_trace_notpreappdata_forward
   (init st0 st1:CS.connection_state)
   (trace:list (SM.transition CS.connection_state CW.wire_message
@@ -3230,6 +3233,7 @@ let rec lemma_list_has_appdata_count_ge1 (msgs:list CW.wire_message)
 
 (** A wire record serializes to a NON-EMPTY byte log (the record header alone is
     5 bytes; the parse consumes a positive prefix). **)
+#restart-solver
 let lemma_wire_serialize_nonempty (w:CW.wire_message)
   : Lemma (ensures B.length (CW.wire_serialize w) > 0)
   = W.lemma_parse_record_wire_some_consumed_positive
@@ -4031,6 +4035,7 @@ let lemma_single_step_server_stage_shape (u:unit)
 (** A consistent (reachable) server-role state satisfies the server field shape,
     hence in particular the `server_stage_ok` lower bounds. **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#restart-solver
 let lemma_connection_state_consistent_server_stage_shape (st:CS.connection_state)
   : Lemma
       (requires
@@ -4853,6 +4858,7 @@ let lemma_client_finished_reachable_sent_ge1
 (** The server handshake-receiving region: server controls strictly before the
     client-Finished delivery (read epoch still Initial/Handshake), excluding
     ControlFailed and every post-delivery control. **)
+#restart-solver
 let server_recv_region_ctrl (c:CS.connection_control_state) : bool =
   match c with
   | CS.ControlNew

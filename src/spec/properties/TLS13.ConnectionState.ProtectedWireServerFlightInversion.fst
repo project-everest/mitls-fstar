@@ -642,6 +642,7 @@ let lemma_server_prefix_model
   )
 #pop-options
 
+#restart-solver
 let is_key_install_ev (ev:CS.conn_event) : bool =
   match ev with
   | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> true
@@ -1306,6 +1307,7 @@ let lemma_client_prefix_received_bytes
 (* ------------------------------------------------------------------ *)
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+#restart-solver
 let lemma_install_empty_sent (e:CS.conn_event)
   : Lemma (requires SCShape.is_server_hs_install e == true)
           (ensures Region.is_empty_sent_ev e == true)
@@ -1920,6 +1922,7 @@ let lemma_server_side (s:sysp)
 (* Client-side package.                                                *)
 (* ================================================================== *)
 
+#restart-solver
 let client_raw_prefix_package
   (s:sysp) (ch:GCH.clientHello) (sh:GSH.serverHello)
   (raw_flight:list CS.conn_event) : prop =
@@ -2568,6 +2571,7 @@ let lemma_server_fields_pinned
 
 (* ================= client field pinning (7-head peel) ================= *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#restart-solver
 let lemma_client_fields_pinned
   (mc:CS.connection_model) (install:CS.conn_event)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv_validate:CS.local_event)
@@ -3205,6 +3209,7 @@ let lemma_stageB
 (* ================================================================== *)
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#restart-solver
 let lemma_conclude_pinned_server_flight
   (client server:CS.connection_state)
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate)

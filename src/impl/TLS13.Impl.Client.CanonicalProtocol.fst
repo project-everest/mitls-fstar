@@ -836,6 +836,7 @@ let lemma_client_step_from_local_witness
     st1
     (CPI.step_output wire_outputs local_outputs))
 
+#restart-solver
 let lemma_client_local_step_ok_process_correct
   (initial:client_initial_state)
   (st0:CS.connection_state)
@@ -1719,6 +1720,7 @@ let lemma_client_local_rejected_process_correct
     wire_outputs
     local_outputs)
 
+#restart-solver
 [@@pulse_unfold]
 let client_network_frame_pre
   (frame:tls_client_network_frame)
@@ -2553,6 +2555,7 @@ let lemma_client_coalesced_network_bytes_step_correct
       st0 st1 buffer_resp.CT.response raw network_out app_out)
   )
 
+#restart-solver
 let lemma_client_coalesced_preserves_config
   (st0 st1:CS.connection_state)
   (buffer_resp:CT.client_buffer_response)
@@ -3393,6 +3396,7 @@ let lemma_client_progress_histories_ahead
     st1
     ()
 
+#restart-solver
 let client_invariant
   (cc:canonical_client)
   (received:B.bytes)
@@ -4265,6 +4269,7 @@ let lemma_client_local_fail_network_process_correct
 // raw_sent/raw_received deltas, so [consumed] and [produced] are both empty
 // and the [network_error_refines_state_machine] LocalEvent disjunct applies.
 #push-options "--z3rlimit 100"
+#restart-solver
 let lemma_client_local_fail_bridge_result
   (initial:client_initial_state)
   (received0:B.bytes)
@@ -5155,6 +5160,7 @@ let lemma_client_network_protected_head_bridge_result
     old_network_out network_out out_len base st1 app_out buffer_resp
     consumed wire_outputs local_outputs
 
+#restart-solver
 let lemma_client_network_bridge_obligation
   (base:tls_client_network_frame)
   : Lemma
@@ -6065,6 +6071,7 @@ ensures exists* (received1:Ghost.erased B.bytes)
 (** A step consuming no raw input cannot be a HEAD step: a head step must
     take delivery of exactly one Application_data record, and the empty byte
     string carries none. **)
+#restart-solver
 let lemma_protected_step_empty_raw_is_tail
   (model:CS.connection_model)
   (step:CS.protected_handshake_step)

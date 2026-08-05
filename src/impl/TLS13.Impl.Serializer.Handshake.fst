@@ -443,6 +443,7 @@ fn serialize_empty_encrypted_extensions_poc
    unfold it definitionally.  The canonical mid below stays private. *)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 (* ---- canonical mid ---- *)
+#restart-solver
 noextract
 let poc_sh_mid (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello_mid
@@ -905,6 +906,7 @@ fn serialize_server_hello_handshake_poc
    ===================================================================== *)
 (* ---- canonical entry + record (transparent copy of mk_cert_witness) ---- *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+#restart-solver
 noextract
 let poc_cert_entry (chain: B.bytes)
   : Pure GCertE.certificateEntry
@@ -1267,6 +1269,7 @@ let lemma_ch_server_name (rnd sni ks sid: B.bytes)
           (ensures Sem.clientHello_server_name (poc_canonical_ch rnd sni ks sid cs sa) == Some (sni <: Seq.seq U8.t))
   = ()
 
+#restart-solver
 let lemma_ch_key_share (rnd sni ks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
@@ -1646,6 +1649,7 @@ fn intro_handshake_client_hello_vmatch
 
 (* Build a singleton vclist from one element vmatch (allocates the 1-vec,
    which the vclist then owns). *)
+#restart-solver
 fn mk_singleton_vclist
   (#el #eh: Type0)
   (#elem_vmatch: el -> eh -> slprop)

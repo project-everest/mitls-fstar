@@ -892,6 +892,7 @@ fn copy_certificate_verify_signature
   snapshot
 }
 
+#restart-solver
 fn get_certificate_verify_signature_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -1840,6 +1841,7 @@ fn can_receive_client_finished
   a [true] result carries a witness, a [false] result promises nothing, so the
   caller simply refuses the handshake.
 **)
+#restart-solver
 fn scan_u16_for
   (v: V.vec U16.t)
   (len: SZ.t)
@@ -2674,6 +2676,7 @@ fn can_receive_application_data
   ok
 }
 
+#restart-solver
 fn can_receive_endpoint_application_data
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -3477,6 +3480,7 @@ fn can_send_certificate_runtime
   ok
 }
 
+#restart-solver
 fn can_sign_certificate_verify_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -4289,6 +4293,7 @@ fn can_validate_certificate
   fold (connection_exactly c st0);
   ok
 }
+#restart-solver
 fn can_receive_certificate_verify
   (c:connection_state)
   (#cv:erased GCV.certificateVerify)
@@ -5229,6 +5234,7 @@ fn client_finished_verify_data_matches
   ok
 }
 
+#restart-solver
 fn can_verify_client_finished_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -6077,6 +6083,7 @@ fn can_send_endpoint_application_data_runtime
   ok
 }
 
+#restart-solver
 fn can_send_close_notify_runtime
   (c:connection_state)
   (network_out_len:SZ.t)

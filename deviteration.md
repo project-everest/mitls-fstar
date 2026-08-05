@@ -318,9 +318,79 @@ requires ... returns ...`". Restructure instead so the measure is a plain read:
 in `TLS13.Impl.Client.DrainLoop`, dropping the separate `keep_going` flag and
 having every exit path zero the fuel made the measure just `SZ.v !remaining`.
 
+## Four levers that cut the build 13%
+
+A full profiling round (cold `verify`, `--query_stats`, plus a shim recording
+wall time and peak RSS per `fstar.exe` invocation) took the build from 10377s to
+9009s of CPU. Ranked by what they teach:
+
+**1. Never pair `--z3refresh` with `--split_queries always` (-742s, -7.2%).**
+The tell is a module burning hundreds of seconds across hundreds of queries at a
+*used rlimit near zero* — `receive_application_data` spent 185.8s over 371
+queries for a total used rlimit of 70, i.e. 0.19 per query. That is not solving.
+`--z3refresh` starts a fresh Z3 per query; combined with a flag that multiplies
+the number of queries, every split query pays process startup plus a re-parse of
+the whole context. All 13 `--z3refresh` sites in the repo were paired this way.
+Removing them left the query count *identical* at 36143 — proof that the change
+was VC-neutral — while SMT time fell 4999s to 4520s and peak RSS fell ~600MB.
+
+**2. `#restart-solver` roughly every 800 lines in big modules (-335s).**
+Look for a monotonic ramp in cost-per-query against position in the file.
+`TLS13.Impl.Parser.fst` ran 78, 68, 127, 108, 148, 117, 144, 221, 177, 320 ms
+per query across its ten deciles — 4x degradation with no change in goal
+difficulty. That is accumulated solver state, and it is why a 7278-line module
+with only two `#push-options` sites is slow. Tuning the interval on that module:
+no restarts 501.5s, 4 restarts 372.6s, 8 restarts 337.9s, 14 restarts 327.7s.
+The knee is near 800 lines; below that the extra context re-sends eat the gain.
+Not every big module ramps — `ConnectionState.Lemmas` peaks in the middle
+(specific costly lemmas) and `Impl.ConnectionState.Queries` is flat (its cost is
+Pulse elaboration, not SMT), so measure per module before inserting.
+
+**3. `assert_norm` never needed fuel (-98s in one 165-line file).**
+`TLS13.Wire.Spec.Reveal.CertificateVerify` carried `--initial_fuel 50
+--max_fuel 50` at six sites and fuel 100 at a seventh, to prove a 34-byte
+literal equals `append` of a 33-byte literal and a zero byte — by enumerating
+all 34 indices in a match. The fuel existed only to unfold `List.length` 34
+times, which `assert_norm` does by normalization at fuel 0. Replacing the
+enumeration with one induction (`seq_of_list` distributes over `append`) took
+the file from 99.2s to 9.0s and 165 lines to 131, with the `.fsti` untouched.
+
+**4. Transparent quantified predicates in an `.fsti` are a cascade waiting to
+happen (-106s in one module).** Profile the worst single query, don't guess:
+
+```bash
+fstar.exe ... --log_queries --query_stats Module.fst      # writes queries-*.smt2
+z3 smt.qi.profile=true queries-Module-5.smt2 2> qi.txt
+awk '/\[quantifier_instances\]/ {t[$2]+=$4} END {for(n in t) printf "%9d %s\n",t[n],n}' \
+  qi.txt | sort -rn | head
+```
+
+For `lemma_finish_strong` (134.2s in a *single* query) this showed one predicate
+equation firing 3,085,362 times, twelve times the next quantifier and in exact
+1:1 lockstep with a nested quantifier interpretation — a cascade, not hard work.
+The predicate was a transparent `let ... : prop` in an `.fsti`: a sixteen-variable
+existential nesting a `forall` and two `exists` over `L.memP`. Transparent and in
+an interface means its equation is in every downstream context. Marking it
+`[@@"opaque_to_smt"]` needed *no other change in the defining module* — nothing
+there required the unfolding, so all three million instantiations were waste —
+and exactly one consumer needed a `reveal_opaque`.
+
+The general shape: a 1:1 count between a definition's `equation_` and an
+`l_quant_interp_`, with the fuel-instrumented axioms of whatever the body
+iterates over trailing behind it.
+
+After all four, SMT is 43% of the build and the frontend/Pulse elaboration is
+57%. Further gains have to come from splitting the big Pulse modules
+(`Impl.ConnectionState.Queries` is 78% non-SMT, `LocalHandshake` 72%), not from
+the solver.
+
 ## Things that did not work
 
 Recording these so they are not re-tried.
+
+- **`--ext context_pruning`.** Not in `FSTAR_FLAGS`, so it looked like a free
+  repo-wide win. A/B on `ConnectionState.ServerCanonicalShape`: 117.5s without,
+  116.5s with. No effect — either already on by default or inapplicable here.
 
 - **`--use_hints` / `--record_hints`.** Unusable with the F* build shipped in
   this project's `tools/everparse`. Recording is fine, but *replay* fails with
