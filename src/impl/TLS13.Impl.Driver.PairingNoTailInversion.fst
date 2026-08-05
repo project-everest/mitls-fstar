@@ -1104,6 +1104,33 @@ let lemma_client_application_progress_rank_step
            | _, _ ->
              assert (CS.step_local_event model local == None);
              assert False))
+     | CS.ConnProtectedHandshake step ->
+       assert (CS.legal_protected_handshake_step model step);
+       assert (CS.step_protected_handshake model step == Some model');
+       (match model.CS.model_control, step.CS.protected_handshake_message with
+        | CS.ControlHandshaking CS.HsServerHelloReceived,
+          M.EncryptedExtensions _ ->
+          let keys = model.CS.model_handshake.CS.hs_keys in
+          (match keys.CS.ks_server_handshake_traffic with
+           | Some _ ->
+             assert (client_application_progress_rank model <=
+              client_application_progress_rank model' + 1)
+           | None ->
+             assert False)
+        | CS.ControlHandshaking CS.HsEncryptedExtensionsReceived,
+          M.Certificate _ ->
+          assert (client_application_progress_rank model <=
+            client_application_progress_rank model' + 1)
+        | CS.ControlHandshaking CS.HsCertificateValidated,
+          M.CertificateVerify _ ->
+          assert (client_application_progress_rank model <=
+            client_application_progress_rank model' + 1)
+        | CS.ControlHandshaking CS.HsCertificateVerifyVerified,
+          M.Finished _ ->
+          assert (client_application_progress_rank model <=
+            client_application_progress_rank model' + 1)
+        | _, _ ->
+          assert False)
      | CS.ConnNetworkEvent msg ->
        assert (CS.legal_tls_message model msg.CL.message_direction msg.CL.message_value);
        assert (CS.step_tls_message model msg.CL.message_direction msg.CL.message_value == Some model');
@@ -1255,4 +1282,3 @@ let rec lemma_client_application_progress_rank_replay_lower_bound
         assert (client_application_progress_rank model1 <= FStar.List.Tot.length rest);
         assert (FStar.List.Tot.length (ev :: rest) == FStar.List.Tot.length rest + 1)
     )
-

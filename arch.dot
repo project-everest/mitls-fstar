@@ -38,7 +38,6 @@ digraph TLS13Architecture {
     style="rounded,filled";
 
     Driver [label="network/application driver\nowns TCP reads/writes", fillcolor="#eeeeee"];
-    BindingTest [label="test_connection_bindings.c\ndeterministic API test", fillcolor="#eeeeee"];
     OpenSSLEcho [label="test_extracted_client_openssl_echo.c\nlocal OpenSSL interop", fillcolor="#eeeeee"];
   }
 
@@ -99,7 +98,6 @@ digraph TLS13Architecture {
   }
 
   Driver -> Client;
-  BindingTest -> Client;
   OpenSSLEcho -> Client;
 
   Client -> ClientTypes;

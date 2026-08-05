@@ -275,6 +275,7 @@ let is_server_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsApplicationData _ -> True
         | M.TlsAlert T.Close_notify -> True
         | _ -> False))
+  | CS.ConnProtectedHandshake _ -> False
   | CS.ConnLocalEvent le ->
     (match le with
      | CS.LocalStartServer -> True

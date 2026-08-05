@@ -40,6 +40,7 @@ module SM = TLS13.Spec.StateMachine.ClientTrace
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module Tr = TLS13.Transcript
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -1338,11 +1339,19 @@ fn process_network_bytes
                 (buffer_resp.ST.response.ST.status == ST.StepOk ==>
                  0 < SZ.v buffer_resp.ST.consumed_len))
 {
+  Trace.emit Trace.server_network_begin
+    (SZ.sizet_to_uint64 raw_len)
+    0UL
+    0UL;
   unfold (connection_exactly s 'st0);
   let decoded = P.decode_network_buffer s raw raw_len;
   fold (connection_exactly s 'st0);
   match decoded {
     IM.NetworkBufferNeedMoreInput -> {
+      Trace.emit Trace.server_network_need_more
+        (SZ.sizet_to_uint64 raw_len)
+        0UL
+        0UL;
       let resp = {
         ST.network_out_len = 0sz;
         ST.app_out_len = 0sz;
@@ -1371,6 +1380,10 @@ fn process_network_bytes
       buffer_resp
     }
     IM.NetworkBufferDecodeError -> {
+      Trace.emit Trace.server_network_decode_error
+        (SZ.sizet_to_uint64 raw_len)
+        0UL
+        0UL;
       let resp =
         process_decode_error
           s
@@ -1418,6 +1431,13 @@ fn process_network_bytes
       buffer_resp
     }
     IM.NetworkBufferOk decoded_buffer -> {
+      Trace.emit Trace.server_network_record
+        (FStar.Int.Cast.uint8_to_uint64
+          decoded_buffer.IM.decoded_buffer_content_type)
+        (SZ.sizet_to_uint64
+          decoded_buffer.IM.decoded_buffer_raw_record_len)
+        (SZ.sizet_to_uint64
+          decoded_buffer.IM.decoded_buffer_fragment_len);
       with raw_record_bytes fragment_bytes.
         assert (V.pts_to decoded_buffer.IM.decoded_buffer_raw_record raw_record_bytes **
                 V.pts_to decoded_buffer.IM.decoded_buffer_fragment fragment_bytes);
@@ -1477,6 +1497,19 @@ fn process_network_bytes
         Some l -> {
           match l {
             IM.LTlsHandshake lhs -> {
+              Trace.emit Trace.server_handshake_message
+                (match lhs with
+                 | IM.LClientHello _ -> 1UL
+                 | IM.LServerHello _ -> 2UL
+                 | IM.LEncryptedExtensions _ -> 8UL
+                 | IM.LCertificate _ -> 11UL
+                 | IM.LCertificateVerify _ -> 15UL
+                 | IM.LFinished _ -> 20UL
+                 | IM.LHelloRetryRequest -> 254UL)
+                (FStar.Int.Cast.uint8_to_uint64
+                  decoded_buffer.IM.decoded_buffer_content_type)
+                (SZ.sizet_to_uint64
+                  decoded_buffer.IM.decoded_buffer_fragment_len);
               with m. assert (pure True);
               unfold (IM.is_valid_tls_message (IM.LTlsHandshake lhs) m);
               with mhs. _;

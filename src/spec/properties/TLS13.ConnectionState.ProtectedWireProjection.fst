@@ -238,6 +238,134 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"
+let lemma_single_protected_message_seal_saturates_protected_head
+  (sender:connection_model)
+  (receiver:connection_model)
+  (sent_msg:M.handshake_msg)
+  (step:protected_handshake_step)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.model_record.record_write.R.seq ==
+          receiver.model_record.record_read.R.seq /\
+        (match
+          record_direction_material sender.model_record.record_write,
+          record_direction_material receiver.model_record.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        sent_single_protected_message_seal
+          sender
+          (M.TlsHandshake sent_msg)
+          raw /\
+        step.protected_handshake_head /\
+        legal_event receiver (ConnProtectedHandshake step) /\
+        received_event_decode_projection
+          receiver
+          (ConnProtectedHandshake step)
+          raw)
+      (ensures
+        step.protected_handshake_offset == 0 /\
+        step.protected_handshake_consumed ==
+          B.length step.protected_handshake_fragment)
+=
+  let sent_tls_msg = M.TlsHandshake sent_msg in
+  CSL.lemma_received_record_opened_from_sent_single_protected_message_seal_peer
+    sender
+    receiver
+    sent_tls_msg
+    raw;
+  eliminate exists (sent_outer:B.bytes).
+    W.parse_record raw == Some (T.Application_data, sent_outer, B.length raw) /\
+    received_record_opened
+      receiver
+      raw
+      sent_outer
+      (sent_tls_inner_plaintext_fragment sent_tls_msg)
+  returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
+  with _.
+  ( eliminate exists
+      (received_outer:B.bytes)
+      (opened:B.bytes)
+      (plaintext:M.plaintext).
+      W.parse_record_wire raw ==
+        Some (T.Application_data, received_outer, B.length raw) /\
+      received_record_opened receiver raw received_outer opened /\
+      W.parse_plaintext opened == Some plaintext /\
+      plaintext.M.content_type == T.Handshake /\
+      Seq.equal plaintext.M.fragment step.protected_handshake_fragment /\
+      step.protected_handshake_offset <=
+        B.length step.protected_handshake_fragment /\
+      W.parse_handshake
+        (Seq.slice
+          step.protected_handshake_fragment
+          step.protected_handshake_offset
+          (B.length step.protected_handshake_fragment)) ==
+        Some
+          (step.protected_handshake_message,
+           step.protected_handshake_consumed)
+    returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
+    with _.
+    ( W.lemma_parse_record_implies_parse_record_wire raw;
+      assert (received_outer == sent_outer);
+      eliminate exists (sent_read_state':R.direction_state).
+        R.open_record
+          receiver.model_record.record_read
+          (record_header_aad raw)
+          sent_outer ==
+          Some (sent_tls_inner_plaintext_fragment sent_tls_msg, sent_read_state')
+      returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
+      with _.
+      ( eliminate exists (received_read_state':R.direction_state).
+          R.open_record
+            receiver.model_record.record_read
+            (record_header_aad raw)
+            received_outer ==
+            Some (opened, received_read_state')
+        returns (step.protected_handshake_offset == 0 /\
+          step.protected_handshake_consumed ==
+            B.length step.protected_handshake_fragment)
+        with _.
+        ( assert (opened == sent_tls_inner_plaintext_fragment sent_tls_msg);
+          W.lemma_serialize_tls_message_handshake sent_msg;
+          let sent_plaintext = {
+            M.content_type = T.Handshake;
+            M.fragment = W.serialize_handshake sent_msg;
+          } in
+          assert (sent_tls_inner_plaintext_fragment sent_tls_msg ==
+                  W.serialize_plaintext sent_plaintext);
+          W.lemma_parse_plaintext_serialize_plaintext sent_plaintext;
+          assert (W.parse_plaintext
+            (sent_tls_inner_plaintext_fragment sent_tls_msg) ==
+            Some sent_plaintext);
+          assert (plaintext == sent_plaintext);
+          assert (step.protected_handshake_offset == 0);
+          assert (Seq.equal
+            step.protected_handshake_fragment
+            (W.serialize_handshake sent_msg));
+          Seq.lemma_eq_elim
+            step.protected_handshake_fragment
+            (W.serialize_handshake sent_msg);
+          assert (W.parse_handshake (W.serialize_handshake sent_msg) ==
+            Some
+              (step.protected_handshake_message,
+               step.protected_handshake_consumed));
+          W.lemma_parse_handshake_serialize_protected_consumes_all
+            sent_msg
+            step.protected_handshake_message
+            step.protected_handshake_consumed ) ) ) )
+#pop-options
+
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:connection_model)
   (receiver:connection_model)

@@ -18,6 +18,7 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module CTypes = TLS13.Impl.CanonicalTypes
 module EC = TLS13.Spec.Endpoint.Client
 module ID = FStar.IndefiniteDescription
@@ -39,11 +40,23 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 noextract
+(** The client has finished the handshake and can carry application data.
+
+    The buffer-emptiness conjunct is what makes this mean *finished* rather than
+    merely *at ControlApplicationData*, and it is the conjunct
+    `TLS13.System.Internal.lemma_application_ready_settled` consumes to derive
+    `tls_settled` from readiness.
+
+    The state machine now also forbids the client from sending its Finished
+    while protected-handshake plaintext is pending (see `legal_handshake_message`),
+    so the two agree; that guard is what rules out the client wedging in
+    `ControlApplicationData` holding bytes no legal step can ever drain. *)
 let client_driver_application_ready
   (st:CS.connection_state)
   : prop =
   CT.client_end_to_end_invariant st /\
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  CS.protected_handshake_buffer_empty st.CS.cs_model /\
   CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
 
 noextract
@@ -211,7 +224,7 @@ let client_receive_observation_network_correct
   : prop =
   obs.client_receive_observed_status <> DriverWorkflowExhausted ==>
     exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
-      CT.network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.client_receive_observed_response
@@ -1324,7 +1337,7 @@ let client_buffered_network_io_step_correct
   (app_out_bytes:B.bytes)
   : prop =
   exists st_before input old_network_out old_app_out.
-    CT.network_bytes_end_to_end_correct
+    D.drained_network_bytes_end_to_end_correct
       st_before
       st1
       result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1365,7 +1378,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
 =
   let network = result.driver_workflow_network in
   assert (exists st_before input old_network_out old_app_out.
-    CT.network_bytes_end_to_end_correct
+    D.drained_network_bytes_end_to_end_correct
       st_before
       st_network
       network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1378,7 +1391,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
     ID.indefinite_description_ghost
       CS.connection_state
       (fun st_before -> exists input old_network_out old_app_out.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before
           st_network
           network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1391,7 +1404,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
     ID.indefinite_description_ghost
       B.bytes
       (fun input -> exists old_network_out old_app_out.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before
           st_network
           network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1404,7 +1417,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
     ID.indefinite_description_ghost
       B.bytes
       (fun old_network_out -> exists old_app_out.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before
           st_network
           network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1417,7 +1430,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
     ID.indefinite_description_ghost
       B.bytes
       (fun old_app_out ->
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before
           st_network
           network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1426,7 +1439,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
           network_out_bytes
           old_app_out
           observed_app_out_bytes) in
-  assert (CT.network_bytes_end_to_end_correct
+  assert (D.drained_network_bytes_end_to_end_correct
     st_before
     st_network
     network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -1440,7 +1453,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
   assert ((client_driver_workflow_observation result).client_receive_observed_response ==
     network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp);
   assert (exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
-    CT.network_bytes_end_to_end_correct
+    D.drained_network_bytes_end_to_end_correct
       st_before
       st_network
       (client_driver_workflow_observation result).client_receive_observed_response
@@ -1652,6 +1665,10 @@ let lemma_local_event_wire_lengths
     (match ev with
      | CS.ConnLocalEvent _ ->
        assert (Seq.equal raw_received B.empty)
+     | CS.ConnProtectedHandshake step ->
+       (* Internal event: a tail step consumes no raw input. *)
+       CT.lemma_local_event_kind_matches_protected_is_tail st0 kind payload step;
+       assert (Seq.equal raw_received B.empty)
      | CS.ConnNetworkEvent msg ->
        (match msg.CL.message_direction with
         | CL.Sent ->
@@ -1807,7 +1824,7 @@ let lemma_network_bytes_wire_lengths
   (old_app_out:B.bytes)
   (app_out:B.bytes)
   : Lemma
-      (requires CT.network_bytes_end_to_end_correct
+      (requires CT.network_bytes_step_correct
         st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out)
       (ensures
         B.length st1.CS.cs_wire_log.CL.raw_sent ==
@@ -1888,7 +1905,7 @@ let lemma_network_bytes_logged_received_accounted
   (old_consumed:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        CT.network_bytes_step_correct
           st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
         logged_received_bytes_accounted
           st0.CS.cs_wire_log.CL.raw_received
@@ -2052,6 +2069,12 @@ let lemma_network_bytes_zero_consumed_raw_received_unchanged
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
   )
 
+(**
+  Coalesced counterpart of [lemma_network_bytes_logged_received_exact_when_nonfailed].
+  In the head-protected case the received wire log grows by exactly the consumed
+  prefix, and a non-failed successor forces a non-failed predecessor through
+  [CT.lemma_legal_response_for_event_nonfailed_previous].
+ **)
 let lemma_network_bytes_logged_received_exact_when_nonfailed
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2183,3 +2206,111 @@ let lemma_network_bytes_logged_received_exact_when_nonfailed
       Seq.lemma_eq_elim st0.CS.cs_wire_log.CL.raw_received old_consumed
     )
   )
+
+
+let lemma_coalesced_logged_received_exact_when_nonfailed_undrained
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (old_consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        client_driver_wire_logs_match_witness
+          st0 received sent old_consumed buffered buffered_len /\
+        CT.coalesced_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        CT.connection_control_not_failed st1 ==>
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append old_consumed
+              (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)))
+=
+  if CT.network_bytes_end_to_end_correct
+       st0 st1 buffer_resp network_input
+       old_network_out network_out old_app_out app_out
+  then
+    lemma_network_bytes_logged_received_exact_when_nonfailed
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out
+      received sent old_consumed buffered buffered_len
+  else (
+    let prefix = CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
+    let step =
+      CP.lemma_client_coalesced_head_step
+        st0 st1 buffer_resp network_input
+        old_network_out network_out old_app_out app_out in
+    CP.lemma_client_coalesced_head_wire_logs
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out;
+    introduce CT.connection_control_not_failed st1 ==>
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append old_consumed prefix)
+    with _. (
+      CT.lemma_legal_response_for_event_nonfailed_previous
+        st0 st1 buffer_resp.CT.response
+        (CS.ConnProtectedHandshake step)
+        B.empty prefix network_out app_out;
+      assert (Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed)
+    )
+  )
+
+
+/// The same fact for a drained call.  A drain neither changes the wire log nor
+/// can turn a failed control state into a live one, so the statement travels
+/// unchanged from the intermediate state to the final one.
+let lemma_coalesced_logged_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (old_consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        client_driver_wire_logs_match_witness
+          st0 received sent old_consumed buffered buffered_len /\
+        D.drained_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        CT.connection_control_not_failed st1 ==>
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append old_consumed
+              (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)))
+=
+  let st_mid =
+    D.drained_network_middle
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out in
+  D.lemma_drained_facts st_mid st1;
+  introduce CT.connection_control_not_failed st1 ==>
+    Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append old_consumed
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len))
+  with _. (
+    D.lemma_drained_nonfailed_previous st_mid st1;
+    lemma_coalesced_logged_received_exact_when_nonfailed_undrained
+      st0 st_mid buffer_resp network_input
+      old_network_out network_out old_app_out app_out
+      received sent old_consumed buffered buffered_len)

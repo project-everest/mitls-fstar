@@ -16,6 +16,7 @@ module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module U8 = FStar.UInt8
 module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
@@ -67,6 +68,7 @@ fn record_state_new ()
   assert_norm (state_matches false 0UL (Seq.create 32 0uy) (Seq.create 12 0uy) R.initial_direction_state);
   assert (pure (state_matches false 0UL (Seq.create 32 0uy) (Seq.create 12 0uy) R.initial_direction_state));
   fold (is_record_state st R.initial_direction_state);
+  Trace.emit Trace.record_state_new 0UL 0UL 0UL;
   st
 }
 
@@ -74,6 +76,7 @@ fn record_state_free (st: record_state)
   requires is_record_state st 's
   ensures emp
 {
+  Trace.emit Trace.record_state_free 0UL 0UL 0UL;
   unfold (is_record_state st 's);
   V.free st.key;
   V.free st.iv;
@@ -347,6 +350,7 @@ fn advance_seq (st: record_state)
   unfold (is_record_state st 's);
   let seq = !st.seq;
   let next_seq = U64.add seq 1UL;
+  Trace.emit Trace.record_sequence_advance seq next_seq 0UL;
   st.seq := next_seq;
   with key_s. assert (V.pts_to st.key key_s);
   with iv_s. assert (V.pts_to st.iv iv_s);
@@ -355,6 +359,25 @@ fn advance_seq (st: record_state)
   assert (pure (U64.v next_seq == 's.R.seq + 1));
   assert (pure (state_matches installed_s next_seq key_s iv_s (R.next_seq 's)));
   fold (is_record_state st (R.next_seq 's));
+}
+
+fn restore_previous_seq (st: record_state)
+  requires is_record_state st (R.next_seq 's)
+  ensures is_record_state st 's
+{
+  unfold (is_record_state st (R.next_seq 's));
+  let seq = !st.seq;
+  assert (pure (U64.v seq == 's.R.seq + 1));
+  let previous_seq = U64.sub seq 1UL;
+  Trace.emit Trace.record_sequence_restore seq previous_seq 0UL;
+  st.seq := previous_seq;
+  with key_s. assert (V.pts_to st.key key_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  with installed_s. assert (Box.pts_to st.installed installed_s);
+  assert (pure (state_matches installed_s seq key_s iv_s (R.next_seq 's)));
+  assert (pure (U64.v previous_seq == 's.R.seq));
+  assert (pure (state_matches installed_s previous_seq key_s iv_s 's));
+  fold (is_record_state st 's);
 }
 
 fn install_keys
@@ -415,6 +438,8 @@ fn install_handshake_keys_runtime
   Arr.memcpy 12sz iv (V.vec_to_array st.iv);
   V.to_vec_pts_to st.key;
   V.to_vec_pts_to st.iv;
+  let old_seq = !st.seq;
+  Trace.emit Trace.record_install_handshake_keys old_seq 32UL 12UL;
   st.seq := 0UL;
   st.installed := true;
   with key_s. assert (V.pts_to st.key key_s);
@@ -448,6 +473,8 @@ fn install_application_keys_runtime
   Arr.memcpy 12sz iv (V.vec_to_array st.iv);
   V.to_vec_pts_to st.key;
   V.to_vec_pts_to st.iv;
+  let old_seq = !st.seq;
+  Trace.emit Trace.record_install_application_keys old_seq 32UL 12UL;
   st.seq := 0UL;
   st.installed := true;
   with key_s. assert (V.pts_to st.key key_s);
@@ -497,6 +524,9 @@ fn seal_application
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_seal_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 plain_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
@@ -506,6 +536,9 @@ fn seal_application
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     let next_seq = U64.add seq 1UL;
+    Trace.emit Trace.record_seal_success next_seq
+      (SZ.sizet_to_uint64 plain_len)
+      0UL;
     st.seq := next_seq;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
@@ -526,6 +559,9 @@ fn seal_application
     fold (is_record_state st (R.next_seq 's));
     true
   } else {
+    Trace.emit Trace.record_seal_failure 0UL
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
@@ -573,6 +609,9 @@ fn seal_application_no_update
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_seal_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 plain_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
@@ -614,9 +653,15 @@ fn seal_application_no_update
       (Ghost.reveal 'aad_bytes)
       { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
       Some ((out_s <: B.bytes), R.next_seq 's)));
+    Trace.emit Trace.record_seal_success seq
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     fold (is_record_state st 's);
     true
   } else {
+    Trace.emit Trace.record_seal_failure 0UL
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
@@ -660,6 +705,9 @@ fn seal_application_runtime
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_seal_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 plain_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
@@ -669,6 +717,9 @@ fn seal_application_runtime
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     let next_seq = U64.add_underspec seq 1UL;
+    Trace.emit Trace.record_seal_success next_seq
+      (SZ.sizet_to_uint64 plain_len)
+      0UL;
     st.seq := next_seq;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
@@ -680,6 +731,9 @@ fn seal_application_runtime
     fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
     true
   } else {
+    Trace.emit Trace.record_seal_failure 0UL
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
@@ -722,6 +776,9 @@ fn open_application
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_open_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 cipher_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
@@ -737,6 +794,9 @@ fn open_application
                   's.R.seq == U64.v seq));
     if opened {
       let next_seq = U64.add seq 1UL;
+      Trace.emit Trace.record_open_success next_seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       st.seq := next_seq;
       with out_s. assert (pts_to out out_s);
       assert (pure (Some? (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
@@ -747,12 +807,18 @@ fn open_application
       fold (is_record_state st (R.next_seq 's));
       true
     } else {
+      Trace.emit Trace.record_open_failure seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       assert (pure (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
       assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
       fold (is_record_state st 's);
       false
     }
   } else {
+    Trace.emit Trace.record_open_failure 0UL
+      (SZ.sizet_to_uint64 cipher_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
@@ -793,6 +859,9 @@ fn peek_open_application
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_open_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 cipher_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
@@ -809,6 +878,9 @@ fn peek_open_application
     assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
                   's.R.seq == U64.v seq));
     if opened {
+      Trace.emit Trace.record_open_success seq
+        (SZ.sizet_to_uint64 cipher_len)
+        1UL;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
       assert (pure (Some? (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
@@ -818,6 +890,9 @@ fn peek_open_application
       fold (is_record_state st 's);
       true
     } else {
+      Trace.emit Trace.record_open_failure seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
       assert (pure (out_s == 'old));
@@ -827,6 +902,9 @@ fn peek_open_application
       false
     }
   } else {
+    Trace.emit Trace.record_open_failure 0UL
+      (SZ.sizet_to_uint64 cipher_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
@@ -956,6 +1034,9 @@ fn open_application_runtime
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_open_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 cipher_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
@@ -970,6 +1051,9 @@ fn open_application_runtime
     assert (pure (B.length key_s == 32 /\ B.length iv_s == 12));
     if opened {
       let next_seq = U64.add_underspec seq 1UL;
+      Trace.emit Trace.record_open_success next_seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       st.seq := next_seq;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
@@ -978,12 +1062,18 @@ fn open_application_runtime
       fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
       true
     } else {
+      Trace.emit Trace.record_open_failure seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       with out_s. assert (pts_to out out_s);
       assert (pure (out_s == 'old));
       fold (is_record_state st 's);
       false
     }
   } else {
+    Trace.emit Trace.record_open_failure 0UL
+      (SZ.sizet_to_uint64 cipher_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);

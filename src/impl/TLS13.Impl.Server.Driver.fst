@@ -21,6 +21,7 @@ module IO = Common.TCP
 module O = TLS13.OpenSSL
 module SP = TLS13.Impl.Server.CanonicalProtocol
 module SZ = FStar.SizeT
+module Trace = TLS13.Trace
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
@@ -403,5 +404,6 @@ fn free
     DS.top_server_driver_closed d 'st 'certificate_chain 'credential_identity
   ensures DS.top_server_driver_released d 'st
 {
+  Trace.emit Trace.server_free 0UL 0UL 0UL;
   BL.free d
 }

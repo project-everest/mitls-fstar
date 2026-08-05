@@ -29,6 +29,7 @@ let conn_event_sent_tls_delta (ev:conn_event) : list M.tls_message =
     (match msg.CL.message_direction with
      | CL.Sent -> [msg.CL.message_value]
      | CL.Received -> [])
+  | ConnProtectedHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
   match ev with
@@ -36,6 +37,8 @@ let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
     (match msg.CL.message_direction with
      | CL.Sent -> []
      | CL.Received -> [msg.CL.message_value])
+  | ConnProtectedHandshake step ->
+    [M.TlsHandshake step.protected_handshake_message]
   | ConnLocalEvent _ -> []
 let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -43,6 +46,7 @@ let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Sent, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
+  | ConnProtectedHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_app_received_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -50,6 +54,7 @@ let conn_event_app_received_delta (ev:conn_event) : list B.bytes =
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Received, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
+  | ConnProtectedHandshake _ -> []
   | ConnLocalEvent local ->
     (match local with
      | LocalDeliverApplicationData bytes -> [bytes]
@@ -72,6 +77,14 @@ let state_event_of_conn_event (ev:conn_event) : GTot (option S.event) =
      | _, M.TlsAlert alert -> Some (S.Fail (T.AlertError alert))
      | _, M.TlsChangeCipherSpec -> None
      | _, _ -> None)
+  | ConnProtectedHandshake step ->
+    (match step.protected_handshake_message with
+     | M.ServerHello sh -> Some (S.RecvServerHello sh)
+     | M.EncryptedExtensions ee -> Some (S.RecvEncryptedExtensions ee)
+     | M.Certificate cert -> Some (S.RecvCertificate cert)
+     | M.CertificateVerify cv -> Some (S.RecvCertificateVerify cv)
+     | M.Finished fin -> Some (S.RecvServerFinished fin)
+     | _ -> None)
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (S.ValidateCertificate peer)
@@ -133,6 +146,8 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
       // transcript as part of the single delivery step.
       W.serialize_handshake (M.Finished fin)
      | _, _ -> B.empty)
+  | ConnProtectedHandshake step ->
+    W.serialize_handshake step.protected_handshake_message
   | ConnLocalEvent local ->
     (match local with
      | LocalVerifyFinished fin -> W.serialize_handshake (M.Finished fin)
@@ -174,6 +189,8 @@ let key_update_response_pending_step
      | CL.Received, M.TlsKeyUpdate M.UpdateRequested -> true
      | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested -> false
      | _, _ -> pending)
+  | ConnProtectedHandshake _ ->
+    pending
   | ConnLocalEvent _ ->
     pending
 let rec key_update_response_pending_after_events_from
@@ -319,6 +336,14 @@ let projected_record_layer_step_for_role
        { record with projected_write = projected_next_seq record.projected_write }
      | _, _ ->
        record)
+  | ConnProtectedHandshake step ->
+    (match step.protected_handshake_message with
+     | M.Finished _ ->
+      { record with projected_read = projected_install_keys R.Application }
+     | _ ->
+      if step.protected_handshake_head
+      then { record with projected_read = projected_next_seq record.projected_read }
+      else record)
 let projected_record_layer_step
   (record:projected_record_layer_state)
   (ev:conn_event)
@@ -501,6 +526,12 @@ let model_app_log_delta
 let connection_log_event_of_conn_event (ev:conn_event) : option CL.host_event =
   match ev with
   | ConnNetworkEvent msg -> Some (CL.NetworkEvent msg)
+  | ConnProtectedHandshake step ->
+    Some
+      (CL.NetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake step.protected_handshake_message;
+      })
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (CL.LocalEvent (CL.LocalValidateCertificate peer))

@@ -402,6 +402,19 @@ val parse_handshake_msg:
   input:B.bytes ->
   GTot (option (M.handshake_msg & nat))
 
+val lemma_parse_handshake_strong_prefix:
+  prefix:B.bytes ->
+  input:B.bytes ->
+  msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake prefix == Some (msg, consumed) /\
+      consumed == B.length prefix /\
+      B.length prefix <= B.length input /\
+      Seq.equal prefix (Seq.slice input 0 (B.length prefix)))
+    (ensures parse_handshake input == Some (msg, consumed))
+
 val serialize_handshake:
   msg:M.handshake_msg ->
   GTot B.bytes
@@ -593,6 +606,43 @@ val parse_tls_message:
   fragment:B.bytes ->
   GTot (option M.tls_message)
 
+val lemma_parse_tls_message_handshake_some:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  Lemma
+    (requires
+      parse_tls_message T.Handshake fragment ==
+        Some (M.TlsHandshake msg))
+    (ensures
+      parse_handshake fragment ==
+        Some (msg, B.length fragment))
+
+val lemma_parse_tls_message_handshake_partial_none:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake fragment == Some (msg, consumed) /\
+      consumed < B.length fragment)
+    (ensures parse_tls_message T.Handshake fragment == None)
+
+val lemma_parse_handshake_serialize_protected_consumes_all:
+  sent_msg:M.handshake_msg ->
+  parsed_msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      (match sent_msg with
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _ -> True
+       | _ -> False) /\
+      parse_handshake (serialize_handshake sent_msg) ==
+        Some (parsed_msg, consumed))
+    (ensures consumed == B.length (serialize_handshake sent_msg))
+
 (* The generated [Invalid] content type (wire byte 0) never carries a TLS
    message: the spec parser rejects it.  Exposed so consumers can discharge the
    "no content type matches" obligation for an unknown record content type. *)
@@ -626,6 +676,83 @@ val lemma_ptm_handshake_fallback:
          (match parse_ignored_post_handshake fragment with
           | Some body -> Some (M.TlsIgnoredPostHandshake body)
           | None -> None)))
+
+(* --- Streaming handshake-content parser ------------------------------------
+
+   [parse_tls_message T.Handshake] is a WHOLE-FRAGMENT parser: it succeeds only
+   when the message occupies the record fragment exactly, so it cannot describe
+   a record whose plaintext coalesces several handshake messages.  The internal-
+   event pipeline needs a STREAMING parser: one that reads the first message of
+   a handshake-content plaintext and reports how many bytes it consumed, so the
+   remainder can be re-parsed by a subsequent internal step.
+
+   [parse_handshake] is already streaming but ranges over [M.handshake_msg],
+   which excludes the post-handshake messages ([TlsKeyUpdate],
+   [TlsIgnoredPostHandshake]) that [parse_tls_message] handles by fallback.
+   [parse_handshake_stream] closes that gap: it ranges over the full
+   [M.tls_message] and always reports a consumed length.
+
+   Note the post-handshake fallbacks are themselves whole-input parsers, so on
+   that branch the reported length is [B.length input] and the residual is
+   empty.  This is exactly the pre-existing behaviour, now made explicit rather
+   than implicit in the record framing. *)
+val parse_handshake_stream:
+  input:B.bytes ->
+  GTot (option (M.tls_message & nat))
+
+val lemma_parse_handshake_stream_def:
+  input:B.bytes ->
+  Lemma (parse_handshake_stream input ==
+    (match parse_handshake input with
+     | Some (msg, consumed) -> Some (M.TlsHandshake msg, consumed)
+     | None ->
+       (match parse_key_update input with
+        | Some req -> Some (M.TlsKeyUpdate req, B.length input)
+        | None ->
+          (match parse_ignored_post_handshake input with
+           | Some body -> Some (M.TlsIgnoredPostHandshake body, B.length input)
+           | None -> None))))
+
+(* The consumed length is strictly positive and within the input.  Strict
+   positivity is what makes an internal-step loop over a pending plaintext
+   terminate: each step strictly decreases the residual length. *)
+val lemma_parse_handshake_stream_bounds:
+  input:B.bytes ->
+  msg:M.tls_message ->
+  consumed:nat ->
+  Lemma
+    (requires parse_handshake_stream input == Some (msg, consumed))
+    (ensures 0 < consumed /\ consumed <= B.length input)
+
+(* Agreement with the whole-fragment parser: on a plaintext holding exactly one
+   message the two coincide, and when the streaming parser leaves a residual the
+   whole-fragment parser rejects.  This is the bridge that lets the pipeline
+   subsume the existing single-message receive path without changing its
+   semantics. *)
+val lemma_parse_handshake_stream_whole:
+  input:B.bytes ->
+  Lemma (parse_tls_message T.Handshake input ==
+    (match parse_handshake_stream input with
+     | Some (msg, consumed) -> if consumed = B.length input then Some msg else None
+     | None -> None))
+
+(* A streaming parse of a prefix is stable under extension of the input, so a
+   message parsed out of a pending plaintext is the same message that would be
+   parsed out of the whole record.  Mirrors [lemma_parse_handshake_strong_prefix]
+   at [tls_message] range. *)
+val lemma_parse_handshake_stream_strong_prefix:
+  prefix:B.bytes ->
+  input:B.bytes ->
+  msg:M.tls_message ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake_stream prefix == Some (msg, consumed) /\
+      consumed == B.length prefix /\
+      M.TlsHandshake? msg /\
+      B.length prefix <= B.length input /\
+      Seq.equal prefix (Seq.slice input 0 (B.length prefix)))
+    (ensures parse_handshake_stream input == Some (msg, consumed))
 
 val serialize_tls_message:
   msg:M.tls_message ->
@@ -713,12 +840,41 @@ val lemma_parse_tls_message_round_trip:
         Seq.equal fragment (serialize_handshake (M.Certificate c))
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | Some (M.TlsHandshake (M.Finished fin)) ->
+        Seq.equal fragment (serialize_handshake (M.Finished fin))
       | _ -> True))
 
 
 (* --- synth_client_hello: the ClientHello accept/reject gate.  Re-targeted to
        return the generated wire record itself ([Some b] iff representable),
        matching how [synth_handshake_msg_of] wraps [M.ClientHello b]. --- *)
+
+
+(* A handshake fragment that parses AS A WHOLE MESSAGE is the serialisation
+   of that message, and re-parsing that serialisation returns the message and
+   consumes all of it.
+
+   Callers need this to describe a received single-message protected record
+   as a [ConnProtectedHandshake] head step whose fragment is written
+   [serialize_handshake msg]: it says that doing so loses no information
+   about the bytes that actually arrived. *)
+val lemma_parse_handshake_serialize_round_trip:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  Lemma
+    (requires
+      parse_tls_message T.Handshake fragment == Some (M.TlsHandshake msg) /\
+      (match msg with
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _ -> True
+       | _ -> False))
+    (ensures
+      Seq.equal fragment (serialize_handshake msg) /\
+      0 < B.length (serialize_handshake msg) /\
+      parse_handshake (serialize_handshake msg) ==
+        Some (msg, B.length (serialize_handshake msg)))
 
 val synth_client_hello:
   c:GCH.clientHello ->

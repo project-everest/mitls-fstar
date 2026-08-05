@@ -1115,7 +1115,9 @@ requires
   canonical_server_exactly srv received0 sent0 log0 **
   calc_local_frame_pre ev frame log0 out out_len old_out **
   pts_to out old_out **
-  pure (SZ.v out_len == Seq.length old_out)
+  pure (
+    SZ.v out_len == Seq.length old_out /\
+    ~ (CPI.no_internal_events #CalcP.calc_frame_local_event ev))
 returns result:CPI.process_result
 ensures exists* (received1:Ghost.erased TCP.bytes)
                 (sent1:Ghost.erased TCP.bytes)
@@ -1213,6 +1215,8 @@ let calc_server_protocol_implementation
   =
   {
     CPI.pi_system = (fun _ -> CalcP.calc_frame_wire_format_state_machine);
+    CPI.pi_internal = CPI.no_internal_events #CalcP.calc_frame_local_event;
+    CPI.pi_internal_pending = CPI.nothing_pending #calc_log;
     CPI.pi_invariant = canonical_server_exactly;
     CPI.pi_snapshot = canonical_server_snapshot;
     CPI.pi_network_frame = calc_network_frame;
@@ -1221,9 +1225,18 @@ let calc_server_protocol_implementation
     CPI.pi_local_frame = calc_local_frame;
     CPI.pi_local_frame_pre = calc_local_frame_pre;
     CPI.pi_local_frame_post = calc_local_frame_post;
+    CPI.pi_internal_frame_pre =
+      CPI.no_internal_frame_pre #calc_local_frame #calc_log;
+    CPI.pi_internal_frame_post =
+      CPI.no_internal_frame_post #calc_local_frame #calc_log #CalcP.calc_frame #unit;
     CPI.pi_invariant_valid = calc_invariant_valid;
     CPI.pi_take_snapshot = calc_take_snapshot;
     CPI.pi_recall_snapshot = calc_recall_snapshot;
     CPI.pi_process_network = calc_process_network;
     CPI.pi_process_local = calc_process_local;
+    CPI.pi_process_internal =
+      CPI.quiescent_process_internal
+        #_ #calc_log #CalcP.calc_frame #CalcP.calc_frame_local_event #unit #calc_local_frame
+        canonical_server_exactly
+        (fun _ -> CalcP.calc_frame_wire_format_state_machine);
   }

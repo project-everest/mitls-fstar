@@ -47,7 +47,11 @@ done
 # 1. Build EverParse (F*, KaRaMeL, QuackyDucky, LowParse) from the fork.
 "$repo_root/scripts/build-everparse.sh"
 
-# 2. Project dependencies.
+# 2. The Z3 this project verifies against (EverParse installs its own pinned
+#    version alongside; see the script header for why we need a newer one).
+"$repo_root/scripts/install-z3.sh"
+
+# 3. Project dependencies.
 "$repo_root/scripts/fetch-hacl-star.sh"
 "$repo_root/scripts/check-openssl.sh"
 

@@ -1590,6 +1590,26 @@ let received_server_finished_state
       }];
   }
 
+noextract
+let protected_handshake_state
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  match CS.step_protected_handshake st.CS.cs_model step with
+  | None -> st
+  | Some model1 ->
+    {
+      CS.cs_model = model1;
+      CS.cs_wire_log = {
+        CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+        CL.raw_received =
+          B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+      };
+      CS.cs_event_log =
+        st.CS.cs_event_log @ [CS.ConnProtectedHandshake step];
+    }
+
 let verified_server_finished_state
   (st:CS.connection_state)
   (fin:GFin.finished)
@@ -3078,6 +3098,35 @@ val lemma_received_server_finished_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_server_finished_state st fin raw_received))
+
+val lemma_protected_handshake_state_evolves
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnProtectedHandshake step) /\
+        Some? (CS.step_protected_handshake st.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received)
+      (ensures
+        TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+          st
+          (protected_handshake_state st step raw_received) /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+          (protected_handshake_state st step raw_received) /\
+        CS.legal_connection_delta
+          st
+          {
+            CS.delta_event = CS.ConnProtectedHandshake step;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = raw_received;
+          }
+          (protected_handshake_state st step raw_received))
 
 val lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)

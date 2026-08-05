@@ -88,6 +88,49 @@ fn get_key_schedule_snapshot
   ensures connection_exactly c st0 **
           pure (key_schedule_snapshot_matches snapshot st0)
 
+fn copy_pending_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:option pending_protected_handshake_snapshot
+  ensures connection_exactly c st0 **
+          (match snapshot with
+           | None ->
+             pure (
+               st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+                 B.length
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes)
+           | Some pending ->
+             exists* fragment.
+               V.pts_to pending.pending_protected_fragment fragment **
+               pure (
+                 V.is_full_vec pending.pending_protected_fragment /\
+                 V.length pending.pending_protected_fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 B.length fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 Seq.equal
+                   fragment
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len ==
+                   B.length
+                     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len <=
+                   max_handshake_flight_len /\
+                 SZ.v pending.pending_protected_parsed ==
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
+                 SZ.v pending.pending_protected_parsed <
+                   SZ.v pending.pending_protected_fragment_len))
+
+fn protected_handshake_buffer_empty_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns empty:bool
+  ensures connection_exactly c st0 **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty st0.CS.cs_model)
+
 fn copy_certificate_leaf_der
   (c:connection_state)
   (out:array U8.t)
@@ -109,6 +152,49 @@ fn copy_certificate_leaf_der
                 | Some leaf ->
                   SZ.v copied_len == B.length leaf /\
                   Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
+                | None -> False))
+
+fn copy_certificate_chain
+  (c:connection_state)
+  (chain_out:array U8.t)
+  (chain_out_len:SZ.t)
+  (offsets_out:array SZ.t)
+  (offsets_out_len:SZ.t)
+  (lens_out:array SZ.t)
+  (lens_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to chain_out 'old_chain_out **
+           ArrPts.pts_to offsets_out 'old_offsets_out **
+           ArrPts.pts_to lens_out 'old_lens_out **
+           pure (B.length 'old_chain_out == SZ.v chain_out_len /\
+                Seq.length 'old_offsets_out == SZ.v offsets_out_len /\
+                Seq.length 'old_lens_out == SZ.v lens_out_len /\
+                SZ.v chain_out_len == IM.max_certificate_chain_bytes /\
+                SZ.v offsets_out_len == IM.max_certificate_chain_entries /\
+                SZ.v lens_out_len == IM.max_certificate_chain_entries /\
+                Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate)
+  returns snapshot:certificate_chain_snapshot
+  ensures exists* chain_bytes offsets lens.
+          connection_exactly c st0 **
+          ArrPts.pts_to chain_out chain_bytes **
+          ArrPts.pts_to offsets_out offsets **
+          ArrPts.pts_to lens_out lens **
+          pure (B.length chain_bytes == SZ.v chain_out_len /\
+                Seq.length offsets == SZ.v offsets_out_len /\
+                Seq.length lens == SZ.v lens_out_len /\
+                SZ.v snapshot.certificate_chain_bytes_len <= B.length chain_bytes /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length offsets /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length lens /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+                | Some cert ->
+                  IM.certificate_chain_matches
+                    chain_bytes
+                    (SZ.v snapshot.certificate_chain_bytes_len)
+                    offsets
+                    lens
+                    (SZ.v snapshot.certificate_chain_cert_count)
+                    (Sem.certificate_entries cert)
                 | None -> False))
 
 fn copy_certificate_verify_input
@@ -886,6 +972,11 @@ fn can_send_client_finished_runtime
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            // The client must not send its Finished while protected-handshake
+            // plaintext is still pending; legal_handshake_message now requires
+            // this, and without it the client would wedge in
+            // ControlApplicationData holding bytes it can never drain.
+            CS.protected_handshake_buffer_empty st0.CS.cs_model /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\

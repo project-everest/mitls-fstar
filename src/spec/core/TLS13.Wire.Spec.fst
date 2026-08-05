@@ -565,6 +565,12 @@ let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
 let parse_handshake_msg (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   parse_handshake input
 
+let lemma_parse_handshake_strong_prefix prefix input msg consumed =
+  match LP.parse GHS.handshake_parser prefix with
+  | Some (h, parsed) ->
+    LP.parse_strong_prefix GHS.handshake_parser prefix input
+  | None -> ()
+
 // Serialize a high handshake message by re-wrapping it into the generated
 // [handshake] record and applying the QuackyDucky serializer (the single source
 // of truth for the wire format).  This is the exact inverse of the structural
@@ -943,6 +949,40 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
        else None
      | None -> None)
 
+let lemma_parse_tls_message_handshake_some fragment msg = ()
+
+let lemma_parse_tls_message_handshake_partial_none fragment msg consumed = ()
+
+#push-options "--z3rlimit 20"
+let lemma_parse_handshake_serialize_protected_consumes_all
+  sent_msg
+  parsed_msg
+  consumed
+=
+  match sent_msg with
+  | M.EncryptedExtensions ee ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_encrypted_extensions ee)
+  | M.Certificate cert ->
+    if GCert.certificate_bytesize cert <= 16777215
+    then
+      LP.parse_serialize
+        GHS.handshake_serializer
+        (GHS.Body_certificate (cert <: GHS.handshake_body_certificate))
+    else ()
+  | M.CertificateVerify cv ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_certificate_verify cv)
+  | M.Finished fin ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_finished fin)
+  | _ ->
+    assert False
+#pop-options
+
 let lemma_parse_tls_message_invalid_none fragment = ()
 
 let lemma_parse_handshake_none_of_lp_none fragment = ()
@@ -950,6 +990,39 @@ let lemma_parse_handshake_none_of_lp_none fragment = ()
 let lemma_parse_handshake_none_of_synth_none fragment v consumed = ()
 
 let lemma_ptm_handshake_fallback fragment = ()
+
+let parse_handshake_stream (input:B.bytes) : GTot (option (M.tls_message & nat)) =
+  match parse_handshake input with
+  | Some (msg, consumed) -> Some (M.TlsHandshake msg, consumed)
+  | None ->
+    match parse_key_update input with
+    | Some req -> Some (M.TlsKeyUpdate req, B.length input)
+    | None ->
+      match parse_ignored_post_handshake input with
+      | Some body -> Some (M.TlsIgnoredPostHandshake body, B.length input)
+      | None -> None
+
+let lemma_parse_handshake_stream_def input = ()
+
+let lemma_parse_handshake_stream_bounds input msg consumed =
+  match parse_handshake input with
+  | Some (m, c) ->
+    LP.parser_kind_prop_intro GHS.handshake_parser_kind GHS.handshake_parser;
+    LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
+    assert (LP.parses_at_least 5 GHS.handshake_parser)
+  | None ->
+    (match parse_key_update input with
+     | Some _ -> ()
+     | None -> lemma_parse_ignored_post_handshake_def input)
+
+let lemma_parse_handshake_stream_whole input = ()
+
+let lemma_parse_handshake_stream_strong_prefix prefix input msg consumed =
+  match parse_handshake prefix with
+  | Some (m, c) ->
+    lemma_parse_handshake_strong_prefix prefix input m c
+  | None -> ()
+
 
 let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) =
   match msg with
@@ -1118,6 +1191,8 @@ let lemma_parse_tls_message_round_trip
         Seq.equal fragment (serialize_handshake (M.Certificate c))
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | Some (M.TlsHandshake (M.Finished fin)) ->
+        Seq.equal fragment (serialize_handshake (M.Finished fin))
       | _ -> True))
 =
   match content_type with
@@ -1152,6 +1227,17 @@ let lemma_parse_tls_message_round_trip
 
 
 (* --- synth_client_hello: accept/reject gate returning the wire record. --- *)
+
+let lemma_parse_handshake_serialize_round_trip fragment msg =
+  lemma_parse_tls_message_round_trip T.Handshake fragment;
+  match msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ ->
+    Seq.lemma_eq_elim fragment (serialize_handshake msg);
+    LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
+    assert (LP.parses_at_least 5 GHS.handshake_parser)
 
 let synth_client_hello (c:GCH.clientHello) : GTot (option GCH.clientHello) =
   if clientHello_representable c then Some c else None

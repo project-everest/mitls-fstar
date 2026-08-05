@@ -507,7 +507,9 @@ requires
   tftp_server_inv i received0 sent0 st0 **
   tftp_server_local_frame_pre ev frame st0 out out_len old_out **
   pts_to out old_out **
-  pure (SZ.v out_len == Seq.length old_out)
+  pure (
+    SZ.v out_len == Seq.length old_out /\
+    ~ (CPI.no_internal_events #TP.tftp_server_local ev))
 returns result:CPI.process_result
 ensures exists* (received1:Ghost.erased TCP.bytes)
                 (sent1:Ghost.erased TCP.bytes)
@@ -711,6 +713,8 @@ let tftp_server_protocol_implementation
   =
   {
     CPI.pi_system = (fun _ -> TP.tftp_server_wfsm);
+    CPI.pi_internal = CPI.no_internal_events #TP.tftp_server_local;
+    CPI.pi_internal_pending = CPI.nothing_pending #TP.tftp_server_state;
     CPI.pi_invariant = tftp_server_inv;
     CPI.pi_snapshot = tftp_server_snap;
     CPI.pi_network_frame = tftp_server_network_frame;
@@ -719,9 +723,18 @@ let tftp_server_protocol_implementation
     CPI.pi_local_frame = tftp_server_local_frame;
     CPI.pi_local_frame_pre = tftp_server_local_frame_pre;
     CPI.pi_local_frame_post = tftp_server_local_frame_post;
+    CPI.pi_internal_frame_pre =
+      CPI.no_internal_frame_pre #tftp_server_local_frame #TP.tftp_server_state;
+    CPI.pi_internal_frame_post =
+      CPI.no_internal_frame_post #tftp_server_local_frame #TP.tftp_server_state #tftp_message #unit;
     CPI.pi_invariant_valid = tftp_server_invariant_valid;
     CPI.pi_take_snapshot = tftp_server_take_snapshot;
     CPI.pi_recall_snapshot = tftp_server_recall_snapshot;
     CPI.pi_process_network = tftp_server_process_network;
     CPI.pi_process_local = tftp_server_process_local;
+    CPI.pi_process_internal =
+      CPI.quiescent_process_internal
+        #_ #TP.tftp_server_state #tftp_message #TP.tftp_server_local #unit #tftp_server_local_frame
+        tftp_server_inv
+        (fun _ -> TP.tftp_server_wfsm);
   }

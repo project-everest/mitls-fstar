@@ -92,6 +92,8 @@ let client_api_event_semantic
       EC.ClientSendCloseNotify
   | CT.LocalFail ->
       EC.ClientFail
+  | CT.LocalProcessPendingHandshake ->
+      EC.ClientProcessPendingHandshake
 
 noextract
 let client_local_event_semantic
@@ -137,6 +139,8 @@ let lemma_client_api_event_semantic_exact
   | CT.LocalSendKeyUpdate
   | CT.LocalSendCloseNotify
   | CT.LocalFail ->
+      ()
+  | CT.LocalProcessPendingHandshake ->
       ()
 
 noextract

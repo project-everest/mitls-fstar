@@ -287,8 +287,17 @@ type local_event =
   | LocalVerifyClientFinished of GFin.finished
   | LocalDeliverApplicationData of B.bytes
   | LocalFail of T.tls_error
+noextract
+type protected_handshake_step = {
+  protected_handshake_message: M.handshake_msg;
+  protected_handshake_fragment: B.bytes;
+  protected_handshake_offset: nat;
+  protected_handshake_consumed: nat;
+  protected_handshake_head: bool;
+}
 type conn_event =
   | ConnNetworkEvent of directed_message M.tls_message
+  | ConnProtectedHandshake of protected_handshake_step
   | ConnLocalEvent of local_event
 type connection_state = {
   cs_model: connection_model;
@@ -971,10 +980,73 @@ let step_tls_message
     Some model
   | _, _ ->
     None
+let protected_handshake_message_supported (msg:M.handshake_msg) : bool =
+  match msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ -> true
+  | _ -> false
+let set_pending_protected_handshake
+  (model:connection_model)
+  (fragment:B.bytes)
+  (parsed:nat)
+  : connection_model =
+  let hs = model.model_handshake in
+  let buffers =
+    if parsed < B.length fragment
+    then
+      { hs.hs_buffers with
+          hb_encrypted_server_handshake_bytes = fragment;
+          hb_encrypted_server_handshake_parsed = parsed;
+      }
+    else
+      { hs.hs_buffers with
+          hb_encrypted_server_handshake_bytes = B.empty;
+          hb_encrypted_server_handshake_parsed = 0;
+      } in
+  { model with model_handshake = { hs with hs_buffers = buffers } }
+let step_protected_handshake
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot (option connection_model) =
+  if protected_handshake_message_supported step.protected_handshake_message
+  then
+    match
+      step_handshake_message
+        model
+        CL.Received
+        step.protected_handshake_message
+    with
+    | None -> None
+    | Some stepped ->
+      let consumed_to =
+        step.protected_handshake_offset + step.protected_handshake_consumed in
+      let record_adjusted =
+        if step.protected_handshake_head
+        then stepped
+        else
+          match step.protected_handshake_message with
+          | M.Finished _ -> stepped
+          | _ ->
+            { stepped with
+                model_record =
+                  { stepped.model_record with
+                      record_read = model.model_record.record_read;
+                  };
+            } in
+      Some
+        (set_pending_protected_handshake
+          record_adjusted
+          step.protected_handshake_fragment
+          consumed_to)
+  else None
 let step_model (model:connection_model) (ev:conn_event) : GTot (option connection_model) =
   match ev with
   | ConnNetworkEvent msg ->
     step_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnProtectedHandshake step ->
+    step_protected_handshake model step
   | ConnLocalEvent local ->
     step_local_event model local
 let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
@@ -1290,6 +1362,12 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     True
   | _, _ ->
     False
+let protected_handshake_buffer_empty (model:connection_model) : prop =
+  Seq.equal
+    model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes
+    B.empty /\
+  model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed == 0
+
 let legal_handshake_message
   (model:connection_model)
   (dir:direction)
@@ -1371,6 +1449,13 @@ let legal_handshake_message
     Some? hs.hs_keys.ks_master_secret
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
+    // The client may not declare the handshake finished while it still holds
+    // unconsumed protected-handshake plaintext.  Without this guard the client
+    // reaches ControlApplicationData with a non-empty pending buffer, and
+    // because legal_handshake_message admits no message at all in
+    // ControlApplicationData that plaintext can never be drained: the endpoint
+    // is wedged permanently unsettled.  See TLS13.System.Internal.
+    protected_handshake_buffer_empty model /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
     Some? hs.hs_keys.ks_server_application_traffic
@@ -1387,6 +1472,14 @@ let legal_tls_message
   let hs = model.model_handshake in
   match msg, model.model_control with
   | M.TlsHandshake handshake_msg, _ ->
+    (* Note: a client-received PROTECTED handshake message may also be
+       delivered by [ConnProtectedHandshake] with [protected_handshake_head],
+       including when the record carries exactly one message.  The two
+       descriptions denote the SAME transition -- see
+       [TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_replay_normalizes].
+       The implementation emits only the head/tail form, so there is one
+       receive path; this route is retained so that the pairing proofs can
+       normalise into it. *)
     legal_handshake_message model dir handshake_msg
   | M.TlsApplicationData _, ControlApplicationData ->
     application_traffic_available_for_role
@@ -1416,10 +1509,46 @@ let legal_tls_message
     True
   | _, _ ->
     False
+let legal_protected_handshake_step
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot prop =
+  let fragment = step.protected_handshake_fragment in
+  let offset = step.protected_handshake_offset in
+  let consumed = step.protected_handshake_consumed in
+  model.model_config.config_role == ClientEndpoint /\
+  offset < B.length fragment /\
+  0 < consumed /\
+  offset + consumed <= B.length fragment /\
+  protected_handshake_message_supported step.protected_handshake_message /\
+  W.parse_handshake (Seq.slice fragment offset (B.length fragment)) ==
+    Some (step.protected_handshake_message, consumed) /\
+  legal_handshake_message model CL.Received step.protected_handshake_message /\
+  (if step.protected_handshake_head
+   then
+     (* The head step takes delivery of a whole record: the offset comes
+        from the wire, not from state, and the buffer must be empty.
+
+        [consumed] is NOT required to be strictly less than the fragment
+        length.  That strict inequality was what forced a record carrying
+        exactly one message down the [ConnNetworkEvent] path and created
+        the fork; dropping it lets the head step describe such a record,
+        with the pending buffer left empty by
+        [set_pending_protected_handshake] and no tail steps following. *)
+     offset == 0 /\
+     protected_handshake_buffer_empty model
+   else
+     Seq.equal
+       fragment
+       model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
+     offset ==
+       model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed)
 let legal_event (model:connection_model) (ev:conn_event) : GTot prop =
   match ev with
   | ConnNetworkEvent msg ->
     legal_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnProtectedHandshake step ->
+    legal_protected_handshake_step model step
   | ConnLocalEvent local ->
     legal_local_event model local
 let rec all_records_outer_type
@@ -1498,6 +1627,11 @@ let event_raw_delta_legal
   | ConnLocalEvent _ ->
     Seq.equal raw_sent B.empty /\
     Seq.equal raw_received B.empty
+  | ConnProtectedHandshake step ->
+    Seq.equal raw_sent B.empty /\
+    (if step.protected_handshake_head
+     then raw_records_exactly raw_received T.Application_data 1
+     else Seq.equal raw_received B.empty)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction with
      | CL.Sent ->

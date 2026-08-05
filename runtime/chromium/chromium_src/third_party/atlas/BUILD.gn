@@ -1,0 +1,12 @@
+source_set("atlas") {
+  sources = [ "tls13_client_socket.cc" ]
+
+  public = [
+    "tls13_client_engine.h",
+    "tls13_client_socket.h",
+  ]
+
+  include_dirs = [ "." ]
+  lib_dirs = [ "lib" ]
+  libs = [ "atlas_tls13_client_engine" ]
+}

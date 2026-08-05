@@ -132,8 +132,41 @@ let lemma_write_result_bytes
     lemma_uint32_to_uint8_mod (U32.shift_right value 16ul);
     lemma_uint32_to_uint8_mod (U32.shift_right value 8ul);
     lemma_uint32_to_uint8_mod value;
-    assert (pow2 24 == 16777216);
-    assert (pow2 16 == 65536);
-    assert (pow2 8 == 256)
+    // Discharge the pow2 values by normalisation rather than by SMT: as plain
+    // asserts they cost enough solver budget to push this lemma over the
+    // default rlimit under Z3 4.15.3.
+    assert_norm (pow2 24 == 16777216);
+    assert_norm (pow2 16 == 65536);
+    assert_norm (pow2 8 == 256)
 
 
+(** Bridge: the five bytes written by `Calc.Impl.Peek.write_result_response`
+    decode back to `value`.
+
+    This is stated as a pure lemma on purpose.  Left inline in the Pulse
+    function, the goal `be_to_n (Seq.slice b 1 5) == U32.v value` sends Z3
+    4.15.3's arithmetic solver into a non-terminating search -- and because the
+    rlimit counter does not advance during it, the query is never cancelled, so
+    the whole build hangs rather than failing.  Discharging the arithmetic here,
+    one substitution at a time, keeps every query linear. *)
+let lemma_write_result_be_to_n (value: U32.t) (b: bytes)
+  : Lemma
+    (requires
+      Seq.length b == 5 /\
+      Seq.index b 1 == Cast.uint32_to_uint8 (U32.shift_right value 24ul) /\
+      Seq.index b 2 == Cast.uint32_to_uint8 (U32.shift_right value 16ul) /\
+      Seq.index b 3 == Cast.uint32_to_uint8 (U32.shift_right value 8ul) /\
+      Seq.index b 4 == Cast.uint32_to_uint8 value)
+    (ensures be_to_n (Seq.slice b 1 5) == U32.v value)
+  = let s = Seq.slice b 1 5 in
+    lemma_write_result_bytes value;
+    lemma_n_to_be_correct (U32.v value);
+    assert (U8.v (Seq.index s 0) == n_to_be_b0 (U32.v value));
+    assert (U8.v (Seq.index s 1) == n_to_be_b1 (U32.v value));
+    assert (U8.v (Seq.index s 2) == n_to_be_b2 (U32.v value));
+    assert (U8.v (Seq.index s 3) == n_to_be_b3 (U32.v value));
+    assert (be_to_n s ==
+            n_to_be_b0 (U32.v value) * 16777216 +
+            n_to_be_b1 (U32.v value) * 65536 +
+            n_to_be_b2 (U32.v value) * 256 +
+            n_to_be_b3 (U32.v value))

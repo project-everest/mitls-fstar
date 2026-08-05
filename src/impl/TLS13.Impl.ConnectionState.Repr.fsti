@@ -405,6 +405,18 @@ type certificate_verify_signature_snapshot = {
   cv_signature_len: SZ.t;
 }
 
+type certificate_chain_snapshot = {
+  certificate_chain_bytes_len: SZ.t;
+  certificate_chain_cert_count: SZ.t;
+}
+
+noeq
+type pending_protected_handshake_snapshot = {
+  pending_protected_fragment: V.vec U8.t;
+  pending_protected_fragment_len: SZ.t;
+  pending_protected_parsed: SZ.t;
+}
+
 type key_schedule_snapshot = {
   snapshot_shared_secret_present: bool;
   snapshot_handshake_secret_present: bool;
