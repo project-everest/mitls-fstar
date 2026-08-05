@@ -49,6 +49,7 @@ module HMF  = TLS13.System.HsMaterialFamilies
 module AMF  = TLS13.System.AppMaterialFamilies
 module ORD  = TLS13.System.Ordering
 module SNCFR = TLS13.System.ServerNotCFR
+module GFin = TLS13.Wire.Generated.Finished
 module ID   = FStar.IndefiniteDescription
 module RTC  = FStar.ReflexiveTransitiveClosure
 
@@ -801,7 +802,7 @@ let lemma_server_local_preserves_app_write
     (:561) and of the server app-READ install (:1182), neither of which is ever
     entered).  So the control is unreachable, and the exclusion is inductive: no
     transition lands there, and the initial control is `ControlNew`.  This lets the
-    qawc SERVER-local family conclude the server never FRESHLY reaches
+    awc SERVER-local family conclude the server never FRESHLY reaches
     `ControlApplicationData` via a local step (the sole CAD-producing local arm,
     `LocalVerifyClientFinished`, is gated on this unreachable control).
     ───────────────────────────────────────────────────────────────────────── **)
@@ -906,7 +907,114 @@ let lemma_server_local_cad_backward
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
-    qawc CONJUNCT 2 FROM THE INVARIANT ALONE (no carried clause).
+    FOUR PURE `step_tls_message` FACTS behind the UNGATED conjunct 1 of
+    `appdata_write_coupling`.  All four are statements about the SPEC'S OWN
+    DISPATCH — no reachability, no invariant, no role — so each is a bare `()`
+    over the arm enumeration.  This is the "get the fact from the step" law: the
+    conjunct's establishment reads the transition, not the state. **)
+
+(** (i) A SEND never un-installs the application WRITE epoch.  The only `Sent` arms
+    that touch `record_write.epoch` are the two installers (the client Finished-send
+    at StateMachine.fst:809 and the KeyUpdate-send), both of which SET it to
+    `Application`; every other arm advances only the sequence number. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_send_preserves_app_write
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Sent sent == Some m' /\
+        R.Application? m.CS.model_record.CS.record_write.R.epoch)
+      (ensures R.Application? m'.CS.model_record.CS.record_write.R.epoch)
+  = ()
+#pop-options
+
+(** (ii) CAD-BACKWARD ACROSS A SEND.  The unique `Sent` arm ENTERING
+    `ControlApplicationData` is the client Finished-send (StateMachine.fst:809), whose
+    pre-control is `HsServerFinishedVerified`.  So a send lands at CAD only from CAD
+    itself or from HSFV — and HSFV is excluded at a consistent SERVER by
+    `SNCFR.lemma_consistent_server_not_shsfv`, which is how the server_send family
+    uses this. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_send_cad_backward
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Sent sent == Some m' /\
+        CS.ControlApplicationData? m'.CS.model_control)
+      (ensures
+        CS.ControlApplicationData? m.CS.model_control \/
+        m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified)
+  = ()
+#pop-options
+
+(** (iii) THE TWO `Sent, Finished` ARMS.  Exactly two exist: StateMachine.fst:676
+    (at `HsServerEncryptedFlightSent`, landing at the SERVER-only stage
+    `HsServerFinishedSent`) and :809 (at `HsServerFinishedVerified`, landing at
+    `ControlApplicationData`).  Consumer: the `deliver_to_server` crux, where
+    `SY.client_stage_ok` (`| _ -> False` on server-only stages) kills the first
+    disjunct and pins the CLIENT'S CONTROL at CAD. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_sent_finished_post_control
+  (m m':CS.connection_model) (fin:GFin.finished)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Sent (M.TlsHandshake (M.Finished fin)) == Some m')
+      (ensures
+        m'.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent \/
+        m'.CS.model_control == CS.ControlApplicationData)
+  = ()
+#pop-options
+
+(** (iv) A RECEIVE THAT ENTERS CAD CARRIES A FINISHED.  `StateMachine.fst:774` (the
+    server's atomic client-Finished receive) is the unique `Received` arm producing
+    `ControlApplicationData` from a different control.  Consumer: the
+    `deliver_to_server` crux, to learn BOTH the in-flight message (a `Finished`) and
+    the PRE-control (`HsServerFinishedSent`) from the STEP rather than from any
+    carried message-identity clause.  The pre-control half is what licenses
+    `CSL.lemma_handshaking_nonfinal_read_not_application` and hence the
+    `~Application? (rd a.server)` side condition of the faithful-decode block. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_recv_entering_cad_is_finished
+  (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        CS.ControlApplicationData? m'.CS.model_control)
+      (ensures
+        CS.ControlApplicationData? m.CS.model_control \/
+        (m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
+         M.TlsHandshake? msg /\ M.Finished? (M.TlsHandshake?._0 msg)))
+  = ()
+#pop-options
+
+(** (v) A PROTECTED NON-HANDSHAKE SEND COMES FROM THE SETTLED REGION.  Once
+    cleartext (`ClientHello`/`ServerHello`/CCS) and `TlsKeyUpdate` are excluded, the
+    only remaining non-handshake sendable messages are `TlsApplicationData` (Sent arm
+    live only at `ControlApplicationData`, StateMachine.fst:841) and
+    `TlsAlert Close_notify` (Sent arm live only at `ControlApplicationData`, :929 —
+    the `ControlClosing` arm is `Sent -> None` and, since the direction-explicit
+    catch-all fix, every other `Sent` alert is `None`).  So such a send LANDS in
+    `{CAD, Closing, Closed}`, from which
+    `lemma_connection_appdata_keys_installed_for_role` /
+    `lemma_connection_closing_closed_record_epochs_installed` give the RECORD-level
+    `Application` write epoch. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_sent_nonhandshake_post_control
+  (m m':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Sent sent == Some m' /\
+        ~(M.TlsHandshake? sent) /\ ~(M.TlsKeyUpdate? sent) /\
+        CS.network_message_is_cleartext CL.Sent sent == false)
+      (ensures
+        CS.ControlApplicationData? m'.CS.model_control \/
+        CS.ControlClosing? m'.CS.model_control \/
+        CS.ControlClosed? m'.CS.model_control)
+  = ()
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    awc CONJUNCT 2 FROM THE INVARIANT ALONE (no carried clause).
 
     At a `Quiet` channel with the CLIENT at `ControlApplicationData` and the server
     NOT `ControlFailed`, the server's application WRITE record epoch (RECORD level,
@@ -929,10 +1037,10 @@ let lemma_server_local_cad_backward
         `SNCFR.lemma_consistent_not_cfr` / `lemma_consistent_not_cfv`.  That is a
         CONTROL-reachability fact, not a key-material one.
     `ControlFailed` is excluded by the conjunct's own gate (see the
-    `quiet_appdata_write_coupling` doc comment in ASP for why it is TRUE but
+    `appdata_write_coupling` doc comment in ASP for why it is TRUE but
     UNDERIVABLE there). **)
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
-let lemma_qawc_conjunct2_from_inv (s:SY.tls_system_state)
+let lemma_awc_conjunct2_from_inv (s:SY.tls_system_state)
   : Lemma
       (requires
         SY.tls_system_inv s /\ MP.Quiet? s.channel /\
@@ -956,28 +1064,28 @@ let lemma_qawc_conjunct2_from_inv (s:SY.tls_system_state)
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
-    qawc LOCAL families.  Channel stays `Quiet`.  For a client local (server
+    awc LOCAL families.  Channel stays `Quiet`.  For a client local (server
     frozen): conjunct 1 `CAD(server) ==> App(wr client)` — the antecedent is frozen
-    (server), `qawc a` gives `App(wr a.client)`, forwarded by the write-monotone
+    (server), `awc a` gives `App(wr a.client)`, forwarded by the write-monotone
     `lemma_client_local_preserves_app_write`; conjunct 2 `CAD(client) ==> App(wr
     server)` — `lemma_client_local_cad_backward` pushes `CAD(c')` back to
-    `CAD(a.client)`, and `qawc a` gives `App(wr a.server)` (= frozen `wr b.server`).
+    `CAD(a.client)`, and `awc a` gives `App(wr a.server)` (= frozen `wr b.server`).
     Server local is the mirror (write-forward on conjunct 2, marker-backed
     CAD-backward on conjunct 1). **)
 
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
-let lemma_qawc_client_local (a b:SY.tls_system_state)
+let lemma_awc_client_local (a b:SY.tls_system_state)
   : Lemma
       (requires
-        SY.tls_system_inv a /\ ASP.quiet_appdata_write_coupling a /\
+        SY.tls_system_inv a /\ ASP.appdata_write_coupling a /\
         MP.Quiet? a.channel /\ SY.tls_step_client_local a b)
-      (ensures ASP.quiet_appdata_write_coupling b)
+      (ensures ASP.appdata_write_coupling b)
   = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns ASP.quiet_appdata_write_coupling b
+    returns ASP.appdata_write_coupling b
     with _pf.
     (
       ASP.lemma_client_local_extract a.client c' local out;
@@ -985,7 +1093,7 @@ let lemma_qawc_client_local (a b:SY.tls_system_state)
         CS.legal_event a.client.CS.cs_model ce /\
         CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
         CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
-      returns ASP.quiet_appdata_write_coupling b
+      returns ASP.appdata_write_coupling b
       with _pe.
       (
         introduce
@@ -998,18 +1106,18 @@ let lemma_qawc_client_local (a b:SY.tls_system_state)
 #pop-options
 
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
-let lemma_qawc_server_local (a b:SY.tls_system_state)
+let lemma_awc_server_local (a b:SY.tls_system_state)
   : Lemma
       (requires
-        SY.tls_system_inv a /\ ASP.quiet_appdata_write_coupling a /\
+        SY.tls_system_inv a /\ ASP.appdata_write_coupling a /\
         MP.Quiet? a.channel /\ SY.tls_step_server_local a b)
-      (ensures ASP.quiet_appdata_write_coupling b)
+      (ensures ASP.appdata_write_coupling b)
   = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns ASP.quiet_appdata_write_coupling b
+    returns ASP.appdata_write_coupling b
     with _pf.
     (
       ASP.lemma_server_local_extract a.server s' local out;
@@ -1017,7 +1125,7 @@ let lemma_qawc_server_local (a b:SY.tls_system_state)
         CS.legal_event a.server.CS.cs_model ce /\
         CS.step_model a.server.CS.cs_model ce == Some s'.CS.cs_model /\
         CS.event_raw_delta_legal a.server.CS.cs_model ce B.empty B.empty
-      returns ASP.quiet_appdata_write_coupling b
+      returns ASP.appdata_write_coupling b
       with _pe.
       (
         introduce
@@ -1027,7 +1135,14 @@ let lemma_qawc_server_local (a b:SY.tls_system_state)
         with _.
         (
           // Gate transfer: `ControlFailed` alone is absorbing, so `~Failed(b.server)`
-          // pushes back to `~Failed(a.server)`, re-enabling `qawc a`'s conjunct 2.
+          // pushes back to `~Failed(a.server)`, re-enabling `awc a`'s conjunct 2.
+          // DO NOT DELETE AS DEAD WEIGHT.  A two-run shows Z3 currently re-derives
+          // this transfer inline (the call is not needed as a proof HINT), but the
+          // call is the MACHINE-CHECKED DISCHARGE of the gate-monotonicity
+          // obligation that makes the `~ControlFailed?` gate on `appdata_write_
+          // coupling`'s conjunct 2 LEGAL AT ALL.  Without it the gate rests on an
+          // unproven absorbing claim, and a future fuel/ifuel change could turn the
+          // inline derivation into a failure with no record of why it was sound.
           HSP.lemma_step_control_failed_absorbing a.server.CS.cs_model s'.CS.cs_model ce;
           lemma_server_local_preserves_app_write a.server s' ce
         );
@@ -1037,18 +1152,26 @@ let lemma_qawc_server_local (a b:SY.tls_system_state)
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
-    qawc SEND families — both VACUOUS.  A send exits `Quiet` to `ToServer`
-    (client) / `ToClient` (server), so `quiet_appdata_write_coupling`'s `MP.Quiet?`
-    gate is FALSE at `b` and the whole conjunct is trivially true.  We only need to
-    pin the post-channel head via the shape lemma / destructuring. **)
+    awc SEND families.  A send exits `Quiet` to `ToServer` (client) / `ToClient`
+    (server), so conjunct 2 — which KEEPS its `MP.Quiet?` gate — is vacuous at `b`
+    and only the post-channel head has to be pinned.  Conjunct 1 is UNGATED, so it
+    is REAL here, and each direction forwards it with one pure step fact:
+      * client_send: the server is frozen, so the antecedent `CAD(b.server)` is the
+        antecedent at `a`; `awc a` gives `App(wr a.client)` and
+        `lemma_send_preserves_app_write` carries it across the client's own send.
+      * server_send: the client is frozen, so the consequent is the consequent at
+        `a`; `lemma_send_cad_backward` pushes `CAD(s')` back to `CAD(a.server)` —
+        its second disjunct `HsServerFinishedVerified` is excluded at a consistent
+        server by `SNCFR.lemma_consistent_server_not_shsfv` — and `awc a` closes. **)
 
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
-let lemma_qawc_client_send (a b:SY.tls_system_state)
+let lemma_awc_client_send (a b:SY.tls_system_state)
   : Lemma
       (requires
-        SY.tls_system_inv a /\ ASP.quiet_appdata_write_coupling a /\
-        MP.Quiet? a.channel /\ SY.tls_step_client_send a b)
-      (ensures ASP.quiet_appdata_write_coupling b)
+        SY.tls_system_inv a /\ ASP.appdata_write_coupling a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_send a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.appdata_write_coupling b)
   = SY.lemma_client_send_shape a b;
     eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
@@ -1057,17 +1180,28 @@ let lemma_qawc_client_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns ASP.quiet_appdata_write_coupling b
-    with _pf. (assert (MP.ToServer? b.channel))
+    returns ASP.appdata_write_coupling b
+    with _pf.
+    (
+      ASP.lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      assert (MP.ToServer? b.channel);
+      introduce
+        CS.ControlApplicationData? (SY.ctrl b.server)
+        ==> R.Application? (ASP.wr b.client).R.epoch
+      with _.
+        lemma_send_preserves_app_write a.client.CS.cs_model c'.CS.cs_model sent
+    )
 #pop-options
 
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
-let lemma_qawc_server_send (a b:SY.tls_system_state)
+let lemma_awc_server_send (a b:SY.tls_system_state)
   : Lemma
       (requires
-        SY.tls_system_inv a /\ ASP.quiet_appdata_write_coupling a /\
-        MP.Quiet? a.channel /\ SY.tls_step_server_send a b)
-      (ensures ASP.quiet_appdata_write_coupling b)
+        SY.tls_system_inv a /\ ASP.appdata_write_coupling a /\
+        MP.Quiet? a.channel /\ SY.tls_step_server_send a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.appdata_write_coupling b)
   = SY.lemma_server_send_shape a b;
     eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
@@ -1076,8 +1210,248 @@ let lemma_qawc_server_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns ASP.quiet_appdata_write_coupling b
-    with _pf. (assert (MP.ToClient? b.channel))
+    returns ASP.appdata_write_coupling b
+    with _pf.
+    (
+      ASP.lemma_server_send_pins_model a.server s' local out sent;
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Sent sent == Some s'.CS.cs_model);
+      assert (MP.ToClient? b.channel);
+      // Kept though decorative by two-run (Z3 re-derives it inline): it is the
+      // machine-checked exclusion of the canonically-unreachable
+      // `HsServerFinishedVerified` server stage, which is what makes
+      // `lemma_send_cad_backward`'s two-case conclusion collapse to the CAD case.
+      SNCFR.lemma_consistent_server_not_shsfv a.server;
+      introduce
+        CS.ControlApplicationData? (SY.ctrl b.server)
+        ==> R.Application? (ASP.wr b.client).R.epoch
+      with _.
+        lemma_send_cad_backward a.server.CS.cs_model s'.CS.cs_model sent
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    awc DELIVER-TO-CLIENT.  Both conjuncts are easy in this direction:
+      * conjunct 1 (UNGATED, which is exactly why the `Quiet` gate had to go): the
+        SERVER is frozen, so the antecedent is unchanged, and `awc a` — which now
+        SPEAKS at the `ToClient` pre-state — hands over `App(wr a.client)`;
+        `AMF.lemma_recv_preserves_write_epoch` carries it across the client's
+        receive (a receive never touches the write epoch).
+      * conjunct 2: `b` is `Quiet`, so `lemma_awc_conjunct2_from_inv b` applies
+        directly off `tls_system_inv b` — no carried clause. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_awc_deliver_to_client (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.appdata_write_coupling a /\
+        SY.tls_step_deliver_to_client a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.appdata_write_coupling b)
+  = SY.lemma_deliver_to_client_shape a b;
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      b == { a with client = c'; channel = MP.Quiet }
+    returns ASP.appdata_write_coupling b
+    with _pf.
+    (
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+            { CL.message_direction = CL.Received; CL.message_value = msg } in
+         SMCan.canonical_wire_step a.client c' conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (CW.wire_serialize wire) /\
+         EC.network_input_message_projection a.client wire msg /\
+         EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns ASP.appdata_write_coupling b
+      with _pd.
+      (
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+        assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
+        introduce
+          CS.ControlApplicationData? (SY.ctrl b.server)
+          ==> R.Application? (ASP.wr b.client).R.epoch
+        with _.
+          AMF.lemma_recv_preserves_write_epoch a.client.CS.cs_model msg c'.CS.cs_model;
+        introduce
+          ( MP.Quiet? b.channel /\
+            CS.ControlApplicationData? (SY.ctrl b.client) /\
+            ~(CS.ControlFailed? (SY.ctrl b.server)) )
+          ==> R.Application? (ASP.wr b.server).R.epoch
+        with _. lemma_awc_conjunct2_from_inv b
+      )
+    )
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    awc DELIVER-TO-SERVER — THE ONE NON-FORWARDING FAMILY, and the reason conjunct 1
+    had to be ungated.  The client is frozen, so conjunct 1's CONSEQUENT is fixed;
+    what moves is its ANTECEDENT, because this is the step that can put the server
+    at `ControlApplicationData` for the first time.  Two cases:
+
+      * `CAD(a.server)` already: the antecedent held at `a`, and `awc a` — speaking
+        at the `ToServer` pre-state, which the `Quiet` gate used to forbid — hands
+        over `App(wr a.client)`, and `b.client == a.client`.
+
+      * the delivery ENTERS CAD: `lemma_recv_entering_cad_is_finished` reads off the
+        step that the received `msg` is a `Finished` and that the server sat at
+        `HsServerFinishedSent` (StateMachine.fst:774 is the unique arm).  That
+        pre-control gives `~Application? (rd a.server)` via
+        `CSL.lemma_handshaking_nonfinal_read_not_application`, which is the side
+        condition of the RECORD-level faithful-decode block (the same block
+        `lemma_fdac_deliver_to_server` runs, and it needs the same clause set:
+        `inflight_snap_handshake_write`, `inflight_raw_delta_legal`,
+        `inflight_single_record`, `hs_channel_seal_ok`, `cs_hs_seq_ok`).  Decode
+        gives `msg == sent`, so the SEALED message was a `Finished`.  Now
+        `inflight_sender_stepped a` carries
+        `step_tls_message pl_snap CL.Sent pl_sent == Some a.client.cs_model`, and
+        `lemma_sent_finished_post_control` leaves exactly two possible client
+        controls: `HsServerFinishedSent` (SERVER-only, killed by
+        `SY.client_stage_ok`'s `| _ -> False`) and `ControlApplicationData`.  So the
+        CLIENT'S CONTROL is CAD — a control fact taken from the STEP — and the two
+        consistency lemmas lift it to the RECORD-level `Application` write epoch.
+
+    LEVEL NOTE: the conclusion is RECORD level (`model_record.record_write.epoch`),
+    reached from a CONTROL fact via `lemma_connection_appdata_keys_installed_for_role`
+    (which is itself reachability-only) and
+    `lemma_connection_application_ready_record_epochs_installed`.  Nothing here
+    infers record-level material from slot-level presence. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_awc_deliver_to_server (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        SY.tls_step_deliver_to_server a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.appdata_write_coupling b)
+  = SY.lemma_deliver_to_server_shape a b;
+    assert (ASP.appdata_write_coupling a);
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      b == { a with server = s'; channel = MP.Quiet }
+    returns ASP.appdata_write_coupling b
+    with _pf.
+    (
+      let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+      assert (a.channel == MP.ToServer p);
+      eliminate exists (msg:M.tls_message).
+        (let conn_ev = CS.ConnNetworkEvent
+            { CL.message_direction = CL.Received; CL.message_value = msg } in
+         SMCan.canonical_wire_step a.server s' conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (CW.wire_serialize wire) /\
+         ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      returns ASP.appdata_write_coupling b
+      with _pd.
+      (
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+        assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
+        assert (a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+        assert (CS.legal_tls_message a.server.CS.cs_model CL.Received msg);
+        // CONJUNCT 2: `b` is Quiet, straight from `tls_system_inv b`.
+        introduce
+          ( MP.Quiet? b.channel /\
+            CS.ControlApplicationData? (SY.ctrl b.client) /\
+            ~(CS.ControlFailed? (SY.ctrl b.server)) )
+          ==> R.Application? (ASP.wr b.server).R.epoch
+        with _. lemma_awc_conjunct2_from_inv b;
+        // CONJUNCT 1 (the crux).
+        introduce
+          CS.ControlApplicationData? (SY.ctrl b.server)
+          ==> R.Application? (ASP.wr b.client).R.epoch
+        with _.
+        (
+          if CS.ControlApplicationData? (SY.ctrl a.server) then ()
+          else
+          (
+            lemma_recv_entering_cad_is_finished
+              a.server.CS.cs_model s'.CS.cs_model msg;
+            assert (a.server.CS.cs_model.CS.model_control ==
+                      CS.ControlHandshaking CS.HsServerFinishedSent);
+            CSL.lemma_handshaking_nonfinal_read_not_application a.server;
+            assert (~(R.Application? (ASP.rd a.server).R.epoch));
+            // ── STEP 1: the RECEIVED message is a Finished, hence NOT cleartext by
+            //    computation, so the receive-side raw-delta takes its PROTECTED
+            //    branch and `raw` is a single `Application_data` record.
+            assert (CS.network_message_is_cleartext CL.Received msg == false);
+            assert (CS.network_message_raw_delta_legal a.server.CS.cs_model
+                      ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
+            assert (CS.raw_records_exactly raw T.Application_data 1);
+            HSP.lemma_rre_nonempty raw;
+            CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+            W.lemma_parse_record_implies_parse_record_wire raw;
+            // ── STEP 2: therefore the SENT message is not cleartext either — a
+            //    cleartext send pins `raw` to a non-`Application_data` record.
+            assert (ASP.inflight_raw_delta_legal a /\ ASP.inflight_single_record a);
+            assert (CS.network_message_raw_delta_legal snap
+                      ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+            (if CS.network_message_is_cleartext CL.Sent sent
+             then HSP.lemma_cleartext_sent_raw_not_appdata sent raw
+             else ());
+            assert (CS.network_message_is_cleartext CL.Sent sent == false);
+            assert (ASP.inflight_sender_stepped a);
+            assert (CS.step_tls_message snap CL.Sent sent == Some a.client.CS.cs_model);
+            // ── STEP 3: split on the SEALED message's class.
+            if M.TlsHandshake? sent then
+            (
+              // RECORD-LEVEL FAITHFUL DECODE (the same block as fdac's ~APP case).
+              assert (ASP.inflight_snap_handshake_write a);
+              assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+              lemma_protected_decode_read_key_present a.server.CS.cs_model msg raw;
+              RKE.lemma_connection_consistent_read_key_present_not_initial a.server;
+              assert (R.Handshake? (ASP.rd a.server).R.epoch);
+              assert (ASP.inflight_bridge_ready snap a.server.CS.cs_model sent raw);
+              assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.server);
+              assert (snap.CS.model_record.CS.record_write.R.seq ==
+                      a.server.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+              CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+                snap a.server.CS.cs_model sent raw;
+              ASP.lemma_decode_functional a.server.CS.cs_model msg sent raw;
+              assert (msg == sent);
+              // Kept deliberately though a two-run shows Z3 re-derives it inline:
+              // this call is the machine-checked record that a `Sent Finished`
+              // lands only at `HsServerFinishedSent` or `ControlApplicationData`,
+              // which (with `client_stage_ok` killing the server-only stage) is
+              // what pins the client at CAD below.  Not a hint — do not delete.
+              lemma_sent_finished_post_control
+                snap a.client.CS.cs_model (M.Finished?._0 (M.TlsHandshake?._0 sent));
+              assert (SY.client_stage_ok a.client);
+              assert (CS.ControlApplicationData? (SY.ctrl a.client));
+              CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint a.client;
+              CSL.lemma_connection_application_ready_record_epochs_installed
+                CS.ClientEndpoint a.client
+            )
+            else
+            (
+              // A protected NON-handshake send: app data or `Close_notify`, both of
+              // which are live only from `ControlApplicationData`, so the client is
+              // in the settled region and its app WRITE epoch is installed.
+              // As above: a two-run shows Z3 re-derives this inline, but the call is
+              // the machine-checked discharge of the message-class case split
+              // (protected non-handshake ==> post-control in {CAD,Closing,Closed}),
+              // which is what justifies the two-way branch below.  Do not delete.
+              lemma_sent_nonhandshake_post_control snap a.client.CS.cs_model sent;
+              if CS.ControlApplicationData? (SY.ctrl a.client) then
+              (
+                CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint a.client;
+                CSL.lemma_connection_application_ready_record_epochs_installed
+                  CS.ClientEndpoint a.client
+              )
+              else
+                CSL.lemma_connection_closing_closed_record_epochs_installed
+                  CS.ClientEndpoint a.client
+            )
+          )
+        )
+      )
+    )
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────

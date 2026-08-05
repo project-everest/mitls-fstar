@@ -150,16 +150,40 @@ let terminal_control (c:CS.connection_control_state) : bool =
     handshake-read seq.  Settled: both endpoints' relevant epoch handshake =>
     write == read.  BOTH arms carry the SAME both-epoch discipline: the snapshot
     (resp. live) write epoch AND the receiver's read epoch must be `Handshake`.
-    The receiver-read gate on the IN-FLIGHT arm is LOAD-BEARING, not decorative:
-    a server/client can seal a PROTECTED alert (`Close_notify` -> `fail_model` via
-    StateMachine.fst:968) under its still-installed handshake WRITE keys AFTER the
-    peer has already collapsed to the application READ epoch (the asymmetric exit),
-    putting a `Handshake`-snapshot record in flight to an `Application`-read
-    receiver — a snapshot-ONLY gate would then spuriously demand `k == 0`.  Gating
-    the in-flight arm on the receiver's read epoch makes exactly that exit window
-    vacuous, matching the Quiet arm.  The faithful-decode CONSUMER is unaffected: at
-    a genuine handshake delivery the receiver has NOT yet received the record, so it
-    is still handshake-read and the gate fires. **)
+    The receiver-read gate on the IN-FLIGHT arm is RETAINED and is load-bearing as
+    a PROOF HYPOTHESIS; the ORIGINALLY-CITED WITNESS for it is, however, now
+    VACUOUS, and this paragraph has been rewritten to say exactly what is known and
+    no more.
+
+      * The original justification named a concrete window: an endpoint seals a
+        PROTECTED alert under its still-installed handshake WRITE keys AFTER the
+        peer has already collapsed to the application READ epoch (the asymmetric
+        exit), putting a `Handshake`-snapshot record in flight to an
+        `Application`-read receiver, where a snapshot-ONLY gate would spuriously
+        demand `k == 0`.  That witness cited the direction-blind alert catch-all in
+        `StateMachine.fst` (`| M.TlsAlert alert, _ -> Some (fail_model ...)`).  That
+        catch-all has since been made DIRECTION-EXPLICIT and now REFUSES the send
+        (`CL.Sent -> None`).  Post-fix the only sendable alert in the whole spec is
+        `Close_notify` at `ControlApplicationData`, where the sender's write epoch is
+        `Application`, NOT `Handshake` — so the snapshot half of the gate is already
+        false in that window and the cited witness can no longer arise.  The named
+        window is vacuous.
+
+      * The gate is NEVERTHELESS KEPT, and it is not decorative in the proof: a
+        two-run (remove the gate, re-verify) FLIPS `lemma_hsp_deliver_to_server`
+        between verified and `Error 19`.  So it is currently doing work as a
+        hypothesis, whatever the semantic status of the conjunct without it.
+
+      * NO EXHAUSTIVE ENUMERATION of other snapshot-`Handshake`/receiver-
+        `Application` windows has been performed.  This comment therefore asserts
+        NEITHER that the gate is necessary NOR that it is unnecessary.  Retiring it
+        would be a STATEMENT change to an invariant conjunct and must not be done on
+        the strength of "the one witness I could name is gone" — bring a two-run
+        showing the conjunct still proves without it, and get a ruling first.
+
+    The faithful-decode CONSUMER is unaffected either way: at a genuine handshake
+    delivery the receiver has NOT yet received the record, so it is still
+    handshake-read and the gate fires. **)
 let cs_hs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToServer p ->
@@ -212,15 +236,19 @@ let cs_hs_seq_ok (s:SY.tls_system_state) : prop =
 
     BLOCKED-CHANNEL (Condition 3).  A failed-reader Quiet `_` arm is reachable via
     `LocalFail` at a Quiet state (read and write seq both frozen and already equal,
-    so `hs_wseq server == hs_rseq client` transfers verbatim), AND via a
-    `deliver_to_client` that FAILS the client on a received in-flight alert
-    (fail_model, StateMachine.fst:968) -> Quiet.  In the latter the alert send
-    fail_models the SERVER too (`M.TlsAlert _,_ -> Sent -> fail_model`, :968-969,
-    which freezes `model_record`), so BOTH seqs freeze in lock-step and the arm
-    still reads `k == k`.  Once a genuine handshake record then blocks (handshake
-    into the failed client -> `:822` None -> no successor), the channel stays
-    `ToClient` forever (locals require Quiet), so all downstream Quiet `_` clauses
-    are vacuous thereafter. **)
+    so `hs_wseq server == hs_rseq client` transfers verbatim).  A second route was
+    originally cited here — a `deliver_to_client` that FAILS the client on a
+    received in-flight alert, via the direction-blind alert catch-all in
+    `StateMachine.fst` — and that route is now VACUOUS AT THIS ARM: the catch-all
+    has been made direction-explicit and REFUSES alert sends (`CL.Sent -> None`), so
+    the only alert that can ever be in flight is `Close_notify` sealed at
+    `ControlApplicationData`, whose snapshot write epoch is `Application` and hence
+    fails the `R.Handshake? (snap_wr p)` gate before the arm is reached.  (The
+    reasoning it supported is unaffected: the surviving `LocalFail` route already
+    freezes both seqs in lock-step, so the arm still reads `k == k`.)  Once a
+    genuine handshake record then blocks (handshake into the failed client ->
+    `:822` None -> no successor), the channel stays `ToClient` forever (locals
+    require Quiet), so all downstream Quiet `_` clauses are vacuous thereafter. **)
 let sc_hs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
@@ -2467,7 +2495,7 @@ let lemma_step_terminal_control_absorbing
     lands in `ControlFailed`.  Hence `~(ControlFailed? ...)` is BACKWARD-monotone
     and is a LEGAL invariant gate (gate-monotonicity law, see the `cs_hs_seq_ok`
     doc comment above).  Consumer: the `ControlFailed?` gate on
-    `quiet_appdata_write_coupling`'s conjunct 2 (AppSeqPairing.fst), which keeps
+    `appdata_write_coupling`'s conjunct 2 (AppSeqPairing.fst), which keeps
     the working `Closing`/`Closed` branches that the coarser `not terminal_control`
     gate would have thrown away. **)
 #push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"

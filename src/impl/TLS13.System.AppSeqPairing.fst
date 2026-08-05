@@ -1430,8 +1430,35 @@ let read_write_coupling (s:SY.tls_system_state) : prop =
 
     `SY.tls_system_inv` carries `client_clean` (System.fst:589), coupling the
     CLIENT's readiness to the server — but NO `server_clean`.  This conjunct is
-    that mirror: at a `Quiet` channel, each endpoint AT `ControlApplicationData`
-    forces its PEER's application WRITE epoch to be installed.
+    that mirror: each endpoint AT `ControlApplicationData` forces its PEER's
+    application WRITE epoch to be installed.
+
+    THE TWO HALVES ARE GATED DIFFERENTLY — read the definition, not the name.
+    Conjunct 1 (server @ CAD ==> client's app WRITE installed) is UNGATED: it holds
+    at EVERY channel, in flight as well as at `Quiet`.  Conjunct 2 (the mirror) is
+    gated on `MP.Quiet?` AND on `~(ControlFailed? (ctrl s.server))`.  The predicate
+    was originally named `quiet_appdata_write_coupling` and gated WHOLESALE on
+    `MP.Quiet?`; that gate was DROPPED from conjunct 1 (a STRENGTHENING — the
+    conjunct now asserts strictly more) and the name changed accordingly, because
+    the `Quiet` gate made conjunct 1 UNESTABLISHABLE: both delivery families have a
+    NON-`Quiet` pre-state, where a `Quiet`-gated conjunct is vacuous and so carries
+    nothing forward into the post-state.
+
+    HOW CONJUNCT 1 IS ESTABLISHED AT THE `deliver_to_server` THAT ENTERS CAD (the
+    one non-forwarding case; the "get the fact from the STEP, not the invariant"
+    law).  `StateMachine.fst:774` is the unique receive arm producing server-CAD, so
+    the delivered message is a `Finished`.  `inflight_sender_stepped` then carries
+    `step_tls_message p.pl_snap CL.Sent p.pl_sent == Some s.client.cs_model`, and
+    there are exactly TWO `CL.Sent, Finished` step arms: `:676` (-> the SERVER-only
+    stage `HsServerFinishedSent`) and `:809` (-> `ControlApplicationData`).
+    `SY.client_stage_ok` (a conjunct of `tls_system_inv`, `| _ -> False` on
+    server-only stages) kills the first, so the CLIENT'S CONTROL is
+    `ControlApplicationData` — derived from the step, needing NO legality and NO
+    counting — and `connection_state_consistent` then lifts that to the RECORD-level
+    `Application` write epoch.  All five other families merely forward: the sends by
+    write-epoch monotonicity, `deliver_to_client` by
+    `AMF.lemma_recv_preserves_write_epoch`, `server_local` by CAD-backward,
+    `client_local` by `lemma_client_local_preserves_app_write`.
 
     STATED AT THE EPOCH LEVEL DELIBERATELY (control antecedent, EPOCH consequent).
     A control-level mirror (`peer @ ControlApplicationData`) would COLLAPSE in the
@@ -1445,7 +1472,7 @@ let read_write_coupling (s:SY.tls_system_state) : prop =
     LOCAL families preserve it for free and lets the closure-region sends discharge
     it (they leave `ControlApplicationData`, weakening the antecedent).
 
-    WHY CONJUNCT 2 IS GATED ON `~(ControlFailed? (ctrl s.server))`.  Conjunct 2 is
+    WHY CONJUNCT 2 KEEPS BOTH ITS GATES.  Conjunct 2 is
     (I believe) TRUE at a failed server — it is UNDERIVABLE, not false, and the
     distinction matters.  The truth argument: if the client is at
     `ControlApplicationData` and the channel is `Quiet`, the client's Finished was
@@ -1467,14 +1494,16 @@ let read_write_coupling (s:SY.tls_system_state) : prop =
     ALREADY-`ControlFailed` server) does NOT exist: that delivery hits
     `| _, _ -> None` (StateMachine.fst:970 pre-fix numbering), so the step cannot
     occur and the channel never returns to `Quiet`.  A future strengthening that
-    carries the history fact could remove this gate. **)
-let quiet_appdata_write_coupling (s:SY.tls_system_state) : prop =
-  MP.Quiet? s.channel ==>
-    ( (CS.ControlApplicationData? (SY.ctrl s.server) ==>
-         R.Application? (wr s.client).R.epoch) /\
-      (CS.ControlApplicationData? (SY.ctrl s.client) /\
-       ~(CS.ControlFailed? (SY.ctrl s.server)) ==>
-         R.Application? (wr s.server).R.epoch) )
+    carries the history fact could remove the `ControlFailed` gate.  The `Quiet`
+    gate on conjunct 2 is NOT known to be droppable the way conjunct 1's was: the
+    `client_clean` route it rests on (System.fst:589) is itself `Quiet`-gated. **)
+let appdata_write_coupling (s:SY.tls_system_state) : prop =
+  ( (CS.ControlApplicationData? (SY.ctrl s.server) ==>
+       R.Application? (wr s.client).R.epoch) /\
+    (MP.Quiet? s.channel /\
+     CS.ControlApplicationData? (SY.ctrl s.client) /\
+     ~(CS.ControlFailed? (SY.ctrl s.server)) ==>
+       R.Application? (wr s.server).R.epoch) )
 
 (** GATE 2a conjunct 1 — both-slots gate: the missing `server_clean` mirror of
     the client-side readiness.  Once the CLIENT has verified the server Finished
@@ -1639,7 +1668,7 @@ let app_extras (s:SY.tls_system_state) : prop =
   inflight_raw_delta_legal s /\
   inflight_snap_handshake_write s /\
   read_write_coupling s /\
-  quiet_appdata_write_coupling s /\
+  appdata_write_coupling s /\
   hs_material_agreement s /\
   client_hs_write_record_slot_link s /\
   finished_delivered_appread_coupling s

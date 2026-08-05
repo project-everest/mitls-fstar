@@ -284,7 +284,7 @@ let lemma_consistent_server_not_shsfv (st:CS.connection_state)
     and role-free, and it holds at `initial` (`ControlNew`).
 
     CONSUMER: the `HsClientFinishedVerified` branch of
-    `AppExtrasInv.lemma_qawc_conjunct2_from_inv`.  `SY.server_post_cf`
+    `AppExtrasInv.lemma_awc_conjunct2_from_inv`.  `SY.server_post_cf`
     (System.fst:580) allows `{HsClientFinishedReceived, HsClientFinishedVerified,
     ControlApplicationData, ControlClosing, ControlClosed, ControlFailed}`; the first
     two are the unreachable pair, excluded here and by `lemma_consistent_not_cfr`,
