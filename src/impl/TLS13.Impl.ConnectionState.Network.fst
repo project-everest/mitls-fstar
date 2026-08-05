@@ -1042,6 +1042,7 @@ fn mark_received_client_hello
 // own fn rather than inlined at the use site: unfolding sized_bytes_exactly
 // inside a conditional branch leaves the surrounding frame with uvars, and
 // Pulse then reports "Cannot check relation with uvars".
+#restart-solver
 fn collapse_sized_bytes_to_empty
   (slot:sized_bytes)
   (#cap:erased nat)
@@ -1796,6 +1797,7 @@ fn mark_received_encrypted_extensions
     (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)))
 }
 
+#restart-solver
 fn mark_received_protected_encrypted_extensions
   (c:connection_state)
   (raw:array U8.t)
@@ -2702,6 +2704,7 @@ fn apply_received_certificate_verify
 
 }
 
+#restart-solver
 fn mark_received_certificate_verify
   (c:connection_state)
   (raw:array U8.t)
@@ -3458,6 +3461,7 @@ fn mark_received_server_finished
     (received_server_finished_state st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)))
 }
 
+#restart-solver
 fn mark_received_protected_server_finished_drain
   (c:connection_state)
   (raw:array U8.t)

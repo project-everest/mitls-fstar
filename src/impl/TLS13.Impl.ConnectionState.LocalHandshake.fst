@@ -1004,6 +1004,7 @@ fn mark_sent_server_hello
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)))
 }
 
+#restart-solver
 fn mark_sent_encrypted_extensions
   (c:connection_state)
   (raw:array U8.t)
@@ -1955,6 +1956,7 @@ fn mark_sent_certificate_verify
     (sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)))
 }
 
+#restart-solver
 fn serialize_stored_certificate_verify_fragment
   (c:connection_state)
   (#cv:erased GCV.certificateVerify)
@@ -2930,6 +2932,7 @@ fn try_send_client_hello
   }
 }
 
+#restart-solver
 fn derive_shared_secret_from_bytes
   (c:connection_state)
   (shared_src:array U8.t)
@@ -3733,6 +3736,7 @@ fn install_server_application_write_traffic_keys_from_material
     }))
 }
 
+#restart-solver
 fn install_client_application_read_traffic_keys_from_material
   (c:connection_state)
   (traffic_secret_src:array U8.t)
@@ -4630,6 +4634,7 @@ fn derive_and_install_client_handshake_read_traffic_keys
     #material;
 }
 
+#restart-solver
 fn try_derive_shared_secret
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -5440,6 +5445,7 @@ fn try_install_client_handshake_traffic_keys
   }
 }
 
+#restart-solver
 fn try_install_server_handshake_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)

@@ -710,6 +710,7 @@ let rec lemma_region_preserves_transcript_sent
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
+#restart-solver
 let rec lemma_region_preserves_transcript_received
   (m:CS.connection_model) (evs:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
@@ -1407,6 +1408,7 @@ let lemma_replay_cong_sent
       (ensures SMReplay.conn_events_sent_seal_replay m l2 a b f)
   = ()
 
+#restart-solver
 let lemma_replay_cong_recv
   (m:CS.connection_model) (l1 l2:list CS.conn_event) (a b:B.bytes) (f:CS.connection_model)
   : Lemma
@@ -2118,6 +2120,7 @@ let rec lemma_cr_region_preserves_read_installed_sent
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#restart-solver
 let rec lemma_cr_region_read_installed_sent
   (m:CS.connection_model) (region:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
@@ -2895,6 +2898,7 @@ let lemma_peel_client_flight
   )))))))
 #pop-options
 
+#restart-solver
 let server_flight_chain
   (ms final_s:CS.connection_model) (mat_write:CS.traffic_key_material)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
@@ -3621,6 +3625,7 @@ let lemma_server_step_classify
    byte-neutral on the sent stream (preserving record_write/control), or is a
    ChangeCipherSpec send whose sent delta parses as a cleartext CCS record. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
+#restart-solver
 let lemma_client_step_classify
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   (ds dr:B.bytes)

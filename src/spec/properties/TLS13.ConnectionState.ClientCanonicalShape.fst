@@ -298,6 +298,7 @@ let lemma_client_raw_suffix_flight_spine
     raw_suffix ee cert cv_validate cv cv_verify sf tail
 #pop-options
 
+#restart-solver
 let region_installs_ok (keys:CS.key_schedule_state) (region:list CS.conn_event) : prop =
   all_hs_installs region /\
   (Some? keys.CS.ks_server_handshake_traffic ==> has_read_install region) /\
@@ -593,6 +594,7 @@ let lemma_semantic_canonical (st:CS.connection_state) (sem:EC.local_event) (conn
 #pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+#restart-solver
 let lemma_client_step_facts
   (st0 s':CS.connection_state)
   (ev:SM.event CW.wire_message CTy.client_local_event)
@@ -970,6 +972,7 @@ let step_from_shr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
           | _ -> ())
        | _ -> ())
 
+#restart-solver
 let step_from_eer (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
       (requires hpre st0 s' conn_ev /\
@@ -1337,6 +1340,7 @@ let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
        | _ -> ())
     | _ -> ()
 
+#restart-solver
 let step_from_appdata (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
       (requires hpre st0 s' conn_ev /\

@@ -843,6 +843,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_empty
       assert (Seq.equal received_prefix_sent B.empty);
       assert (Seq.equal received_prefix_received B.empty) )
 
+#restart-solver
 let lemma_same_endpoint_replay_split_prefixes_equal_uniform_empty
   (model:connection_model)
   (suffix:list conn_event)
@@ -1809,6 +1810,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
               received_tail_received;
             assert (Seq.equal sent_prefix_received received_prefix_received) ) ) )
 
+#restart-solver
 let lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
   (model:connection_model)
   (ch:GCH.clientHello)
@@ -2985,6 +2987,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
               server_tail_received;
             assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
 
+#restart-solver
 let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_client_local
   (server_model:connection_model)
   (client_model:connection_model)
@@ -3947,6 +3950,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
     client_shared ==
     [ConnLocalEvent (LocalStartHandshake start); client_sent_ch; client_received_sh; client_derive])
 
+#restart-solver
 let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalized
   (server_model:connection_model)
   (client_model:connection_model)
@@ -4760,6 +4764,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalize
               server_tail_received;
             assert (Seq.equal client_prefix_sent server_prefix_received) ) ) )
 
+#restart-solver
 let lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handshake_prefix
   (server_model0:connection_model)
   (client_model0:connection_model)
@@ -5624,6 +5629,7 @@ let lemma_paired_replay_split_prefixes_equal_single_server_hello
       assert (Seq.equal client_prefix_sent B.empty);
       assert (Seq.equal server_prefix_received B.empty) )
 
+#restart-solver
 let lemma_paired_replay_split_prefixes_equal_single_client_hello_with_full_streams
   (server_model:connection_model)
   (client_model:connection_model)
@@ -6508,6 +6514,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_w
       client_raw_received
     and () )
 
+#restart-solver
 let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_full_replays
   (server_model0:connection_model)
   (client_model0:connection_model)

@@ -554,6 +554,7 @@ let tls_machine_iface
     as its hypothesis and used to read the gate off that hypothesis now takes an
     explicit `MP.Quiet? a.channel` precondition. **)
 
+#restart-solver
 let tls_step_client_send (a b:tls_system_state) : prop =
   MP.mp_client_send tls_machine_iface a b
 
@@ -1150,6 +1151,7 @@ let lemma_cc_client_send
 
 (** FACTS 1–5 across a client SEND (client emits one record; needs field
     stability + config→profile at CH-send + carried cleartext for the channel). **)
+#restart-solver
 val lemma_wire_facts_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ MP.Quiet? a.channel /\ tls_step_client_send a b)
           (ensures ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
@@ -1698,6 +1700,7 @@ let lemma_client_step_e2e
     the immutable config, the real work only fires when the pre-state is already
     valid; otherwise the post-guard is false and the obligation is vacuous. **)
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#restart-solver
 let lemma_server_step_e2e
   (st0 st1:CS.connection_state)
   (e:SM.event CW.wire_message CTy.server_local_event)
@@ -2250,6 +2253,7 @@ let lemma_server_wire_recv_into_appdata_shape
 
 (** SERVER step-level: a SEND (nonempty wire output) never enters application data. **)
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 60 --split_queries always"
+#restart-solver
 let lemma_server_send_not_into_appdata
   (st0:CS.connection_state) (local:CTy.server_local_event)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)

@@ -1038,6 +1038,7 @@ let lemma_server_network_step_ok_process_correct
   | _ ->
     assert False
 
+#restart-solver
 [@@pulse_unfold]
 let server_network_frame_pre
   (frame:tls_server_network_frame)
@@ -2029,6 +2030,7 @@ fn new_canonical_server
   }
 }
 
+#restart-solver
 ghost fn take_server_snapshot
   (srv:canonical_server)
   (received:Ghost.erased B.bytes)
@@ -2942,6 +2944,7 @@ let lemma_server_network_need_more_input_bridge_result
     wire_outputs
     local_outputs
 
+#restart-solver
 let lemma_server_network_illegal_transition_bridge_result
   (initial:server_initial_state)
   (received0:B.bytes)
@@ -3964,6 +3967,7 @@ let lemma_server_network_connection_failed_bridge_result
     wire_outputs
     local_outputs
 
+#restart-solver
 let server_network_bridge_obligation
   (base:tls_server_network_frame)
   : prop =
@@ -5023,6 +5027,7 @@ let lemma_server_local_process_correct
       produced
   )
 
+#restart-solver
 let server_local_bridge_obligation
   (base:tls_server_local_frame)
   : prop =
@@ -5866,6 +5871,7 @@ let lemma_server_local_event_progress
 
 // Prove server_progress_preorder st0 st1 from server_local_common_witness.
 // Mirrors lemma_client_local_progress in TLS13.Impl.Client.CanonicalProtocol.fst.
+#restart-solver
 let lemma_server_local_progress
   (initial:server_initial_state)
   (received0:B.bytes)
@@ -6890,6 +6896,7 @@ ensures exists* (received1:Ghost.erased B.bytes)
 
 (* Phase 1: the TLS server has no internal events, so internal processing
    is unconditionally quiescent. *)
+#restart-solver
 fn server_process_internal
   (srv:canonical_server)
   (frame:tls_server_local_bridge_frame)

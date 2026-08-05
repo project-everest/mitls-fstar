@@ -1091,6 +1091,7 @@ let lemma_protected_handshake_event_projection_pair_after_server_write_client_re
             client_tail_received
           and () ) ) ) )
 
+#restart-solver
 let lemma_protected_handshake_event_projection_pair_after_server_write_receiver_preserve_read_local_head_client_read_install_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -2125,6 +2126,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_preserve_write_
     )
   )
 
+#restart-solver
 let lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_next_alignment_and_tails
   (server:connection_model)
   (client:connection_model)
@@ -3212,6 +3214,7 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
           client_tail_received2
         and () ) )
 
+#restart-solver
 let lemma_protected_handshake_event_projection_pairs_after_server_write_client_read_install_server_encrypted_flight_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -4185,6 +4188,7 @@ let lemma_protected_handshake_event_projection_pairs_server_encrypted_flight_aft
       and () )
   )
 
+#restart-solver
 let lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -5447,6 +5451,7 @@ let lemma_server_encrypted_flight_preserves_client_to_server_replay_tails_with_t
                   server_tail_received
                 and () ) ) ) ) ) ) )
 
+#restart-solver
 let lemma_server_encrypted_flight_produces_client_finished_replay_inputs_with_tails
   (server:connection_model)
   (client:connection_model)

@@ -843,6 +843,7 @@ let lemma_sent_event_nonempty_seal_projection_protected
       })
       delta_sent)
 
+#restart-solver
 let lemma_received_event_nonempty_decode_projection_protected
   (model:connection_model)
   (msg:M.tls_message)
@@ -1742,6 +1743,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays
 #pop-options
 
 #push-options "--split_queries always --z3rlimit 10"
+#restart-solver
 let lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
   (sender:connection_model)
   (receiver:connection_model)
@@ -2735,6 +2737,7 @@ let lemma_protected_handshake_event_projection_pairs_from_two_head_replays_with_
         receiver_tail_received1
       and () ) )
 
+#restart-solver
 let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
   (sender:connection_model)
   (sender_after:connection_model)
@@ -3672,6 +3675,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         receiver_tail_received
       and () ) )
 
+#restart-solver
 let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_head_with_next_alignment_and_tails
   (sender:connection_model)
   (receiver:connection_model)
@@ -4554,6 +4558,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
       receiver_tail_received
     and () )
 
+#restart-solver
 let lemma_protected_handshake_event_projection_pairs_from_two_heads_then_both_non_install_local_heads_with_next_alignment_and_tails
   (sender:connection_model)
   (receiver:connection_model)

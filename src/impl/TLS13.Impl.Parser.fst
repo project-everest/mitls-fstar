@@ -800,6 +800,7 @@ let lemma_ch_find_key_share_nil ()
   : Lemma (WS.ch_find_key_share [] == None)
   = WS.lemma_ch_find_key_share_nil ()
 
+#restart-solver
 let lemma_ch_find_key_share_cons (e: GKSE.keyShareEntry) tl
   : Lemma (ensures WS.ch_find_key_share (e :: tl) ==
              (if GNG.X25519? e.GKSE.group
@@ -1604,6 +1605,7 @@ let lemma_extCH_ks_constructor
     (ensures GECH.Extension_data_key_share_mid? vm)
   = ()
 
+#restart-solver
 let lemma_extCH_sv_constructor
   (xl: GECH.extensionClientHello_low) (vm: GECH.extensionClientHello_mid)
   : Lemma
@@ -2484,6 +2486,7 @@ fn copy_first_protocol_name
    existing 255-byte (full) destination Vec.  Used by the EncryptedExtensions ALPN
    scan to land the negotiated protocol name into a pre-allocated [max_alpn_len]
    buffer. *)
+#restart-solver
 inline_for_extraction
 fn copy_vec_prefix_into
   (dst: V.vec U8.t)
@@ -3287,6 +3290,7 @@ fn intro_vmatch_extSH_key_share
 
 (* Expose the protocolVersion (legacy_version) equality, the random tag lvec, and
    the ite payload of the serverHello read result. *)
+#restart-solver
 ghost
 fn elim_serverHello_body (xsh: GSH.serverHello_lowtype) (#cm: GSH.serverHello_mid)
   requires GSH.serverHello_vmatch xsh cm
@@ -4230,6 +4234,7 @@ fn scan_ch_key_share
 }
 
 #push-options "--z3rlimit 800 --fuel 2 --ifuel 2"
+#restart-solver
 fn scan_ch_extensions
   (ext_lo: GCH.clientHello_extensions_lowtype)
   (#cext: Ghost.erased GCH.clientHello_extensions_mid)
@@ -5226,6 +5231,7 @@ fn scan_certificate_chain
 (* Full handshake (content-type 0x16) arm.  Parses the handshake message
    structure exclusively through the QuackyDucky-generated validator + copyful
    reader; ServerHello, Finished and CertificateVerify sub-arms are proven. *)
+#restart-solver
 fn parse_handshake_message
   (content_type: U8.t)
   (input: array U8.t)
@@ -6155,6 +6161,7 @@ fn parse_tls_message
   }
 }
 
+#restart-solver
 fn parse_handshake_prefix
   (input: array U8.t)
   (input_len: SZ.t)
@@ -7032,6 +7039,7 @@ fn build_decoded_buffer_ok
       L.decoded_buffer_protected = protected }
 }
 
+#restart-solver
 fn decode_network_buffer
   (c:CR.connection_state)
   (raw: array U8.t)

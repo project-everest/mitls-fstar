@@ -669,6 +669,7 @@ let lemma_server_process_local_obligations
 (* impossible) collision with a runtime 32-byte comparison.                 *)
 (* ----------------------------------------------------------------------- *)
 (* Copy of the generated (private) serverHello_body_sz_contradiction. *)
+#restart-solver
 let hrr_sentinel_sz_contradiction (j: SZ.t)
   : Lemma (requires SZ.v j < 32 /\ ~(j == 0sz) /\ ~(j == 1sz) /\ ~(j == 2sz) /\ ~(j == 3sz) /\ ~(j == 4sz) /\ ~(j == 5sz) /\ ~(j == 6sz) /\ ~(j == 7sz) /\ ~(j == 8sz) /\ ~(j == 9sz) /\ ~(j == 10sz) /\ ~(j == 11sz) /\ ~(j == 12sz) /\ ~(j == 13sz) /\ ~(j == 14sz) /\ ~(j == 15sz) /\ ~(j == 16sz) /\ ~(j == 17sz) /\ ~(j == 18sz) /\ ~(j == 19sz) /\ ~(j == 20sz) /\ ~(j == 21sz) /\ ~(j == 22sz) /\ ~(j == 23sz) /\ ~(j == 24sz) /\ ~(j == 25sz) /\ ~(j == 26sz) /\ ~(j == 27sz) /\ ~(j == 28sz) /\ ~(j == 29sz) /\ ~(j == 30sz) /\ ~(j == 31sz)) (ensures False) = ()
 
@@ -1268,6 +1269,7 @@ fn process_send_server_hello_serialized
 }
 #pop-options
 
+#restart-solver
 fn build_server_hello_from_arrays
   (server_random:array U8.t)
   (server_key_share:array U8.t)
@@ -1907,6 +1909,7 @@ fn build_certificate_from_credentials
 }
 #pop-options
 
+#restart-solver
 fn process_send_certificate_serialized
   (s:server)
   (lcert:IM.certificate_msg)
@@ -2621,6 +2624,7 @@ fn process_send_certificate_verify_serialized
   resp
 }
 
+#restart-solver
 fn process_send_stored_certificate_verify_serialized
   (s:server)
   (#cv:erased GCV.certificateVerify)
