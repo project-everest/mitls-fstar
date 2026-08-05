@@ -913,6 +913,17 @@ CHROMIUM_OUT ?= out/atlas
 CHROMIUM_OUT_ABS = $(if $(filter /%,$(CHROMIUM_OUT)),$(CHROMIUM_OUT),$(CHROMIUM_SRC)/$(CHROMIUM_OUT))
 CHROMIUM_DEMO_BUNDLE = $(EXTRACT_DIR)/atlas-chromium-demo-linux-x86_64.tar.gz
 
+# The logging and non-logging bundles are built from the same CHROMIUM_OUT, so
+# they must be distinguishable once extracted: they unpack into differently
+# named directories and record ATLAS logging state in BUILD_INFO.
+ifeq ($(ATLAS_LOGGING),1)
+CHROMIUM_DEMO_BUNDLE_LOGGING_FLAG = --logging
+CHROMIUM_DEMO_BUNDLE_DIR_NAME = atlas-chromium-demo-logging-linux-x86_64
+else
+CHROMIUM_DEMO_BUNDLE_LOGGING_FLAG =
+CHROMIUM_DEMO_BUNDLE_DIR_NAME = atlas-chromium-demo-linux-x86_64
+endif
+
 CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
 CHROMIUM_DEMO_C_SOURCES = c_stubs/tls13_openssl_stubs.c
 CHROMIUM_DEMO_OBJ_STAMP = $(CHROMIUM_DEMO_OBJ_DIR)/.built
@@ -1059,6 +1070,7 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
   test-chromium-browser test-chromium-browser-logging \
   test-chromium-browser-public chromium-demo-bundle \
   chromium-demo-bundle-logging test-chromium-demo-bundle \
+  test-chromium-demo-bundle-logging \
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
   test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
@@ -1369,7 +1381,7 @@ $(CHROMIUM_DEMO_BUNDLE): chromium-browser test/openssl_http_server \
 	  --private-key test/certs/leaf.key \
 	  --bundle-sources runtime/chromium/bundle \
 	  --trace-analyzer runtime/analyze_atlas_trace.py \
-	  --output "$@"
+	  --output "$@" $(CHROMIUM_DEMO_BUNDLE_LOGGING_FLAG)
 
 chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
 	@echo "Chromium demo bundle: $(CHROMIUM_DEMO_BUNDLE)"
@@ -1384,10 +1396,15 @@ test-chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
 	  test_dir=$$(mktemp -d "$(abspath $(EXTRACT_DIR))/chromium_bundle_test.XXXXXX"); \
 	  trap 'rm -rf "'"$$test_dir"'"' EXIT; \
 	  tar xzf "$(CHROMIUM_DEMO_BUNDLE)" -C "$$test_dir"; \
-	  cd "$$test_dir/atlas-chromium-demo-linux-x86_64"; \
+	  cd "$$test_dir/$(CHROMIUM_DEMO_BUNDLE_DIR_NAME)"; \
 	  sha256sum --check SHA256SUMS; \
 	  timeout 90 \
 	    ./run-demo.sh --headless
+
+test-chromium-demo-bundle-logging:
+	$(MAKE) ATLAS_LOGGING=1 \
+	  CHROMIUM_DEMO_BUNDLE=$(EXTRACT_DIR)/atlas-chromium-demo-logging-linux-x86_64.tar.gz \
+	  test-chromium-demo-bundle
 
 $(CHROMIUM_DEMO_OBJ_STAMP): $(CHROMIUM_DEMO_C_SOURCES) \
   c_stubs/tls13_openssl_stubs.h Makefile | check-deps
@@ -1707,5 +1724,6 @@ quick:
   chromium-net chromium-browser test-chromium-browser \
   test-chromium-browser-public chromium-demo-bundle \
   test-chromium-demo-bundle \
+  test-chromium-demo-bundle-logging \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
   benchmark-profile-build profile clean quick

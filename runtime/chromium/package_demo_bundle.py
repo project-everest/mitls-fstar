@@ -13,6 +13,11 @@ import tempfile
 
 
 BUNDLE_NAME = "atlas-chromium-demo-linux-x86_64"
+BUNDLE_NAME_LOGGING = "atlas-chromium-demo-logging-linux-x86_64"
+
+
+def bundle_name(logging_enabled: bool) -> str:
+    return BUNDLE_NAME_LOGGING if logging_enabled else BUNDLE_NAME
 
 REQUIRED_CHROMIUM_FILES = (
     "chrome",
@@ -103,6 +108,7 @@ def package_bundle(args: argparse.Namespace) -> None:
     chromium_out = args.chromium_out.resolve()
     bundle_sources = args.bundle_sources.resolve()
     output = args.output.resolve()
+    bundle_directory = bundle_name(args.logging)
 
     for relative_path in REQUIRED_CHROMIUM_FILES:
         if not (chromium_out / relative_path).is_file():
@@ -129,9 +135,9 @@ def package_bundle(args: argparse.Namespace) -> None:
         output.unlink()
 
     with tempfile.TemporaryDirectory(
-        prefix=f".{BUNDLE_NAME}-", dir=output.parent
+        prefix=f".{bundle_directory}-", dir=output.parent
     ) as temporary_directory:
-        root = Path(temporary_directory) / BUNDLE_NAME
+        root = Path(temporary_directory) / bundle_directory
         chromium_destination = root / "chromium"
         server_destination = root / "server"
 
@@ -171,11 +177,12 @@ def package_bundle(args: argparse.Namespace) -> None:
         )
         build_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
         (root / "BUILD_INFO").write_text(
-            f"Bundle: {BUNDLE_NAME}\n"
+            f"Bundle: {bundle_directory}\n"
             f"Architecture: Linux x86_64\n"
             f"Created: {build_time}\n"
             f"ATLAS revision: {repository_revision}\n"
             f"Chromium revision: {chromium_revision}\n"
+            f"ATLAS logging: {'enabled' if args.logging else 'disabled'}\n"
         )
 
         dependency_sections = []
@@ -194,7 +201,7 @@ def package_bundle(args: argparse.Namespace) -> None:
         with tarfile.open(output, "w:gz", compresslevel=1) as archive:
             archive.add(
                 root,
-                arcname=BUNDLE_NAME,
+                arcname=bundle_directory,
                 recursive=True,
                 filter=normalized_tar_info,
             )
@@ -215,6 +222,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--bundle-sources", required=True, type=Path)
     parser.add_argument("--trace-analyzer", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--logging",
+        action="store_true",
+        help="package a bundle built with ATLAS_LOGGING=1; names the bundle "
+        "directory distinctly and records the fact in BUILD_INFO",
+    )
     return parser.parse_args()
 
 
