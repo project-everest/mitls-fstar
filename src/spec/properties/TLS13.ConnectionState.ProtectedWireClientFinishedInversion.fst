@@ -2480,6 +2480,10 @@ let lemma_client_side_cf (s:sysp)
   assert (CCShape.log_has_no_received_ccs s.client.CS.cs_event_log);
   SFInv.lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing
     s.client s.server;
+  (* [client_normalized_appdata_exact_spine] is opaque_to_smt; unfold it here,
+     the one place that destructs it. *)
+  reveal_opaque (`%SFInv.client_normalized_appdata_exact_spine)
+    SFInv.client_normalized_appdata_exact_spine;
   eliminate exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
                    (client_shared:C.x25519_shared_secret)
                    (region:list CS.conn_event)

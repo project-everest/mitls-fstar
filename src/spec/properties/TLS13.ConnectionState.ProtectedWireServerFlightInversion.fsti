@@ -133,7 +133,16 @@ let server_flight_pairs_conclusion (client server : CS.connection_state) : prop 
     False
 
 (** The verified paired endpoint normalizes the client's raw protected server
-    flight to the ordinary network-event spine consumed by downstream proofs. **)
+    flight to the ordinary network-event spine consumed by downstream proofs.
+
+    Opaque to SMT deliberately.  This is a sixteen-variable existential whose
+    body carries nested [forall]/[exists] over [L.memP].  Left transparent, its
+    definitional equation fired 3,085,362 times in a single query for
+    [lemma_finish_strong] -- twelve times the next most active quantifier --
+    each instantiation dragging in the nested membership quantifier and the
+    fuel-instrumented [memP] axioms.  Unfold it only where it is genuinely
+    needed, via [reveal_client_normalized_appdata_exact_spine]. **)
+[@@"opaque_to_smt"]
 let client_normalized_appdata_exact_spine (client:CS.connection_state) : prop =
   exists (start:CS.handshake_start)
          (ch:GCH.clientHello) (sh:GSH.serverHello)
