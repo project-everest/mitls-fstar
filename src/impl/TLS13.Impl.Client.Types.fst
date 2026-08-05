@@ -4240,7 +4240,7 @@ let lemma_network_bytes_consumed_input_event_projection
         app_out)
   )
 
-#push-options "--split_queries always --z3refresh"
+#push-options "--split_queries always"
 let lemma_network_bytes_protected_record_key_schedule_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4379,7 +4379,7 @@ let lemma_network_bytes_protected_record_key_schedule_projection
 #pop-options
 
 
-#push-options "--split_queries always --z3refresh"
+#push-options "--split_queries always"
 let lemma_network_bytes_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5442,7 +5442,7 @@ let lemma_network_bytes_step_correct_sent_seal_replay_consistent
       app_out
   )
 
-#push-options "--split_queries always --z3refresh --z3rlimit_factor 4"
+#push-options "--split_queries always --z3rlimit_factor 4"
 let lemma_network_bytes_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5832,7 +5832,7 @@ let lemma_local_event_step_correct_client_end_to_end_invariant
   assert (client_state_correct st1);
   lemma_client_state_correct_raw_to_message_replay st1
 
-#push-options "--split_queries always --z3refresh --z3rlimit 10"
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_local_event_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -6446,7 +6446,7 @@ let driver_trace_end_to_end
   driver_trace_accepted_wire_log_delta st0 st1 steps /\
   driver_trace_rejected_input_witnesses steps
 
-#push-options "--split_queries always --z3refresh"
+#push-options "--split_queries always"
 let lemma_network_bytes_end_to_end_correct_rejected_input_witness
   (st0:CS.connection_state)
   (st1:CS.connection_state)

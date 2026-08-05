@@ -287,7 +287,7 @@ let lemma_control_snapshot_not_failed
   | CS.ControlClosed ->
     ()
 
-#push-options "--z3refresh --z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
 fn rec receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)

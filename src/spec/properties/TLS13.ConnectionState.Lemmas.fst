@@ -4487,7 +4487,7 @@ let lemma_step_model_preserves_config
 =
   ()
 
-#push-options "--split_queries always --z3rlimit 10 --z3refresh"
+#push-options "--split_queries always --z3rlimit 10"
 
 let state_of_model_for_first_epoch_application_material
   (model:connection_model)

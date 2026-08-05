@@ -46,7 +46,7 @@ module U8 = FStar.UInt8
 
 let drain_fuel : SZ.t = 16384sz
 
-#push-options "--z3refresh --split_queries always --fuel 1 --ifuel 1"
+#push-options "--split_queries always --fuel 1 --ifuel 1"
 fn drain_pending (c:C.client) (empty:array U8.t)
   requires CR.connection_exactly c 'st0 **
            pts_to empty 'empty_bytes **

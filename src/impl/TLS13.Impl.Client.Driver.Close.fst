@@ -145,7 +145,7 @@ fn top_driver_send_close_notify
   result
 }
 
-#push-options "--z3refresh --z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
 fn rec await_peer_close_notify
   (d:top_driver)
   (buffered_len:SZ.t)

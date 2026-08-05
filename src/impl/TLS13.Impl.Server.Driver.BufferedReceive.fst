@@ -272,7 +272,7 @@ let lemma_yield_preserves_not_failed
         network.BN.buffered_network_read.BN.network_read_prefix)
   | _ -> assert False
 
-#push-options "--z3refresh --z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
 fn rec receive_loop
   (d:DS.top_server_driver)
   (out:array U8.t)
@@ -372,7 +372,7 @@ fn rec receive_loop
 }
 #pop-options
 
-#push-options "--z3refresh --z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
 fn rec await_peer_close_with_buffer
   (d:DS.top_server_driver)
   (out:array U8.t)
