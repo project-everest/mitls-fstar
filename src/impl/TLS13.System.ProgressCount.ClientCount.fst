@@ -24,6 +24,8 @@ module TLS13.System.ProgressCount.ClientCount
 module CS  = TLS13.Spec.StateMachine
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
 module B   = TLS13.Bytes
+module M   = TLS13.Messages
+module CL  = TLS13.ConnectionLog
 
 (** Control stages strictly before application data (and before any close). **)
 let pre_appdata_control (c:CS.connection_control_state) : bool =
@@ -65,6 +67,26 @@ let client_micro_shape (m:CS.connection_model) : prop =
 
     The client version needs no restriction: every pre-appdata client control
     change strictly advances progress. **)
+(** The `step_handshake_message` half of the control-change progress lemma,
+    isolated so that BOTH routes into it -- an ordinary received
+    `ConnNetworkEvent (TlsHandshake hm)` and the protected-record
+    `ConnProtectedHandshake` step -- can reuse the same enumeration. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
+let lemma_client_control_change_progress_handshake
+  (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg)
+  (m':CS.connection_model)
+  : Lemma (requires
+            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            CS.legal_handshake_message m dir hm /\
+            CS.step_handshake_message m dir hm == Some m' /\
+            pre_appdata_control m.CS.model_control /\
+            pre_appdata_control m'.CS.model_control /\
+            client_micro_shape m /\
+            ~(m'.CS.model_control == m.CS.model_control))
+          (ensures client_progress m' > client_progress m)
+  = ()
+#pop-options
+
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
 let lemma_client_control_change_progress
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
@@ -77,5 +99,28 @@ let lemma_client_control_change_progress
             client_micro_shape m /\
             ~(m'.CS.model_control == m.CS.model_control))
           (ensures client_progress m' > client_progress m)
-  = ()
+  = match ev with
+    | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnLocalEvent _ -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* `step_protected_handshake` is a RECEIVED handshake message step.  The
+         two post-processing rewrites it applies on top of
+         `step_handshake_message` touch only `model_record` (the tail
+         `record_read` restore) and `model_handshake.hs_buffers` (the pending
+         protected-handshake fragment); neither `model_control` nor
+         `model_handshake.hs_keys` moves.  Since `client_progress` is a
+         function of exactly those two, the stepped model and `m'` have equal
+         progress, and the shared handshake enumeration applies.  Legality is
+         supplied by `legal_protected_handshake_step`, which contains
+         `legal_handshake_message m CL.Received
+         step.protected_handshake_message` verbatim. *)
+      let hm = step.CS.protected_handshake_message in
+      (match CS.step_handshake_message m CL.Received hm with
+       | Some stepped ->
+         assert (m'.CS.model_control == stepped.CS.model_control);
+         assert (m'.CS.model_handshake.CS.hs_keys ==
+                 stepped.CS.model_handshake.CS.hs_keys);
+         assert (client_progress m' == client_progress stepped);
+         lemma_client_control_change_progress_handshake m CL.Received hm stepped
+       | None -> ())
 #pop-options

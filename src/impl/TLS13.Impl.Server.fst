@@ -104,6 +104,10 @@ fn new_server
                 TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal 'credential_identity_bytes)) /\
+                CR.server_config_valid
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
 {
   let s =
@@ -136,6 +140,9 @@ fn new_server
     (CR.server_initial_state
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal 'credential_identity_bytes));
+  CR.lemma_server_initial_state_config_valid
+    (Ghost.reveal 'certificate_chain_bytes)
+    (Ghost.reveal 'credential_identity_bytes);
   fold (connection_exactly
     s
     (CR.server_initial_state
@@ -186,6 +193,10 @@ fn new_server_erased_credential_identity
                 TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                CR.server_config_valid
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)))
 {
   let s =
@@ -217,6 +228,9 @@ fn new_server_erased_credential_identity
     (CR.server_initial_state
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal credential_identity));
+  CR.lemma_server_initial_state_config_valid
+    (Ghost.reveal 'certificate_chain_bytes)
+    (Ghost.reveal credential_identity);
   fold (connection_exactly
     s
     (CR.server_initial_state

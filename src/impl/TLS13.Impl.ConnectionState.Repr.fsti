@@ -1313,6 +1313,41 @@ let server_initial_state
   : CS.connection_state =
   CS.initial (server_connection_config certificate_chain credential_identity)
 
+(** IMPLEMENTATION-level validity of a server configuration: the protocol-level
+    fact that the credential is present (`CS.server_config_present`), conjoined
+    with THIS implementation's certificate-chain buffer bound.
+
+    The two halves live at different layers on purpose.  The first is a property
+    of the protocol; the second is a property of our buffers -- the wire format
+    permits a considerably longer chain than `max_server_certificate_chain_len`,
+    so this conjunct is genuinely an implementation restriction and is not
+    derivable from spec-level reachability.  It is exactly the precondition the
+    Pulse constructors `TLS13.Impl.Server.new_server` (and its erased-credential
+    variant) already impose on their caller, and they now discharge this
+    predicate as a postcondition, which is what lets the system-level
+    stream-integrity theorem be instantiated at a state the implementation can
+    actually build. **)
+let server_config_valid (st:CS.connection_state) : prop =
+  CS.server_config_present st /\
+  (match st.CS.cs_model.CS.model_config.CS.config_server with
+   | Some cfg ->
+     B.length cfg.CS.server_certificate_chain <= max_server_certificate_chain_len
+   | None -> False)
+
+(** The state the Pulse server constructor builds satisfies the predicate, given
+    exactly that constructor's own precondition.  Definitional: the config is
+    built with `config_server = Some { server_certificate_chain = chain; ... }`. **)
+let lemma_server_initial_state_config_valid
+  (certificate_chain:B.bytes)
+  (credential_identity:B.bytes)
+  : Lemma
+      (requires B.length certificate_chain <= max_server_certificate_chain_len)
+      (ensures
+        server_config_valid
+          (server_initial_state certificate_chain credential_identity))
+=
+  ()
+
 let lemma_default_initial_consistent ()
   : Lemma (TLS13.Spec.StateMachine.Reachability.connection_state_consistent default_initial_state)
 =

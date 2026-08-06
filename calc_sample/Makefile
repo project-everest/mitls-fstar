@@ -81,6 +81,7 @@ all: verify
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	@echo "Verifying $<"
 	@$(FSTAR) $<
+	@touch -c $@
 	@touch $@
 
 $(CACHE_DIR):

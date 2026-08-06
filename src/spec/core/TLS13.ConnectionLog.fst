@@ -405,6 +405,16 @@ type directed_message (a:Type0) = {
 type local_event =
   | LocalValidateCertificate of X.peer_identity
   | LocalFail of T.tls_error
+  (* NOTE (application-data stream integrity): the TLS-to-host-application
+     delivery hop modelled by `LocalDeliverApplicationData` is UNIMPLEMENTED.
+     The field it draws from — `app_pending_plaintext` in
+     `TLS13.Spec.StateMachine.application_state` — is assigned exactly once, to
+     `B.empty` in `empty_application_state`, and is never written again by any
+     step; and `legal_local_event` (in `TLS13.Spec.StateMachine`) requires the
+     delivered bytes to be a prefix of `app_pending_plaintext`.  Hence this event
+     can only ever deliver `B.empty`: it changes the `app_received` chunk LIST
+     but not its concatenation (the received byte stream).  The Pulse drivers
+     statically exclude it entirely. *)
   | LocalDeliverApplicationData of B.bytes
 
 type host_event =

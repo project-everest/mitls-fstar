@@ -99,6 +99,16 @@ fn new_server
                 TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal 'credential_identity_bytes)) /\
+                // The constructed initial state satisfies the server-config
+                // validity predicate consumed as an ENTRY HYPOTHESIS by the
+                // system-level stream-integrity theorem.  Establishing it here
+                // is what turns that hypothesis from an assumption about the
+                // starting state into a proved property of the state this
+                // implementation actually builds.
+                CR.server_config_valid
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
 
 fn new_server_erased_credential_identity
@@ -137,6 +147,12 @@ fn new_server_erased_credential_identity
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)) /\
                 TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                // See `new_server`: the stream-integrity entry hypothesis, proved
+                // rather than assumed.
+                CR.server_config_valid
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)))

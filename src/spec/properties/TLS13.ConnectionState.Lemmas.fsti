@@ -168,6 +168,37 @@ val lemma_connection_application_ready_record_epochs_installed
         application_record_keys_installed_for_role role st.cs_model)
       (ensures application_record_epochs_installed_for_role role st.cs_model)
 
+(** Sub-goal (a) BRIDGE: a reachable endpoint at `ControlApplicationData` has both
+    of its own application record keys installed (key + iv matching for read and
+    write).  Established purely from reachability via the strengthened application
+    record-epoch reachable shape, so no additional invariant is required. **)
+val lemma_connection_appdata_keys_installed_for_role
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData)
+      (ensures application_record_keys_installed_for_role role st.cs_model)
+
+(** Graceful-close analogue of
+    [lemma_connection_application_ready_record_epochs_installed]: at any reachable
+    (consistent) endpoint at `ControlClosing` or `ControlClosed`, BOTH record
+    directions are at the `Application` epoch.  Contrapositive: a consistent
+    endpoint at a `Handshake` read/write epoch is NOT in `{Closing, Closed}`.
+    Established purely from reachability; no additional invariant is required. **)
+val lemma_connection_closing_closed_record_epochs_installed
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        (ControlClosing? st.cs_model.model_control \/
+         ControlClosed? st.cs_model.model_control))
+      (ensures application_record_epochs_installed_for_role role st.cs_model)
+
 (** A reachable SERVER endpoint at `HsServerFinishedSent` has not yet installed the
     client application (read) traffic secret. **)
 val lemma_server_finished_sent_no_client_application_traffic
@@ -179,6 +210,108 @@ val lemma_server_finished_sent_no_client_application_traffic
         st.cs_model.model_control == ControlHandshaking HsServerFinishedSent)
       (ensures
         st.cs_model.model_handshake.hs_keys.ks_client_application_traffic == None)
+
+(** STAGE (b): a reachable CLIENT endpoint at `HsServerFinishedVerified` still has
+    its record_write at the Handshake epoch (the application write key is installed
+    only at the Finished send, which advances control to ControlApplicationData). **)
+val lemma_client_finished_verified_write_epoch_not_application
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+
+(** STAGE (b), message-keyed: any legal CLIENT *send* of a handshake message
+    happens with record_write still off the Application epoch.  The only client
+    Sent-handshake sites are ClientHello @ HsStarted and Finished @
+    HsServerFinishedVerified, both covered by the strengthened reachable shape. **)
+val lemma_client_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+
+(** STAGE (b), server mirror: any legal SERVER *send* of a handshake message
+    happens with record_write off the Application epoch. **)
+val lemma_server_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+
+(** STAGE (b), READ side: at any reachable handshaking state the epoch-collapsing
+    read projection is 0 — `record_read` is off the Application epoch, or (at the
+    two stages where the app-read key is installed while control is still
+    handshaking: client `HsServerFinishedVerified`, server `HsClientFinishedReceived`)
+    its seq is still 0.  This is the pre-state fact the LOCAL-family
+    `app_seq_pairing` preservation needs to rule out a key install RESETTING an
+    already-advanced application read seq. **)
+val lemma_handshaking_read_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_read.R.seq == 0)
+
+(** STAGE (b), READ side, STRONG form: at any reachable handshaking state OTHER
+    than the two where the app-read key is installed while control is still
+    handshaking (client `HsServerFinishedVerified`, server `HsClientFinishedReceived`),
+    the record read epoch is strictly off `Application`.  This is the strong
+    (non-`seq==0`) arm of the same read-epoch reachable shape exposed by
+    `lemma_handshaking_read_app_seq_zero`.
+
+    NEEDED BY the client DELIVERY family: a client legally RECEIVES a cleartext
+    `ServerHello`/`HelloRetryRequest` ONLY at `HsClientHelloSent`
+    (`step_tls_message` has no other `Received` arm for them), which this lemma
+    places off the Application read epoch.  So in the delivery's both-application
+    branch (client read epoch `Application`) a `ServerHello`/`HelloRetryRequest`
+    receive is impossible, discharging the not-cleartext side condition for those
+    two messages WITHOUT a wire-length bound.  The asymmetry with the server: a
+    server never receives `ServerHello`/`HelloRetryRequest` at any control, so the
+    server delivery excluded them by `server_ctrl_ok` alone; the client does
+    receive them (early), so it needs this read-epoch placement instead. **)
+val lemma_handshaking_nonfinal_read_not_application (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control /\
+        st.cs_model.model_control =!= ControlHandshaking HsServerFinishedVerified /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientFinishedReceived)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application)
+
+(** STAGE (b), WRITE side: mirror of the read-side fact.  At any reachable
+    handshaking state the epoch-collapsing write projection is 0 — `record_write`
+    is off the Application epoch, or (at the two stages where the app-write key is
+    installed while control is still handshaking: server `HsServerFinishedSent`,
+    server `HsClientFinishedReceived`) its seq is still 0.  This is the pre-state
+    fact the LOCAL-family `app_seq_pairing` preservation needs to rule out a key
+    install RESETTING an already-advanced application write seq. **)
+val lemma_handshaking_write_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_write.R.seq == 0)
 
 val lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
@@ -863,3 +996,211 @@ val lemma_legal_connection_delta_consistent
         connection_state_consistent st0 /\
         legal_connection_delta st0 delta st1)
       (ensures connection_state_consistent st1)
+
+(** NON-READY x25519 key-share projection from consistency + shared-secret
+    presence.  The consistency-side ingredient of the non-ready cross-endpoint
+    HANDSHAKE agreement producer: [Some? ks_shared_secret] is supplied non-ready
+    by the CANONICAL-shape presence bricks, and the model-level x25519 reachable
+    shape then yields the full stable projection. **)
+val lemma_consistent_shared_secret_stable_client_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures stable_client_x25519_key_share_projection st)
+
+(** Server mirror.  Excludes the two non-stable arms of
+    [server_x25519_reachable_shape] ([HsClientHelloReceived] and [ControlFailed]);
+    at [HsServerFinishedSent] both exclusions hold, so the consumer discharges
+    them for free. **)
+val lemma_consistent_shared_secret_stable_server_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived /\
+        ~(ControlFailed? st.cs_model.model_control))
+      (ensures stable_server_x25519_key_share_projection st)
+
+(** NON-READY record-keys consistency producer.  Part 1 of the handshake-epoch
+    material bridge: closes [connection_state_record_keys_consistent_for_role]
+    (= [model_record_keys_consistent_for_role role st.cs_model]) over the reachable
+    closure from a bare [connection_state_consistent].  Standard [stable_on_closure]
+    over the already-exposed initial ([lemma_initial_record_keys_consistent_for_role])
+    and step ([lemma_legal_connection_delta_record_keys_consistent_for_role])
+    ingredients.  No readiness. **)
+val lemma_connection_state_consistent_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        connection_state_record_keys_consistent_for_role
+          st.cs_model.model_config.config_role
+          st)
+
+(** NON-READY handshake-epoch material producer.  Part 2 of the bridge, the
+    HANDSHAKE mirror of [lemma_application_record_direction_material_matches_key_schedule_for_role].
+    Given [model_record_keys_consistent_for_role role model] (past the
+    [ControlFailed _ -> True] guard via [~(ControlFailed?)]) and a record direction
+    whose epoch is [Handshake], the [R.Handshake] arm of
+    [record_keys_match_key_schedule_for_role] supplies
+    [traffic_material_matches_record_direction], which bridges to the
+    [record_key_iv_material_agrees] form the consumer needs by the SAME [Seq.equal]
+    step the application producer discharges.  The handshake arm carries NO
+    [ControlHandshaking _ -> True] vacuity (unlike the application arm), so this
+    goes directly through [record_keys_match_key_schedule_for_role] with no
+    installed-helper detour.  The two obligations ([~ControlFailed], epoch ==
+    Handshake) are discharged by the client-Finished send's control gates
+    (client [HsServerFinishedVerified], server [HsServerFinishedSent]). **)
+val lemma_handshake_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        model_record_keys_consistent_for_role role model /\
+        ~(ControlFailed? model.model_control) /\
+        (record_direction_for_endpoint role dir model).R.epoch == R.Handshake)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id TrafficHandshake (traffic_label_for_endpoint_direction role dir))
+          model)
+
+(* Non-ready handshake-epoch analogue of the application slots-match       *)
+(* producer.  Establishes, from consistency alone (no readiness), that     *)
+(* each present handshake traffic slot matches its expected derived        *)
+(* material.  Consumed by the non-ready cross-endpoint handshake-agreement *)
+(* route (Brick 4).                                                        *)
+val lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        first_epoch_handshake_traffic_material_slots_match_expected st)
+
+(* Brick 3.6 : positive record-epoch lemmas.  From bare consistency plus a  *)
+(* RECORD-LEVEL key-presence hypothesis, derive [R.epoch == R.Handshake] at *)
+(* the client-Finished send (client write) and delivery (server read)       *)
+(* control points.  The record-level hypothesis excludes [R.Initial]        *)
+(* directly (consistency's Initial arm forces [R.key == None]); the         *)
+(* committed negative-epoch lemmas exclude [R.Application].  Consumed by the *)
+(* non-ready cross-endpoint handshake-agreement route (Brick 4).            *)
+val lemma_client_finished_verified_write_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified /\
+        Some? st.cs_model.model_record.record_write.R.key)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch == R.Handshake)
+
+val lemma_server_finished_sent_read_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedSent /\
+        Some? st.cs_model.model_record.record_read.R.key)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch == R.Handshake)
+
+(* Brick 3.7 : NON-READY key-schedule lineage producer.  From bare          *)
+(* consistency plus [Some? ks_shared_secret], derive the full               *)
+(* [connection_supported_profile_key_schedule_lineage] via the internal     *)
+(* reachable-shape lemma (the [base_lineage_or_empty] shape collapses to     *)
+(* all-Some once the shared secret is present).  Lets the non-ready          *)
+(* cross-endpoint handshake-agreement route (Brick 4) discharge lineage      *)
+(* internally instead of surfacing it as a hypothesis.                       *)
+val lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        connection_supported_profile_key_schedule_lineage st)
+
+(* Gate 2a: a present client-handshake-traffic slot forces [Some? ks_shared_secret], *)
+(* control-independently (from the consistency-only reachable shape).  Used to        *)
+(* discharge the shared-secret precondition of the ControlFailed-aware slot-level      *)
+(* handshake-agreement route at a possibly-failed endpoint, where record-key           *)
+(* consistency is blind but the key-schedule lineage shape still holds.                *)
+val lemma_consistent_client_handshake_traffic_slot_shared_secret
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+
+(* Gate-2a slimming: the [Some? ks_shared_secret] branch of the server x25519    *)
+(* reachable shape, surfaced in terms of the public Correspondence projections.  *)
+(* Lets ServerHelloSelectionLink drop its local re-derivation of the x25519       *)
+(* shape machinery.  Control-independent; [ControlFailed] gives the genuine       *)
+(* pre-ServerHello / key-share disjunction. *)
+val lemma_consistent_server_x25519_shared_secret_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        (match st.cs_model.model_control with
+         | ControlHandshaking HsClientHelloReceived ->
+           server_x25519_pre_server_hello_projection st
+         | ControlFailed _ ->
+           server_x25519_pre_server_hello_projection st \/
+           server_x25519_key_share_projection st
+         | _ ->
+           stable_server_x25519_key_share_projection st))
+
+(* PHASE 1A : PERSISTENCE of the client handshake READ record<->slot link.  *)
+(* At a reachable CLIENT with a Handshake read epoch — INCLUDING             *)
+(* ControlFailed — the record read (key,iv) matches the handshake            *)
+(* server-traffic key-schedule slot.  Derivable from bare consistency at a   *)
+(* live control; carried across the fail step (which freezes model_record +  *)
+(* hs_keys) by a reachable-shape stable_on_closure.  This is what lets the   *)
+(* server->client faithful-decode bridge fire at a FAILED reader, and lets   *)
+(* [hs_channel_seal_ok] drop its [~terminal(client)] workaround gate.        *)
+val lemma_client_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ClientEndpoint TrafficRead
+          (traffic_id TrafficHandshake ServerTraffic)
+          st.cs_model)
+
+(* PHASE 1A MIRROR: persistence of the SERVER handshake READ record<->slot  *)
+(* material link across ControlFailed.  Exact mirror of                     *)
+(* [lemma_client_hs_read_slot_link_persist] for the server's read direction  *)
+(* (label [ClientTraffic]); same proof shape (control-free link + fail_model *)
+(* freezing model_record and hs_keys, lifted by a reachable-shape            *)
+(* stable_on_closure).  This is what lets the client->server faithful-decode *)
+(* bridge ([hs_channel_seal_ok]'s ToServer arm) fire at a FAILED server.     *)
+val lemma_server_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ServerEndpoint TrafficRead
+          (traffic_id TrafficHandshake ClientTraffic)
+          st.cs_model)

@@ -2500,12 +2500,36 @@ let client_application_record_epoch_reachable_shape
   | ControlHandshaking HsCertificateVerifyReceived
   | ControlHandshaking HsCertificateVerifyVerified
   | ControlHandshaking HsServerFinishedReceived ->
-    keys.ks_server_application_traffic == None
+    keys.ks_server_application_traffic == None /\
+    // STAGE (b): the client installs its application WRITE key only at the
+    // Finished send (HsServerFinishedVerified -> ControlApplicationData); the
+    // legal local (TrafficApplication, TrafficWrite) install is a NO-OP on
+    // record_write for a client (install_record_keys, StateMachine.fst:399), so
+    // record_write stays at the Handshake epoch throughout the handshake.  This
+    // pins app_wseq to 0 at the Finished send, discharging the record-seq pairing.
+    model.model_record.record_write.R.epoch =!= R.Application
   | ControlHandshaking HsServerFinishedVerified ->
-    client_application_record_read_epoch_link model
-  | ControlApplicationData
+    client_application_record_read_epoch_link model /\
+    (match keys.ks_server_application_traffic with
+     | Some m -> traffic_material_matches_record_direction m model.model_record.record_read
+     | None -> True) /\
+    // STAGE (b): see the grouped handshaking arm above — record_write is still at
+    // the Handshake epoch at the instant the Finished send installs the client
+    // application write key.
+    model.model_record.record_write.R.epoch =!= R.Application
+  | ControlApplicationData ->
+    application_record_keys_installed_for_role ClientEndpoint model /\
+    client_application_record_epoch_link model
   | ControlClosing
   | ControlClosed ->
+    // Strengthened (mirrors the CAD arm): the graceful-close controls are entered
+    // ONLY from ControlApplicationData (Close_notify send/recv) or ControlClosing
+    // (Close_notify recv), all of which already carry the both-direction key
+    // installation; Close_notify's `next_seq` bumps only the record seq, leaving
+    // key/iv (hence `application_record_keys_installed_for_role`) intact.  Carrying
+    // it here lets a `consistent + Closing/Closed` endpoint recover the Application
+    // read/write epochs WITHOUT the caller supplying keys-installed.
+    application_record_keys_installed_for_role ClientEndpoint model /\
     client_application_record_epoch_link model
   | ControlFailed _ ->
     True
@@ -2523,15 +2547,30 @@ let server_application_record_epoch_reachable_shape
   | ControlHandshaking HsClientHelloReceived
   | ControlHandshaking HsServerHelloSent
   | ControlHandshaking HsServerEncryptedFlightSent ->
-    no_application_traffic_keys keys
+    no_application_traffic_keys keys /\
+    // STAGE (b), server mirror: the server installs its application WRITE key only
+    // at HsServerFinishedSent (LocalInstallServerApplicationTrafficKeys), which is
+    // strictly AFTER every server handshake SEND (ServerHello .. Finished, all at
+    // HsServerHelloSent/HsServerEncryptedFlightSent).  So record_write stays off
+    // the Application epoch throughout the server's sending stages, pinning
+    // app_wseq to 0 there — exactly the guard the send-delta lemma needs at a
+    // server handshake send.
+    model.model_record.record_write.R.epoch =!= R.Application
   | ControlHandshaking HsServerFinishedSent ->
     keys.ks_client_application_traffic == None /\
-    server_application_record_write_epoch_link model
+    server_application_record_write_epoch_link model /\
+    (match keys.ks_server_application_traffic with
+     | Some m -> traffic_material_matches_record_direction m model.model_record.record_write
+     | None -> True)
   | ControlHandshaking HsClientFinishedReceived ->
     server_application_record_epoch_link model
-  | ControlApplicationData
+  | ControlApplicationData ->
+    application_record_keys_installed_for_role ServerEndpoint model /\
+    server_application_record_epoch_link model
   | ControlClosing
   | ControlClosed ->
+    // Strengthened, server mirror of the client Closing/Closed arm above.
+    application_record_keys_installed_for_role ServerEndpoint model /\
     server_application_record_epoch_link model
   | ControlFailed _ ->
     True
@@ -2576,6 +2615,18 @@ let rec lemma_advance_direction_records_preserves_epoch
 =
   if n = 0 then ()
   else lemma_advance_direction_records_preserves_epoch st (n - 1)
+
+let rec lemma_advance_direction_records_preserves_key_iv
+  (st:R.direction_state)
+  (n:nat)
+  : Lemma
+      (ensures
+        (advance_direction_records st n).R.key == st.R.key /\
+        (advance_direction_records st n).R.static_iv == st.R.static_iv)
+      (decreases n)
+=
+  if n = 0 then ()
+  else lemma_advance_direction_records_preserves_key_iv st (n - 1)
 
 let lemma_step_model_application_record_epoch_reachable_shape_for_role
   (role:endpoint_role)
@@ -2628,7 +2679,12 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                 | TrafficApplication, TrafficRead ->
                   assert (stage == HsServerFinishedVerified);
                   assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
-                  assert (model'.model_record.record_read.R.epoch == R.Application)
+                  assert (model'.model_record.record_read.R.epoch == R.Application);
+                  // establishes the HsServerFinishedVerified read-material match clause.
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                          Some install.install_material);
+                  assert (traffic_material_matches_record_direction
+                            install.install_material model'.model_record.record_read)
                 | TrafficApplication, TrafficWrite ->
                   assert (stage == HsServerFinishedVerified);
                   assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
@@ -2637,7 +2693,13 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                   assert (model'.model_record.record_read ==
                           model.model_record.record_read);
                   assert (client_application_record_read_epoch_link model);
-                  assert (client_application_record_read_epoch_link model'))
+                  assert (client_application_record_read_epoch_link model');
+                  // the read-material clause is preserved: neither ks_server_application_traffic
+                  // nor record_read is touched by installing the client write key.
+                  (match model.model_handshake.hs_keys.ks_server_application_traffic with
+                   | Some rm ->
+                     assert (traffic_material_matches_record_direction rm model'.model_record.record_read)
+                   | None -> ()))
              | _ ->
                assert False)
           | LocalInstallTrafficKeysForRole role_install ->
@@ -2655,7 +2717,12 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                 | TrafficApplication, TrafficRead ->
                   assert (stage == HsServerFinishedVerified);
                   assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
-                  assert (model'.model_record.record_read.R.epoch == R.Application)
+                  assert (model'.model_record.record_read.R.epoch == R.Application);
+                  // establishes the HsServerFinishedVerified read-material match clause.
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                          Some install.install_material);
+                  assert (traffic_material_matches_record_direction
+                            install.install_material model'.model_record.record_read)
                 | TrafficApplication, TrafficWrite ->
                   assert (stage == HsServerFinishedVerified);
                   assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
@@ -2664,7 +2731,13 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                   assert (model'.model_record.record_read ==
                           model.model_record.record_read);
                   assert (client_application_record_read_epoch_link model);
-                  assert (client_application_record_read_epoch_link model'))
+                  assert (client_application_record_read_epoch_link model');
+                  // the read-material clause is preserved: neither ks_server_application_traffic
+                  // nor record_read is touched by installing the client write key.
+                  (match model.model_handshake.hs_keys.ks_server_application_traffic with
+                   | Some rm ->
+                     assert (traffic_material_matches_record_direction rm model'.model_record.record_read)
+                   | None -> ()))
              | _ ->
                assert False)
           | LocalValidateCertificate _ ->
@@ -2729,7 +2802,14 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             // (record_read epoch -> Application) and populates ks_server_application_traffic,
             // landing directly at HsServerFinishedVerified; prove the read-epoch link.
             assert (model'.model_record.record_read.R.epoch == R.Application);
-            assert (client_application_record_read_epoch_link model')
+            assert (client_application_record_read_epoch_link model');
+            // establishes the HsServerFinishedVerified read-material match clause:
+            // record_read is installed from the freshly derived server application
+            // read material, which is also stored into ks_server_application_traffic.
+            (match model'.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read)
+             | None -> ())
           | M.TlsHandshake (M.Finished _), CL.Sent,
             ControlHandshaking HsServerFinishedVerified ->
             assert (Some? model.model_handshake.hs_keys.ks_server_application_traffic);
@@ -2738,7 +2818,23 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             assert (model.model_record.record_read.R.epoch == R.Application);
             assert (model'.model_record.record_read.R.epoch == R.Application);
             assert (model'.model_record.record_write.R.epoch == R.Application);
-            assert (client_application_record_epoch_link model')
+            assert (client_application_record_epoch_link model');
+            // keys-installed at ControlApplicationData: the client READ material
+            // (server application traffic) is carried unchanged from the
+            // HsServerFinishedVerified shape, and the client WRITE material (client
+            // application traffic) is installed into record_write here by
+            // install_client_application_write_after_finished.
+            assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+            assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+            assert (model'.model_record.record_read == model.model_record.record_read);
+            (match model.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model.model_record.record_read);
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read));
+            (match model.model_handshake.hs_keys.ks_client_application_traffic with
+             | Some wm ->
+               assert (traffic_material_matches_record_direction wm model'.model_record.record_write));
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsHandshake M.HelloRetryRequest, CL.Received,
             ControlHandshaking HsClientHelloSent ->
             ()
@@ -2747,31 +2843,52 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             lemma_advance_direction_records_preserves_epoch
               model.model_record.record_write
               (S.application_data_record_count bytes);
-            assert (client_application_record_epoch_link model')
+            lemma_advance_direction_records_preserves_key_iv
+              model.model_record.record_write
+              (S.application_data_record_count bytes);
+            assert (client_application_record_epoch_link model');
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsApplicationData _, CL.Received, ControlApplicationData
           | M.TlsIgnoredPostHandshake _, CL.Received, ControlApplicationData ->
             assert (client_application_record_epoch_link model);
-            assert (client_application_record_epoch_link model')
+            assert (client_application_record_epoch_link model');
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsKeyUpdate _, CL.Received, ControlApplicationData ->
             assert (client_application_record_epoch_link model);
             assert (model'.model_record.record_read.R.epoch == R.Application);
             assert (model'.model_record.record_write ==
                     model.model_record.record_write);
-            assert (client_application_record_epoch_link model')
+            assert (client_application_record_epoch_link model');
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent,
             ControlApplicationData ->
             assert (client_application_record_epoch_link model);
             assert (model'.model_record.record_read ==
                     model.model_record.record_read);
             assert (model'.model_record.record_write.R.epoch == R.Application);
-            assert (client_application_record_epoch_link model')
+            assert (client_application_record_epoch_link model');
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData ->
             assert (client_application_record_epoch_link model);
             assert (model'.model_record.record_read ==
                     model.model_record.record_read);
             assert (model'.model_record.record_write.R.epoch ==
                     (R.next_seq model.model_record.record_write).R.epoch);
-            assert (client_application_record_epoch_link model')
+            assert (client_application_record_epoch_link model');
+            // strengthened Closing arm: keys-installed carried from the CAD
+            // pre-state; record_read unchanged, record_write only bumps seq
+            // (next_seq preserves key/iv), so both direction materials still match.
+            assert (application_record_keys_installed_for_role ClientEndpoint model);
+            assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+            assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+            (match model.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read));
+            (match model.model_handshake.hs_keys.ks_client_application_traffic with
+             | Some wm ->
+               assert (traffic_material_matches_record_direction wm model.model_record.record_write);
+               assert (traffic_material_matches_record_direction wm model'.model_record.record_write));
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
           | M.TlsAlert T.Close_notify, CL.Received, ControlClosing ->
             assert (client_application_record_epoch_link model);
@@ -2779,7 +2896,21 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                     model.model_record.record_write);
             assert (model'.model_record.record_read.R.epoch ==
                     (R.next_seq model.model_record.record_read).R.epoch);
-            assert (client_application_record_epoch_link model')
+            assert (client_application_record_epoch_link model');
+            // strengthened Closed arm: keys-installed carried from the pre-state
+            // (CAD arm, or the strengthened Closing arm); record_write unchanged,
+            // record_read only bumps seq (next_seq preserves key/iv).
+            assert (application_record_keys_installed_for_role ClientEndpoint model);
+            assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+            assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+            (match model.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model.model_record.record_read);
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read));
+            (match model.model_handshake.hs_keys.ks_client_application_traffic with
+             | Some wm ->
+               assert (traffic_material_matches_record_direction wm model'.model_record.record_write));
+            assert (application_record_keys_installed_for_role ClientEndpoint model')
           | M.TlsAlert _, _, _ ->
             ()
           | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
@@ -2818,21 +2949,24 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             (match model.model_control with
              | ControlNew ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalSelectServerParameters _ ->
             (match model.model_control with
              | ControlHandshaking HsClientHelloReceived ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalDeriveSharedSecret _ ->
             (match model.model_control with
              | ControlHandshaking HsClientHelloReceived ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalInstallTrafficKeysForRole role_install ->
@@ -2846,7 +2980,10 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                 | TrafficHandshake, _ ->
                   assert (stage == HsServerHelloSent);
                   assert (no_application_traffic_keys model.model_handshake.hs_keys);
-                  assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+                  assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+                  // handshake write-key install lands record_write at the Handshake
+                  // epoch, never Application.
+                  assert (model'.model_record.record_write.R.epoch =!= R.Application)
                 | TrafficApplication, TrafficWrite ->
                   assert (stage == HsServerFinishedSent);
                   assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
@@ -2854,7 +2991,15 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                           model.model_handshake.hs_keys.ks_client_application_traffic);
                   assert (model.model_handshake.hs_keys.ks_client_application_traffic == None);
                   assert (model'.model_handshake.hs_keys.ks_client_application_traffic == None);
-                  assert (model'.model_record.record_write.R.epoch == R.Application)
+                  assert (model'.model_record.record_write.R.epoch == R.Application);
+                  assert (server_application_record_write_epoch_link model');
+                  // establishes the HsServerFinishedSent write-material match clause:
+                  // the server application write material is installed into record_write.
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                          Some install.install_material);
+                  assert (traffic_material_matches_record_direction
+                            install.install_material
+                            model'.model_record.record_write)
                 | TrafficApplication, TrafficRead ->
                   assert (stage == HsClientFinishedReceived);
                   assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
@@ -2871,7 +3016,8 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             (match model.model_control with
              | ControlHandshaking HsServerEncryptedFlightSent ->
                assert (no_application_traffic_keys model.model_handshake.hs_keys);
-               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+               assert (model'.model_record.record_write.R.epoch =!= R.Application)
              | _ ->
                assert False)
           | LocalVerifyClientFinished _ ->
@@ -2923,11 +3069,17 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
           | M.TlsHandshake (M.CertificateVerify _), CL.Sent,
             ControlHandshaking HsServerEncryptedFlightSent ->
             assert (no_application_traffic_keys model.model_handshake.hs_keys);
-            assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+            assert (no_application_traffic_keys model'.model_handshake.hs_keys);
+            // These arms either leave record_write untouched (received ClientHello)
+            // or advance it by `next_seq` (server handshake sends), both of which
+            // PRESERVE the write epoch; the strengthened pre-shape gives it off
+            // Application, so it stays off Application.
+            assert (model'.model_record.record_write.R.epoch =!= R.Application)
           | M.TlsHandshake (M.Finished _), CL.Sent,
             ControlHandshaking HsServerEncryptedFlightSent ->
             assert (no_application_traffic_keys model.model_handshake.hs_keys);
             assert (model'.model_handshake.hs_keys.ks_client_application_traffic == None);
+            assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None);
             assert (server_application_record_write_epoch_link model')
           | M.TlsHandshake (M.Finished _), CL.Received,
             ControlHandshaking HsServerFinishedSent ->
@@ -2943,27 +3095,62 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             assert (model'.model_record.record_read.R.epoch == R.Application);
             assert (server_application_record_read_epoch_link model');
             assert (server_application_record_write_epoch_link model');
-            assert (server_application_record_epoch_link model')
+            assert (server_application_record_epoch_link model');
+            // keys-installed at ControlApplicationData: the server READ material
+            // (client application traffic) is installed into record_read here; the server
+            // WRITE material (server application traffic) is carried unchanged from the
+            // HsServerFinishedSent shape and is forced present by the strengthened
+            // CF-receive legality (Some? ks_server_application_traffic).
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+            assert (Some? model.model_handshake.hs_keys.ks_server_application_traffic);
+            (match model'.model_handshake.hs_keys.ks_client_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read));
+            (match model.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some wm ->
+               assert (traffic_material_matches_record_direction wm model.model_record.record_write);
+               assert (traffic_material_matches_record_direction wm model'.model_record.record_write));
+            assert (application_record_keys_installed_for_role ServerEndpoint model')
           | M.TlsApplicationData bytes, CL.Sent, ControlApplicationData ->
             assert (server_application_record_epoch_link model);
             lemma_advance_direction_records_preserves_epoch
               model.model_record.record_write
               (S.application_data_record_count bytes);
-            assert (server_application_record_epoch_link model')
+            lemma_advance_direction_records_preserves_key_iv
+              model.model_record.record_write
+              (S.application_data_record_count bytes);
+            assert (server_application_record_epoch_link model');
+            assert (application_record_keys_installed_for_role ServerEndpoint model')
           | M.TlsApplicationData _, CL.Received, ControlApplicationData ->
             assert (server_application_record_epoch_link model);
             assert (model'.model_record.record_write ==
                     model.model_record.record_write);
             assert (model'.model_record.record_read.R.epoch ==
                     (R.next_seq model.model_record.record_read).R.epoch);
-            assert (server_application_record_epoch_link model')
+            assert (server_application_record_epoch_link model');
+            assert (application_record_keys_installed_for_role ServerEndpoint model')
           | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData ->
             assert (server_application_record_epoch_link model);
             assert (model'.model_record.record_read ==
                     model.model_record.record_read);
             assert (model'.model_record.record_write.R.epoch ==
                     (R.next_seq model.model_record.record_write).R.epoch);
-            assert (server_application_record_epoch_link model')
+            assert (server_application_record_epoch_link model');
+            // strengthened Closing arm (server mirror): keys-installed carried
+            // from the CAD pre-state; record_read unchanged, record_write only
+            // bumps seq (next_seq preserves key/iv).
+            assert (application_record_keys_installed_for_role ServerEndpoint model);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+            (match model.model_handshake.hs_keys.ks_client_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read));
+            (match model.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some wm ->
+               assert (traffic_material_matches_record_direction wm model.model_record.record_write);
+               assert (traffic_material_matches_record_direction wm model'.model_record.record_write));
+            assert (application_record_keys_installed_for_role ServerEndpoint model')
           | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
           | M.TlsAlert T.Close_notify, CL.Received, ControlClosing ->
             assert (server_application_record_epoch_link model);
@@ -2971,7 +3158,21 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                     model.model_record.record_write);
             assert (model'.model_record.record_read.R.epoch ==
                     (R.next_seq model.model_record.record_read).R.epoch);
-            assert (server_application_record_epoch_link model')
+            assert (server_application_record_epoch_link model');
+            // strengthened Closed arm (server mirror): keys-installed carried from
+            // the pre-state (CAD arm, or the strengthened Closing arm); record_write
+            // unchanged, record_read only bumps seq (next_seq preserves key/iv).
+            assert (application_record_keys_installed_for_role ServerEndpoint model);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+            assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+            (match model.model_handshake.hs_keys.ks_client_application_traffic with
+             | Some rm ->
+               assert (traffic_material_matches_record_direction rm model.model_record.record_read);
+               assert (traffic_material_matches_record_direction rm model'.model_record.record_read));
+            (match model.model_handshake.hs_keys.ks_server_application_traffic with
+             | Some wm ->
+               assert (traffic_material_matches_record_direction wm model'.model_record.record_write));
+            assert (application_record_keys_installed_for_role ServerEndpoint model')
           | M.TlsAlert _, _, _ ->
             ()
           | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
@@ -3086,6 +3287,110 @@ let lemma_connection_application_ready_record_epochs_installed
     assert (st.cs_model.model_record.record_read.R.epoch == R.Application);
     assert (st.cs_model.model_record.record_write.R.epoch == R.Application)
 
+(** Sub-goal (a) BRIDGE: at any reachable (consistent) endpoint sitting at
+    `ControlApplicationData`, the strengthened application-record-epoch reachable
+    shape yields the full both-direction key installation for the endpoint's own
+    role.  This is the missing ingredient over `client_e2e`/`server_e2e` needed to
+    conclude `client_driver_application_ready`/`server_driver_application_ready`.
+    The shape itself is established here purely from reachability (RTC closure over
+    single steps from the initial state), so NO new `tls_system_inv` conjunct is
+    required — the existing `connection_state_consistent` conjunct suffices. **)
+let lemma_connection_appdata_keys_installed_for_role
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData)
+      (ensures application_record_keys_installed_for_role role st.cs_model)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role role in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    role
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    role;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  match role with
+  | ClientEndpoint ->
+    assert (client_application_record_epoch_reachable_shape st.cs_model)
+  | ServerEndpoint ->
+    assert (server_application_record_epoch_reachable_shape st.cs_model)
+
+(** Graceful-close analogue of [lemma_connection_application_ready_record_epochs_installed].
+    At any reachable (consistent) endpoint sitting at `ControlClosing` or
+    `ControlClosed`, BOTH record directions are at the `Application` epoch.  The
+    strengthened Closing/Closed reachable-shape arm carries the both-direction key
+    installation (inherited from the CAD pre-state through Close_notify's seq-only
+    `next_seq` bump), and the epoch link then pins both epochs to `Application`.
+    This is what excludes the graceful-close controls from a `Handshake?`-epoch
+    guard: a consistent endpoint at a Handshake read/write epoch is necessarily
+    NOT in `{Closing, Closed}` (nor `ControlApplicationData`).  Established purely
+    from reachability, so NO new `tls_system_inv` conjunct is required. **)
+let lemma_connection_closing_closed_record_epochs_installed
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        (ControlClosing? st.cs_model.model_control \/
+         ControlClosed? st.cs_model.model_control))
+      (ensures application_record_epochs_installed_for_role role st.cs_model)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role role in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    role
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    role;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  match role with
+  | ClientEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (client_application_record_epoch_reachable_shape st.cs_model);
+    assert (application_record_keys_installed_for_role ClientEndpoint st.cs_model);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_server_application_traffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_client_application_traffic);
+    assert (client_application_record_epoch_link st.cs_model);
+    assert (st.cs_model.model_record.record_read.R.epoch == R.Application);
+    assert (st.cs_model.model_record.record_write.R.epoch == R.Application)
+  | ServerEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (server_application_record_epoch_reachable_shape st.cs_model);
+    assert (application_record_keys_installed_for_role ServerEndpoint st.cs_model);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_client_application_traffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_server_application_traffic);
+    assert (server_application_record_epoch_link st.cs_model);
+    assert (st.cs_model.model_record.record_read.R.epoch == R.Application);
+    assert (st.cs_model.model_record.record_write.R.epoch == R.Application)
+
+
 (** Model-Fix-1 corollary: a reachable SERVER endpoint at `HsServerFinishedSent`
     has NOT yet installed the client application (read) traffic secret — that
     install is legal only at `HsClientFinishedReceived` (or is performed atomically
@@ -3123,6 +3428,393 @@ let lemma_server_finished_sent_no_client_application_traffic
   assert (connection_state_evolves (initial st.cs_model.model_config) st);
   assert (p st);
   assert (server_application_record_epoch_reachable_shape st.cs_model)
+
+(** STAGE (b): a reachable CLIENT endpoint at `HsServerFinishedVerified` has not
+    yet installed its application WRITE key — record_write is still at the
+    Handshake epoch.  The client's application write key is installed only by the
+    Finished send (`install_client_application_write_after_finished`), which moves
+    control to `ControlApplicationData`; the legal local (TrafficApplication,
+    TrafficWrite) install is a no-op on record_write for a client
+    (`install_record_keys`, StateMachine.fst:399).  Hence app_wseq is 0 at the
+    Finished send, which is what makes the application record-seq pairing hold
+    across that step. **)
+let lemma_client_finished_verified_write_epoch_not_application
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ClientEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (client_application_record_epoch_reachable_shape st.cs_model)
+
+(** STAGE (b), message-keyed form: whenever a reachable CLIENT endpoint legally
+    *sends* a handshake message, its record_write is still at the Handshake epoch
+    (not Application).  This packages the two client Sent-handshake sites uniformly:
+    by `legal_handshake_message` (StateMachine.fst:1300) the only `CL.Sent` arms
+    with `config_role == ClientEndpoint` are `ClientHello @ HsStarted` and
+    `Finished @ HsServerFinishedVerified` — every other Sent arm requires
+    `ServerEndpoint` or falls through to `False`.  Both of those stages sit in the
+    strengthened `client_application_record_epoch_reachable_shape`, which pins
+    record_write off the Application epoch throughout the client handshake.  This
+    is the guard the application record-seq delta lemma needs at a client send. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_client_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ClientEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ClientEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (client_application_record_epoch_reachable_shape st.cs_model);
+  // Client handshaking stages: the strengthened shape gives record_write off the
+  // Application epoch directly.  Everything else is unreachable for a legal client
+  // Sent handshake (legal_handshake_message has no ClientEndpoint Sent arm there).
+  match st.cs_model.model_control with
+  | ControlHandshaking HsStarted
+  | ControlHandshaking HsClientHelloSent
+  | ControlHandshaking HsServerHelloReceived
+  | ControlHandshaking HsEncryptedExtensionsReceived
+  | ControlHandshaking HsCertificateReceived
+  | ControlHandshaking HsCertificateValidated
+  | ControlHandshaking HsCertificateVerifyReceived
+  | ControlHandshaking HsCertificateVerifyVerified
+  | ControlHandshaking HsServerFinishedReceived
+  | ControlHandshaking HsServerFinishedVerified -> ()
+  | _ ->
+    assert False
+#pop-options
+
+(** STAGE (b), server mirror of the message-keyed extraction: any legal SERVER
+    *send* of a handshake message happens with record_write off the Application
+    epoch.  The only server Sent-handshake sites are ServerHello @
+    HsClientHelloReceived, EncryptedExtensions @ HsServerHelloSent, and
+    Certificate/CertificateVerify/Finished @ HsServerEncryptedFlightSent — all in
+    the strengthened grouped arm of `server_application_record_epoch_reachable_shape`,
+    which pins record_write off Application throughout the server's sending
+    stages (the server app write key installs only later, at HsServerFinishedSent). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_server_handshake_send_write_epoch_not_application
+  (st st':connection_state)
+  (hm:M.handshake_msg)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        legal_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) /\
+        step_tls_message st.cs_model CL.Sent (M.TlsHandshake hm) == Some st'.cs_model)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role ServerEndpoint in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    ServerEndpoint
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    ServerEndpoint;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert (server_application_record_epoch_reachable_shape st.cs_model);
+  match st.cs_model.model_control with
+  | ControlNew
+  | ControlHandshaking HsAwaitingClientHello
+  | ControlHandshaking HsClientHelloReceived
+  | ControlHandshaking HsServerHelloSent
+  | ControlHandshaking HsServerEncryptedFlightSent -> ()
+  | _ ->
+    assert False
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    STAGE (b), READ side — the handshaking read-seq shape.
+
+    During the handshake the epoch-collapsing READ projection is 0.  This is the
+    read-side analogue of the write strengthening above and is what the LOCAL
+    families need: the only local events that touch `record_read` are key
+    installs, which `R.install_keys` resets to seq 0 (checked the EFFECT function,
+    Record.Spec.fst:25) — so the post-install projection is 0, and this shape
+    supplies that the PRE-install projection was 0 too, giving preservation.
+
+    The shape is STRONG (`record_read.epoch =!= Application`) at every handshaking
+    stage EXCEPT the two where the app-read key is already installed while control
+    is still handshaking: the client's `HsServerFinishedVerified` (app-read key
+    installed atomically on receiving the server Finished, StateMachine.fst:753)
+    and the server's `HsClientFinishedReceived` (app-read installable by the
+    role-keyed local install, legality StateMachine.fst:1181).  There the epoch may
+    be `Application` but `record_read.seq` is still 0 — no application record can be
+    received before `ControlApplicationData`, and every `R.next_seq`-on-read arm of
+    `step_handshake_message` (StateMachine.fst:693/703/724) runs at read epoch
+    `Handshake`, never `Application` (verified against the effect functions). **)
+let handshaking_read_epoch_shape (model:connection_model) : prop =
+  match model.model_control with
+  | ControlHandshaking HsServerFinishedVerified
+  | ControlHandshaking HsClientFinishedReceived ->
+    model.model_record.record_read.R.epoch =!= R.Application \/
+    model.model_record.record_read.R.seq == 0
+  | ControlNew
+  | ControlHandshaking _ ->
+    model.model_record.record_read.R.epoch =!= R.Application
+  | _ -> True
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_step_model_handshaking_read_epoch_shape
+  (model:connection_model) (ev:conn_event) (model':connection_model)
+  : Lemma
+      (requires
+        handshaking_read_epoch_shape model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures handshaking_read_epoch_shape model')
+  = ()
+#pop-options
+
+let conn_handshaking_read_epoch_shape (st:connection_state) : prop =
+  handshaking_read_epoch_shape st.cs_model
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_handshaking_read_epoch_shape (st0 st1:connection_state)
+  : Lemma
+      (requires
+        conn_handshaking_read_epoch_shape st0 /\ connection_state_single_step st0 st1)
+      (ensures conn_handshaking_read_epoch_shape st1)
+  = assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    lemma_step_model_handshaking_read_epoch_shape
+      st0.cs_model delta.delta_event st1.cs_model
+#pop-options
+
+let lemma_single_step_handshaking_read_epoch_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (conn_handshaking_read_epoch_shape y); (connection_state_single_step x y)}
+          conn_handshaking_read_epoch_shape x /\ connection_state_single_step x y ==>
+          conn_handshaking_read_epoch_shape y)
+  = introduce forall x y.
+      conn_handshaking_read_epoch_shape x /\ connection_state_single_step x y ==>
+      conn_handshaking_read_epoch_shape y
+    with introduce _ ==> _ with _.
+      lemma_delta_handshaking_read_epoch_shape x y
+
+let lemma_initial_handshaking_read_epoch_shape (cfg:connection_config)
+  : Lemma (ensures conn_handshaking_read_epoch_shape (initial cfg))
+  = ()
+
+(** STAGE (b), READ side, consumed form: at any reachable handshaking state the
+    epoch-collapsing read projection is 0 (`record_read` is off the Application
+    epoch, or its seq is still 0).  This is the pre-state fact the LOCAL-family
+    `app_seq_pairing` preservation needs to rule out an install RESETTING an
+    already-advanced application read seq. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshaking_read_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_read.R.seq == 0)
+  = lemma_initial_handshaking_read_epoch_shape st.cs_model.model_config;
+    lemma_single_step_handshaking_read_epoch_shape ();
+    let p = conn_handshaking_read_epoch_shape in
+    let stable :
+      squash (forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure connection_state_single_step p stable;
+    assert (p (initial st.cs_model.model_config));
+    assert (connection_state_evolves (initial st.cs_model.model_config) st);
+    assert (p st)
+#pop-options
+
+(** STAGE (b), READ side, STRONG form: at any reachable handshaking state OTHER
+    than client `HsServerFinishedVerified` / server `HsClientFinishedReceived`, the
+    record read epoch is strictly off `Application`.  Same read-epoch reachable
+    shape as `lemma_handshaking_read_app_seq_zero`, but reading its strong
+    (non-`seq==0`) arm; used by the client delivery family to rule out a cleartext
+    `ServerHello`/`HelloRetryRequest` receive (legal only at `HsClientHelloSent`)
+    when the client's read epoch is `Application`.  See the `.fsti` for the full
+    rationale. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshaking_nonfinal_read_not_application (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control /\
+        st.cs_model.model_control =!= ControlHandshaking HsServerFinishedVerified /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientFinishedReceived)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch =!= R.Application)
+  = lemma_initial_handshaking_read_epoch_shape st.cs_model.model_config;
+    lemma_single_step_handshaking_read_epoch_shape ();
+    let p = conn_handshaking_read_epoch_shape in
+    let stable :
+      squash (forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure connection_state_single_step p stable;
+    assert (p (initial st.cs_model.model_config));
+    assert (connection_state_evolves (initial st.cs_model.model_config) st);
+    assert (p st)
+#pop-options
+
+(** STAGE (b), WRITE side.  Mirror of `handshaking_read_epoch_shape` for the
+    write projection.  The shape is STRONG (`record_write.epoch =!= Application`)
+    at every handshaking stage EXCEPT the two where an app-write key can already be
+    installed while control is still handshaking: the server's `HsServerFinishedSent`
+    (app-write key installed by `LocalInstallServerApplicationTrafficKeys`) and its
+    `HsClientFinishedReceived`.  There the epoch may be `Application` but
+    `record_write.seq` is still 0 — no application record is written before
+    `ControlApplicationData`, and every `R.next_seq`-on-write arm of
+    `step_handshake_message` runs at write epoch `Handshake`, never `Application`
+    (verified against the effect functions, not the legality predicates).  The
+    client side is subsumed: a client's only legal app-write install is a no-op on
+    `record_write` (`install_record_keys`'s `TrafficApplication, TrafficWrite`
+    arm), so a client stays off the Application write epoch at every handshaking
+    stage; the two weak-stage arms just do not fire for it. **)
+let handshaking_write_epoch_shape (model:connection_model) : prop =
+  match model.model_control with
+  | ControlHandshaking HsServerFinishedSent
+  | ControlHandshaking HsClientFinishedReceived ->
+    model.model_record.record_write.R.epoch =!= R.Application \/
+    model.model_record.record_write.R.seq == 0
+  | ControlNew
+  | ControlHandshaking _ ->
+    model.model_record.record_write.R.epoch =!= R.Application
+  | _ -> True
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_step_model_handshaking_write_epoch_shape
+  (model:connection_model) (ev:conn_event) (model':connection_model)
+  : Lemma
+      (requires
+        handshaking_write_epoch_shape model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures handshaking_write_epoch_shape model')
+  = ()
+#pop-options
+
+let conn_handshaking_write_epoch_shape (st:connection_state) : prop =
+  handshaking_write_epoch_shape st.cs_model
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_delta_handshaking_write_epoch_shape (st0 st1:connection_state)
+  : Lemma
+      (requires
+        conn_handshaking_write_epoch_shape st0 /\ connection_state_single_step st0 st1)
+      (ensures conn_handshaking_write_epoch_shape st1)
+  = assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    lemma_step_model_handshaking_write_epoch_shape
+      st0.cs_model delta.delta_event st1.cs_model
+#pop-options
+
+let lemma_single_step_handshaking_write_epoch_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (conn_handshaking_write_epoch_shape y); (connection_state_single_step x y)}
+          conn_handshaking_write_epoch_shape x /\ connection_state_single_step x y ==>
+          conn_handshaking_write_epoch_shape y)
+  = introduce forall x y.
+      conn_handshaking_write_epoch_shape x /\ connection_state_single_step x y ==>
+      conn_handshaking_write_epoch_shape y
+    with introduce _ ==> _ with _.
+      lemma_delta_handshaking_write_epoch_shape x y
+
+let lemma_initial_handshaking_write_epoch_shape (cfg:connection_config)
+  : Lemma (ensures conn_handshaking_write_epoch_shape (initial cfg))
+  = ()
+
+(** STAGE (b), WRITE side, consumed form: at any reachable handshaking state the
+    epoch-collapsing write projection is 0.  This is the pre-state fact the
+    LOCAL-family `app_seq_pairing` preservation needs to rule out an install
+    RESETTING an already-advanced application write seq. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshaking_write_app_seq_zero (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        ControlHandshaking? st.cs_model.model_control)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch =!= R.Application \/
+        st.cs_model.model_record.record_write.R.seq == 0)
+  = lemma_initial_handshaking_write_epoch_shape st.cs_model.model_config;
+    lemma_single_step_handshaking_write_epoch_shape ();
+    let p = conn_handshaking_write_epoch_shape in
+    let stable :
+      squash (forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+    RTC.stable_on_closure connection_state_single_step p stable;
+    assert (p (initial st.cs_model.model_config));
+    assert (connection_state_evolves (initial st.cs_model.model_config) st);
+    assert (p st)
+#pop-options
 
 let lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
@@ -5422,6 +6114,14 @@ let lemma_atomic_application_install_matches_expected
     Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key secret);
     Seq.lemma_eq_refl material.traffic_iv (K.derive_aead_iv secret)
 
+// Localized rlimit bump (10 -> 20) for this single lemma: enlarging the
+// application-record-epoch reachable-shape axiom (the added
+// `application_record_keys_installed_for_role` conjunct on the Closing/Closed
+// arms) shifts the module SMT context and tips this pre-existing rlimit-10 query
+// over the edge on its final slots-match conjunction.  All sub-facts are already
+// discharged as explicit intermediate assertions; this only funds the final
+// definition unfold.  Scoped to this lemma so the surrounding block stays at 10.
+#push-options "--z3rlimit 20"
 let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_match_expected_model
   (role:endpoint_role)
   (model0:connection_model)
@@ -5675,12 +6375,35 @@ let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_ma
          ClientTraffic
          model1
          model0.model_handshake.hs_transcript;
+       // Bridge the two per-slot facts explicitly to the goal.  (Restated over the
+       // same [state_of_model_for_first_epoch_application_material model1] so the
+       // final conjunction is a trivial AND of two in-context facts — keeps this
+       // rlimit-10 query robust against SMT-context shifts elsewhere in the module.)
+       let st1 = state_of_model_for_first_epoch_application_material model1 in
+       // [traffic_material_for_label _ TrafficApplication ServerTraffic] reduces to
+       // [ks_server_application_traffic]; state the equality so the preserved-lemma
+       // ensures transports onto the goal's guard without relying on Z3 unfolding.
+       assert_norm (traffic_material_for_label
+                      model1.model_handshake.hs_keys
+                      TrafficApplication
+                      ServerTraffic ==
+                    model1.model_handshake.hs_keys.ks_server_application_traffic);
+       assert (traffic_material_matches_expected_derived_material
+                 (traffic_id TrafficApplication ClientTraffic) st1);
+       assert (Some? model1.model_handshake.hs_keys.ks_server_application_traffic ==>
+               traffic_material_matches_expected_derived_material
+                 (traffic_id TrafficApplication ServerTraffic) st1);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_client_application_traffic ==
+               model1.model_handshake.hs_keys.ks_client_application_traffic);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_server_application_traffic ==
+               model1.model_handshake.hs_keys.ks_server_application_traffic);
        assert (first_epoch_application_traffic_material_slots_match_expected_model
          model1)
      | _, _, _ ->
        lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
          model0
          model1)
+#pop-options
 
 let lemma_step_model_preserves_first_epoch_application_traffic_material_replay_invariant_for_role
   (role:endpoint_role)
@@ -10708,3 +11431,1299 @@ let lemma_legal_connection_delta_consistent
   assert (connection_state_evolves st0 st1);
   assert (connection_state_evolves (initial st0.cs_model.model_config) st0);
   assert (connection_state_evolves (initial st0.cs_model.model_config) st1)
+
+(* ================================================================== *)
+(* NON-READY x25519 key-share PROJECTION from consistency + presence.  *)
+(*                                                                     *)
+(* Given [connection_state_consistent] and [Some? ks_shared_secret]    *)
+(* (the latter supplied non-ready by the CANONICAL-shape presence      *)
+(* bricks), the model-level x25519 reachable shape yields the full     *)
+(* stable per-endpoint projection.  These are the consistency-side     *)
+(* ingredient of the non-ready cross-endpoint HANDSHAKE agreement      *)
+(* producer.  The server form excludes the two non-stable arms of      *)
+(* [server_x25519_reachable_shape] ([HsClientHelloReceived], where the *)
+(* shape gives only the pre-ServerHello projection, and [ControlFailed] *)
+(* where it degrades to a disjunction); at [HsServerFinishedSent] — the *)
+(* only server control a client-Finished send's consumer needs — both  *)
+(* exclusions hold and the stable projection follows.                  *)
+(* ================================================================== *)
+let lemma_consistent_shared_secret_stable_client_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures stable_client_x25519_key_share_projection st)
+  = lemma_connection_state_consistent_client_x25519_reachable_shape st
+
+let lemma_consistent_shared_secret_stable_server_x25519_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret /\
+        st.cs_model.model_control =!= ControlHandshaking HsClientHelloReceived /\
+        ~(ControlFailed? st.cs_model.model_control))
+      (ensures stable_server_x25519_key_share_projection st)
+  = lemma_connection_state_consistent_server_x25519_reachable_shape st
+
+(* ================================================================== *)
+(* NON-READY handshake-epoch material bridge (Brick 3).               *)
+(*                                                                     *)
+(* Part 1: consistency -> record-keys consistency.  [stable_on_closure] *)
+(* over the reachable closure, using the already-exposed initial and   *)
+(* delta record-keys ingredients.  The stable predicate tracks the     *)
+(* config role (preserved by every step).                              *)
+(* ================================================================== *)
+let record_keys_consistent_config_role_shape (st:connection_state) : prop =
+  connection_state_record_keys_consistent_for_role
+    st.cs_model.model_config.config_role
+    st
+
+let lemma_delta_record_keys_consistent_config_role_shape
+  (st0 st1:connection_state)
+  : Lemma
+      (requires
+        record_keys_consistent_config_role_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures record_keys_consistent_config_role_shape st1)
+=
+  eliminate exists delta. legal_connection_delta st0 delta st1
+  returns record_keys_consistent_config_role_shape st1
+  with _.
+    (lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+     assert (st1.cs_model.model_config == st0.cs_model.model_config);
+     lemma_legal_connection_delta_record_keys_consistent_for_role
+       st0.cs_model.model_config.config_role st0 delta st1)
+
+let lemma_single_step_record_keys_consistent_config_role_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (record_keys_consistent_config_role_shape y);
+                    (connection_state_single_step x y)}
+          record_keys_consistent_config_role_shape x /\
+          connection_state_single_step x y ==>
+          record_keys_consistent_config_role_shape y)
+=
+  introduce forall (x:connection_state) (y:connection_state).
+    record_keys_consistent_config_role_shape x /\
+    connection_state_single_step x y ==>
+    record_keys_consistent_config_role_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_delta_record_keys_consistent_config_role_shape x y
+
+let lemma_initial_record_keys_consistent_config_role_shape (cfg:connection_config)
+  : Lemma (ensures record_keys_consistent_config_role_shape (initial cfg))
+=
+  lemma_initial_record_keys_consistent_for_role cfg.config_role cfg
+
+let lemma_connection_state_consistent_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        connection_state_record_keys_consistent_for_role
+          st.cs_model.model_config.config_role
+          st)
+=
+  lemma_initial_record_keys_consistent_config_role_shape st.cs_model.model_config;
+  lemma_single_step_record_keys_consistent_config_role_shape ();
+  let p = record_keys_consistent_config_role_shape in
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure connection_state_single_step p stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+
+(* ================================================================== *)
+(* Part 2: handshake-epoch material producer.  HANDSHAKE mirror of     *)
+(* [lemma_application_record_direction_material_matches_key_schedule_for_role]. *)
+(* From [model_record_keys_consistent_for_role role model] (past the   *)
+(* [ControlFailed] guard) and a [Handshake]-epoch record direction, the *)
+(* [R.Handshake] arm of [record_keys_match_key_schedule_for_role]       *)
+(* delivers [traffic_material_matches_record_direction material st]     *)
+(* (= [st.key == Some material.traffic_key /\ st.static_iv == Some ..]);*)
+(* the [Seq.equal] bridge to [record_key_iv_material_agrees] is the     *)
+(* SAME one proved in the application producer.  No vacuity clause on   *)
+(* the handshake arm, so no installed-helper detour is needed.          *)
+(* ================================================================== *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_handshake_record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : Lemma
+      (requires
+        model_record_keys_consistent_for_role role model /\
+        ~(ControlFailed? model.model_control) /\
+        (record_direction_for_endpoint role dir model).R.epoch == R.Handshake)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          role
+          dir
+          (traffic_id TrafficHandshake (traffic_label_for_endpoint_direction role dir))
+          model)
+=
+  let keys = model.model_handshake.hs_keys in
+  match role, dir with
+  | ClientEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ClientEndpoint TrafficWrite model.model_control keys model.model_record.record_write);
+    (match
+      traffic_material_for_label keys TrafficHandshake ClientTraffic,
+      record_direction_material model.model_record.record_write
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_write);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ClientEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ClientEndpoint TrafficRead model.model_control keys model.model_record.record_read);
+    (match
+      traffic_material_for_label keys TrafficHandshake ServerTraffic,
+      record_direction_material model.model_record.record_read
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_read);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ServerEndpoint, TrafficRead ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ServerEndpoint TrafficRead model.model_control keys model.model_record.record_read);
+    (match
+      traffic_material_for_label keys TrafficHandshake ClientTraffic,
+      record_direction_material model.model_record.record_read
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_read);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+  | ServerEndpoint, TrafficWrite ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (record_keys_match_key_schedule_for_role
+      ServerEndpoint TrafficWrite model.model_control keys model.model_record.record_write);
+    (match
+      traffic_material_for_label keys TrafficHandshake ServerTraffic,
+      record_direction_material model.model_record.record_write
+     with
+     | Some material, Some record_material ->
+       assert (traffic_material_matches_record_direction material model.model_record.record_write);
+       assert (Seq.equal material.traffic_key record_material.record_material_key);
+       assert (Seq.equal material.traffic_iv record_material.record_material_iv)
+     | _, _ ->
+       assert False)
+#pop-options
+
+(* ================================================================== *)
+(* Brick 3.5: handshake-epoch analogue of                              *)
+(* [first_epoch_application_traffic_material_slots_match_expected].     *)
+(*                                                                      *)
+(* Establishes, from [connection_state_consistent] alone, that each     *)
+(* installed handshake traffic slot's material equals the expected      *)
+(* material derived from the (frozen) TH_SH checkpoint.  This is the     *)
+(* "missing, not circular" GAP feeding                                  *)
+(* [lemma_key_schedule_traffic_record_material_agrees_from_expected]     *)
+(* for the handshake epoch (the application analogue already exists).    *)
+(*                                                                      *)
+(* Structure MIRRORS the application machinery (stage-shape +           *)
+(* checkpoint-ready + slots-match, closed by [stable_on_closure]) but   *)
+(* is lighter: the TH_SH checkpoint is [serialize CH ++ serialize SH]   *)
+(* read from the STORED hellos (Correspondence.fst:53), hence frozen    *)
+(* from HsServerHelloReceived onward, so there is no key-update and no   *)
+(* late-checkpoint-drift; and no raw-event-replay is needed because     *)
+(* every ingredient is model-only.  The install control is pinned by    *)
+(* [traffic_install_allowed_at_stage] to exactly                        *)
+(* HsServerHelloReceived / HsServerHelloSent, where the EXISTING        *)
+(* checkpoint-ready table already carries [TH_SH == live transcript],   *)
+(* so install-legality (which uses the live [Tr.hash hs_transcript])    *)
+(* coincides with the checkpoint form used by                           *)
+(* [traffic_material_matches_expected_derived_material].                 *)
+(*                                                                      *)
+(* Both handshake traffic slots (ClientTraffic and ServerTraffic) are   *)
+(* covered: ClientTraffic is what the client-Finished flip needs, and   *)
+(* ServerTraffic is the mirror obligation for the reverse-direction     *)
+(* flip (StateMachine.fst:738, client read -> Application on receiving   *)
+(* the server Finished).  The induction is uniform in the label, so     *)
+(* both come for essentially the same cost.                             *)
+(* ================================================================== *)
+
+(* Stage-shape companion: handshake traffic slots are None before both  *)
+(* CH and SH are present, i.e. before the ServerHello control.  This is  *)
+(* what discharges the "slot None \/ checkpoint stable" disjunction at   *)
+(* the (only) CH/SH-appending steps that move the TH_SH checkpoint.      *)
+let handshake_traffic_key_slot_stage_shape_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  let keys = model.model_handshake.hs_keys in
+  match role, model.model_control with
+  | ClientEndpoint, ControlNew
+  | ClientEndpoint, ControlHandshaking HsStarted
+  | ClientEndpoint, ControlHandshaking HsClientHelloSent
+  | ServerEndpoint, ControlNew
+  | ServerEndpoint, ControlHandshaking HsAwaitingClientHello
+  | ServerEndpoint, ControlHandshaking HsClientHelloReceived ->
+    keys.ks_client_handshake_traffic == None /\
+    keys.ks_server_handshake_traffic == None
+  | _, _ ->
+    True
+
+// Localized hardening for this whole-match `()` preservation VC: the enlarged
+// application-record-epoch shape axiom shifts the module SMT context and tips this
+// pre-existing single-VC proof over its budget.  `--split_queries always` solves it
+// per step-arm (each cheap), which is robust to context shift.
+#push-options "--split_queries always --z3rlimit 40"
+let lemma_step_model_preserves_handshake_traffic_key_slot_stage_shape_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model.model_config.config_role == role /\
+        handshake_traffic_key_slot_stage_shape_for_role role model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures
+        handshake_traffic_key_slot_stage_shape_for_role role model')
+=
+  ()
+#pop-options
+
+(* Companion: a present handshake secret implies a present shared secret. *)
+(* [derive_shared_secret_model] (StateMachine.fst:470) sets both slots     *)
+(* atomically and no other step writes [ks_handshake_secret], so this is   *)
+(* preserved trivially.  It is what forces the handshake traffic slots to  *)
+(* be absent at a [LocalDeriveSharedSecret] step (whose legality pins      *)
+(* [ks_shared_secret == None]), the one non-install local event that moves *)
+(* [ks_handshake_secret] and hence escapes the stage-shape / checkpoint    *)
+(* discharge used for every other event.                                   *)
+let handshake_secret_requires_shared_secret
+  (model:connection_model)
+  : prop =
+  Some? model.model_handshake.hs_keys.ks_handshake_secret ==>
+  Some? model.model_handshake.hs_keys.ks_shared_secret
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_step_model_preserves_handshake_secret_requires_shared_secret
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        handshake_secret_requires_shared_secret model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures
+        handshake_secret_requires_shared_secret model')
+=
+  match ev with
+  | ConnNetworkEvent _ -> ()
+  | ConnProtectedHandshake _ -> ()
+  | ConnLocalEvent _ -> ()
+#pop-options
+
+let first_epoch_handshake_traffic_material_slots_match_expected_model
+  (model:connection_model)
+  : prop =
+  first_epoch_handshake_traffic_material_slots_match_expected
+    (state_of_model_for_first_epoch_application_material model)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+
+(* H1: single-label preservation when the slot, the handshake secret,   *)
+(* and the TH_SH checkpoint are all unchanged.  Mirrors                 *)
+(* [lemma_application_traffic_label_match_expected_preserved].           *)
+let lemma_handshake_traffic_label_match_expected_preserved
+  (label:traffic_label)
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficHandshake label)
+          (state_of_model_for_first_epoch_application_material model0) /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficHandshake
+          label ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          label /\
+        model1.model_handshake.hs_keys.ks_handshake_secret ==
+        model0.model_handshake.hs_keys.ks_handshake_secret /\
+        transcript_checkpoint_bytes TH_SH model1.model_handshake ==
+        transcript_checkpoint_bytes TH_SH model0.model_handshake)
+      (ensures
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficHandshake label)
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  let st0 = state_of_model_for_first_epoch_application_material model0 in
+  let st1 = state_of_model_for_first_epoch_application_material model1 in
+  assert_norm (key_checkpoint_for_epoch TrafficHandshake == DeriveHandshakeTraffic);
+  assert_norm (key_derivation_checkpoint_transcript DeriveHandshakeTraffic == Some TH_SH);
+  assert
+    (expected_traffic_secret_for_state
+      (traffic_id TrafficHandshake label)
+      st1 ==
+     expected_traffic_secret_for_state
+      (traffic_id TrafficHandshake label)
+      st0);
+  assert
+    (expected_derived_key_material
+      (TrafficKey (traffic_id TrafficHandshake label))
+      st1 ==
+     expected_derived_key_material
+      (TrafficKey (traffic_id TrafficHandshake label))
+      st0);
+  assert
+    (expected_derived_key_material
+      (TrafficIV (traffic_id TrafficHandshake label))
+      st1 ==
+     expected_derived_key_material
+      (TrafficIV (traffic_id TrafficHandshake label))
+      st0)
+
+(* H2: guarded single-label preservation (the slot may be absent, in    *)
+(* which case the conclusion is vacuous).  Mirrors                      *)
+(* [..._application_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable]. *)
+let lemma_first_epoch_handshake_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable
+  (label:traffic_label)
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model0 /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficHandshake
+          label ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          label /\
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          label == None \/
+         (model1.model_handshake.hs_keys.ks_handshake_secret ==
+          model0.model_handshake.hs_keys.ks_handshake_secret /\
+          transcript_checkpoint_bytes TH_SH model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SH model0.model_handshake)))
+      (ensures
+        Some?
+          (traffic_material_for_label
+            model1.model_handshake.hs_keys
+            TrafficHandshake
+            label) ==>
+        traffic_material_matches_expected_derived_material
+          (traffic_id TrafficHandshake label)
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  if Some?
+      (traffic_material_for_label
+        model1.model_handshake.hs_keys
+        TrafficHandshake
+        label)
+  then begin
+    assert
+      (Some?
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          label));
+    match
+      traffic_material_for_label
+        model0.model_handshake.hs_keys
+        TrafficHandshake
+        label
+    with
+    | None ->
+      assert False
+    | Some _ ->
+      (match label with
+       | ClientTraffic ->
+         assert
+           (traffic_material_matches_expected_derived_material
+             (traffic_id TrafficHandshake ClientTraffic)
+             (state_of_model_for_first_epoch_application_material model0))
+       | ServerTraffic ->
+         assert
+           (traffic_material_matches_expected_derived_material
+             (traffic_id TrafficHandshake ServerTraffic)
+             (state_of_model_for_first_epoch_application_material model0)));
+      assert
+        (model1.model_handshake.hs_keys.ks_handshake_secret ==
+         model0.model_handshake.hs_keys.ks_handshake_secret);
+      assert
+        (transcript_checkpoint_bytes TH_SH model1.model_handshake ==
+         transcript_checkpoint_bytes TH_SH model0.model_handshake);
+      lemma_handshake_traffic_label_match_expected_preserved
+        label
+        model0
+        model1
+  end
+
+(* H3: both-slot preservation.  Mirrors                                 *)
+(* [..._application_slots_preserved_when_slots_unchanged_or_checkpoint_stable]. *)
+let lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+  (model0:connection_model)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model0 /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficHandshake
+          ClientTraffic ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          ClientTraffic /\
+        traffic_material_for_label
+          model1.model_handshake.hs_keys
+          TrafficHandshake
+          ServerTraffic ==
+        traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          ServerTraffic /\
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          ClientTraffic == None \/
+         (model1.model_handshake.hs_keys.ks_handshake_secret ==
+          model0.model_handshake.hs_keys.ks_handshake_secret /\
+          transcript_checkpoint_bytes TH_SH model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SH model0.model_handshake)) /\
+        (traffic_material_for_label
+          model0.model_handshake.hs_keys
+          TrafficHandshake
+          ServerTraffic == None \/
+         (model1.model_handshake.hs_keys.ks_handshake_secret ==
+          model0.model_handshake.hs_keys.ks_handshake_secret /\
+          transcript_checkpoint_bytes TH_SH model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SH model0.model_handshake)))
+      (ensures
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model1)
+=
+  lemma_first_epoch_handshake_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable
+    ClientTraffic
+    model0
+    model1;
+  lemma_first_epoch_handshake_label_match_expected_preserved_when_slot_unchanged_or_checkpoint_stable
+    ServerTraffic
+    model0
+    model1
+
+(* Client-side checkpoint-ready eliminator at HsServerHelloReceived,     *)
+(* mirroring [lemma_server_hs_server_hello_sent_checkpoint_ready_elim].   *)
+let lemma_client_hs_server_hello_received_checkpoint_ready_elim
+  (model:connection_model)
+  : Lemma
+      (requires
+        application_traffic_install_checkpoint_ready_for_role
+          ClientEndpoint
+          model /\
+        model.model_control == ControlHandshaking HsServerHelloReceived)
+      (ensures
+        transcript_checkpoint_bytes TH_SH model.model_handshake ==
+        Some model.model_handshake.hs_transcript)
+=
+  match model.model_control with
+  | ControlHandshaking HsServerHelloReceived ->
+    ()
+  | _ ->
+    assert False
+
+(* H4: freshly-installed handshake slot matches the expected derived     *)
+(* material.  Mirrors                                                    *)
+(* [lemma_application_traffic_install_for_role_material_matches_expected].*)
+(* The install control is forced to HsServerHelloReceived (client) /     *)
+(* HsServerHelloSent (server) by [traffic_install_allowed_at_stage],     *)
+(* and at that control the checkpoint-ready table gives                 *)
+(* [transcript_checkpoint_bytes TH_SH hs0 == Some hs0.hs_transcript],    *)
+(* so the live-transcript install match equals the TH_SH-checkpoint one. *)
+let lemma_handshake_traffic_install_for_role_material_matches_expected
+  (role:endpoint_role)
+  (model0:connection_model)
+  (stage:handshake_stage)
+  (install:traffic_key_install)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_config.config_role == role /\
+        model0.model_control == ControlHandshaking stage /\
+        application_traffic_install_checkpoint_ready_for_role role model0 /\
+        traffic_install_allowed_at_stage_for_role role stage install /\
+        traffic_install_matches_key_schedule_for_role
+          role
+          model0.model_handshake
+          install /\
+        install.install_epoch == TrafficHandshake /\
+        model1.model_handshake ==
+          { model0.model_handshake with
+              hs_keys =
+                update_key_schedule_with_install_for_role
+                  role
+                  model0.model_handshake.hs_keys
+                  install })
+      (ensures
+        traffic_material_matches_expected_derived_material
+          (traffic_id
+            TrafficHandshake
+            (traffic_label_for_endpoint_direction
+              role
+              install.install_direction))
+          (state_of_model_for_first_epoch_application_material model1))
+=
+  let hs0 = model0.model_handshake in
+  let hs1 = model1.model_handshake in
+  assert_norm (key_checkpoint_for_epoch TrafficHandshake == DeriveHandshakeTraffic);
+  assert_norm (key_derivation_checkpoint_transcript DeriveHandshakeTraffic == Some TH_SH);
+  (match role with
+   | ClientEndpoint ->
+     assert (stage == HsServerHelloReceived);
+     lemma_client_hs_server_hello_received_checkpoint_ready_elim model0
+   | ServerEndpoint ->
+     assert (stage == HsServerHelloSent);
+     lemma_server_hs_server_hello_sent_checkpoint_ready_elim model0);
+  assert (transcript_checkpoint_bytes TH_SH hs0 == Some hs0.hs_transcript);
+  assert (transcript_checkpoint_bytes TH_SH hs1 == Some hs0.hs_transcript);
+  (match role, install.install_direction with
+   | ClientEndpoint, TrafficWrite ->
+     assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite ==
+                  ClientTraffic)
+   | ClientEndpoint, TrafficRead ->
+     assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead ==
+                  ServerTraffic)
+   | ServerEndpoint, TrafficWrite ->
+     assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite ==
+                  ServerTraffic)
+   | ServerEndpoint, TrafficRead ->
+     assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead ==
+                  ClientTraffic));
+  match
+    expected_traffic_secret_for_role
+      role
+      hs0
+      install.install_epoch
+      install.install_direction
+  with
+  | Some secret ->
+    assert (install.install_material == traffic_key_material_for_secret secret);
+    assert (install.install_material.traffic_key == K.derive_aead_key secret);
+    assert (install.install_material.traffic_iv == K.derive_aead_iv secret);
+    Seq.lemma_eq_refl
+      install.install_material.traffic_key
+      (K.derive_aead_key secret);
+    Seq.lemma_eq_refl
+      install.install_material.traffic_iv
+      (K.derive_aead_iv secret)
+  | None ->
+    assert False
+
+(* H5: a handshake install preserves BOTH slots-match conjuncts: the     *)
+(* installed slot via H4, the other slot via H1 (guarded on presence).   *)
+let lemma_first_epoch_handshake_slots_preserved_on_handshake_install
+  (role:endpoint_role)
+  (model0:connection_model)
+  (stage:handshake_stage)
+  (install:traffic_key_install)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_config.config_role == role /\
+        model0.model_control == ControlHandshaking stage /\
+        application_traffic_install_checkpoint_ready_for_role role model0 /\
+        traffic_install_allowed_at_stage_for_role role stage install /\
+        traffic_install_matches_key_schedule_for_role
+          role
+          model0.model_handshake
+          install /\
+        install.install_epoch == TrafficHandshake /\
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model0 /\
+        model1.model_handshake ==
+          { model0.model_handshake with
+              hs_keys =
+                update_key_schedule_with_install_for_role
+                  role
+                  model0.model_handshake.hs_keys
+                  install })
+      (ensures
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model1)
+=
+  let inst_label =
+    traffic_label_for_endpoint_direction role install.install_direction in
+  lemma_handshake_traffic_install_for_role_material_matches_expected
+    role model0 stage install model1;
+  (* installed slot matches; now the OTHER slot is untouched (the install  *)
+  (* writes exactly one traffic slot), and the handshake secret + TH_SH    *)
+  (* checkpoint are unchanged (install only rewrites one hs_keys field).   *)
+  assert (model1.model_handshake.hs_keys.ks_handshake_secret ==
+          model0.model_handshake.hs_keys.ks_handshake_secret);
+  assert (transcript_checkpoint_bytes TH_SH model1.model_handshake ==
+          transcript_checkpoint_bytes TH_SH model0.model_handshake);
+  (match inst_label with
+   | ClientTraffic ->
+     assert (traffic_material_for_label
+       model1.model_handshake.hs_keys TrafficHandshake ServerTraffic ==
+             traffic_material_for_label
+       model0.model_handshake.hs_keys TrafficHandshake ServerTraffic);
+     if Some?
+          (traffic_material_for_label
+            model0.model_handshake.hs_keys TrafficHandshake ServerTraffic)
+     then
+       lemma_handshake_traffic_label_match_expected_preserved
+         ServerTraffic model0 model1
+   | ServerTraffic ->
+     assert (traffic_material_for_label
+       model1.model_handshake.hs_keys TrafficHandshake ClientTraffic ==
+             traffic_material_for_label
+       model0.model_handshake.hs_keys TrafficHandshake ClientTraffic);
+     if Some?
+          (traffic_material_for_label
+            model0.model_handshake.hs_keys TrafficHandshake ClientTraffic)
+     then
+       lemma_handshake_traffic_label_match_expected_preserved
+         ClientTraffic model0 model1);
+  assert (first_epoch_handshake_traffic_material_slots_match_expected_model
+    model1)
+
+(* H6: model-step preservation of the slots-match invariant.            *)
+let lemma_step_model_preserves_first_epoch_handshake_traffic_material_slots_match_expected_model
+  (role:endpoint_role)
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model0.model_config.config_role == role /\
+        handshake_traffic_key_slot_stage_shape_for_role role model0 /\
+        handshake_secret_requires_shared_secret model0 /\
+        application_traffic_install_checkpoint_ready_for_role role model0 /\
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model0 /\
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1)
+      (ensures
+        first_epoch_handshake_traffic_material_slots_match_expected_model
+          model1)
+=
+  let hs0 = model0.model_handshake in
+  lemma_step_model_preserves_handshake_traffic_key_slot_stage_shape_for_role
+    role model0 ev model1;
+  lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_role
+    role model0 ev model1;
+  match ev with
+  | ConnLocalEvent local ->
+    (match local, model0.model_control with
+     | LocalInstallTrafficKeys install, ControlHandshaking stage ->
+       assert (role == ClientEndpoint);
+       (match install.install_epoch with
+        | TrafficHandshake ->
+          lemma_expected_traffic_secret_client_projection
+            hs0 install.install_epoch install.install_direction;
+          lemma_update_key_schedule_with_install_client_projection
+            hs0.hs_keys install;
+          assert (model1.model_handshake ==
+            { hs0 with
+                hs_keys =
+                  update_key_schedule_with_install_for_role
+                    ClientEndpoint
+                    hs0.hs_keys
+                    install });
+          lemma_first_epoch_handshake_slots_preserved_on_handshake_install
+            ClientEndpoint model0 stage install model1
+        | TrafficApplication ->
+          lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+            model0 model1)
+     | LocalInstallTrafficKeysForRole role_install, ControlHandshaking stage ->
+       let install = role_install.install_payload in
+       assert (role_install.install_role == role);
+       (match install.install_epoch with
+        | TrafficHandshake ->
+          assert (model1.model_handshake ==
+            { hs0 with
+                hs_keys =
+                  update_key_schedule_with_install_for_role
+                    role
+                    hs0.hs_keys
+                    install });
+          lemma_first_epoch_handshake_slots_preserved_on_handshake_install
+            role model0 stage install model1
+        | TrafficApplication ->
+          lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+            model0 model1)
+     | LocalDeriveSharedSecret _, _ ->
+       (* The one non-install local step that moves [ks_handshake_secret]. *)
+       (* Its legality pins [ks_shared_secret == None]; the companion then  *)
+       (* forces [ks_handshake_secret == None], so a Some handshake slot    *)
+       (* would give a None expected material, contradicting the IH match.  *)
+       (* Hence both slots are absent, and they are untouched by the derive.*)
+       assert (model0.model_handshake.hs_keys.ks_shared_secret == None);
+       assert (model0.model_handshake.hs_keys.ks_handshake_secret == None);
+       assert (model0.model_handshake.hs_keys.ks_client_handshake_traffic == None);
+       assert (model0.model_handshake.hs_keys.ks_server_handshake_traffic == None);
+       lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+         model0 model1
+     | _, _ ->
+       lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+         model0 model1)
+  | ConnNetworkEvent msg ->
+    lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+      model0 model1
+  | ConnProtectedHandshake step ->
+    (* A protected-handshake step is a RECEIVED handshake message step, so it
+       is covered by exactly the same reasoning as the `ConnNetworkEvent` arm:
+       no `step_handshake_message` arm writes a first-epoch handshake traffic
+       slot, `ks_handshake_secret`, or the `TH_SH` checkpoint.  The extra
+       post-processing rewrites only `model_record` and
+       `model_handshake.hs_buffers`, neither of which the slot/checkpoint
+       predicates read. *)
+    lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+      model0 model1
+
+#pop-options
+
+(* ------------------------------------------------------------------ *)
+(* Closure: [connection_state_consistent] -> handshake slots-match.    *)
+(* Model-only [stable_on_closure], reusing the Brick-3-Part-1 pattern. *)
+(* ------------------------------------------------------------------ *)
+let handshake_slots_match_shape (st:connection_state) : prop =
+  handshake_traffic_key_slot_stage_shape_for_role
+    st.cs_model.model_config.config_role st.cs_model /\
+  handshake_secret_requires_shared_secret st.cs_model /\
+  application_traffic_install_checkpoint_ready_for_role
+    st.cs_model.model_config.config_role st.cs_model /\
+  first_epoch_handshake_traffic_material_slots_match_expected_model
+    st.cs_model
+
+let lemma_delta_handshake_slots_match_shape
+  (st0 st1:connection_state)
+  : Lemma
+      (requires
+        handshake_slots_match_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures handshake_slots_match_shape st1)
+=
+  eliminate exists delta. legal_connection_delta st0 delta st1
+  returns handshake_slots_match_shape st1
+  with _.
+    (let role = st0.cs_model.model_config.config_role in
+     lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+     assert (st1.cs_model.model_config == st0.cs_model.model_config);
+     lemma_step_model_preserves_handshake_traffic_key_slot_stage_shape_for_role
+       role st0.cs_model delta.delta_event st1.cs_model;
+     lemma_step_model_preserves_handshake_secret_requires_shared_secret
+       st0.cs_model delta.delta_event st1.cs_model;
+     lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_role
+       role st0.cs_model delta.delta_event st1.cs_model;
+     lemma_step_model_preserves_first_epoch_handshake_traffic_material_slots_match_expected_model
+       role st0.cs_model delta.delta_event st1.cs_model)
+
+let lemma_single_step_handshake_slots_match_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (handshake_slots_match_shape y);
+                    (connection_state_single_step x y)}
+          handshake_slots_match_shape x /\
+          connection_state_single_step x y ==>
+          handshake_slots_match_shape y)
+=
+  introduce forall (x:connection_state) (y:connection_state).
+    handshake_slots_match_shape x /\
+    connection_state_single_step x y ==>
+    handshake_slots_match_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_delta_handshake_slots_match_shape x y
+
+let lemma_initial_handshake_slots_match_shape (cfg:connection_config)
+  : Lemma (ensures handshake_slots_match_shape (initial cfg))
+=
+  ()
+
+let lemma_connection_state_consistent_first_epoch_handshake_traffic_material_slots_match_expected
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_consistent st)
+      (ensures
+        first_epoch_handshake_traffic_material_slots_match_expected st)
+=
+  lemma_initial_handshake_slots_match_shape st.cs_model.model_config;
+  lemma_single_step_handshake_slots_match_shape ();
+  let p = handshake_slots_match_shape in
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure connection_state_single_step p stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  assert
+    (first_epoch_handshake_traffic_material_slots_match_expected_model
+      st.cs_model);
+  assert
+    (first_epoch_handshake_traffic_material_slots_match_expected
+      (state_of_model_for_first_epoch_application_material st.cs_model));
+  assert
+    (first_epoch_handshake_traffic_material_slots_match_expected st)
+
+(* ------------------------------------------------------------------------ *)
+(* Brick 3.6 : positive record-epoch lemmas.                                 *)
+(*                                                                           *)
+(* From bare consistency plus a RECORD-LEVEL key-presence hypothesis         *)
+(* [Some? record_direction.R.key], derive [record_direction.R.epoch ==       *)
+(* R.Handshake] at the client-Finished send/delivery control points.  The    *)
+(* record-level hypothesis excludes [R.Initial] DIRECTLY: consistency's      *)
+(* [record_keys_match_key_schedule_for_role] Initial arm forces              *)
+(* [R.key == None], contradicting [Some?].  [R.Application] is excluded by    *)
+(* the committed negative-epoch lemmas.  Three arms exhausted -> Handshake.   *)
+(* Record-level (not key-schedule-slot) hypothesis is deliberate: it is      *)
+(* exactly what the discharge sites supply (seal at send / open_record at    *)
+(* delivery both yield [record.key == Some]) and it avoids any reachable-     *)
+(* shape induction -- the key-schedule Initial arm says nothing about the     *)
+(* slot, so a slot-level hypothesis would NOT exclude Initial without one.    *)
+(* ------------------------------------------------------------------------ *)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_client_finished_verified_write_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedVerified /\
+        Some? st.cs_model.model_record.record_write.R.key)
+      (ensures
+        st.cs_model.model_record.record_write.R.epoch == R.Handshake)
+=
+  let m = st.cs_model in
+  lemma_connection_state_consistent_record_keys_consistent_for_config_role st;
+  lemma_client_finished_verified_write_epoch_not_application st;
+  let keys = m.model_handshake.hs_keys in
+  let rw = m.model_record.record_write in
+  assert (model_record_keys_consistent_for_role ClientEndpoint m);
+  assert (record_keys_match_key_schedule_for_role
+            ClientEndpoint TrafficWrite m.model_control keys rw);
+  assert (rw.R.epoch =!= R.Application);
+  match rw.R.epoch with
+  | R.Handshake -> ()
+  | R.Application -> ()
+  | R.Initial -> assert (rw.R.key == None)
+
+let lemma_server_finished_sent_read_epoch_handshake
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlHandshaking HsServerFinishedSent /\
+        Some? st.cs_model.model_record.record_read.R.key)
+      (ensures
+        st.cs_model.model_record.record_read.R.epoch == R.Handshake)
+=
+  let m = st.cs_model in
+  lemma_connection_state_consistent_record_keys_consistent_for_config_role st;
+  lemma_handshaking_nonfinal_read_not_application st;
+  let keys = m.model_handshake.hs_keys in
+  let rr = m.model_record.record_read in
+  assert (model_record_keys_consistent_for_role ServerEndpoint m);
+  assert (record_keys_match_key_schedule_for_role
+            ServerEndpoint TrafficRead m.model_control keys rr);
+  assert (rr.R.epoch =!= R.Application);
+  match rr.R.epoch with
+  | R.Handshake -> ()
+  | R.Application -> ()
+  | R.Initial -> assert (rr.R.key == None)
+#pop-options
+
+(* ------------------------------------------------------------------------ *)
+(* Brick 3.7 : NON-READY key-schedule lineage producer.                      *)
+(*                                                                           *)
+(* Exposes [connection_supported_profile_key_schedule_lineage] from bare     *)
+(* consistency plus [Some? ks_shared_secret].  The committed interface only  *)
+(* exposes the app-keys-GATED producer [lemma_connection_application_keys_   *)
+(* supported_profile_key_schedule_lineage] (:102), whose precondition        *)
+(* [application_record_keys_installed_for_role] is NOT available at the       *)
+(* client-Finished send.  This producer routes instead through the INTERNAL  *)
+(* reachable-shape lemma (:1171): its [supported_profile_base_lineage_or_    *)
+(* empty] conjunct has only all-None / all-Some / False arms, so a present    *)
+(* shared secret collapses it to the all-Some arm -- master included --        *)
+(* whence [lemma_supported_profile_base_lineage_or_empty_to_lineage] gives    *)
+(* the full lineage.  No readiness, no app-keys gate.                         *)
+(* ------------------------------------------------------------------------ *)
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_connection_state_consistent_shared_secret_supported_profile_key_schedule_lineage
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        connection_supported_profile_key_schedule_lineage st)
+=
+  lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape st;
+  let keys = st.cs_model.model_handshake.hs_keys in
+  assert (supported_profile_base_lineage_or_empty keys);
+  match
+    keys.ks_shared_secret,
+    keys.ks_early_secret,
+    keys.ks_handshake_secret,
+    keys.ks_master_secret
+  with
+  | Some _, Some _, Some _, Some _ ->
+    lemma_supported_profile_base_lineage_or_empty_to_lineage keys
+  | _ -> assert False
+#pop-options
+
+(* Gate 2a: a present handshake-traffic slot forces the shared secret.  From    *)
+(* [traffic_material_slots_have_base_secret] (slot ⟹ handshake_secret) and       *)
+(* [supported_profile_base_lineage_or_empty] (all-four None or all-four Some),   *)
+(* a [Some? ks_handshake_secret] excludes the all-None arm, so [ks_shared_secret] *)
+(* is [Some].  Control-independent (reachable shape from bare consistency), hence  *)
+(* usable at [ControlFailed]. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_consistent_client_handshake_traffic_slot_shared_secret
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic)
+      (ensures Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+=
+  lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape st;
+  let keys = st.cs_model.model_handshake.hs_keys in
+  assert (traffic_material_slots_have_base_secret keys);
+  assert (Some? keys.ks_handshake_secret);
+  assert (supported_profile_base_lineage_or_empty keys)
+#pop-options
+
+(* Gate-2a slimming: the [Some? ks_shared_secret] branch of                    *)
+(* [server_x25519_reachable_shape], surfaced directly in terms of the (public) *)
+(* Correspondence projections.  This is the one already-proven consequence the *)
+(* ServerHelloSelectionLink module needs at a possibly-[ControlFailed] server,  *)
+(* so that module no longer re-derives the x25519 reachable-shape machinery.     *)
+(* Control-independent; the [ControlFailed] arm is the genuine disjunction       *)
+(* (pre-ServerHello vs key-share projection). *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_consistent_server_x25519_shared_secret_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        Some? st.cs_model.model_handshake.hs_keys.ks_shared_secret)
+      (ensures
+        (match st.cs_model.model_control with
+         | ControlHandshaking HsClientHelloReceived ->
+           server_x25519_pre_server_hello_projection st
+         | ControlFailed _ ->
+           server_x25519_pre_server_hello_projection st \/
+           server_x25519_key_share_projection st
+         | _ ->
+           stable_server_x25519_key_share_projection st))
+=
+  lemma_connection_state_consistent_server_x25519_reachable_shape st
+#pop-options
+
+(* ================================================================== *)
+(* PHASE 1A : PERSISTENCE of the CLIENT handshake READ record<->slot   *)
+(* material link across ControlFailed.                                 *)
+(*                                                                     *)
+(* [model_record_keys_consistent_for_role] is VACUOUS at ControlFailed *)
+(* ([ControlFailed -> True] arm), so the record<->slot link is not      *)
+(* derivable from bare consistency at a failed client.  But the link   *)
+(* is CONTROL-FREE (reads only [model_record] + [hs_keys]) and BOTH     *)
+(* are frozen by [fail_model], so it PERSISTS: established at the live  *)
+(* install/handshake control (existing consistency producer) and       *)
+(* transferred verbatim across the fail step.  We prove it as a         *)
+(* reachable-shape [stable_on_closure], embedding the (already stable)  *)
+(* [record_keys_consistent_config_role_shape] so the NON-failed re-      *)
+(* derivation has consistency available and the FAILED transfer reads    *)
+(* the (control-ungated) link from the pre-state.                       *)
+(* ================================================================== *)
+
+let client_hs_read_slot_link (model:connection_model) : prop =
+  record_direction_material_matches_key_schedule_for_role
+    ClientEndpoint TrafficRead
+    (traffic_id TrafficHandshake ServerTraffic)
+    model
+
+let client_hs_read_link_shape (st:connection_state) : prop =
+  record_keys_consistent_config_role_shape st /\
+  ( (st.cs_model.model_config.config_role == ClientEndpoint /\
+     R.Handshake? st.cs_model.model_record.record_read.R.epoch) ==>
+    client_hs_read_slot_link st.cs_model )
+
+(* A legal step whose RESULT lands at [ControlFailed] preserves           *)
+(* [model_record] and the key schedule (fail is a pure control/failure    *)
+(* field update; [fail_model] at StateMachine.fst:303).                   *)
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+let lemma_step_failed_result_preserves_record_keys
+  (m m':connection_model) (ce:conn_event)
+  : Lemma
+      (requires
+        legal_event m ce /\ step_model m ce == Some m' /\
+        ControlFailed? m'.model_control)
+      (ensures
+        m'.model_record == m.model_record /\
+        m'.model_handshake.hs_keys == m.model_handshake.hs_keys)
+  = ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_delta_client_hs_read_link_shape
+  (st0 st1:connection_state)
+  : Lemma
+      (requires
+        client_hs_read_link_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures client_hs_read_link_shape st1)
+=
+  eliminate exists delta. legal_connection_delta st0 delta st1
+  returns client_hs_read_link_shape st1
+  with _.
+  (
+    lemma_delta_record_keys_consistent_config_role_shape st0 st1;
+    lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    introduce
+      (st1.cs_model.model_config.config_role == ClientEndpoint /\
+       R.Handshake? st1.cs_model.model_record.record_read.R.epoch)
+      ==> client_hs_read_slot_link st1.cs_model
+    with _hyp.
+    (
+      if ControlFailed? st1.cs_model.model_control then
+      (
+        lemma_step_failed_result_preserves_record_keys
+          st0.cs_model st1.cs_model delta.delta_event;
+        assert (st1.cs_model.model_record == st0.cs_model.model_record);
+        assert (st1.cs_model.model_handshake.hs_keys ==
+                  st0.cs_model.model_handshake.hs_keys);
+        assert (R.Handshake? st0.cs_model.model_record.record_read.R.epoch);
+        assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+        assert (client_hs_read_slot_link st0.cs_model)
+      )
+      else
+      (
+        assert (record_keys_consistent_config_role_shape st1);
+        assert (model_record_keys_consistent_for_role
+                  st1.cs_model.model_config.config_role st1.cs_model);
+        assert (model_record_keys_consistent_for_role ClientEndpoint st1.cs_model);
+        lemma_handshake_record_direction_material_matches_key_schedule_for_role
+          ClientEndpoint TrafficRead st1.cs_model;
+        assert_norm
+          (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic)
+      )
+    )
+  )
+#pop-options
+
+let lemma_single_step_client_hs_read_link_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (client_hs_read_link_shape y);
+                    (connection_state_single_step x y)}
+          client_hs_read_link_shape x /\
+          connection_state_single_step x y ==>
+          client_hs_read_link_shape y)
+=
+  introduce forall (x:connection_state) (y:connection_state).
+    client_hs_read_link_shape x /\
+    connection_state_single_step x y ==>
+    client_hs_read_link_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_delta_client_hs_read_link_shape x y
+
+let lemma_initial_client_hs_read_link_shape (cfg:connection_config)
+  : Lemma (ensures client_hs_read_link_shape (initial cfg))
+=
+  lemma_initial_record_keys_consistent_config_role_shape cfg
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_client_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ClientEndpoint TrafficRead
+          (traffic_id TrafficHandshake ServerTraffic)
+          st.cs_model)
+=
+  lemma_initial_client_hs_read_link_shape st.cs_model.model_config;
+  lemma_single_step_client_hs_read_link_shape ();
+  let p = client_hs_read_link_shape in
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure connection_state_single_step p stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+#pop-options
+
+(* ================================================================== *)
+(* PHASE 1A MIRROR : PERSISTENCE of the SERVER handshake READ          *)
+(* record<->slot material link across ControlFailed.                   *)
+(*                                                                     *)
+(* Exact mirror of [lemma_client_hs_read_slot_link_persist], for the   *)
+(* SERVER's handshake READ direction (label [ClientTraffic]).  Same     *)
+(* justification: [model_record_keys_consistent_for_role] is VACUOUS at *)
+(* [ControlFailed], but the link is CONTROL-FREE (reads only            *)
+(* [model_record] + [hs_keys]) and both are frozen by [fail_model], so  *)
+(* it PERSISTS across the fail step.                                    *)
+(*                                                                     *)
+(* This is what lets the client->server faithful-decode bridge          *)
+(* ([hs_channel_seal_ok]'s ToServer arm) fire at a FAILED server        *)
+(* reader, exactly as the client-side lemma does for a failed client.   *)
+(* ================================================================== *)
+
+let server_hs_read_slot_link (model:connection_model) : prop =
+  record_direction_material_matches_key_schedule_for_role
+    ServerEndpoint TrafficRead
+    (traffic_id TrafficHandshake ClientTraffic)
+    model
+
+let server_hs_read_link_shape (st:connection_state) : prop =
+  record_keys_consistent_config_role_shape st /\
+  ( (st.cs_model.model_config.config_role == ServerEndpoint /\
+     R.Handshake? st.cs_model.model_record.record_read.R.epoch) ==>
+    server_hs_read_slot_link st.cs_model )
+
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_delta_server_hs_read_link_shape
+  (st0 st1:connection_state)
+  : Lemma
+      (requires
+        server_hs_read_link_shape st0 /\
+        connection_state_single_step st0 st1)
+      (ensures server_hs_read_link_shape st1)
+=
+  eliminate exists delta. legal_connection_delta st0 delta st1
+  returns server_hs_read_link_shape st1
+  with _.
+  (
+    lemma_delta_record_keys_consistent_config_role_shape st0 st1;
+    lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+    assert (st1.cs_model.model_config == st0.cs_model.model_config);
+    introduce
+      (st1.cs_model.model_config.config_role == ServerEndpoint /\
+       R.Handshake? st1.cs_model.model_record.record_read.R.epoch)
+      ==> server_hs_read_slot_link st1.cs_model
+    with _hyp.
+    (
+      if ControlFailed? st1.cs_model.model_control then
+      (
+        lemma_step_failed_result_preserves_record_keys
+          st0.cs_model st1.cs_model delta.delta_event;
+        assert (st1.cs_model.model_record == st0.cs_model.model_record);
+        assert (st1.cs_model.model_handshake.hs_keys ==
+                  st0.cs_model.model_handshake.hs_keys);
+        assert (R.Handshake? st0.cs_model.model_record.record_read.R.epoch);
+        assert (st0.cs_model.model_config.config_role == ServerEndpoint);
+        assert (server_hs_read_slot_link st0.cs_model)
+      )
+      else
+      (
+        assert (record_keys_consistent_config_role_shape st1);
+        assert (model_record_keys_consistent_for_role
+                  st1.cs_model.model_config.config_role st1.cs_model);
+        assert (model_record_keys_consistent_for_role ServerEndpoint st1.cs_model);
+        lemma_handshake_record_direction_material_matches_key_schedule_for_role
+          ServerEndpoint TrafficRead st1.cs_model;
+        assert_norm
+          (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic)
+      )
+    )
+  )
+#pop-options
+
+let lemma_single_step_server_hs_read_link_shape (_:unit)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern (server_hs_read_link_shape y);
+                    (connection_state_single_step x y)}
+          server_hs_read_link_shape x /\
+          connection_state_single_step x y ==>
+          server_hs_read_link_shape y)
+=
+  introduce forall (x:connection_state) (y:connection_state).
+    server_hs_read_link_shape x /\
+    connection_state_single_step x y ==>
+    server_hs_read_link_shape y
+  with
+    introduce _ ==> _ with _.
+    lemma_delta_server_hs_read_link_shape x y
+
+let lemma_initial_server_hs_read_link_shape (cfg:connection_config)
+  : Lemma (ensures server_hs_read_link_shape (initial cfg))
+=
+  lemma_initial_record_keys_consistent_config_role_shape cfg
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 20"
+let lemma_server_hs_read_slot_link_persist
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        R.Handshake? st.cs_model.model_record.record_read.R.epoch)
+      (ensures
+        record_direction_material_matches_key_schedule_for_role
+          ServerEndpoint TrafficRead
+          (traffic_id TrafficHandshake ClientTraffic)
+          st.cs_model)
+=
+  lemma_initial_server_hs_read_link_shape st.cs_model.model_config;
+  lemma_single_step_server_hs_read_link_shape ();
+  let p = server_hs_read_link_shape in
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure connection_state_single_step p stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st)
+#pop-options
