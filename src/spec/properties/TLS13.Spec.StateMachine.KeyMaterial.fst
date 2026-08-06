@@ -779,6 +779,70 @@ let first_epoch_application_traffic_material_no_key_update_invariant
   connection_state_no_key_update_trace st /\
   first_epoch_application_traffic_material_slots_match_expected st
 
+(**
+  The two rules a step lemma needs to move an epoch-indexed slot across a
+  transition.  A step that leaves a slot and its expected epoch-0 secret alone
+  leaves its epoch alone; a step that rotates the slot advances its epoch by
+  one.  Together they cover every transition, because `step_model` either
+  rewrites an application traffic slot with `updated_traffic_key_material` (on
+  a KeyUpdate) or leaves it untouched.
+ **)
+let lemma_traffic_material_matches_expected_at_count_transfer
+  (traffic_id:labeled_traffic_epoch)
+  (st0:connection_state)
+  (st1:connection_state)
+  (n:nat)
+  : Lemma
+      (requires
+        traffic_material_matches_expected_at_count traffic_id st0 n /\
+        traffic_material_for_label
+          st1.cs_model.model_handshake.hs_keys
+          traffic_id.traffic_id_epoch
+          traffic_id.traffic_id_label ==
+        traffic_material_for_label
+          st0.cs_model.model_handshake.hs_keys
+          traffic_id.traffic_id_epoch
+          traffic_id.traffic_id_label /\
+        expected_traffic_secret_for_state traffic_id st1 ==
+        expected_traffic_secret_for_state traffic_id st0)
+      (ensures traffic_material_matches_expected_at_count traffic_id st1 n)
+= ()
+
+let lemma_traffic_material_matches_expected_at_count_rotate
+  (traffic_id:labeled_traffic_epoch)
+  (st0:connection_state)
+  (st1:connection_state)
+  (n:nat)
+  : Lemma
+      (requires
+        traffic_material_matches_expected_at_count traffic_id st0 n /\
+        expected_traffic_secret_for_state traffic_id st1 ==
+        expected_traffic_secret_for_state traffic_id st0 /\
+        (match
+           traffic_material_for_label
+             st0.cs_model.model_handshake.hs_keys
+             traffic_id.traffic_id_epoch
+             traffic_id.traffic_id_label,
+           traffic_material_for_label
+             st1.cs_model.model_handshake.hs_keys
+             traffic_id.traffic_id_epoch
+             traffic_id.traffic_id_label
+         with
+         | Some m0, Some m1 -> m1 == updated_traffic_key_material m0
+         | _, _ -> False))
+      (ensures traffic_material_matches_expected_at_count traffic_id st1 (n + 1))
+=
+  match
+    traffic_material_for_label
+      st0.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    expected_traffic_secret_for_state traffic_id st0
+  with
+  | Some m0, Some secret ->
+    lemma_updated_traffic_key_material_advances_count secret n m0
+  | _, _ -> ()
+
 let base_secret_inputs_agree
   (base_id:base_secret_id)
   (client:connection_state)
