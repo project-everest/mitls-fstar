@@ -282,6 +282,63 @@ the pin moves, rebuild **and delete every `_cache`, `generated/*.checked` and
 `generated/.checked.stamp`** — the stamp in particular will otherwise convince
 make that the generated modules are still verified.
 
+## A missing build-graph edge is the same failure, one layer down
+
+The toolchain-drift bug above is an instance of a general shape: **a build step
+that is silently skipped looks exactly like a build step that had nothing to
+do.** It happened again in the Chromium overlay, and this time it reached as far
+as a shippable artefact.
+
+`third_party/atlas/BUILD.gn` linked the extracted engine the obvious way:
+
+```gn
+lib_dirs = [ "lib" ]
+libs = [ "atlas_tls13_client_engine" ]
+```
+
+GN turns a short `libs` entry into a bare `-l` flag and **does not create a
+dependency edge for it** — the name is a linker search term, not a file. So
+ninja never learned that `chrome` depends on `libatlas_tls13_client_engine.a`.
+Rebuilding and reinstalling the verified engine reported `ninja: no work to do`
+and left the previously linked browser untouched.
+
+The tell was a date, not an error. The installed archive was current; the
+`chrome` supposedly packaged with it was five days and twenty-one `src/impl`
+commits old, including a restructure of the drain loop. Every command in the
+chain had exited 0. `make chromium-demo-bundle` would have shipped a browser
+linked against a stale verified engine — the demo would have *worked*, and
+demonstrated the wrong code.
+
+The fix is to name the file where ninja is looking:
+
+```gn
+inputs = [ "lib/libatlas_tls13_client_engine.a" ]
+libs = [ rebase_path("lib/libatlas_tls13_client_engine.a", root_build_dir) ]
+```
+
+Two things generalise:
+
+- **`libs` is not a dependency in any build system that resolves it by search
+  path.** The same hole exists in Make (`-lfoo` in `LDFLAGS` is not a
+  prerequisite), CMake without an imported target, and Bazel `linkopts`. If a
+  build input is named by a search term rather than a path, assume it is
+  unwatched until proven otherwise.
+- **Test the edge, not the build.** A successful rebuild proves nothing, because
+  editing the build file forces work regardless. Touch *only* the dependency and
+  check that the dependent is rebuilt:
+
+  ```bash
+  touch third_party/atlas/lib/libatlas_tls13_client_engine.a
+  autoninja -C out/atlas chrome     # must do work, not "no work to do"
+  ```
+
+  Before the fix: no-op. After: 894 steps and a relinked `chrome`.
+
+Note also that `install_chromium_overlay.py` uses `shutil.copy2`, which
+*preserves* mtime. Copying a freshly built archive can therefore leave it
+looking older than the binary that consumed it — timestamps are evidence, but
+only once you know which tool set them.
+
 ## Pulse: an unmeasured `while` is divergent
 
 Pulse `while` loops now take an optional `decreases` measure, and the choice is
