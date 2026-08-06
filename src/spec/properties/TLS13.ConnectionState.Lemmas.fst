@@ -5069,7 +5069,15 @@ let lemma_application_traffic_install_for_role_material_matches_expected
             (traffic_label_for_endpoint_direction
               role
               install.install_direction))
-          (state_of_model_for_first_epoch_application_material model1))
+          (state_of_model_for_first_epoch_application_material model1) /\
+        traffic_material_matches_expected_at_count
+          (traffic_id
+            TrafficApplication
+            (traffic_label_for_endpoint_direction
+              role
+              install.install_direction))
+          (state_of_model_for_first_epoch_application_material model1)
+          0)
 =
   let hs0 = model0.model_handshake in
   let hs1 = model1.model_handshake in
@@ -5132,7 +5140,15 @@ let lemma_application_traffic_label_match_expected_preserved
       (ensures
         traffic_material_matches_expected_derived_material
           (traffic_id TrafficApplication label)
-          (state_of_model_for_first_epoch_application_material model1))
+          (state_of_model_for_first_epoch_application_material model1) /\
+        (traffic_material_matches_expected_at_count
+           (traffic_id TrafficApplication label)
+           (state_of_model_for_first_epoch_application_material model0)
+           0 ==>
+         traffic_material_matches_expected_at_count
+           (traffic_id TrafficApplication label)
+           (state_of_model_for_first_epoch_application_material model1)
+           0))
 =
   let st0 = state_of_model_for_first_epoch_application_material model0 in
   let st1 = state_of_model_for_first_epoch_application_material model1 in
@@ -5184,9 +5200,13 @@ let lemma_first_epoch_application_label_match_expected_preserved
             model1.model_handshake.hs_keys
             TrafficApplication
             label) ==>
-        traffic_material_matches_expected_derived_material
-          (traffic_id TrafficApplication label)
-          (state_of_model_for_first_epoch_application_material model1))
+        (traffic_material_matches_expected_derived_material
+           (traffic_id TrafficApplication label)
+           (state_of_model_for_first_epoch_application_material model1) /\
+         traffic_material_matches_expected_at_count
+           (traffic_id TrafficApplication label)
+           (state_of_model_for_first_epoch_application_material model1)
+           0))
 =
   match label with
   | ClientTraffic ->
@@ -5197,6 +5217,11 @@ let lemma_first_epoch_application_label_match_expected_preserved
         (traffic_material_matches_expected_derived_material
           (traffic_id TrafficApplication ClientTraffic)
           (state_of_model_for_first_epoch_application_material model0));
+      assert
+        (traffic_material_matches_expected_at_count
+          (traffic_id TrafficApplication ClientTraffic)
+          (state_of_model_for_first_epoch_application_material model0)
+          0);
       lemma_application_traffic_label_match_expected_preserved
         ClientTraffic
         model0
@@ -5210,6 +5235,11 @@ let lemma_first_epoch_application_label_match_expected_preserved
         (traffic_material_matches_expected_derived_material
           (traffic_id TrafficApplication ServerTraffic)
           (state_of_model_for_first_epoch_application_material model0));
+      assert
+        (traffic_material_matches_expected_at_count
+          (traffic_id TrafficApplication ServerTraffic)
+          (state_of_model_for_first_epoch_application_material model0)
+          0);
       lemma_application_traffic_label_match_expected_preserved
         ServerTraffic
         model0
@@ -5246,9 +5276,13 @@ let lemma_first_epoch_application_label_match_expected_preserved_when_slot_uncha
             model1.model_handshake.hs_keys
             TrafficApplication
             label) ==>
-        traffic_material_matches_expected_derived_material
-          (traffic_id TrafficApplication label)
-          (state_of_model_for_first_epoch_application_material model1))
+        (traffic_material_matches_expected_derived_material
+           (traffic_id TrafficApplication label)
+           (state_of_model_for_first_epoch_application_material model1) /\
+         traffic_material_matches_expected_at_count
+           (traffic_id TrafficApplication label)
+           (state_of_model_for_first_epoch_application_material model1)
+           0))
 =
   if Some?
       (traffic_material_for_label
@@ -5277,6 +5311,11 @@ let lemma_first_epoch_application_label_match_expected_preserved_when_slot_uncha
       assert
         (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
          transcript_checkpoint_bytes TH_SF model0.model_handshake);
+      assert
+        (traffic_material_matches_expected_at_count
+          (traffic_id TrafficApplication label)
+          (state_of_model_for_first_epoch_application_material model0)
+          0);
       lemma_application_traffic_label_match_expected_preserved
         label
         model0
@@ -5423,6 +5462,12 @@ let lemma_atomic_application_install_matches_expected
     Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key secret);
     Seq.lemma_eq_refl material.traffic_iv (K.derive_aead_iv secret)
 
+(* Strengthening the slot invariant with the stored-secret conjunct enlarges
+   this lemma's hypothesis, which pushes two of its sub-queries from a used
+   rlimit of ~9.5 to ~11.9 — just over the file default of 10.  Measured with
+   --query_stats; 20 is a little under 2x the observed peak. *)
+#restart-solver
+#push-options "--z3rlimit 20"
 let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_match_expected_model
   (role:endpoint_role)
   (model0:connection_model)
@@ -5683,6 +5728,7 @@ let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_ma
          model0
          model1)
 
+#pop-options
 let lemma_step_model_preserves_first_epoch_application_traffic_material_replay_invariant_for_role
   (role:endpoint_role)
   (model0:connection_model)

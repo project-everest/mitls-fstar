@@ -557,24 +557,6 @@ let supported_profile_application_traffic_material_matches_expected
     (traffic_id TrafficApplication ClientTraffic) st /\
   traffic_material_matches_expected_derived_material
     (traffic_id TrafficApplication ServerTraffic) st
-let first_epoch_application_traffic_material_slots_match_expected
-  (st:connection_state)
-  : prop =
-  (Some?
-    st.cs_model.model_handshake.hs_keys.ks_client_application_traffic ==>
-      traffic_material_matches_expected_derived_material
-        (traffic_id TrafficApplication ClientTraffic)
-        st) /\
-  (Some?
-    st.cs_model.model_handshake.hs_keys.ks_server_application_traffic ==>
-      traffic_material_matches_expected_derived_material
-        (traffic_id TrafficApplication ServerTraffic)
-        st)
-let first_epoch_application_traffic_material_no_key_update_invariant
-  (st:connection_state)
-  : prop =
-  connection_state_no_key_update_trace st /\
-  first_epoch_application_traffic_material_slots_match_expected st
 (**
   Rotation commutes with iteration: advancing `n+1` epochs is the same as
   updating the `n`-epoch secret once.  `application_traffic_secret_after`
@@ -758,6 +740,44 @@ let rec lemma_conn_events_no_key_update_count_zero
 = match events with
   | [] -> ()
   | _ :: rest -> lemma_conn_events_no_key_update_count_zero role rest l
+
+(**
+  The epoch-0 slot invariant.  The `_at_count ... 0` conjuncts are the
+  strengthening that makes this predicate *inductive across a KeyUpdate*: they
+  additionally pin the stored `traffic_secret`, which is what identifies the
+  material a rotation produces.  They subsume the
+  `traffic_material_matches_expected_derived_material` conjuncts, which are
+  retained because consumers unfold those directly.
+
+  It is stated after the count machinery only because it now mentions it; the
+  meaning at epoch 0 is unchanged apart from the added secret conjunct.
+ **)
+let first_epoch_application_traffic_material_slots_match_expected
+  (st:connection_state)
+  : prop =
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_client_application_traffic ==>
+      traffic_material_matches_expected_derived_material
+        (traffic_id TrafficApplication ClientTraffic)
+        st /\
+      traffic_material_matches_expected_at_count
+        (traffic_id TrafficApplication ClientTraffic)
+        st
+        0) /\
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_server_application_traffic ==>
+      traffic_material_matches_expected_derived_material
+        (traffic_id TrafficApplication ServerTraffic)
+        st /\
+      traffic_material_matches_expected_at_count
+        (traffic_id TrafficApplication ServerTraffic)
+        st
+        0)
+let first_epoch_application_traffic_material_no_key_update_invariant
+  (st:connection_state)
+  : prop =
+  connection_state_no_key_update_trace st /\
+  first_epoch_application_traffic_material_slots_match_expected st
 
 let base_secret_inputs_agree
   (base_id:base_secret_id)
