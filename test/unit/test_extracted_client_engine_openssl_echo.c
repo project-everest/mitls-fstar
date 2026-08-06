@@ -28,9 +28,15 @@ typedef struct engine_test_state_s {
   uint8_t application_out[TLS13_CLIENT_ENGINE_APPLICATION_OUT_CAPACITY];
   uint8_t received[64];
   size_t received_len;
-  bool sent_ping;
+  unsigned pings_sent;
+  unsigned pings_echoed;
   bool sent_close;
 } engine_test_state;
+
+/* Several echo round-trips, not one.  The echo server requests a KeyUpdate on
+   each record it receives, so round-trip i drives application traffic at
+   epoch i in both directions.  One round-trip only ever reaches epoch 1. */
+#define ECHO_ROUNDS 4u
 
 static int read_file(const char *path, uint8_t **out, size_t *out_len) {
   FILE *f = fopen(path, "rb");
@@ -367,7 +373,14 @@ static int drive_engine(engine_test_state *state) {
         }
         break;
       case TLS13_CLIENT_ENGINE_READY:
-        if (!state->sent_ping) {
+        if (state->received_len == sizeof ping &&
+            memcmp(state->received, ping, sizeof ping) == 0) {
+          state->pings_echoed += 1u;
+          state->received_len = 0u;
+          memset(state->received, 0, sizeof state->received);
+        }
+        if (state->pings_sent < ECHO_ROUNDS &&
+            state->pings_sent == state->pings_echoed) {
           int rc = tls13_client_engine_send_application_data(
               state->engine,
               ping,
@@ -378,13 +391,13 @@ static int drive_engine(engine_test_state *state) {
               sizeof state->application_out,
               &result);
           if (rc != TLS13_CLIENT_ENGINE_SUCCESS) {
-            fprintf(stderr, "application send failed: %d\n", rc);
+            fprintf(stderr, "application send failed in round %u: %d\n",
+                    state->pings_sent, rc);
             return 1;
           }
-          state->sent_ping = true;
+          state->pings_sent += 1u;
         } else if (!state->sent_close &&
-                   state->received_len == sizeof ping &&
-                   memcmp(state->received, ping, sizeof ping) == 0) {
+                   state->pings_echoed == ECHO_ROUNDS) {
           int rc = tls13_client_engine_send_close_notify(
               state->engine,
               state->network_out,
@@ -402,9 +415,7 @@ static int drive_engine(engine_test_state *state) {
         }
         break;
       case TLS13_CLIENT_ENGINE_CLOSED:
-        if (state->sent_ping && state->sent_close &&
-            state->received_len == sizeof ping &&
-            memcmp(state->received, ping, sizeof ping) == 0) {
+        if (state->sent_close && state->pings_echoed == ECHO_ROUNDS) {
           return 0;
         }
         fprintf(stderr, "TLS closed before the echo exchange completed\n");
