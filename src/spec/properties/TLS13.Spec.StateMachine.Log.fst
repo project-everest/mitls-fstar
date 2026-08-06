@@ -330,7 +330,10 @@ let projected_record_layer_step_for_role
                (S.application_data_record_count bytes) }
      | CL.Received, M.TlsKeyUpdate _ ->
        { record with projected_read = projected_install_keys R.Application }
-     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
+     | CL.Sent, M.TlsKeyUpdate _ ->
+       (* Both request forms rotate the sender's write key: a spontaneous
+          [update_requested] installs new Application write keys just as the
+          [update_not_requested] response does (RFC 8446 §4.6.3). *)
        { record with projected_write = projected_install_keys R.Application }
      | CL.Sent, M.TlsAlert T.Close_notify ->
        { record with projected_write = projected_next_seq record.projected_write }

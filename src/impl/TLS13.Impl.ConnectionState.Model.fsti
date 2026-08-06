@@ -2125,6 +2125,13 @@ let can_send_key_update
   (raw_sent:B.bytes)
   : GTot prop =
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  (* [step_tls_message] rotates the slot named by the *local role's* write
+     label, so the client-specific [ks_client_application_traffic] below is
+     the right slot only for a client.  The runtime guard
+     [can_send_key_update_runtime] already establishes this, and the receive
+     counterpart [lemma_received_key_update_state_evolves] carries the same
+     hypothesis. *)
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
   st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
   Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\

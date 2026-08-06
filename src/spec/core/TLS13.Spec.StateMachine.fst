@@ -830,6 +830,80 @@ let step_handshake_message
     Some (fail_model model T.HelloRetryRequestRejected)
   | _, _, _ ->
     None
+(** RFC 8446 §4.6.3.  A KeyUpdate rotates exactly one direction's application
+    traffic secret.  Which key-schedule slot that is depends on the endpoint's
+    role: [TrafficWrite] names our own sending secret, [TrafficRead] the peer's.
+    Sending a KeyUpdate rotates our write key; receiving one rotates our read
+    key.  Going through [traffic_label_for_endpoint_direction] rather than
+    naming [ks_client_application_traffic] / [ks_server_application_traffic]
+    directly is what makes this arm correct for a server as well as a client.
+
+    The [next_seq] is immaterial to the result — [R.install_keys] resets the
+    sequence number to zero, as §5.3 requires on a key change — but it is kept
+    so the shape matches the other record-advancing arms.
+
+    Marked [unfold] on purpose: downstream invariants routinely need to see
+    that rotation touches only [model_record] and [model_handshake.hs_keys]
+    (control state, config, transcript and application state are all
+    preserved).  Behind an ordinary [let] that fact costs an extra unfolding
+    in every such proof, which is enough to push several of the larger
+    reachability lemmas over their rlimit. *)
+unfold
+let rotate_application_traffic
+  (model:connection_model)
+  (tdir:traffic_direction)
+  : option connection_model =
+  let hs = model.model_handshake in
+  let label =
+    traffic_label_for_endpoint_direction model.model_config.config_role tdir in
+  match traffic_material_for_label hs.hs_keys TrafficApplication label with
+  | None -> None
+  | Some old ->
+    let updated = updated_traffic_key_material old in
+    let record =
+      match tdir with
+      | TrafficRead ->
+        { model.model_record with
+            record_read =
+              R.install_keys
+                (R.next_seq model.model_record.record_read)
+                R.Application
+                updated.traffic_key
+                updated.traffic_iv }
+      | TrafficWrite ->
+        { model.model_record with
+            record_write =
+              R.install_keys
+                (R.next_seq model.model_record.record_write)
+                R.Application
+                updated.traffic_key
+                updated.traffic_iv } in
+    Some {
+      model with
+        model_record = record;
+        model_handshake = {
+          hs with
+            hs_keys =
+              update_key_schedule_with_label
+                hs.hs_keys TrafficApplication label updated;
+        };
+    }
+
+(** Sending a KeyUpdate discharges a pending response obligation exactly when it
+    is the response form.  §4.6.3 requires the reply to a [update_requested] to
+    carry [update_not_requested]; a spontaneous [update_requested] therefore
+    leaves any outstanding obligation in place rather than silently clearing
+    it. *)
+let sent_key_update_response
+  (app:application_state)
+  (req:M.key_update_request)
+  : application_state =
+  match req with
+  | M.UpdateNotRequested ->
+    { app with app_key_update_response_pending = false }
+  | M.UpdateRequested ->
+    app
+
 let step_tls_message
   (model:connection_model)
   (dir:direction)
@@ -876,65 +950,32 @@ let step_tls_message
        }
      | CL.Sent -> None)
   | M.TlsKeyUpdate req, ControlApplicationData ->
-   (match dir, req with
-    | CL.Received, _ ->
-      (match hs.hs_keys.ks_server_application_traffic with
-       | Some old_server_app ->
-         let new_server_app = updated_traffic_key_material old_server_app in
+   (match dir with
+    | CL.Received ->
+      (* The peer rotated its sending key, so rotate our read key.  Only an
+         [update_requested] obliges us to answer (§4.6.3); answering an
+         [update_not_requested] would make the two endpoints ping-pong. *)
+      (match rotate_application_traffic model TrafficRead with
+       | Some model' ->
          Some {
-           model with
-             model_record = {
-               model.model_record with
-                 record_read =
-                   R.install_keys
-                     (R.next_seq model.model_record.record_read)
-                     R.Application
-                     new_server_app.traffic_key
-                     new_server_app.traffic_iv;
-             };
-             model_handshake = {
-               hs with
-                 hs_keys = {
-                   hs.hs_keys with
-                     ks_server_application_traffic = Some new_server_app;
-                 };
-             };
+           model' with
              model_application =
                received_key_update_pending model.model_application req;
          }
        | None -> None)
-    | CL.Sent, M.UpdateNotRequested ->
-      (match hs.hs_keys.ks_client_application_traffic with
-       | Some old_client_app ->
-         if model.model_application.app_key_update_response_pending then
-           let new_client_app = updated_traffic_key_material old_client_app in
-           Some {
-             model with
-               model_record = {
-                 model.model_record with
-                   record_write =
-                     R.install_keys
-                       (R.next_seq model.model_record.record_write)
-                       R.Application
-                       new_client_app.traffic_key
-                       new_client_app.traffic_iv;
-               };
-               model_handshake = {
-                 hs with
-                   hs_keys = {
-                     hs.hs_keys with
-                       ks_client_application_traffic = Some new_client_app;
-                   };
-               };
-               model_application = {
-                 model.model_application with
-                   app_key_update_response_pending = false;
-               };
-           }
-         else None
-       | None -> None)
-    | CL.Sent, M.UpdateRequested ->
-      None)
+    | CL.Sent ->
+      (* Rotate our own sending key.  This arm is deliberately not conditioned
+         on an outstanding response obligation: an endpoint may initiate a
+         KeyUpdate spontaneously, which is what keeps a long-lived connection
+         inside the AEAD usage limits of §5.5. *)
+      (match rotate_application_traffic model TrafficWrite with
+       | Some model' ->
+         Some {
+           model' with
+             model_application =
+               sent_key_update_response model.model_application req;
+         }
+       | None -> None))
   | M.TlsAlert T.Close_notify, ControlApplicationData ->
     (match dir with
      | CL.Sent ->
@@ -1490,15 +1531,19 @@ let legal_tls_message
     model.model_config.config_role == ClientEndpoint /\
     dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
   | M.TlsKeyUpdate req, ControlApplicationData ->
-    model.model_config.config_role == ClientEndpoint /\
-    (match dir, req with
-     | CL.Received, _ ->
-       Some? hs.hs_keys.ks_server_application_traffic
-     | CL.Sent, M.UpdateNotRequested ->
-       Some? hs.hs_keys.ks_client_application_traffic /\
-       model.model_application.app_key_update_response_pending
-     | CL.Sent, M.UpdateRequested ->
-       False)
+    (* Either endpoint may rotate, and either may initiate.  The material that
+       has to exist is exactly the one this direction rotates -- our read key
+       on receive, our write key on send -- which keeps this predicate in step
+       with [rotate_application_traffic]'s success condition. *)
+    Some?
+      (traffic_material_for_label
+         hs.hs_keys
+         TrafficApplication
+         (traffic_label_for_endpoint_direction
+            model.model_config.config_role
+            (match dir with
+             | CL.Received -> TrafficRead
+             | CL.Sent -> TrafficWrite)))
   | M.TlsAlert T.Close_notify, ControlApplicationData ->
     True
   | M.TlsAlert T.Close_notify, ControlClosing ->

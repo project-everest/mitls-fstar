@@ -1204,15 +1204,15 @@ let lemma_client_application_progress_rank_step
                client_application_progress_rank model' + 1)
            | _, _ ->
              assert False)
-        | M.TlsKeyUpdate req ->
-          (match model.CS.model_control, msg.CL.message_direction, req with
-           | CS.ControlApplicationData, CL.Received, _ ->
+        | M.TlsKeyUpdate _ ->
+          (* Both directions and both request forms are now legal in
+             [ControlApplicationData] (a client may spontaneously send
+             [update_requested]), so the arms collapse to one. *)
+          (match model.CS.model_control with
+           | CS.ControlApplicationData ->
              assert (client_application_progress_rank model <=
                client_application_progress_rank model' + 1)
-           | CS.ControlApplicationData, CL.Sent, M.UpdateNotRequested ->
-             assert (client_application_progress_rank model <=
-               client_application_progress_rank model' + 1)
-           | _, _, _ ->
+           | _ ->
              assert False)))
 
 let rec lemma_client_application_progress_rank_replay_lower_bound

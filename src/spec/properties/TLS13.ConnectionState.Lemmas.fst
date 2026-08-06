@@ -1049,45 +1049,32 @@ let lemma_step_tls_message_supported_profile_key_schedule_reachable_shape
       handshake_msg
       model'
   | M.TlsKeyUpdate req, ControlApplicationData ->
-    (match dir, req with
-     | CL.Received, _ ->
-       (match keys.ks_server_application_traffic with
-        | Some old_server_app ->
-          let new_server_app = updated_traffic_key_material old_server_app in
-          lemma_update_application_traffic_material_reachable_shape
-            keys
-            ServerTraffic
-            new_server_app;
-          assert (model'.model_handshake.hs_keys ==
-                  update_key_schedule_with_label
-                    keys
-                    TrafficApplication
-                    ServerTraffic
-                    new_server_app);
-          assert (model_supported_profile_key_schedule_reachable_shape model')
-        | None ->
-          assert False)
-     | CL.Sent, M.UpdateNotRequested ->
-       (match keys.ks_client_application_traffic with
-        | Some old_client_app ->
-          if model.model_application.app_key_update_response_pending then
-            let new_client_app = updated_traffic_key_material old_client_app in
-            lemma_update_application_traffic_material_reachable_shape
-              keys
-              ClientTraffic
-              new_client_app;
-            assert (model'.model_handshake.hs_keys ==
-                    update_key_schedule_with_label
-                      keys
-                      TrafficApplication
-                      ClientTraffic
-                      new_client_app);
-            assert (model_supported_profile_key_schedule_reachable_shape model')
-          else
-            assert False
-        | None ->
-          assert False)
-     | CL.Sent, M.UpdateRequested ->
+    (* KeyUpdate rotates whichever application-traffic slot the *local role*
+       owns in the relevant direction, so the reasoning here is role-generic:
+       a received KeyUpdate rotates the read label, a sent one the write label.
+       [lemma_update_application_traffic_material_reachable_shape] is already
+       stated for an arbitrary [traffic_label], so no case split on the role
+       is needed. *)
+    let tdir = match dir with
+      | CL.Received -> TrafficRead
+      | CL.Sent -> TrafficWrite in
+    let label =
+      traffic_label_for_endpoint_direction model.model_config.config_role tdir in
+    (match traffic_material_for_label keys TrafficApplication label with
+     | Some old_material ->
+       let new_material = updated_traffic_key_material old_material in
+       lemma_update_application_traffic_material_reachable_shape
+         keys
+         label
+         new_material;
+       assert (model'.model_handshake.hs_keys ==
+               update_key_schedule_with_label
+                 keys
+                 TrafficApplication
+                 label
+                 new_material);
+       assert (model_supported_profile_key_schedule_reachable_shape model')
+     | None ->
        assert False)
   | M.TlsApplicationData _, ControlApplicationData
   | M.TlsAlert _, _
@@ -1654,8 +1641,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
              | M.TlsHandshake M.HelloRetryRequest, CL.Received, ControlHandshaking HsClientHelloSent
              | M.TlsApplicationData _, _, ControlApplicationData
              | M.TlsIgnoredPostHandshake _, CL.Received, ControlApplicationData
-             | M.TlsKeyUpdate _, CL.Received, ControlApplicationData
-             | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent, ControlApplicationData
+             | M.TlsKeyUpdate _, _, ControlApplicationData
              | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData
              | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
              | M.TlsAlert T.Close_notify, CL.Received, ControlClosing
@@ -1891,8 +1877,7 @@ let lemma_connection_delta_server_x25519_reachable_shape
              | M.TlsHandshake M.HelloRetryRequest, CL.Received, ControlHandshaking HsClientHelloSent
              | M.TlsApplicationData _, _, ControlApplicationData
              | M.TlsIgnoredPostHandshake _, CL.Received, ControlApplicationData
-             | M.TlsKeyUpdate _, CL.Received, ControlApplicationData
-             | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent, ControlApplicationData
+             | M.TlsKeyUpdate _, _, ControlApplicationData
              | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData
              | M.TlsAlert T.Close_notify, CL.Received, ControlApplicationData
              | M.TlsAlert T.Close_notify, CL.Received, ControlClosing
@@ -2758,7 +2743,7 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             assert (model'.model_record.record_write ==
                     model.model_record.record_write);
             assert (client_application_record_epoch_link model')
-          | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent,
+          | M.TlsKeyUpdate _, CL.Sent,
             ControlApplicationData ->
             assert (client_application_record_epoch_link model);
             assert (model'.model_record.record_read ==
@@ -2956,6 +2941,22 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
                     model.model_record.record_write);
             assert (model'.model_record.record_read.R.epoch ==
                     (R.next_seq model.model_record.record_read).R.epoch);
+            assert (server_application_record_epoch_link model')
+          | M.TlsKeyUpdate _, CL.Received, ControlApplicationData ->
+            (* Server-side receive rotates the *client* application traffic
+               slot and reinstalls the read keys at the Application epoch. *)
+            assert (server_application_record_epoch_link model);
+            assert (model'.model_record.record_read.R.epoch == R.Application);
+            assert (model'.model_record.record_write ==
+                    model.model_record.record_write);
+            assert (server_application_record_epoch_link model')
+          | M.TlsKeyUpdate _, CL.Sent, ControlApplicationData ->
+            (* Server-side send rotates the *server* application traffic slot
+               and reinstalls the write keys at the Application epoch. *)
+            assert (server_application_record_epoch_link model);
+            assert (model'.model_record.record_read ==
+                    model.model_record.record_read);
+            assert (model'.model_record.record_write.R.epoch == R.Application);
             assert (server_application_record_epoch_link model')
           | M.TlsAlert T.Close_notify, CL.Sent, ControlApplicationData ->
             assert (server_application_record_epoch_link model);
@@ -5954,24 +5955,35 @@ let lemma_step_model_key_update_pending_delta
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Received, M.TlsKeyUpdate req ->
+       (* No role hypothesis here, so name the rotated slot through the
+          role-indexed label rather than assuming the client's view. *)
        (match model0.model_control with
         | ControlApplicationData ->
-          (match model0.model_handshake.hs_keys.ks_server_application_traffic with
+          (match traffic_material_for_label
+                   model0.model_handshake.hs_keys
+                   TrafficApplication
+                   (traffic_label_for_endpoint_direction
+                      model0.model_config.config_role
+                      TrafficRead) with
            | Some _ -> ()
            | None -> assert False)
         | _ -> assert False)
      | CL.Sent, M.TlsKeyUpdate req ->
-       (match req with
-        | M.UpdateNotRequested ->
-          (match model0.model_control with
-           | ControlApplicationData ->
-             (match model0.model_handshake.hs_keys.ks_client_application_traffic with
-              | Some _ ->
-                if model0.model_application.app_key_update_response_pending then ()
-                else assert False
-              | None -> assert False)
-           | _ -> assert False)
-        | M.UpdateRequested -> assert False)
+       (* Both request forms are legal to send.  [key_update_response_pending_step]
+          already leaves [pending] untouched for a spontaneous [update_requested]
+          and clears it only for the [update_not_requested] response, which is
+          exactly what [sent_key_update_response] does. *)
+       (match model0.model_control with
+        | ControlApplicationData ->
+          (match traffic_material_for_label
+                   model0.model_handshake.hs_keys
+                   TrafficApplication
+                   (traffic_label_for_endpoint_direction
+                      model0.model_config.config_role
+                      TrafficWrite) with
+           | Some _ -> ()
+           | None -> assert False)
+        | _ -> assert False)
      | _, _ -> ())
   | ConnLocalEvent _ -> ()
   | ConnProtectedHandshake _ -> ()
@@ -6110,11 +6122,10 @@ let lemma_step_model_record_keys_consistent
                Some new_server_app)
            | None -> assert False)
         | _ -> assert False)
-     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
+     | CL.Sent, M.TlsKeyUpdate _ ->
        (match model0.model_control with
         | ControlApplicationData ->
           assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
-          assert (model0.model_application.app_key_update_response_pending);
           (match model0.model_handshake.hs_keys.ks_client_application_traffic with
            | Some old_client_app ->
              let new_client_app = updated_traffic_key_material old_client_app in
@@ -6453,6 +6464,68 @@ let lemma_step_model_record_keys_consistent_for_role
             assert (ControlFailed? model1.model_control))
        | M.TlsAlert _ ->
          assert (ControlFailed? model1.model_control)
+       | M.TlsKeyUpdate _ ->
+         (* Rotation reinstalls the Application keys of the slot this endpoint
+            owns in the stepped direction, and leaves the other direction
+            untouched; for a server the read slot is ClientTraffic and the
+            write slot is ServerTraffic. *)
+         (match msg.CL.message_direction with
+          | CL.Received ->
+            (match traffic_material_for_label
+                     model0.model_handshake.hs_keys
+                     TrafficApplication
+                     ClientTraffic with
+             | Some old_read_app ->
+               let new_read_app = updated_traffic_key_material old_read_app in
+               assert (model1.model_record.record_read ==
+                 R.install_keys
+                   (R.next_seq model0.model_record.record_read)
+                   R.Application
+                   new_read_app.traffic_key
+                   new_read_app.traffic_iv);
+               assert (traffic_material_for_label
+                         model1.model_handshake.hs_keys
+                         TrafficApplication
+                         ClientTraffic == Some new_read_app);
+               assert (model1.model_record.record_write ==
+                       model0.model_record.record_write);
+               assert (traffic_material_for_label
+                         model1.model_handshake.hs_keys
+                         TrafficApplication
+                         ServerTraffic ==
+                       traffic_material_for_label
+                         model0.model_handshake.hs_keys
+                         TrafficApplication
+                         ServerTraffic)
+             | None -> assert False)
+          | CL.Sent ->
+            (match traffic_material_for_label
+                     model0.model_handshake.hs_keys
+                     TrafficApplication
+                     ServerTraffic with
+             | Some old_write_app ->
+               let new_write_app = updated_traffic_key_material old_write_app in
+               assert (model1.model_record.record_write ==
+                 R.install_keys
+                   (R.next_seq model0.model_record.record_write)
+                   R.Application
+                   new_write_app.traffic_key
+                   new_write_app.traffic_iv);
+               assert (traffic_material_for_label
+                         model1.model_handshake.hs_keys
+                         TrafficApplication
+                         ServerTraffic == Some new_write_app);
+               assert (model1.model_record.record_read ==
+                       model0.model_record.record_read);
+               assert (traffic_material_for_label
+                         model1.model_handshake.hs_keys
+                         TrafficApplication
+                         ClientTraffic ==
+                       traffic_material_for_label
+                         model0.model_handshake.hs_keys
+                         TrafficApplication
+                         ClientTraffic)
+             | None -> assert False))
        | M.TlsChangeCipherSpec ->
          assert (model1 == model0)
        | _ ->
@@ -6538,60 +6611,65 @@ let lemma_step_model_record_layer_delta
              assert (model_record_layer_delta model0 ev model1)
            | _ -> assert False))
      | CL.Received, M.TlsKeyUpdate _ ->
+       (* Role-generic: a received KeyUpdate rotates whichever
+          application-traffic slot this endpoint reads with. *)
        (match model0.model_control with
         | ControlApplicationData ->
-          assert (Some? model0.model_handshake.hs_keys.ks_server_application_traffic);
-          (match model0.model_handshake.hs_keys.ks_server_application_traffic with
-           | Some old_server_app ->
-             let new_server_app = updated_traffic_key_material old_server_app in
+          (match traffic_material_for_label
+                   model0.model_handshake.hs_keys
+                   TrafficApplication
+                   (traffic_label_for_endpoint_direction
+                      model0.model_config.config_role
+                      TrafficRead) with
+           | Some old_read_app ->
+             let new_read_app = updated_traffic_key_material old_read_app in
              assert (model1.model_record == {
                model0.model_record with
                  record_read =
                    R.install_keys
                      (R.next_seq model0.model_record.record_read)
                      R.Application
-                     new_server_app.traffic_key
-                     new_server_app.traffic_iv
+                     new_read_app.traffic_key
+                     new_read_app.traffic_iv
              });
              lemma_projected_install_keys_of_record
                (R.next_seq model0.model_record.record_read)
                R.Application
-               new_server_app.traffic_key
-               new_server_app.traffic_iv;
+               new_read_app.traffic_key
+               new_read_app.traffic_iv;
              assert (model_record_layer_delta model0 ev model1)
            | None -> assert False)
         | _ -> assert False)
      | CL.Sent, M.TlsKeyUpdate req ->
-       (match req with
-        | M.UpdateNotRequested ->
-          (match model0.model_control with
-           | ControlApplicationData ->
-             assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
-             (match model0.model_handshake.hs_keys.ks_client_application_traffic with
-              | Some _ ->
-                assert (model0.model_application.app_key_update_response_pending);
-                (match model0.model_handshake.hs_keys.ks_client_application_traffic with
-                 | Some old_client_app ->
-                   let new_client_app = updated_traffic_key_material old_client_app in
-                   assert (model1.model_record == {
-                     model0.model_record with
-                       record_write =
-                         R.install_keys
-                           (R.next_seq model0.model_record.record_write)
-                           R.Application
-                           new_client_app.traffic_key
-                           new_client_app.traffic_iv
-                   });
-                   lemma_projected_install_keys_of_record
+       (* Role-generic: a sent KeyUpdate rotates whichever application-traffic
+          slot this endpoint writes with, and both request forms are legal. *)
+       (match model0.model_control with
+        | ControlApplicationData ->
+          (match traffic_material_for_label
+                   model0.model_handshake.hs_keys
+                   TrafficApplication
+                   (traffic_label_for_endpoint_direction
+                      model0.model_config.config_role
+                      TrafficWrite) with
+           | Some old_write_app ->
+             let new_write_app = updated_traffic_key_material old_write_app in
+             assert (model1.model_record == {
+               model0.model_record with
+                 record_write =
+                   R.install_keys
                      (R.next_seq model0.model_record.record_write)
                      R.Application
-                     new_client_app.traffic_key
-                     new_client_app.traffic_iv;
-                   assert (model_record_layer_delta model0 ev model1)
-                 | None -> assert False)
-              | None -> assert False)
-           | _ -> assert False)
-        | M.UpdateRequested -> assert False)
+                     new_write_app.traffic_key
+                     new_write_app.traffic_iv
+             });
+             lemma_projected_install_keys_of_record
+               (R.next_seq model0.model_record.record_write)
+               R.Application
+               new_write_app.traffic_key
+               new_write_app.traffic_iv;
+             assert (model_record_layer_delta model0 ev model1)
+           | None -> assert False)
+        | _ -> assert False)
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Received, M.TlsHandshake (M.Certificate _)
      | CL.Received, M.TlsHandshake (M.CertificateVerify _) ->
