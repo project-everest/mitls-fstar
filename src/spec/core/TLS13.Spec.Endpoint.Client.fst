@@ -37,7 +37,12 @@ type local_event =
   | ClientSendClientHello
   | ClientSendClientFinished
   | ClientSendApplicationData of B.bytes
-  | ClientSendKeyUpdate
+  (**
+    Send a KeyUpdate.  The request form is part of the action: a client may
+    answer a peer's [update_requested] with [update_not_requested], and may
+    also rotate spontaneously with either form (RFC 8446 §4.6.3).
+   **)
+  | ClientSendKeyUpdate of M.key_update_request
   | ClientSendCloseNotify
   | ClientFail
   (**
@@ -86,9 +91,9 @@ let client_local_event_matches
   | ClientSendCloseNotify, CS.ConnNetworkEvent msg ->
       msg.CL.message_direction == CL.Sent /\
       msg.CL.message_value == M.TlsAlert TLS13.Types.Close_notify
-  | ClientSendKeyUpdate, CS.ConnNetworkEvent msg ->
+  | ClientSendKeyUpdate req, CS.ConnNetworkEvent msg ->
       msg.CL.message_direction == CL.Sent /\
-      msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+      msg.CL.message_value == M.TlsKeyUpdate req
   | ClientStartHandshake,
     CS.ConnLocalEvent (CS.LocalStartHandshake _) ->
       True

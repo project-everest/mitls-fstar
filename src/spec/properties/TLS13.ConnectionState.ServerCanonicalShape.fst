@@ -274,6 +274,7 @@ let is_server_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsHandshake (M.CertificateVerify _) -> True
         | M.TlsHandshake (M.Finished _) -> True
         | M.TlsApplicationData _ -> True
+        | M.TlsKeyUpdate _ -> True
         | M.TlsAlert T.Close_notify -> True
         | _ -> False))
   | CS.ConnProtectedHandshake _ -> False

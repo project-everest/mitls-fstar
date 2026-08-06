@@ -11,6 +11,7 @@ module CT = TLS13.Impl.Client.Types
 module EC = TLS13.Spec.Endpoint.Client
 module ET = TLS13.Impl.Endpoint.Types
 module ES = TLS13.Spec.Endpoint.Server
+module M = TLS13.Messages
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -87,7 +88,9 @@ let client_api_event_semantic
   | CT.LocalSendApplicationData ->
       EC.ClientSendApplicationData api.client_local_payload
   | CT.LocalSendKeyUpdate ->
-      EC.ClientSendKeyUpdate
+      (* The concrete client currently only ever answers a peer's request;
+         [rekey-impl] adds a second ABI kind for spontaneous initiation. *)
+      EC.ClientSendKeyUpdate M.UpdateNotRequested
   | CT.LocalSendCloseNotify ->
       EC.ClientSendCloseNotify
   | CT.LocalFail ->
