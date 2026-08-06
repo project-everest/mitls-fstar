@@ -389,7 +389,9 @@ Client and server `BufferedNetwork.process` follow the same logical sequence:
 
 1. Open the role's `buffered_driver_indexed` ownership.
 2. Borrow a view equal to the entire pending prefix.
-3. Invoke the verified role-specific `process_network_bytes`.
+3. Invoke the verified role-specific receive primitive — for the client,
+   `TLS13.Impl.Client.process_coalesced_network_bytes`; for the server,
+   `TLS13.Impl.Server.process_network_bytes`.
 4. Release the unchanged pending view.
 5. Inspect the TLS response:
    - `NeedMoreInput`: prove stuttering and
@@ -398,7 +400,30 @@ Client and server `BufferedNetwork.process` follow the same logical sequence:
    - successful step: commit exactly `consumed_len`, write exactly
      `network_out_len`, update histories, and return a positive `Yield`;
    - fatal status: return terminal `Reject`.
-6. Re-establish the canonical protocol progress and wire-log correspondence.
+6. Drain: while an internal step is enabled, take it (see below).
+7. Re-establish the canonical protocol progress and wire-log correspondence.
+
+### The drain (step 6)
+
+Since the internal-event refactor (`INTERNAL_EVENT_PLAN.md`), a client-received
+*protected handshake* record does not immediately produce all of its semantic
+effects. The record transition installs a pending plaintext, and the handshake
+messages it carries are consumed one at a time by internal events — ordinary
+`LocalEvent`s classified by `pi_internal` that emit no wire output and read no
+socket.
+
+`TLS13.Impl.Client.Drain` supplies the theory: `drain_step`, `drain_chain`,
+`drained`, and `lemma_drained_facts`, which shows that a drain chain ending in
+`drained` establishes exactly the end-to-end postcondition the caller of a
+coalesced receive expects. Termination is by a decreasing measure on the pending
+plaintext length, so the loop needs no fuel parameter.
+
+The consequence for buffering is a scheduling rule: **an internal step must
+never authorise a socket read.** A pending plaintext is input the connection
+already holds; reading more bytes before consuming it would break the
+"exactly one physical event at a time" accounting that the rest of this document
+relies on. The driver therefore drains to quiescence before it will consider
+`read_auth`.
 
 The endpoint's `read` operation:
 
@@ -414,6 +439,15 @@ generic scheduler to consume an arbitrary number of protocol records. The
 surrounding verified role workflow gets a chance to perform any required local
 action after each TLS transition. If a second coalesced record is still
 pending, the next network drive processes that retained prefix before any read.
+
+Note the two distinct senses of "coalesced" that meet here, and do not carry
+over into one another:
+
+- *transport* coalescing — one `read` returns bytes spanning several TLS
+  records. Handled by the pending prefix and `consumed_len` accounting, and
+  unchanged by the internal-event work.
+- *record* coalescing — one TLS record's plaintext carries several handshake
+  messages. Handled by the internal-event pipeline described above.
 
 ## TCP history and state-machine conformance
 

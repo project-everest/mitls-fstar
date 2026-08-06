@@ -102,6 +102,7 @@ let server_hello_from_payload_correct
        (CL.raw_slice payload 0 32)
        (CryptoSpec.x25519_public_from_private
          (CL.raw_slice payload 32 64))
+       (CM.stored_client_hello_session_id st0)
        T.TLS_CHACHA20_POLY1305_SHA256 in
    st1 ==
      CM.sent_server_hello_state
@@ -264,6 +265,7 @@ fn send_server_hello_from_payload_once
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+           (CM.stored_client_hello_session_id 'st0)
            T.TLS_CHACHA20_POLY1305_SHA256 in
        CM.can_send_server_hello
          'st0
@@ -301,6 +303,7 @@ fn send_server_hello_from_payload_once
                   (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                   (CryptoSpec.x25519_public_from_private
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+                  (CM.stored_client_hello_session_id 'st0)
                   T.TLS_CHACHA20_POLY1305_SHA256))))
           app_out_bytes)
 
@@ -404,8 +407,9 @@ fn select_derive_send_server_hello_from_payload_once
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
+           (CM.stored_client_hello_session_id 'st0)
            T.TLS_CHACHA20_POLY1305_SHA256 in
-       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) == 90))
+       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) == 122))
   returns result:server_flight_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

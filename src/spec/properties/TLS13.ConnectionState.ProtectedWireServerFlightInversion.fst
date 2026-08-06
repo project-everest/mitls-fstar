@@ -23,9 +23,11 @@ module Lemmas = TLS13.ConnectionState.Lemmas
 module M = TLS13.Messages
 module PB = TLS13.ConnectionState.ProtectedWireBase
 module PWBase = TLS13.ConnectionState.ProtectedWireBase
+module PWAlign = TLS13.ConnectionState.ProtectedWireRecordAlignment
 module PWReplay = TLS13.ConnectionState.ProtectedWireReplay
 module PWSFlight = TLS13.ConnectionState.ProtectedWireServerFlight
 module PWHead = TLS13.ConnectionState.ProtectedWireHead
+module PWNorm = TLS13.ConnectionState.ProtectedWireNormalize
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module Pairing = TLS13.Impl.Driver.Pairing
 module R = TLS13.Record.Spec
@@ -222,7 +224,7 @@ let lemma_ch_serialize_agree
 (* Some?; every other clause leaves both fields untouched.             *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 300"
 let lemma_step_preserves_secrets
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
@@ -238,6 +240,7 @@ let lemma_step_preserves_secrets
         Some? m1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
 =
   match ev with
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> ()
   | _ -> ()
 #pop-options
@@ -639,6 +642,7 @@ let lemma_server_prefix_model
   )
 #pop-options
 
+#restart-solver
 let is_key_install_ev (ev:CS.conn_event) : bool =
   match ev with
   | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> true
@@ -651,6 +655,18 @@ let lemma_install_step_preserves_transcript
   : Lemma
       (requires is_key_install_ev ev /\ CS.step_model m ev == Some m1)
       (ensures m1.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript)
+= ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
+let lemma_install_step_preserves_protected_buffer_empty
+  (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
+  : Lemma
+      (requires
+        is_key_install_ev ev /\
+        CS.protected_handshake_buffer_empty m /\
+        CS.step_model m ev == Some m1)
+      (ensures CS.protected_handshake_buffer_empty m1)
 = ()
 #pop-options
 
@@ -712,6 +728,36 @@ let rec lemma_region_preserves_transcript_received
     )
 #pop-options
 
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
+let rec lemma_region_preserves_protected_buffer_empty_received
+  (m:CS.connection_model) (evs:list CS.conn_event)
+  (rs rr:B.bytes) (final:CS.connection_model)
+  : Lemma
+      (requires
+        L.for_all is_key_install_ev evs /\
+        CS.protected_handshake_buffer_empty m /\
+        SMReplay.conn_events_received_decode_replay m evs rs rr final)
+      (ensures CS.protected_handshake_buffer_empty final)
+      (decreases evs)
+=
+  match evs with
+  | [] -> ()
+  | ev :: rest ->
+    PWReplay.lemma_conn_events_received_decode_replay_head m ev rest rs rr final;
+    eliminate exists (model1:CS.connection_model) (ds dr ts tr:B.bytes).
+      CS.legal_event m ev /\ CS.step_model m ev == Some model1 /\
+      CS.event_raw_delta_legal m ev ds dr /\
+      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m ev dr /\
+      Seq.equal rs (B.append ds ts) /\ Seq.equal rr (B.append dr tr) /\
+      SMReplay.conn_events_received_decode_replay model1 rest ts tr final
+    returns CS.protected_handshake_buffer_empty final
+    with _.
+    (
+      lemma_install_step_preserves_protected_buffer_empty m ev model1;
+      lemma_region_preserves_protected_buffer_empty_received model1 rest ts tr final
+    )
+#pop-options
+
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
 let lemma_client_prefix_model
   (cfg:CS.connection_config)
@@ -729,7 +775,8 @@ let lemma_client_prefix_model
         p.CS.model_config == cfg /\
         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-        p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
+        p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
+        CS.protected_handshake_buffer_empty p)
 =
   let m0 = CS.initial_model cfg in
   let e0 = CS.ConnLocalEvent (CS.LocalStartHandshake start) in
@@ -752,7 +799,8 @@ let lemma_client_prefix_model
     (p.CS.model_config == cfg /\
      p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
      p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-     p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
+     p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
+     CS.protected_handshake_buffer_empty p)
   with _.
   (
     PWReplay.lemma_conn_events_received_decode_replay_head m1 e1 r2 ts1 tr1 p;
@@ -766,7 +814,8 @@ let lemma_client_prefix_model
       (p.CS.model_config == cfg /\
        p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
        p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-       p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
+       p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
+       CS.protected_handshake_buffer_empty p)
     with _.
     (
       PWReplay.lemma_conn_events_received_decode_replay_head m2 e2 r3 ts2 tr2 p;
@@ -780,7 +829,8 @@ let lemma_client_prefix_model
         (p.CS.model_config == cfg /\
          p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
          p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
+         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
+         CS.protected_handshake_buffer_empty p)
       with _.
       (
         PWReplay.lemma_conn_events_received_decode_replay_head m3 e3 [] ts3 tr3 p;
@@ -794,7 +844,8 @@ let lemma_client_prefix_model
           (p.CS.model_config == cfg /\
            p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
            p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-           p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
+           p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
+           CS.protected_handshake_buffer_empty p)
         with _. ()
       )
     )
@@ -1256,6 +1307,7 @@ let lemma_client_prefix_received_bytes
 (* ------------------------------------------------------------------ *)
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+#restart-solver
 let lemma_install_empty_sent (e:CS.conn_event)
   : Lemma (requires SCShape.is_server_hs_install e == true)
           (ensures Region.is_empty_sent_ev e == true)
@@ -1541,19 +1593,17 @@ let client_flight_events
 let client_flight_result
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (sh:GSH.serverHello)
-  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
-  (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
-  (cv_verify:CS.local_event) (sf:GFin.finished)
-  (tail:list CS.conn_event)
+  (raw_flight:list CS.conn_event)
   (cr:B.bytes) (final:CS.connection_model)
   (mid:CS.connection_model) (material:CS.traffic_key_material)
   (fl_sent fl_recv:B.bytes) : prop =
   SMReplay.conn_events_received_decode_replay
     mid
     (RI.client_hs_read_install_event material ::
-     client_flight_events ee cert cv_validate cv cv_verify sf tail)
+     raw_flight)
     fl_sent fl_recv final /\
   Some? mid.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+  CS.protected_handshake_buffer_empty mid /\
   mid.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
     final.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
   mid.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
@@ -1569,10 +1619,7 @@ let lemma_client_flight
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
   (client_shared:C.x25519_shared_secret)
-  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
-  (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
-  (cv_verify:CS.local_event) (sf:GFin.finished)
-  (region:list CS.conn_event) (tail:list CS.conn_event)
+  (region raw_flight:list CS.conn_event)
   (cs cr:B.bytes) (final:CS.connection_model)
   : Lemma
       (requires
@@ -1582,21 +1629,21 @@ let lemma_client_flight
         SMReplay.conn_events_received_decode_replay
           (CS.initial_model cfg)
           (L.append (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
-                    (L.append region (client_flight_events ee cert cv_validate cv cv_verify sf tail)))
+                    (L.append region raw_flight))
           cs cr final)
       (ensures
         (exists (mid:CS.connection_model) (material:CS.traffic_key_material)
            (fl_sent fl_recv:B.bytes).
-           client_flight_result cfg ch sh ee cert cv_validate cv cv_verify sf tail cr final
+           client_flight_result cfg ch sh raw_flight cr final
              mid material fl_sent fl_recv))
   =
   let prefix = PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared in
-  let cflight = client_flight_events ee cert cv_validate cv cv_verify sf tail in
+  let cflight = raw_flight in
   let m0 = CS.initial_model cfg in
   let goal =
     (exists (mid:CS.connection_model) (material:CS.traffic_key_material)
        (fl_sent fl_recv:B.bytes).
-       client_flight_result cfg ch sh ee cert cv_validate cv cv_verify sf tail cr final
+       client_flight_result cfg ch sh raw_flight cr final
          mid material fl_sent fl_recv) in
   PWReplay.lemma_conn_events_received_decode_replay_append_split
     m0 prefix (L.append region cflight) cs cr final;
@@ -1636,6 +1683,8 @@ let lemma_client_flight
         lemma_received_replay_preserves_secrets ms cflight fl_sent fl_recv final;
         lemma_forall_install_key_c region;
         lemma_region_preserves_transcript_received ps region rg_sent rg_recv ms;
+        lemma_region_preserves_protected_buffer_empty_received
+          ps region rg_sent rg_recv ms;
         RI.lemma_prepend_redundant_client_hs_read_install_received ms material cflight fl_sent fl_recv final;
         // byte accounting: cr == record(SH) ++ fl_recv
         Seq.lemma_eq_elim rg_recv B.empty;
@@ -1646,7 +1695,7 @@ let lemma_client_flight
         Seq.lemma_eq_elim cr (B.append ps_recv suf_recv);
         introduce exists (mid:CS.connection_model) (material2:CS.traffic_key_material)
                     (a b:B.bytes).
-           client_flight_result cfg ch sh ee cert cv_validate cv cv_verify sf tail cr final
+           client_flight_result cfg ch sh raw_flight cr final
              mid material2 a b
         with ms material fl_sent fl_recv
         and ()
@@ -1873,19 +1922,44 @@ let lemma_server_side (s:sysp)
 (* Client-side package.                                                *)
 (* ================================================================== *)
 
+#restart-solver
+let client_raw_prefix_package
+  (s:sysp) (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (raw_flight:list CS.conn_event) : prop =
+  exists (start:CS.handshake_start)
+         (client_shared:C.x25519_shared_secret)
+         (region:list CS.conn_event).
+    (forall (e:CS.conn_event).
+      L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+    (exists (er:CS.conn_event).
+      L.memP er region /\
+      CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+    (exists (ew:CS.conn_event).
+      L.memP ew region /\
+      CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+    s.client.CS.cs_event_log ==
+      L.append
+        (PWSeg.client_cleartext_handshake_prefix_events
+          start ch sh client_shared)
+        (L.append region raw_flight)
+
 let client_side_package (s:sysp)
   (mc:CS.connection_model) (material_c:CS.traffic_key_material)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
   (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-  (tail_c:list CS.conn_event)
+  (tail_c raw_flight_c:list CS.conn_event)
   (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (rest_cs:B.bytes) : prop =
   SMReplay.conn_events_received_decode_replay
     mc
     (RI.client_hs_read_install_event material_c ::
-     client_flight_events ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c)
+     raw_flight_c)
     fl_sent_c fl_recv_c s.client.CS.cs_model /\
+  CCShape.raw_flight_spine
+    raw_flight_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c /\
+  client_raw_prefix_package s ch_c sh_c raw_flight_c /\
   Some? mc.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+  CS.protected_handshake_buffer_empty mc /\
   mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
     s.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
   mc.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch_c sh_c /\
@@ -1896,14 +1970,35 @@ let client_side_package (s:sysp)
     (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch_c))) rest_cs) /\
   B.length (W.serialize_handshake (M.ClientHello ch_c)) <= 16640
 
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_client_side_package_has_raw_prefix
+  (s:sysp)
+  (mc:CS.connection_model) (material_c:CS.traffic_key_material)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate)
+  (cv_validate_c:CS.local_event) (cv_c:GCV.certificateVerify)
+  (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
+  (tail_c raw_flight_c:list CS.conn_event)
+  (fl_sent_c fl_recv_c:B.bytes)
+  (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
+  (rest_cs:B.bytes)
+  : Lemma
+      (requires
+        client_side_package s mc material_c ee_c cert_c cv_validate_c
+          cv_c cv_verify_c sf_c tail_c raw_flight_c fl_sent_c fl_recv_c
+          ch_c sh_c rest_cs)
+      (ensures client_raw_prefix_package s ch_c sh_c raw_flight_c)
+  = ()
+#pop-options
+
 let client_side_exists (s:sysp) : prop =
   exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
     (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
     (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-    (tail_c:list CS.conn_event)
+    (tail_c raw_flight_c:list CS.conn_event)
     (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
     (rest_cs:B.bytes).
-    client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c
+    client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+      tail_c raw_flight_c
       fl_sent_c fl_recv_c ch_c sh_c rest_cs
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
@@ -1932,7 +2027,12 @@ let lemma_client_side (s:sysp)
     (forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
     (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
     (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
-    s.client.CS.cs_event_log ==
+    (exists (raw_suffix:list CS.conn_event).
+      s.client.CS.cs_event_log ==
+        L.append
+          (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+          (L.append region raw_suffix)) /\
+    CCShape.canonical_log s.client.CS.cs_event_log ==
       L.append
         (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
         (L.append region
@@ -1946,53 +2046,57 @@ let lemma_client_side (s:sysp)
   returns client_side_exists s
   with _.
   (
-    let prefix = PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared in
-    let cflight = client_flight_events ee cert cv_validate cv cv_verify sf tail in
-    let suffix = L.append region cflight in
-    assert (s.client.CS.cs_event_log == L.append prefix suffix);
-    lemma_client_flight cfg_c start ch sh client_shared ee cert cv_validate cv cv_verify sf
-      region tail cs cr final;
-    eliminate exists (mc:CS.connection_model) (material:CS.traffic_key_material)
-                     (fl_sent fl_recv:B.bytes).
-      client_flight_result cfg_c ch sh ee cert cv_validate cv cv_verify sf tail cr final
-        mc material fl_sent fl_recv
+    eliminate exists (raw_suffix:list CS.conn_event).
+      s.client.CS.cs_event_log ==
+        L.append
+          (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+          (L.append region raw_suffix)
     returns client_side_exists s
     with _.
     (
-      lemma_client_sent_ch cfg_c start ch sh client_shared suffix cs cr final;
-      eliminate exists (rest:B.bytes).
-        Seq.equal cs
-          (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch))) rest) /\
-        B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640
+      CCShape.lemma_client_raw_suffix_flight_spine
+        start ch sh client_shared region raw_suffix s.client.CS.cs_event_log
+        ee cert cv_validate cv cv_verify sf tail;
+      let prefix = PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared in
+      let suffix = L.append region raw_suffix in
+      lemma_client_flight cfg_c start ch sh client_shared
+        region raw_suffix cs cr final;
+      eliminate exists (mc:CS.connection_model) (material:CS.traffic_key_material)
+                       (fl_sent fl_recv:B.bytes).
+        client_flight_result cfg_c ch sh raw_suffix cr final
+          mc material fl_sent fl_recv
       returns client_side_exists s
       with _.
       (
-        introduce exists (mc0:CS.connection_model) (material_c:CS.traffic_key_material)
-          (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
-          (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-          (tail_c:list CS.conn_event)
-          (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
-          (rest_cs:B.bytes).
-          client_side_package s mc0 material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-            tail_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
-        with mc material ee cert cv_validate cv cv_verify sf tail fl_sent fl_recv ch sh rest
-        and ()
+        lemma_client_sent_ch cfg_c start ch sh client_shared suffix cs cr final;
+        eliminate exists (rest:B.bytes).
+          Seq.equal cs
+            (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch))) rest) /\
+          B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640
+        returns client_side_exists s
+        with _.
+        (
+          introduce exists (mc0:CS.connection_model) (material_c:CS.traffic_key_material)
+            (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
+            (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
+            (tail_c raw_flight_c:list CS.conn_event)
+            (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
+            (rest_cs:B.bytes).
+            client_side_package s mc0 material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+              tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
+          with mc material ee cert cv_validate cv cv_verify sf tail raw_suffix
+               fl_sent fl_recv ch sh rest
+          and (assert (CCShape.raw_flight_spine
+                         raw_suffix ee cert cv_validate cv cv_verify sf tail);
+               assert (client_raw_prefix_package s ch sh raw_suffix);
+               assert (SMReplay.conn_events_received_decode_replay mc
+                         (RI.client_hs_read_install_event material :: raw_suffix)
+                         fl_sent fl_recv s.client.CS.cs_model))
+        )
       )
     )
   )
 #pop-options
-
-(* ================================================================== *)
-(* The goal.                                                          *)
-(* ================================================================== *)
-
-let goal_exists (s:sysp) : prop =
-  exists (server_after client_after:CS.connection_model)
-         (sent_msg received_msg:M.handshake_msg)
-         (pair:PB.protected_message_replay).
-    pair.PB.pm_sender == server_after /\
-    pair.PB.pm_receiver == client_after /\
-    PB.protected_handshake_event_projection_pair pair sent_msg received_msg
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
 let lemma_replay_cong_sent
@@ -2041,280 +2145,6 @@ let lemma_secret_swap (a b:option C.secret)
     | _ -> ()
 #pop-options
 
-(* The producer call, isolated with fuel 0 so that its (already-established)
-   preconditions are matched syntactically rather than re-derived. *)
-#push-options "--fuel 0 --ifuel 1 --z3rlimit 60"
-let lemma_call_producer (s:sysp)
-  (ms mc:CS.connection_model)
-  (material_s material_c:CS.traffic_key_material)
-  (ee_s ee_c:GEE.encryptedExtensions)
-  (server_rest client_rest:list CS.conn_event)
-  (fl_sent_s fl_recv_s fl_sent_c fl_recv_c:B.bytes)
-  : Lemma
-      (requires
-        (match ms.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret,
-               mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret with
-         | Some a, Some b -> Seq.equal a b
-         | _ -> False) /\
-        Seq.equal ms.CS.model_handshake.CS.hs_transcript
-                  mc.CS.model_handshake.CS.hs_transcript /\
-        Seq.equal fl_sent_s fl_recv_c /\
-        SMReplay.conn_events_sent_seal_replay ms
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeysForRole {
-              CS.install_role = CS.ServerEndpoint;
-              CS.install_payload = {
-                CS.install_epoch = CS.TrafficHandshake;
-                CS.install_direction = CS.TrafficWrite;
-                CS.install_material = material_s;
-              };
-            }) ::
-            CS.ConnNetworkEvent {
-              CL.message_direction = CL.Sent;
-              CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_s);
-            } :: server_rest)
-          fl_sent_s fl_recv_s s.server.CS.cs_model /\
-        SMReplay.conn_events_received_decode_replay mc
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficHandshake;
-              CS.install_direction = CS.TrafficRead;
-              CS.install_material = material_c;
-            }) ::
-            CS.ConnNetworkEvent {
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_c);
-            } :: client_rest)
-          fl_sent_c fl_recv_c s.client.CS.cs_model)
-      (ensures goal_exists s)
-  =
-  let final_s = s.server.CS.cs_model in
-  let final_c = s.client.CS.cs_model in
-  PWSFlight.lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
-    ms mc material_s material_c
-    (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c)
-    server_rest client_rest
-    fl_sent_s fl_recv_s fl_sent_c fl_recv_c
-    final_s final_c;
-  eliminate exists (server_after client_after server_after_head client_after_head:CS.connection_model)
-                   (pair:PB.protected_message_replay)
-                   (server_tail_sent server_tail_received client_tail_sent client_tail_received:B.bytes).
-    CS.step_model ms
-      (CS.ConnLocalEvent
-        (CS.LocalInstallTrafficKeysForRole {
-          CS.install_role = CS.ServerEndpoint;
-          CS.install_payload = {
-            CS.install_epoch = CS.TrafficHandshake;
-            CS.install_direction = CS.TrafficWrite;
-            CS.install_material = material_s;
-          };
-        })) == Some server_after /\
-    CS.step_model mc
-      (CS.ConnLocalEvent
-        (CS.LocalInstallTrafficKeys {
-          CS.install_epoch = CS.TrafficHandshake;
-          CS.install_direction = CS.TrafficRead;
-          CS.install_material = material_c;
-        })) == Some client_after /\
-    CS.step_model server_after
-      (CS.ConnNetworkEvent {
-        CL.message_direction = CL.Sent;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_s);
-      }) == Some server_after_head /\
-    CS.step_model client_after
-      (CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_c);
-      }) == Some client_after_head /\
-    pair.PB.pm_sender == server_after /\
-    pair.PB.pm_receiver == client_after /\
-    PB.protected_handshake_event_projection_pair pair
-      (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
-    Seq.equal server_tail_sent client_tail_received /\
-    SMReplay.conn_events_sent_seal_replay server_after_head server_rest
-      server_tail_sent server_tail_received final_s /\
-    SMReplay.conn_events_received_decode_replay client_after_head client_rest
-      client_tail_sent client_tail_received final_c
-  returns goal_exists s
-  with _.
-  (
-    introduce exists (server_after client_after:CS.connection_model)
-      (sent_msg received_msg:M.handshake_msg)
-      (pair0:PB.protected_message_replay).
-      pair0.PB.pm_sender == server_after /\
-      pair0.PB.pm_receiver == client_after /\
-      PB.protected_handshake_event_projection_pair pair0 sent_msg received_msg
-    with server_after client_after (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) pair
-    and ()
-  )
-#pop-options
-
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
-let lemma_finish (s:sysp)
-  (ms:CS.connection_model) (material_s:CS.traffic_key_material)
-  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
-  (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (tail_s:list CS.conn_event)
-  (fl_sent_s fl_recv_s:B.bytes) (ch_s:GCH.clientHello) (sh_s:GSH.serverHello)
-  (d_ch_s rest_sr:B.bytes)
-  (mc:CS.connection_model) (material_c:CS.traffic_key_material)
-  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
-  (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-  (tail_c:list CS.conn_event)
-  (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
-  (rest_cs:B.bytes)
-  : Lemma
-      (requires
-        server_flight_bridge_inputs s.client s.server /\
-        server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
-          fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr /\
-        client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-          tail_c fl_sent_c fl_recv_c ch_c sh_c rest_cs)
-      (ensures goal_exists s)
-  =
-  lemma_goalA_state s;
-  lemma_byte_pairing_quiet s;
-  let cs = s.client.CS.cs_wire_log.CL.raw_sent in
-  let sr = s.server.CS.cs_wire_log.CL.raw_received in
-  let ss = s.server.CS.cs_wire_log.CL.raw_sent in
-  let cr = s.client.CS.cs_wire_log.CL.raw_received in
-  let final_s = s.server.CS.cs_model in
-  let final_c = s.client.CS.cs_model in
-  (* ---- CH agreement ---- *)
-  lemma_ch_serialize_agree ch_c ch_s cs sr rest_cs rest_sr d_ch_s;
-  (* ---- SH agreement + flight-byte pairing ---- *)
-  Seq.lemma_eq_elim ss cr;
-  assert (Seq.equal ss
-            (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ServerHello sh_c))) fl_recv_c));
-  lemma_front_handshake_record_agree
-    (W.serialize_handshake (M.ServerHello sh_s))
-    (W.serialize_handshake (M.ServerHello sh_c))
-    fl_sent_s fl_recv_c ss;
-  assert (Seq.equal fl_sent_s fl_recv_c);
-  (* ---- transcript equality (req 2) ---- *)
-  lemma_transcript_cong ch_s ch_c sh_s sh_c;
-  assert (Seq.equal ms.CS.model_handshake.CS.hs_transcript
-                    mc.CS.model_handshake.CS.hs_transcript);
-  (* ---- handshake-secret agreement (req 1) ---- *)
-  lemma_secret_swap final_s.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret
-                    final_c.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret;
-  assert (match ms.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret,
-                mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret with
-          | Some a, Some b -> Seq.equal a b
-          | _ -> False);
-  (* ---- the producer's flight rests ---- *)
-  let server_rest =
-    sent_ev (M.Certificate cert_s) ::
-    CS.ConnLocalEvent cv_local_s ::
-    sent_ev (M.CertificateVerify cv_s) ::
-    sent_ev (M.Finished sf_s) :: tail_s in
-  let client_rest =
-    recv_ev (M.Certificate cert_c) ::
-    CS.ConnLocalEvent cv_validate_c ::
-    recv_ev (M.CertificateVerify cv_c) ::
-    CS.ConnLocalEvent cv_verify_c ::
-    recv_ev (M.Finished sf_c) :: tail_c in
-  (* ---- flight replays in producer shape by list-equality congruence (req 5,6) ---- *)
-  assert (RI.server_hs_write_install_event material_s ==
-            CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeysForRole {
-                CS.install_role = CS.ServerEndpoint;
-                CS.install_payload = {
-                  CS.install_epoch = CS.TrafficHandshake;
-                  CS.install_direction = CS.TrafficWrite;
-                  CS.install_material = material_s;
-                };
-              }));
-  assert (server_flight_events ee_s cert_s cv_local_s cv_s sf_s tail_s ==
-            CS.ConnNetworkEvent {
-              CL.message_direction = CL.Sent;
-              CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_s);
-            } :: server_rest);
-  assert (RI.client_hs_read_install_event material_c ==
-            CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficHandshake;
-                CS.install_direction = CS.TrafficRead;
-                CS.install_material = material_c;
-              }));
-  assert (client_flight_events ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c ==
-            CS.ConnNetworkEvent {
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_c);
-            } :: client_rest);
-  lemma_replay_cong_sent ms
-    (RI.server_hs_write_install_event material_s ::
-     server_flight_events ee_s cert_s cv_local_s cv_s sf_s tail_s)
-    (CS.ConnLocalEvent
-      (CS.LocalInstallTrafficKeysForRole {
-        CS.install_role = CS.ServerEndpoint;
-        CS.install_payload = {
-          CS.install_epoch = CS.TrafficHandshake;
-          CS.install_direction = CS.TrafficWrite;
-          CS.install_material = material_s;
-        };
-      }) ::
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Sent;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_s);
-      } :: server_rest)
-    fl_sent_s fl_recv_s final_s;
-  lemma_replay_cong_recv mc
-    (RI.client_hs_read_install_event material_c ::
-     client_flight_events ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c)
-    (CS.ConnLocalEvent
-      (CS.LocalInstallTrafficKeys {
-        CS.install_epoch = CS.TrafficHandshake;
-        CS.install_direction = CS.TrafficRead;
-        CS.install_material = material_c;
-      }) ::
-      CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_c);
-      } :: client_rest)
-    fl_sent_c fl_recv_c final_c;
-  (* ---- assemble via the isolated producer call ---- *)
-  lemma_call_producer s ms mc material_s material_c ee_s ee_c server_rest client_rest
-    fl_sent_s fl_recv_s fl_sent_c fl_recv_c
-#pop-options
-
-
-
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
-let lemma_combine (s:sysp)
-  : Lemma (requires server_flight_bridge_inputs s.client s.server)
-          (ensures goal_exists s)
-  =
-  lemma_server_side s;
-  lemma_client_side s;
-  eliminate exists (ms:CS.connection_model) (material_s:CS.traffic_key_material)
-    (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
-    (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (tail_s:list CS.conn_event)
-    (fl_sent_s fl_recv_s:B.bytes) (ch_s:GCH.clientHello) (sh_s:GSH.serverHello)
-    (d_ch_s rest_sr:B.bytes).
-    server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
-      fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-  returns goal_exists s
-  with _.
-  (
-    eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
-      (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
-      (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-      (tail_c:list CS.conn_event)
-      (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
-      (rest_cs:B.bytes).
-      client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c
-        fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    returns goal_exists s
-    with _.
-    (
-      lemma_finish s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
-        fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-        mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c
-        fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    )
-  )
-#pop-options
-
 (* ================= ported stage infrastructure ================= *)
 
 let after_fin_server (m:CS.connection_model) : prop =
@@ -2344,6 +2174,7 @@ let lemma_server_field_step (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.co
   match ev with
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg -> ()
+  | CS.ConnProtectedHandshake step -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
@@ -2400,6 +2231,7 @@ let lemma_client_field_step (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.co
   match ev with
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg -> ()
+  | CS.ConnProtectedHandshake step -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
@@ -2442,6 +2274,7 @@ let lemma_step_preserves_config (m:CS.connection_model) (ev:CS.conn_event) (m1:C
   = match ev with
     | CS.ConnLocalEvent local -> ()
     | CS.ConnNetworkEvent msg -> ()
+    | CS.ConnProtectedHandshake step -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
@@ -2738,6 +2571,7 @@ let lemma_server_fields_pinned
 
 (* ================= client field pinning (7-head peel) ================= *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#restart-solver
 let lemma_client_fields_pinned
   (mc:CS.connection_model) (install:CS.conn_event)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv_validate:CS.local_event)
@@ -2863,6 +2697,31 @@ let lemma_noninstall_local_preserves_record (m m1:CS.connection_model) (l:CS.loc
           (ensures m1.CS.model_record == m.CS.model_record)
   = ()
 
+let lemma_local_step_preserves_protected_buffer_empty
+  (m m1:CS.connection_model) (l:CS.local_event)
+  : Lemma
+      (requires
+        CS.protected_handshake_buffer_empty m /\
+        CS.step_model m (CS.ConnLocalEvent l) == Some m1)
+      (ensures CS.protected_handshake_buffer_empty m1)
+  = ()
+
+let lemma_received_handshake_step_preserves_protected_buffer_empty
+  (m m1:CS.connection_model) (msg:M.handshake_msg)
+  : Lemma
+      (requires
+        CS.protected_handshake_buffer_empty m /\
+        CS.step_model m (recv_ev msg) == Some m1)
+      (ensures CS.protected_handshake_buffer_empty m1)
+  = ()
+
+let lemma_received_replay_head_legal
+  (m:CS.connection_model) (ev:CS.conn_event) (rest:list CS.conn_event)
+  (rs rr:B.bytes) (f:CS.connection_model)
+  : Lemma (requires SMReplay.conn_events_received_decode_replay m (ev :: rest) rs rr f)
+          (ensures CS.legal_event m ev)
+  = ()
+
 let lemma_skip_not_install_server (m m1:CS.connection_model) (l:CS.local_event)
   : Lemma (requires m.CS.model_config.CS.config_role == CS.ServerEndpoint /\
                     m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
@@ -2897,7 +2756,8 @@ unfold let stageA_result
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify)
   (sf_s:GFin.finished) (tail_s:list CS.conn_event)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_c:GCV.certificateVerify)
-  (cv_verify:CS.local_event) (sf_c:GFin.finished) (tail_c:list CS.conn_event)
+  (cv_verify:CS.local_event) (sf_c:GFin.finished)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event) (raw_tail:list CS.conn_event)
   (final_s final_c:CS.connection_model) : prop =
   exists (server_after2 client_after2:CS.connection_model)
          (pair0 pair1 pair2:PB.protected_message_replay)
@@ -2911,13 +2771,21 @@ unfold let stageA_result
     PB.write_read_record_material_aligned server_after2 client_after2 /\
     client_after2.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
     client_after2.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+    CS.protected_handshake_buffer_empty client_after2 /\
+    CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+    CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+    CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+    CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
+    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee_c) raw_ee /\
+    PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
+    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
     Seq.equal sts ctr /\
     SMReplay.conn_events_sent_seal_replay server_after2
       (sent_ev (M.Finished sf_s) :: tail_s) sts str final_s /\
     SMReplay.conn_events_received_decode_replay client_after2
-      (CS.ConnLocalEvent cv_verify :: recv_ev (M.Finished sf_c) :: tail_c) cts ctr final_c
+      (CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail) cts ctr final_c
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 180 --split_queries always"
 let lemma_stageA
   (ms mc:CS.connection_model)
   (material_s material_c:CS.traffic_key_material)
@@ -2926,7 +2794,8 @@ let lemma_stageA
   (fl_sent_s fl_recv_s:B.bytes)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate:CS.local_event)
   (cv_c:GCV.certificateVerify) (cv_verify:CS.local_event) (sf_c:GFin.finished)
-  (tail_c:list CS.conn_event) (fl_sent_c fl_recv_c:B.bytes)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event) (raw_tail:list CS.conn_event)
+  (fl_sent_c fl_recv_c:B.bytes)
   (final_s final_c:CS.connection_model)
   : Lemma
       (requires
@@ -2936,6 +2805,11 @@ let lemma_stageA
                mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret with
          | Some a, Some b -> Seq.equal a b | _ -> False) /\
         Seq.equal ms.CS.model_handshake.CS.hs_transcript mc.CS.model_handshake.CS.hs_transcript /\
+        CS.protected_handshake_buffer_empty mc /\
+        CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+        CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+        CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+        CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
         Seq.equal fl_sent_s fl_recv_c /\
         SMReplay.conn_events_sent_seal_replay ms
           (install_ev_server material_s :: sent_ev (M.EncryptedExtensions ee_s) ::
@@ -2943,15 +2817,14 @@ let lemma_stageA
            sent_ev (M.CertificateVerify cv_s) :: sent_ev (M.Finished sf_s) :: tail_s)
           fl_sent_s fl_recv_s final_s /\
         SMReplay.conn_events_received_decode_replay mc
-          (install_ev_client material_c :: recv_ev (M.EncryptedExtensions ee_c) ::
-           recv_ev (M.Certificate cert_c) :: CS.ConnLocalEvent cv_validate ::
-           recv_ev (M.CertificateVerify cv_c) :: CS.ConnLocalEvent cv_verify ::
-           recv_ev (M.Finished sf_c) :: tail_c)
+          (install_ev_client material_c :: raw_ee :: raw_cert ::
+           CS.ConnLocalEvent cv_validate :: raw_cv ::
+           CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail)
           fl_sent_c fl_recv_c final_c)
-      (ensures stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c)
+      (ensures
+        stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
+          cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
   =
-  let iS = install_ev_server material_s in
-  let iC = install_ev_client material_c in
   let sEE = sent_ev (M.EncryptedExtensions ee_s) in
   let sCert = sent_ev (M.Certificate cert_s) in
   let sCV = sent_ev (M.CertificateVerify cv_s) in
@@ -2959,142 +2832,226 @@ let lemma_stageA
   let cEE = recv_ev (M.EncryptedExtensions ee_c) in
   let cCert = recv_ev (M.Certificate cert_c) in
   let cCV = recv_ev (M.CertificateVerify cv_c) in
-  let cFin = recv_ev (M.Finished sf_c) in
   let lcvl = CS.ConnLocalEvent cv_local in
-  let lcvv = CS.ConnLocalEvent cv_verify in
   let lcvval = CS.ConnLocalEvent cv_validate in
-  let server_rest = sFin :: tail_s in
-  let client_rest = lcvv :: cFin :: tail_c in
-  let goal = stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c in
-  PWReplay.lemma_conn_events_sent_seal_replay_head ms iS (sEE::sCert::lcvl::sCV::sFin::tail_s) fl_sent_s fl_recv_s final_s;
-  eliminate exists (sm0:CS.connection_model) (a0 b0 ts0 tr0:B.bytes).
-      CS.legal_event ms iS /\ CS.step_model ms iS == Some sm0 /\
-      CS.event_raw_delta_legal ms iS a0 b0 /\
-      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection ms iS a0 /\
-      Seq.equal fl_sent_s (B.append a0 ts0) /\ Seq.equal fl_recv_s (B.append b0 tr0) /\
-      SMReplay.conn_events_sent_seal_replay sm0 (sEE::sCert::lcvl::sCV::sFin::tail_s) ts0 tr0 final_s
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_sent_seal_replay_head sm0 sEE (sCert::lcvl::sCV::sFin::tail_s) ts0 tr0 final_s;
-  eliminate exists (sm1:CS.connection_model) (a1 b1 ts1 tr1:B.bytes).
-      CS.legal_event sm0 sEE /\ CS.step_model sm0 sEE == Some sm1 /\
-      CS.event_raw_delta_legal sm0 sEE a1 b1 /\
-      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection sm0 sEE a1 /\
-      Seq.equal ts0 (B.append a1 ts1) /\ Seq.equal tr0 (B.append b1 tr1) /\
-      SMReplay.conn_events_sent_seal_replay sm1 (sCert::lcvl::sCV::sFin::tail_s) ts1 tr1 final_s
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_sent_seal_replay_head sm1 sCert (lcvl::sCV::sFin::tail_s) ts1 tr1 final_s;
-  eliminate exists (sm2:CS.connection_model) (a2 b2 ts2 tr2:B.bytes).
-      CS.legal_event sm1 sCert /\ CS.step_model sm1 sCert == Some sm2 /\
-      CS.event_raw_delta_legal sm1 sCert a2 b2 /\
-      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection sm1 sCert a2 /\
-      Seq.equal ts1 (B.append a2 ts2) /\ Seq.equal tr1 (B.append b2 tr2) /\
-      SMReplay.conn_events_sent_seal_replay sm2 (lcvl::sCV::sFin::tail_s) ts2 tr2 final_s
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_sent_seal_replay_head sm2 lcvl (sCV::sFin::tail_s) ts2 tr2 final_s;
-  eliminate exists (sm3:CS.connection_model) (a3 b3 ts3 tr3:B.bytes).
-      CS.legal_event sm2 lcvl /\ CS.step_model sm2 lcvl == Some sm3 /\
-      CS.event_raw_delta_legal sm2 lcvl a3 b3 /\
-      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection sm2 lcvl a3 /\
-      Seq.equal ts2 (B.append a3 ts3) /\ Seq.equal tr2 (B.append b3 tr3) /\
-      SMReplay.conn_events_sent_seal_replay sm3 (sCV::sFin::tail_s) ts3 tr3 final_s
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_sent_seal_replay_head sm3 sCV (sFin::tail_s) ts3 tr3 final_s;
-  eliminate exists (sm4:CS.connection_model) (a4 b4 ts4 tr4:B.bytes).
-      CS.legal_event sm3 sCV /\ CS.step_model sm3 sCV == Some sm4 /\
-      CS.event_raw_delta_legal sm3 sCV a4 b4 /\
-      TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection sm3 sCV a4 /\
-      Seq.equal ts3 (B.append a4 ts4) /\ Seq.equal tr3 (B.append b4 tr4) /\
-      SMReplay.conn_events_sent_seal_replay sm4 (sFin::tail_s) ts4 tr4 final_s
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_received_decode_replay_head mc iC (cEE::cCert::lcvval::cCV::lcvv::cFin::tail_c) fl_sent_c fl_recv_c final_c;
-  eliminate exists (cm0:CS.connection_model) (ca0 cb0 cts0 ctr0:B.bytes).
-      CS.legal_event mc iC /\ CS.step_model mc iC == Some cm0 /\
-      CS.event_raw_delta_legal mc iC ca0 cb0 /\
-      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection mc iC cb0 /\
-      Seq.equal fl_sent_c (B.append ca0 cts0) /\ Seq.equal fl_recv_c (B.append cb0 ctr0) /\
-      SMReplay.conn_events_received_decode_replay cm0 (cEE::cCert::lcvval::cCV::lcvv::cFin::tail_c) cts0 ctr0 final_c
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_received_decode_replay_head cm0 cEE (cCert::lcvval::cCV::lcvv::cFin::tail_c) cts0 ctr0 final_c;
-  eliminate exists (cm1:CS.connection_model) (ca1 cb1 cts1 ctr1:B.bytes).
-      CS.legal_event cm0 cEE /\ CS.step_model cm0 cEE == Some cm1 /\
-      CS.event_raw_delta_legal cm0 cEE ca1 cb1 /\
-      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection cm0 cEE cb1 /\
-      Seq.equal cts0 (B.append ca1 cts1) /\ Seq.equal ctr0 (B.append cb1 ctr1) /\
-      SMReplay.conn_events_received_decode_replay cm1 (cCert::lcvval::cCV::lcvv::cFin::tail_c) cts1 ctr1 final_c
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_received_decode_replay_head cm1 cCert (lcvval::cCV::lcvv::cFin::tail_c) cts1 ctr1 final_c;
-  eliminate exists (cm2:CS.connection_model) (ca2 cb2 cts2 ctr2:B.bytes).
-      CS.legal_event cm1 cCert /\ CS.step_model cm1 cCert == Some cm2 /\
-      CS.event_raw_delta_legal cm1 cCert ca2 cb2 /\
-      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection cm1 cCert cb2 /\
-      Seq.equal cts1 (B.append ca2 cts2) /\ Seq.equal ctr1 (B.append cb2 ctr2) /\
-      SMReplay.conn_events_received_decode_replay cm2 (lcvval::cCV::lcvv::cFin::tail_c) cts2 ctr2 final_c
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_received_decode_replay_head cm2 lcvval (cCV::lcvv::cFin::tail_c) cts2 ctr2 final_c;
-  eliminate exists (cm3:CS.connection_model) (ca3 cb3 cts3 ctr3:B.bytes).
-      CS.legal_event cm2 lcvval /\ CS.step_model cm2 lcvval == Some cm3 /\
-      CS.event_raw_delta_legal cm2 lcvval ca3 cb3 /\
-      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection cm2 lcvval cb3 /\
-      Seq.equal cts2 (B.append ca3 cts3) /\ Seq.equal ctr2 (B.append cb3 ctr3) /\
-      SMReplay.conn_events_received_decode_replay cm3 (cCV::lcvv::cFin::tail_c) cts3 ctr3 final_c
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  PWReplay.lemma_conn_events_received_decode_replay_head cm3 cCV (lcvv::cFin::tail_c) cts3 ctr3 final_c;
-  eliminate exists (cm4:CS.connection_model) (ca4 cb4 cts4 ctr4:B.bytes).
-      CS.legal_event cm3 cCV /\ CS.step_model cm3 cCV == Some cm4 /\
-      CS.event_raw_delta_legal cm3 cCV ca4 cb4 /\
-      TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection cm3 cCV cb4 /\
-      Seq.equal cts3 (B.append ca4 cts4) /\ Seq.equal ctr3 (B.append cb4 ctr4) /\
-      SMReplay.conn_events_received_decode_replay cm4 (lcvv::cFin::tail_c) cts4 ctr4 final_c
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-  lemma_step_preserves_config ms iS sm0;
-  lemma_step_preserves_config sm0 sEE sm1;
-  lemma_step_preserves_config sm1 sCert sm2;
-  lemma_step_preserves_config mc iC cm0;
-  lemma_step_preserves_config cm0 cEE cm1;
-  lemma_step_preserves_config cm1 cCert cm2;
-  lemma_step_preserves_config cm2 lcvval cm3;
-  lemma_step_preserves_config cm3 cCV cm4;
-  lemma_read_ee sm0 sm1 ee_s;
-  lemma_read_cert sm1 sm2 cert_s;
-  lemma_read_cv sm3 sm4 cv_s;
-  lemma_read_recv_ee cm0 cm1 ee_c;
-  lemma_read_recv_cert cm1 cm2 cert_c;
-  lemma_read_recv_cv cm3 cm4 cv_c;
-  lemma_skip_not_install_server sm2 sm2 cv_local;
-  lemma_skip_not_install_client cm2 cm2 cv_validate;
-  PWSFlight.lemma_protected_handshake_event_projection_pairs_after_server_write_client_read_install_two_heads_then_both_non_install_local_heads_with_next_alignment_and_tails
-    ms mc sm0 cm0 sm1 cm1 sm2 cm2 sm3 cm3 sm4 cm4 cv_local cv_validate material_s material_c
+  let lcvv = CS.ConnLocalEvent cv_verify in
+  let server_rest0 = sCert :: lcvl :: sCV :: sFin :: tail_s in
+  let client_rest0 =
+    raw_cert :: lcvval :: raw_cv :: lcvv :: raw_sf :: raw_tail in
+  PWSFlight.lemma_single_message_sender_after_server_write_client_read_install_normalizes_received_head
+    ms mc material_s material_c
     (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c)
-    (M.Certificate cert_s) (M.Certificate cert_c)
-    (M.CertificateVerify cv_s) (M.CertificateVerify cv_c)
-    server_rest client_rest fl_sent_s fl_recv_s fl_sent_c fl_recv_c final_s final_c;
-  eliminate exists (pair0 pair1 pair2:PB.protected_message_replay)
-                   (sts str cts ctr:B.bytes).
+    raw_ee server_rest0 client_rest0
+    fl_sent_s fl_recv_s fl_sent_c fl_recv_c final_s final_c;
+  PWSFlight.lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
+    ms mc material_s material_c
+    (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c)
+    server_rest0 client_rest0
+    fl_sent_s fl_recv_s fl_sent_c fl_recv_c final_s final_c;
+  eliminate exists (sm0 cm0 sm1 cm1:CS.connection_model)
+                   (pair0:PB.protected_message_replay)
+                   (sts1 str1 cts1 ctr1:B.bytes).
+      CS.step_model ms (install_ev_server material_s) == Some sm0 /\
+      CS.step_model mc (install_ev_client material_c) == Some cm0 /\
+      CS.step_model sm0 sEE == Some sm1 /\
+      CS.step_model cm0 cEE == Some cm1 /\
       pair0.PB.pm_sender == sm0 /\ pair0.PB.pm_receiver == cm0 /\
-      PB.protected_handshake_event_projection_pair pair0 (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
-      pair1.PB.pm_sender == sm1 /\ pair1.PB.pm_receiver == cm1 /\
-      PB.protected_handshake_event_projection_pair pair1 (M.Certificate cert_s) (M.Certificate cert_c) /\
-      pair2.PB.pm_sender == sm3 /\ pair2.PB.pm_receiver == cm3 /\
-      PB.protected_handshake_event_projection_pair pair2 (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
-      PB.write_read_record_material_aligned sm4 cm4 /\
-      Seq.equal sts ctr /\
-      SMReplay.conn_events_sent_seal_replay sm4 server_rest sts str final_s /\
-      SMReplay.conn_events_received_decode_replay cm4 client_rest cts ctr final_c
-  returns (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c) with _. (
-    introduce exists (server_after2 client_after2:CS.connection_model)
-                     (p0 p1 p2:PB.protected_message_replay) (xa xb xc xd:B.bytes).
-      PB.protected_handshake_event_projection_pair p0 (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
-      PB.protected_handshake_event_projection_pair p1 (M.Certificate cert_s) (M.Certificate cert_c) /\
-      PB.protected_handshake_event_projection_pair p2 (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
-      PB.write_read_record_material_aligned server_after2 client_after2 /\
-      client_after2.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
-      client_after2.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-      Seq.equal xa xd /\
-      SMReplay.conn_events_sent_seal_replay server_after2 (sent_ev (M.Finished sf_s) :: tail_s) xa xb final_s /\
-      SMReplay.conn_events_received_decode_replay client_after2 (CS.ConnLocalEvent cv_verify :: recv_ev (M.Finished sf_c) :: tail_c) xc xd final_c
-    with sm4 cm4 pair0 pair1 pair2 sts str cts ctr
-    and ()
-  )))))))))))
+      PB.protected_handshake_event_projection_pair pair0
+        (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
+      Seq.equal sts1 ctr1 /\
+      SMReplay.conn_events_sent_seal_replay sm1 server_rest0 sts1 str1 final_s /\
+      SMReplay.conn_events_received_decode_replay cm1 client_rest0 cts1 ctr1 final_c
+  returns
+    (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
+      cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
+  with _.
+  (
+    lemma_step_preserves_config ms (install_ev_server material_s) sm0;
+    lemma_step_preserves_config mc (install_ev_client material_c) cm0;
+    lemma_step_preserves_config sm0 sEE sm1;
+    lemma_step_preserves_config cm0 cEE cm1;
+    lemma_read_ee sm0 sm1 ee_s;
+    lemma_read_recv_ee cm0 cm1 ee_c;
+    PWAlign.lemma_next_seq_models_preserve_write_read_record_material_alignment
+      sm0 cm0 sm1 cm1;
+    lemma_local_step_preserves_protected_buffer_empty
+      mc cm0
+      (CS.LocalInstallTrafficKeys {
+        CS.install_epoch = CS.TrafficHandshake;
+        CS.install_direction = CS.TrafficRead;
+        CS.install_material = material_c;
+      });
+    lemma_received_handshake_step_preserves_protected_buffer_empty
+      cm0 cm1 (M.EncryptedExtensions ee_c);
+    PWHead.lemma_single_message_sender_normalizes_received_handshake_head
+      sm1 cm1 (M.Certificate cert_s) (M.Certificate cert_c) raw_cert
+      (lcvl :: sCV :: sFin :: tail_s)
+      (lcvval :: raw_cv :: lcvv :: raw_sf :: raw_tail)
+      sts1 str1 cts1 ctr1 final_s final_c;
+    PWHead.lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
+      sm1 cm1 (M.Certificate cert_s) (M.Certificate cert_c)
+      (lcvl :: sCV :: sFin :: tail_s)
+      (lcvval :: raw_cv :: lcvv :: raw_sf :: raw_tail)
+      sts1 str1 cts1 ctr1 final_s final_c;
+    lemma_received_replay_head_legal
+      cm1 cCert (lcvval :: raw_cv :: lcvv :: raw_sf :: raw_tail)
+      cts1 ctr1 final_c;
+    eliminate exists (sm2 cm2:CS.connection_model)
+                     (pair1:PB.protected_message_replay)
+                     (sts2 str2 cts2 ctr2:B.bytes).
+        CS.step_model sm1 sCert == Some sm2 /\
+        CS.step_model cm1 cCert == Some cm2 /\
+        pair1.PB.pm_sender == sm1 /\ pair1.PB.pm_receiver == cm1 /\
+        PB.protected_handshake_event_projection_pair pair1
+          (M.Certificate cert_s) (M.Certificate cert_c) /\
+        Seq.equal sts2 ctr2 /\
+        SMReplay.conn_events_sent_seal_replay sm2
+          (lcvl :: sCV :: sFin :: tail_s) sts2 str2 final_s /\
+        SMReplay.conn_events_received_decode_replay cm2
+          (lcvval :: raw_cv :: lcvv :: raw_sf :: raw_tail)
+          cts2 ctr2 final_c
+    returns
+      (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
+        cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
+    with _.
+    (
+      lemma_step_preserves_config sm1 sCert sm2;
+      lemma_step_preserves_config cm1 cCert cm2;
+      lemma_read_cert sm1 sm2 cert_s;
+      lemma_read_recv_cert cm1 cm2 cert_c;
+      PWAlign.lemma_next_seq_models_preserve_write_read_record_material_alignment
+        sm1 cm1 sm2 cm2;
+      lemma_received_handshake_step_preserves_protected_buffer_empty
+        cm1 cm2 (M.Certificate cert_c);
+      PWHead.lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
+        sm2 cm2 lcvl lcvval
+        (sCV :: sFin :: tail_s)
+        (raw_cv :: lcvv :: raw_sf :: raw_tail)
+        sts2 str2 cts2 ctr2 final_s final_c;
+      eliminate exists (sm3 cm3:CS.connection_model)
+                       (sts3 str3 cts3 ctr3:B.bytes).
+          CS.legal_event sm2 lcvl /\
+          CS.step_model sm2 lcvl == Some sm3 /\
+          CS.legal_event cm2 lcvval /\
+          CS.step_model cm2 lcvval == Some cm3 /\
+          Seq.equal sts3 ctr3 /\
+          SMReplay.conn_events_sent_seal_replay sm3
+            (sCV :: sFin :: tail_s) sts3 str3 final_s /\
+          SMReplay.conn_events_received_decode_replay cm3
+            (raw_cv :: lcvv :: raw_sf :: raw_tail) cts3 ctr3 final_c
+      returns
+        (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
+          cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
+      with _.
+      (
+        lemma_skip_not_install_server sm2 sm3 cv_local;
+        lemma_skip_not_install_client cm2 cm3 cv_validate;
+        lemma_step_preserves_config sm2 lcvl sm3;
+        lemma_step_preserves_config cm2 lcvval cm3;
+        PWAlign.lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
+          sm2 cv_local sm3 cm2;
+        PWAlign.lemma_step_receiver_non_install_local_event_preserves_write_read_record_material_alignment
+          sm3 cm2 cv_validate cm3;
+        lemma_local_step_preserves_protected_buffer_empty cm2 cm3 cv_validate;
+        PWHead.lemma_single_message_sender_normalizes_received_handshake_head
+          sm3 cm3 (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) raw_cv
+          (sFin :: tail_s) (lcvv :: raw_sf :: raw_tail)
+          sts3 str3 cts3 ctr3 final_s final_c;
+        PWHead.lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
+          sm3 cm3 (M.CertificateVerify cv_s) (M.CertificateVerify cv_c)
+          (sFin :: tail_s) (lcvv :: raw_sf :: raw_tail)
+          sts3 str3 cts3 ctr3 final_s final_c;
+        lemma_received_replay_head_legal
+          cm3 cCV (lcvv :: raw_sf :: raw_tail)
+          cts3 ctr3 final_c;
+        eliminate exists (sm4 cm4:CS.connection_model)
+                         (pair2:PB.protected_message_replay)
+                         (sts4 str4 cts4 ctr4:B.bytes).
+            CS.step_model sm3 sCV == Some sm4 /\
+            CS.step_model cm3 cCV == Some cm4 /\
+            pair2.PB.pm_sender == sm3 /\ pair2.PB.pm_receiver == cm3 /\
+            PB.protected_handshake_event_projection_pair pair2
+              (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
+            Seq.equal sts4 ctr4 /\
+            SMReplay.conn_events_sent_seal_replay sm4
+              (sFin :: tail_s) sts4 str4 final_s /\
+            SMReplay.conn_events_received_decode_replay cm4
+              (lcvv :: raw_sf :: raw_tail) cts4 ctr4 final_c
+        returns
+          (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
+            cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
+        with _.
+        (
+          lemma_step_preserves_config sm3 sCV sm4;
+          lemma_read_cv sm3 sm4 cv_s;
+          lemma_read_recv_cv cm3 cm4 cv_c;
+          lemma_step_preserves_config cm3 cCV cm4;
+          PWAlign.lemma_next_seq_models_preserve_write_read_record_material_alignment
+            sm3 cm3 sm4 cm4;
+          lemma_received_handshake_step_preserves_protected_buffer_empty
+            cm3 cm4 (M.CertificateVerify cv_c);
+          assert (PB.protected_handshake_event_projection_pair pair0
+            (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c));
+          assert (PB.protected_handshake_event_projection_pair pair1
+            (M.Certificate cert_s) (M.Certificate cert_c));
+          assert (PB.protected_handshake_event_projection_pair pair2
+            (M.CertificateVerify cv_s) (M.CertificateVerify cv_c));
+          assert (PB.write_read_record_material_aligned sm4 cm4);
+          assert (cm4.CS.model_control ==
+            CS.ControlHandshaking CS.HsCertificateVerifyReceived);
+          assert (cm4.CS.model_config.CS.config_role == CS.ClientEndpoint);
+          assert (CS.protected_handshake_buffer_empty cm4);
+          assert (CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c));
+          assert (CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c));
+          assert (CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c));
+          assert (CCShape.canonical_event raw_sf ==
+            recv_ev (M.Finished sf_c));
+          assert (PWHead.received_handshake_head_normal_form
+            (M.EncryptedExtensions ee_c) raw_ee);
+          assert (PWHead.received_handshake_head_normal_form
+            (M.Certificate cert_c) raw_cert);
+          assert (PWHead.received_handshake_head_normal_form
+            (M.CertificateVerify cv_c) raw_cv);
+          assert (Seq.equal sts4 ctr4);
+          assert (SMReplay.conn_events_sent_seal_replay sm4
+            (sent_ev (M.Finished sf_s) :: tail_s) sts4 str4 final_s);
+          assert (SMReplay.conn_events_received_decode_replay cm4
+            (CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail)
+            cts4 ctr4 final_c);
+          introduce exists
+            (server_after2 client_after2:CS.connection_model)
+            (p0 p1 p2:PB.protected_message_replay)
+            (xa xb xc xd:B.bytes).
+              PB.protected_handshake_event_projection_pair p0
+                (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
+              PB.protected_handshake_event_projection_pair p1
+                (M.Certificate cert_s) (M.Certificate cert_c) /\
+              PB.protected_handshake_event_projection_pair p2
+                (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
+              PB.write_read_record_material_aligned server_after2 client_after2 /\
+              client_after2.CS.model_control ==
+                CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
+              client_after2.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+              CS.protected_handshake_buffer_empty client_after2 /\
+              CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+              CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+              CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+              CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
+              PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee_c) raw_ee /\
+              PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
+              PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
+              Seq.equal xa xd /\
+              SMReplay.conn_events_sent_seal_replay server_after2
+                (sent_ev (M.Finished sf_s) :: tail_s) xa xb final_s /\
+              SMReplay.conn_events_received_decode_replay client_after2
+                (CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail)
+                xc xd final_c
+          with sm4 cm4 pair0 pair1 pair2 sts4 str4 cts4 ctr4
+          and ()
+        )
+      )
+    )
+  )
 #pop-options
 
 (* ================= Stage B: SF (Finished) pair via :1138 ================= *)
@@ -3118,7 +3075,8 @@ unfold let stageB_result
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify)
   (sf_s:GFin.finished)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_c:GCV.certificateVerify)
-  (sf_c:GFin.finished) : prop =
+  (sf_c:GFin.finished)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event) : prop =
   exists (pair_ee pair_cert pair_cv pair_sf:PB.protected_message_replay).
     PB.protected_handshake_event_projection_pair pair_ee
       (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
@@ -3127,18 +3085,31 @@ unfold let stageB_result
     PB.protected_handshake_event_projection_pair pair_cv
       (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
     PB.protected_handshake_event_projection_pair pair_sf
-      (M.Finished sf_s) (M.Finished sf_c)
+      (M.Finished sf_s) (M.Finished sf_c) /\
+    CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+    CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+    CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+    CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
+    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee_c) raw_ee /\
+    PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
+    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
+    PWHead.received_handshake_head_normal_form (M.Finished sf_c) raw_sf
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 120 --split_queries always"
 let lemma_stageB
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify)
   (sf_s:GFin.finished) (tail_s:list CS.conn_event)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_c:GCV.certificateVerify)
-  (cv_verify:CS.local_event) (sf_c:GFin.finished) (tail_c:list CS.conn_event)
+  (cv_verify:CS.local_event) (sf_c:GFin.finished)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event) (raw_tail:list CS.conn_event)
   (final_s final_c:CS.connection_model)
   : Lemma
-      (requires stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c cv_verify sf_c tail_c final_s final_c)
-      (ensures stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c)
+      (requires
+        stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
+          cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
+      (ensures
+        stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
+          raw_ee raw_cert raw_cv raw_sf)
   =
   let cFin = recv_ev (M.Finished sf_c) in
   let sFin = sent_ev (M.Finished sf_s) in
@@ -3155,28 +3126,47 @@ let lemma_stageB
       PB.write_read_record_material_aligned server_after2 client_after2 /\
       client_after2.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
       client_after2.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+      CS.protected_handshake_buffer_empty client_after2 /\
+      CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+      CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+      CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+      CCShape.canonical_event raw_sf == cFin /\
+      PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee_c) raw_ee /\
+      PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
+      PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
       Seq.equal sts ctr /\
       SMReplay.conn_events_sent_seal_replay server_after2
         (sFin :: tail_s) sts str final_s /\
       SMReplay.conn_events_received_decode_replay client_after2
-        (lcvv :: cFin :: tail_c) cts ctr final_c
-  returns (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c)
+        (lcvv :: raw_sf :: raw_tail) cts ctr final_c
+  returns
+    (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
+      raw_ee raw_cert raw_cv raw_sf)
   with _. (
-    PWReplay.lemma_conn_events_received_decode_replay_head client_after2 lcvv (cFin::tail_c) cts ctr final_c;
-    eliminate exists (cvs:CS.connection_model) (dds ddr tts ttr:B.bytes).
-        CS.legal_event client_after2 lcvv /\ CS.step_model client_after2 lcvv == Some cvs /\
-        CS.event_raw_delta_legal client_after2 lcvv dds ddr /\
-        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection client_after2 lcvv ddr /\
-        Seq.equal cts (B.append dds tts) /\ Seq.equal ctr (B.append ddr ttr) /\
-        SMReplay.conn_events_received_decode_replay cvs (cFin::tail_c) tts ttr final_c
-    returns (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c)
+    PWHead.lemma_received_replay_skip_empty_head_preserves_peer_stream
+      sts client_after2 lcvv (raw_sf :: raw_tail)
+      cts ctr final_c;
+    eliminate exists (cvs:CS.connection_model) (tts ttr:B.bytes).
+        CS.legal_event client_after2 lcvv /\
+        CS.step_model client_after2 lcvv == Some cvs /\
+        Seq.equal sts ttr /\
+        SMReplay.conn_events_received_decode_replay
+          cvs (raw_sf :: raw_tail) tts ttr final_c
+    returns
+      (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
+        raw_ee raw_cert raw_cv raw_sf)
     with _. (
       lemma_skip_not_install_client_cv client_after2 cv_verify;
       lemma_noninstall_local_preserves_record client_after2 cvs cv_verify;
       lemma_aligned_transfer server_after2 client_after2 cvs;
-      PWHead.lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_head_with_tails
-        server_after2 client_after2 cvs lcvv (M.Finished sf_s) (M.Finished sf_c)
-        tail_s tail_c sts str cts ctr final_s final_c;
+      lemma_local_step_preserves_protected_buffer_empty
+        client_after2 cvs cv_verify;
+      PWHead.lemma_single_message_sender_normalizes_received_handshake_head
+        server_after2 cvs (M.Finished sf_s) (M.Finished sf_c) raw_sf
+        tail_s raw_tail sts str tts ttr final_s final_c;
+      PWHead.lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
+        server_after2 cvs (M.Finished sf_s) (M.Finished sf_c)
+        tail_s raw_tail sts str tts ttr final_s final_c;
       eliminate exists (fah rah:CS.connection_model) (psf:PB.protected_message_replay)
                        (ftls ftlr rtls rtlr:B.bytes).
           CS.step_model server_after2 sFin == Some fah /\
@@ -3185,8 +3175,10 @@ let lemma_stageB
           PB.protected_handshake_event_projection_pair psf (M.Finished sf_s) (M.Finished sf_c) /\
           Seq.equal ftls rtlr /\
           SMReplay.conn_events_sent_seal_replay fah tail_s ftls ftlr final_s /\
-          SMReplay.conn_events_received_decode_replay rah tail_c rtls rtlr final_c
-      returns (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c)
+          SMReplay.conn_events_received_decode_replay rah raw_tail rtls rtlr final_c
+      returns
+        (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
+          raw_ee raw_cert raw_cv raw_sf)
       with _. (
         introduce exists (pair_ee pair_cert pair_cv pair_sf:PB.protected_message_replay).
           PB.protected_handshake_event_projection_pair pair_ee
@@ -3196,7 +3188,15 @@ let lemma_stageB
           PB.protected_handshake_event_projection_pair pair_cv
             (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
           PB.protected_handshake_event_projection_pair pair_sf
-            (M.Finished sf_s) (M.Finished sf_c)
+            (M.Finished sf_s) (M.Finished sf_c) /\
+          CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+          CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+          CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+          CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
+          PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee_c) raw_ee /\
+          PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
+          PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
+          PWHead.received_handshake_head_normal_form (M.Finished sf_c) raw_sf
         with pair0 pair1 pair2 psf
         and ()
       )
@@ -3208,7 +3208,133 @@ let lemma_stageB
 (* Strengthened capstone: field-pinned 4-pair server-flight inversion *)
 (* ================================================================== *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#restart-solver
+let lemma_conclude_pinned_server_flight
+  (client server:CS.connection_state)
+  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate)
+  (cv_s:GCV.certificateVerify) (sf_s:GFin.finished)
+  (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate)
+  (cv_c:GCV.certificateVerify) (sf_c:GFin.finished)
+  (pair_ee pair_cert pair_cv pair_sf:PB.protected_message_replay)
+  : Lemma
+      (requires
+        server.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == Some ee_s /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_certificate == Some cert_s /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv_s /\
+        server.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some sf_s /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == Some ee_c /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_certificate == Some cert_c /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv_c /\
+        client.CS.cs_model.CS.model_handshake.CS.hs_server_finished == Some sf_c /\
+        PB.protected_handshake_event_projection_pair pair_ee
+          (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
+        PB.protected_handshake_event_projection_pair pair_cert
+          (M.Certificate cert_s) (M.Certificate cert_c) /\
+        PB.protected_handshake_event_projection_pair pair_cv
+          (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
+        PB.protected_handshake_event_projection_pair pair_sf
+          (M.Finished sf_s) (M.Finished sf_c))
+      (ensures server_flight_pairs_conclusion client server)
+  =
+  assert (server_flight_pairs_conclusion client server)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+(* The client's log carries the RAW flight: for a single-message record the
+   implementation emits a saturating head [ConnProtectedHandshake] step rather
+   than a [ConnNetworkEvent].  [client_normalized_appdata_exact_spine] records
+   the raw events together with their NORMAL FORM, which is what downstream
+   consumers need in order to normalise their own replays
+   ([TLS13.ConnectionState.ProtectedWireNormalize]). *)
+let lemma_normalized_client_spine_from_raw
+  (s:sysp)
+  (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (raw_flight:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event) (sf:GFin.finished)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
+  (raw_tail:list CS.conn_event)
+  : Lemma
+      (requires
+        client_raw_prefix_package s ch sh raw_flight /\
+        raw_flight ==
+          raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate ::
+          raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail /\
+        PWHead.received_handshake_head_normal_form
+          (M.EncryptedExtensions ee) raw_ee /\
+        PWHead.received_handshake_head_normal_form
+          (M.Certificate cert) raw_cert /\
+        PWHead.received_handshake_head_normal_form
+          (M.CertificateVerify cv) raw_cv /\
+        PWHead.received_handshake_head_normal_form
+          (M.Finished sf) raw_sf)
+      (ensures client_normalized_appdata_exact_spine s.client)
+  =
+  eliminate exists
+    (start:CS.handshake_start)
+    (client_shared:C.x25519_shared_secret)
+    (region:list CS.conn_event).
+      (forall (e:CS.conn_event).
+        L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+      (exists (er:CS.conn_event).
+        L.memP er region /\
+        CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+      (exists (ew:CS.conn_event).
+        L.memP ew region /\
+        CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+      s.client.CS.cs_event_log ==
+        L.append
+          (PWSeg.client_cleartext_handshake_prefix_events
+            start ch sh client_shared)
+          (L.append region raw_flight)
+  returns client_normalized_appdata_exact_spine s.client
+  with _.
+  (
+    introduce exists
+      (start0:CS.handshake_start)
+      (ch0:GCH.clientHello) (sh0:GSH.serverHello)
+      (client_shared0:C.x25519_shared_secret)
+      (region0:list CS.conn_event)
+      (ee0:GEE.encryptedExtensions) (cert0:GCert.certificate)
+      (cv_validate0:CS.local_event)
+      (cv0:GCV.certificateVerify)
+      (cv_verify0:CS.local_event)
+      (sf0:GFin.finished)
+      (raw_ee0 raw_cert0 raw_cv0 raw_sf0:CS.conn_event)
+      (tail0:list CS.conn_event).
+        PWHead.received_handshake_head_normal_form
+          (M.EncryptedExtensions ee0) raw_ee0 /\
+        PWHead.received_handshake_head_normal_form
+          (M.Certificate cert0) raw_cert0 /\
+        PWHead.received_handshake_head_normal_form
+          (M.CertificateVerify cv0) raw_cv0 /\
+        PWHead.received_handshake_head_normal_form
+          (M.Finished sf0) raw_sf0 /\
+        (forall (e:CS.conn_event).
+          L.memP e region0 ==> CCShape.is_client_hs_install e == true) /\
+        (exists (er:CS.conn_event).
+          L.memP er region0 /\
+          CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+        (exists (ew:CS.conn_event).
+          L.memP ew region0 /\
+          CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+        s.client.CS.cs_event_log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events
+              start0 ch0 sh0 client_shared0)
+            (L.append region0
+              (raw_ee0 :: raw_cert0 :: CS.ConnLocalEvent cv_validate0 ::
+               raw_cv0 :: CS.ConnLocalEvent cv_verify0 :: raw_sf0 :: tail0))
+    with start ch sh client_shared region
+         ee cert cv_validate cv cv_verify sf
+         raw_ee raw_cert raw_cv raw_sf raw_tail
+    and ()
+  )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
 let lemma_finish_strong (s:sysp)
   (ms:CS.connection_model) (material_s:CS.traffic_key_material)
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
@@ -3218,7 +3344,7 @@ let lemma_finish_strong (s:sysp)
   (mc:CS.connection_model) (material_c:CS.traffic_key_material)
   (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
   (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-  (tail_c:list CS.conn_event)
+  (tail_c raw_flight_c:list CS.conn_event)
   (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
   (rest_cs:B.bytes)
   : Lemma
@@ -3227,8 +3353,10 @@ let lemma_finish_strong (s:sysp)
         server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
           fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr /\
         client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-          tail_c fl_sent_c fl_recv_c ch_c sh_c rest_cs)
-      (ensures server_flight_pairs_conclusion s.client s.server)
+          tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs)
+      (ensures
+        server_flight_pairs_conclusion s.client s.server /\
+        client_normalized_appdata_exact_spine s.client)
   =
   lemma_goalA_state s;
   lemma_byte_pairing_quiet s;
@@ -3238,6 +3366,9 @@ let lemma_finish_strong (s:sysp)
   let cr = s.client.CS.cs_wire_log.CL.raw_received in
   let final_s = s.server.CS.cs_model in
   let final_c = s.client.CS.cs_model in
+  lemma_client_side_package_has_raw_prefix s mc material_c
+    ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+    tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs;
   (* ---- CH agreement ---- *)
   lemma_ch_serialize_agree ch_c ch_s cs sr rest_cs rest_sr d_ch_s;
   (* ---- SH agreement + flight-byte pairing ---- *)
@@ -3260,84 +3391,166 @@ let lemma_finish_strong (s:sysp)
                 mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret with
           | Some a, Some b -> Seq.equal a b
           | _ -> False);
-  (* ---- reshape both package replays into the stage-A canonical spine ---- *)
-  let server_list_stageA =
-    install_ev_server material_s ::
-    sent_ev (M.EncryptedExtensions ee_s) ::
-    sent_ev (M.Certificate cert_s) ::
-    CS.ConnLocalEvent cv_local_s ::
-    sent_ev (M.CertificateVerify cv_s) ::
-    sent_ev (M.Finished sf_s) :: tail_s in
-  let client_list_stageA =
-    install_ev_client material_c ::
-    recv_ev (M.EncryptedExtensions ee_c) ::
-    recv_ev (M.Certificate cert_c) ::
-    CS.ConnLocalEvent cv_validate_c ::
-    recv_ev (M.CertificateVerify cv_c) ::
-    CS.ConnLocalEvent cv_verify_c ::
-    recv_ev (M.Finished sf_c) :: tail_c in
-  assert (RI.server_hs_write_install_event material_s == install_ev_server material_s);
-  assert (RI.client_hs_read_install_event material_c == install_ev_client material_c);
-  assert (server_flight_events ee_s cert_s cv_local_s cv_s sf_s tail_s ==
-            sent_ev (M.EncryptedExtensions ee_s) ::
-            sent_ev (M.Certificate cert_s) ::
-            CS.ConnLocalEvent cv_local_s ::
-            sent_ev (M.CertificateVerify cv_s) ::
-            sent_ev (M.Finished sf_s) :: tail_s);
-  assert (client_flight_events ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c ==
-            recv_ev (M.EncryptedExtensions ee_c) ::
-            recv_ev (M.Certificate cert_c) ::
-            CS.ConnLocalEvent cv_validate_c ::
-            recv_ev (M.CertificateVerify cv_c) ::
-            CS.ConnLocalEvent cv_verify_c ::
-            recv_ev (M.Finished sf_c) :: tail_c);
-  lemma_replay_cong_sent ms
-    (RI.server_hs_write_install_event material_s ::
-     server_flight_events ee_s cert_s cv_local_s cv_s sf_s tail_s)
-    server_list_stageA
-    fl_sent_s fl_recv_s final_s;
-  lemma_replay_cong_recv mc
-    (RI.client_hs_read_install_event material_c ::
-     client_flight_events ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c)
-    client_list_stageA
-    fl_sent_c fl_recv_c final_c;
-  (* ---- role facts from roles_ok + config preservation ---- *)
-  lemma_sent_replay_preserves_config ms server_list_stageA fl_sent_s fl_recv_s final_s;
-  lemma_received_replay_preserves_config mc client_list_stageA fl_sent_c fl_recv_c final_c;
-  assert (ms.CS.model_config.CS.config_role == CS.ServerEndpoint);
-  assert (mc.CS.model_config.CS.config_role == CS.ClientEndpoint);
-  (* ---- field pinning: model handshake fields == the spine messages ---- *)
-  lemma_server_fields_pinned ms (install_ev_server material_s)
-    ee_s cert_s cv_local_s cv_s sf_s tail_s fl_sent_s fl_recv_s final_s;
-  lemma_client_fields_pinned mc (install_ev_client material_c)
-    ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c fl_sent_c fl_recv_c final_c;
-  (* ---- Stage A + Stage B: build the four field-pinned projection pairs ---- *)
-  lemma_stageA ms mc material_s material_c
-    ee_s cert_s cv_local_s cv_s sf_s tail_s fl_sent_s fl_recv_s
-    ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c fl_sent_c fl_recv_c
-    final_s final_c;
-  lemma_stageB ee_s cert_s cv_s sf_s tail_s
-    ee_c cert_c cv_c cv_verify_c sf_c tail_c final_s final_c;
-  (* ---- discharge the conclusion match on the pinned fields ---- *)
-  eliminate exists (pair_ee pair_cert pair_cv pair_sf:PB.protected_message_replay).
-      PB.protected_handshake_event_projection_pair pair_ee
-        (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
-      PB.protected_handshake_event_projection_pair pair_cert
-        (M.Certificate cert_s) (M.Certificate cert_c) /\
-      PB.protected_handshake_event_projection_pair pair_cv
-        (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
-      PB.protected_handshake_event_projection_pair pair_sf
-        (M.Finished sf_s) (M.Finished sf_c)
-  returns (server_flight_pairs_conclusion s.client s.server)
-  with _. (
-    assert (server_flight_pairs_conclusion s.client s.server)
+  eliminate exists (g_ee g_cert g_cv g_sf raw_tail:list CS.conn_event).
+      raw_flight_c ==
+        L.append g_ee
+          (L.append g_cert
+            (CS.ConnLocalEvent cv_validate_c ::
+              L.append g_cv
+                (CS.ConnLocalEvent cv_verify_c ::
+                  L.append g_sf raw_tail))) /\
+      CCShape.delivers_handshake g_ee (M.EncryptedExtensions ee_c) /\
+      CCShape.delivers_handshake g_cert (M.Certificate cert_c) /\
+      CCShape.delivers_handshake g_cv (M.CertificateVerify cv_c) /\
+      CCShape.delivers_handshake g_sf (M.Finished sf_c) /\
+      CCShape.canonical_log raw_tail == tail_c
+  returns
+    (server_flight_pairs_conclusion s.client s.server /\
+     client_normalized_appdata_exact_spine s.client)
+  with _.
+  (
+    (* Peel each delivery group down to the event that carries its message. *)
+    CCShape.lemma_delivers_handshake_singleton g_ee (M.EncryptedExtensions ee_c);
+    CCShape.lemma_delivers_handshake_singleton g_cert (M.Certificate cert_c);
+    CCShape.lemma_delivers_handshake_singleton g_cv (M.CertificateVerify cv_c);
+    CCShape.lemma_delivers_handshake_singleton g_sf (M.Finished sf_c);
+    let raw_ee = L.hd g_ee in
+    let raw_cert = L.hd g_cert in
+    let raw_cv = L.hd g_cv in
+    let raw_sf = L.hd g_sf in
+    assert (L.append g_sf raw_tail == raw_sf :: raw_tail);
+    assert (L.append g_cv
+              (CS.ConnLocalEvent cv_verify_c :: L.append g_sf raw_tail) ==
+            raw_cv :: CS.ConnLocalEvent cv_verify_c :: raw_sf :: raw_tail);
+    assert (raw_flight_c ==
+      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate_c ::
+      raw_cv :: CS.ConnLocalEvent cv_verify_c :: raw_sf :: raw_tail);
+    let server_list_stageA =
+      install_ev_server material_s ::
+      sent_ev (M.EncryptedExtensions ee_s) ::
+      sent_ev (M.Certificate cert_s) ::
+      CS.ConnLocalEvent cv_local_s ::
+      sent_ev (M.CertificateVerify cv_s) ::
+      sent_ev (M.Finished sf_s) :: tail_s in
+    let client_list_stageA =
+      install_ev_client material_c ::
+      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate_c ::
+      raw_cv :: CS.ConnLocalEvent cv_verify_c :: raw_sf :: raw_tail in
+    let client_list_ordinary =
+      install_ev_client material_c ::
+      recv_ev (M.EncryptedExtensions ee_c) ::
+      recv_ev (M.Certificate cert_c) ::
+      CS.ConnLocalEvent cv_validate_c ::
+      recv_ev (M.CertificateVerify cv_c) ::
+      CS.ConnLocalEvent cv_verify_c ::
+      recv_ev (M.Finished sf_c) :: raw_tail in
+    assert (RI.server_hs_write_install_event material_s ==
+      install_ev_server material_s);
+    assert (RI.client_hs_read_install_event material_c ==
+      install_ev_client material_c);
+    assert (server_flight_events ee_s cert_s cv_local_s cv_s sf_s tail_s ==
+      sent_ev (M.EncryptedExtensions ee_s) ::
+      sent_ev (M.Certificate cert_s) ::
+      CS.ConnLocalEvent cv_local_s ::
+      sent_ev (M.CertificateVerify cv_s) ::
+      sent_ev (M.Finished sf_s) :: tail_s);
+    lemma_replay_cong_sent ms
+      (RI.server_hs_write_install_event material_s ::
+       server_flight_events ee_s cert_s cv_local_s cv_s sf_s tail_s)
+      server_list_stageA fl_sent_s fl_recv_s final_s;
+    lemma_replay_cong_recv mc
+      (RI.client_hs_read_install_event material_c :: raw_flight_c)
+      client_list_stageA fl_sent_c fl_recv_c final_c;
+    lemma_sent_replay_preserves_config
+      ms server_list_stageA fl_sent_s fl_recv_s final_s;
+    lemma_received_replay_preserves_config
+      mc client_list_stageA fl_sent_c fl_recv_c final_c;
+    assert (ms.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    assert (mc.CS.model_config.CS.config_role == CS.ClientEndpoint);
+    lemma_server_fields_pinned ms (install_ev_server material_s)
+      ee_s cert_s cv_local_s cv_s sf_s tail_s
+      fl_sent_s fl_recv_s final_s;
+    lemma_stageA ms mc material_s material_c
+      ee_s cert_s cv_local_s cv_s sf_s tail_s fl_sent_s fl_recv_s
+      ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+      raw_ee raw_cert raw_cv raw_sf raw_tail
+      fl_sent_c fl_recv_c final_s final_c;
+    lemma_stageB ee_s cert_s cv_s sf_s tail_s
+      ee_c cert_c cv_c cv_verify_c sf_c
+      raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c;
+    eliminate exists
+      (pair_ee pair_cert pair_cv pair_sf:PB.protected_message_replay).
+        PB.protected_handshake_event_projection_pair pair_ee
+          (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
+        PB.protected_handshake_event_projection_pair pair_cert
+          (M.Certificate cert_s) (M.Certificate cert_c) /\
+        PB.protected_handshake_event_projection_pair pair_cv
+          (M.CertificateVerify cv_s) (M.CertificateVerify cv_c) /\
+        PB.protected_handshake_event_projection_pair pair_sf
+          (M.Finished sf_s) (M.Finished sf_c) /\
+        CCShape.canonical_event raw_ee == recv_ev (M.EncryptedExtensions ee_c) /\
+        CCShape.canonical_event raw_cert == recv_ev (M.Certificate cert_c) /\
+        CCShape.canonical_event raw_cv == recv_ev (M.CertificateVerify cv_c) /\
+        CCShape.canonical_event raw_sf == recv_ev (M.Finished sf_c) /\
+        PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee_c) raw_ee /\
+        PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
+        PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
+        PWHead.received_handshake_head_normal_form (M.Finished sf_c) raw_sf
+    returns
+      (server_flight_pairs_conclusion s.client s.server /\
+       client_normalized_appdata_exact_spine s.client)
+    with _.
+    (
+      lemma_normalized_client_spine_from_raw s ch_c sh_c raw_flight_c
+        ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+        raw_ee raw_cert raw_cv raw_sf raw_tail;
+      PWNorm.lemma_normalize_flight_recv_after
+        mc (install_ev_client material_c)
+        (M.EncryptedExtensions ee_c) (M.Certificate cert_c)
+        (M.CertificateVerify cv_c) (M.Finished sf_c)
+        raw_ee raw_cert raw_cv raw_sf
+        cv_validate_c cv_verify_c raw_tail
+        fl_sent_c fl_recv_c final_c;
+      assert (PWNorm.recv_ev (M.EncryptedExtensions ee_c) ==
+              recv_ev (M.EncryptedExtensions ee_c));
+      assert (install_ev_client material_c ::
+         PWNorm.normal_flight
+           (M.EncryptedExtensions ee_c) (M.Certificate cert_c)
+           (M.CertificateVerify cv_c) (M.Finished sf_c)
+           cv_validate_c cv_verify_c raw_tail
+        == client_list_ordinary);
+      lemma_replay_cong_recv mc
+        (install_ev_client material_c ::
+         PWNorm.normal_flight
+           (M.EncryptedExtensions ee_c) (M.Certificate cert_c)
+           (M.CertificateVerify cv_c) (M.Finished sf_c)
+           cv_validate_c cv_verify_c raw_tail)
+        client_list_ordinary
+        fl_sent_c fl_recv_c final_c;
+      lemma_client_fields_pinned mc (install_ev_client material_c)
+        ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c raw_tail
+        fl_sent_c fl_recv_c final_c;
+      assert (final_s.CS.model_handshake.CS.hs_encrypted_extensions == Some ee_s);
+      assert (final_s.CS.model_handshake.CS.hs_certificate == Some cert_s);
+      assert (final_s.CS.model_handshake.CS.hs_certificate_verify == Some cv_s);
+      assert (final_s.CS.model_handshake.CS.hs_server_finished == Some sf_s);
+      assert (final_c.CS.model_handshake.CS.hs_encrypted_extensions == Some ee_c);
+      assert (final_c.CS.model_handshake.CS.hs_certificate == Some cert_c);
+      assert (final_c.CS.model_handshake.CS.hs_certificate_verify == Some cv_c);
+      assert (final_c.CS.model_handshake.CS.hs_server_finished == Some sf_c);
+      lemma_conclude_pinned_server_flight s.client s.server
+        ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
+        pair_ee pair_cert pair_cv pair_sf
+    )
   )
 #pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
 let lemma_combine_strong (s:sysp)
   : Lemma (requires server_flight_bridge_inputs s.client s.server)
-          (ensures server_flight_pairs_conclusion s.client s.server)
+          (ensures
+            server_flight_pairs_conclusion s.client s.server /\
+            client_normalized_appdata_exact_spine s.client)
   =
   lemma_server_side s;
   lemma_client_side s;
@@ -3348,23 +3561,28 @@ let lemma_combine_strong (s:sysp)
     (d_ch_s rest_sr:B.bytes).
     server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-  returns server_flight_pairs_conclusion s.client s.server
+  returns
+    (server_flight_pairs_conclusion s.client s.server /\
+     client_normalized_appdata_exact_spine s.client)
   with _.
   (
     eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
       (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
       (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-      (tail_c:list CS.conn_event)
+      (tail_c raw_flight_c:list CS.conn_event)
       (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
       (rest_cs:B.bytes).
-      client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c
-        fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    returns server_flight_pairs_conclusion s.client s.server
+      client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+        tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
+    returns
+      (server_flight_pairs_conclusion s.client s.server /\
+       client_normalized_appdata_exact_spine s.client)
     with _.
     (
       lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
         fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-        mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c tail_c
+        mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+        tail_c raw_flight_c
         fl_sent_c fl_recv_c ch_c sh_c rest_cs
     )
   )
@@ -3377,3 +3595,7 @@ let lemma_server_flight_pairs_from_replays_and_pairing client server =
   let s : sysp = { client = client; server = server } in
   lemma_combine_strong s
 
+let lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing
+  client server =
+  let s : sysp = { client = client; server = server } in
+  lemma_combine_strong s

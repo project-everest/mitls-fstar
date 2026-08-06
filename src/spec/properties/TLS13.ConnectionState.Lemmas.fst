@@ -104,7 +104,9 @@ let lemma_step_model_from_failed_results_failed
             model0
             msg.CL.message_direction
             msg.CL.message_value == None);
-          assert False))
+          assert False)
+     | ConnProtectedHandshake step ->
+       assert False)
   | _ ->
     assert False
 
@@ -574,7 +576,27 @@ let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
-       lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1)
+       lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1
+      | ConnProtectedHandshake step ->
+       assert (legal_protected_handshake_step st0.cs_model step);
+       assert_norm (
+         step_model st0.cs_model (ConnProtectedHandshake step) ==
+           step_protected_handshake st0.cs_model step);
+       (match step.protected_handshake_message, st0.cs_model.model_control with
+        | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
+        | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
+        | M.CertificateVerify _, ControlHandshaking HsCertificateValidated
+        | M.Finished _, ControlHandshaking HsCertificateVerifyVerified -> ()
+        | _, _ -> assert False);
+       let hs0 = st0.cs_model.model_handshake in
+       assert (st1.cs_model.model_handshake.hs_start == hs0.hs_start);
+       assert (st1.cs_model.model_handshake.hs_client_hello == hs0.hs_client_hello);
+       assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+       assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret ==
+         hs0.hs_keys.ks_shared_secret);
+       assert (client_x25519_key_share_projection st1);
+       assert (client_x25519_key_share_projection_stable_control
+         st1.cs_model.model_control))
   | ControlClosed ->
     (match delta.delta_event with
      | ConnLocalEvent local ->
@@ -603,7 +625,9 @@ let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
-       lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1)
+       lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1
+      | ConnProtectedHandshake step ->
+       assert False)
   | ControlFailed _ ->
     lemma_step_model_from_failed_results_failed
       st0.cs_model
@@ -662,7 +686,9 @@ let lemma_legal_connection_delta_stable_server_x25519_key_share_projection
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
-       lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1)
+       lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1
+      | ConnProtectedHandshake step ->
+       assert False)
   | ControlClosed ->
     (match delta.delta_event with
      | ConnLocalEvent local ->
@@ -691,7 +717,9 @@ let lemma_legal_connection_delta_stable_server_x25519_key_share_projection
          st0.cs_model
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
-       lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1)
+       lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1
+      | ConnProtectedHandshake step ->
+       assert False)
   | ControlFailed _ ->
     lemma_step_model_from_failed_results_failed
       st0.cs_model
@@ -770,6 +798,7 @@ let lemma_same_key_schedule_reachable_shape
 =
   ()
 
+#restart-solver
 let lemma_supported_profile_base_lineage_or_empty_to_lineage
   (keys:key_schedule_state)
   : Lemma
@@ -1114,6 +1143,29 @@ let lemma_step_model_supported_profile_key_schedule_reachable_shape
       msg.CL.message_direction
       msg.CL.message_value
       model'
+  | ConnProtectedHandshake step ->
+    assert (step_protected_handshake model step == Some model');
+    if protected_handshake_message_supported step.protected_handshake_message
+    then
+      match
+        step_handshake_message
+          model
+          CL.Received
+          step.protected_handshake_message
+      with
+      | None ->
+        assert False
+      | Some stepped ->
+        lemma_step_handshake_message_supported_profile_key_schedule_reachable_shape
+          model
+          CL.Received
+          step.protected_handshake_message
+          stepped;
+        assert (model'.model_handshake.hs_keys ==
+          stepped.model_handshake.hs_keys);
+        lemma_same_key_schedule_reachable_shape stepped model'
+    else
+      assert False
 
 let lemma_connection_delta_supported_profile_key_schedule_reachable_shape
   (st0:connection_state)
@@ -1574,6 +1626,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
               st0.cs_model
               msg.CL.message_direction
               msg.CL.message_value == Some st1.cs_model);
+            assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
             assert (client_x25519_reachable_shape st1)
           | _, M.TlsChangeCipherSpec, ControlHandshaking _ ->
             assert (step_tls_message
@@ -1614,8 +1667,31 @@ let lemma_connection_delta_client_x25519_reachable_shape
                  msg.CL.message_value == Some st1.cs_model);
                assert (client_x25519_reachable_shape st1)
              | _, _, _ ->
-               assert False)))
+               assert False))
+       | ConnProtectedHandshake step ->
+         assert (legal_protected_handshake_step st0.cs_model step);
+         assert_norm (
+           step_model st0.cs_model (ConnProtectedHandshake step) ==
+             step_protected_handshake st0.cs_model step);
+         assert (step_protected_handshake st0.cs_model step == Some st1.cs_model);
+         (match step.protected_handshake_message, st0.cs_model.model_control with
+           | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
+             assert (st1.cs_model.model_control ==
+             ControlHandshaking HsEncryptedExtensionsReceived)
+           | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived ->
+             assert (st1.cs_model.model_control ==
+             ControlHandshaking HsCertificateReceived)
+           | M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+             assert (st1.cs_model.model_control ==
+             ControlHandshaking HsCertificateVerifyReceived)
+           | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+             assert (st1.cs_model.model_control ==
+             ControlHandshaking HsServerFinishedVerified)
+           | _, _ -> assert False);
+         assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
+         assert (client_x25519_reachable_shape st1))
 
+#restart-solver
 let lemma_connection_delta_server_x25519_reachable_shape
   (st0:connection_state)
   (st1:connection_state)
@@ -1696,7 +1772,9 @@ let lemma_connection_delta_server_x25519_reachable_shape
               step_local_event st0.cs_model local);
             assert (step_model st0.cs_model (ConnLocalEvent local) == Some st1.cs_model);
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
-            assert (server_x25519_reachable_shape st1))
+            assert (server_x25519_reachable_shape st1)
+          | ConnProtectedHandshake step ->
+            assert False)
        | ControlFailed _ ->
          lemma_step_model_from_failed_results_failed
            st0.cs_model
@@ -1715,7 +1793,9 @@ let lemma_connection_delta_server_x25519_reachable_shape
            (match msg.CL.message_value with
             | M.TlsAlert alert ->
               assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert))
-            | _ -> assert False));
+            | _ -> assert False)
+         | ConnProtectedHandshake step ->
+           assert False);
         assert (st1.cs_model.model_handshake == st0.cs_model.model_handshake);
         assert (server_x25519_reachable_shape st1)
        | _ ->
@@ -1824,7 +1904,9 @@ let lemma_connection_delta_server_x25519_reachable_shape
                  msg.CL.message_value == Some st1.cs_model);
                assert (server_x25519_reachable_shape st1)
              | _, _, _ ->
-               assert False)))
+               assert False))
+       | ConnProtectedHandshake step ->
+         assert False)
 
 let lemma_initial_client_x25519_reachable_shape
   (cfg:connection_config)
@@ -2096,6 +2178,7 @@ let lemma_step_model_server_handshake_write_key_reachable_shape
         step_model model ev == Some model')
       (ensures server_handshake_write_key_reachable_shape model')
 =
+  lemma_step_model_preserves_config_for_x25519_reachable_shape model ev model';
   assert (model'.model_config == model.model_config);
   if model'.model_config.config_role == ServerEndpoint then begin
     assert (model.model_config.config_role == ServerEndpoint);
@@ -2255,6 +2338,8 @@ let lemma_step_model_server_handshake_write_key_reachable_shape
         lemma_server_handshake_write_key_shape_unchanged model model'
       | _ ->
         assert False)
+    | ConnProtectedHandshake step ->
+      assert False
   end
 
 let lemma_connection_delta_server_handshake_write_key_reachable_shape
@@ -2451,6 +2536,7 @@ let client_application_record_epoch_reachable_shape
   | _ ->
     True
 
+#restart-solver
 let server_application_record_epoch_reachable_shape
   (model:connection_model)
   : prop =
@@ -2555,6 +2641,7 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
       (ensures
         model_application_record_epoch_reachable_shape_for_role role model')
 =
+  lemma_step_model_preserves_config_for_x25519_reachable_shape model ev model';
   assert (model'.model_config == model.model_config);
   match role with
   | ClientEndpoint ->
@@ -2829,7 +2916,21 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
           | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
             assert (model' == model)
           | _, _, _ ->
-            assert False));
+            assert False)
+      | ConnProtectedHandshake step ->
+        assert (legal_protected_handshake_step model step);
+        assert (step_protected_handshake model step == Some model');
+        (match step.protected_handshake_message, model.model_control with
+         | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
+         | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
+         | M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+           assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+           assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+         | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+           assert (model'.model_record.record_read.R.epoch == R.Application);
+           assert (client_application_record_read_epoch_link model')
+         | _, _ ->
+           assert False));
       assert (client_application_record_epoch_reachable_shape model')
     end;
     assert (model_application_record_epoch_reachable_shape_for_role
@@ -3077,7 +3178,9 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
           | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
             assert (model' == model)
           | _, _, _ ->
-            assert False));
+            assert False)
+       | ConnProtectedHandshake step ->
+         assert False);
       assert (server_application_record_epoch_reachable_shape model')
     end;
     assert (model_application_record_epoch_reachable_shape_for_role
@@ -3908,6 +4011,7 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
      | _, _, _, _ -> assert False)
   | _, _, _, _ -> assert False
 
+#restart-solver
 let lemma_shared_secret_lineage_base_secret_agree
   (base_id:base_secret_id)
   (client:connection_state)
@@ -4560,7 +4664,7 @@ let lemma_model_record_keys_consistent_record_write_key_schedule_projection
              assert (exists material'.
                keys.ks_client_application_traffic == Some material' /\
                traffic_material_matches_record_direction material' st)
-           | None -> assert False)))
+           | None ->            assert False)))
 
 let lemma_record_read_keys_next_seq
   (keys:key_schedule_state)
@@ -4721,6 +4825,7 @@ let rec lemma_app_received_messages_snoc
       (app_received_messages tl)
       (conn_event_app_received_delta ev)
 
+#restart-solver
 let rec lemma_transcript_bytes_snoc
   (events:list conn_event)
   (ev:conn_event)
@@ -5079,7 +5184,7 @@ let lemma_step_model_preserves_config
 =
   ()
 
-#push-options "--split_queries always --z3rlimit 10 --z3refresh"
+#push-options "--split_queries always --z3rlimit 10"
 
 let state_of_model_for_first_epoch_application_material
   (model:connection_model)
@@ -5603,7 +5708,27 @@ let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_
        lemma_server_finished_sent_checkpoint_ready_elim model0
      | _, _, _, _ ->
        ())
+  | ConnProtectedHandshake step ->
+    (match role, step.protected_handshake_message, model0.model_control with
+     | ClientEndpoint, M.EncryptedExtensions _,
+      ControlHandshaking HsServerHelloReceived ->
+      assert (transcript_checkpoint_bytes TH_SH hs0 ==
+              Some hs0.hs_transcript)
+     | ClientEndpoint, M.Certificate _,
+      ControlHandshaking HsEncryptedExtensionsReceived ->
+      assert (transcript_after_encrypted_extensions_bytes hs0 ==
+              Some hs0.hs_transcript)
+     | ClientEndpoint, M.CertificateVerify _,
+      ControlHandshaking HsCertificateValidated ->
+      assert (transcript_checkpoint_bytes TH_before_CV hs0 ==
+              Some hs0.hs_transcript)
+     | ClientEndpoint, M.Finished _,
+      ControlHandshaking HsCertificateVerifyVerified ->
+      lemma_client_certificate_verify_verified_checkpoint_ready_elim model0
+     | _, _, _ ->
+      assert False)
 
+#restart-solver
 let lemma_application_traffic_install_for_role_material_matches_expected
   (role:endpoint_role)
   (model0:connection_model)
@@ -6165,6 +6290,29 @@ let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_ma
        lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
          model0
          model1)
+  | ConnProtectedHandshake step ->
+    (match step.protected_handshake_message, model0.model_control with
+     | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+       assert (role == ClientEndpoint);
+       assert (application_traffic_install_checkpoint_ready_for_role role model1);
+       assert (model1.model_control == ControlHandshaking HsServerFinishedVerified);
+       assert (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
+               Some model1.model_handshake.hs_transcript);
+       assert (model1.model_handshake.hs_keys.ks_client_application_traffic == None);
+       lemma_atomic_application_install_matches_expected
+         ServerTraffic
+         model1
+         model1.model_handshake.hs_transcript;
+       assert (first_epoch_application_traffic_material_slots_match_expected_model
+         model1)
+     | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
+     | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
+     | M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+       lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+         model0
+         model1
+     | _, _ ->
+       assert False)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_value, msg.CL.message_direction, model0.model_control with
      | M.TlsKeyUpdate _, _, _ ->
@@ -6436,7 +6584,10 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
      | _, _ ->
        assert (model'.model_handshake.hs_certificate_verify ==
                model.model_handshake.hs_certificate_verify))
+  | ConnProtectedHandshake step ->
+    assert (model.model_config.config_role == ClientEndpoint)
 
+#restart-solver
 let lemma_connection_delta_server_certificate_verify_body_empty_reachable_shape
   (st0:connection_state)
   (st1:connection_state)
@@ -6546,6 +6697,7 @@ let lemma_step_model_key_update_pending_delta
         | M.UpdateRequested -> assert False)
      | _, _ -> ())
   | ConnLocalEvent _ -> ()
+  | ConnProtectedHandshake _ -> ()
 
 let lemma_step_model_record_keys_consistent
   (model0:connection_model)
@@ -6559,6 +6711,7 @@ let lemma_step_model_record_keys_consistent
         model_record_keys_consistent model0)
       (ensures model_record_keys_consistent model1)
 =
+  lemma_step_model_preserves_config_for_x25519_reachable_shape model0 ev model1;
   assert (model1.model_config == model0.model_config);
   match ev with
   | ConnLocalEvent local ->
@@ -6786,6 +6939,48 @@ let lemma_step_model_record_keys_consistent
         | _ ->
           assert (model1.model_record == model0.model_record);
           assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)))
+  | ConnProtectedHandshake step ->
+    (match step.protected_handshake_message, model0.model_control with
+     | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+      assert (model1.model_control == ControlHandshaking HsServerFinishedVerified);
+      assert (model1.model_record.record_write == model0.model_record.record_write);
+      assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
+              model0.model_handshake.hs_keys.ks_client_handshake_traffic);
+      assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+              model0.model_handshake.hs_keys.ks_server_handshake_traffic);
+      assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
+              model0.model_handshake.hs_keys.ks_client_application_traffic);
+      (match model1.model_handshake.hs_keys.ks_server_application_traffic with
+       | Some material ->
+         assert (model1.model_record.record_read ==
+           R.install_keys model0.model_record.record_read R.Application
+             material.traffic_key material.traffic_iv);
+         assert (traffic_material_matches_record_direction
+           material model1.model_record.record_read);
+         assert (record_keys_match_key_schedule_for_role
+           ClientEndpoint TrafficRead model1.model_control
+           model1.model_handshake.hs_keys model1.model_record.record_read)
+       | None -> assert False);
+      assert (model_record_keys_consistent model1)
+     | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
+     | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
+     | M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+      assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+      if step.protected_handshake_head
+      then
+        begin
+          assert (model1.model_record.record_read ==
+            R.next_seq model0.model_record.record_read);
+          assert (model1.model_record.record_write ==
+            model0.model_record.record_write);
+          lemma_record_read_keys_next_seq
+            model0.model_handshake.hs_keys
+            model0.model_record.record_read
+        end
+      else
+        assert (model1.model_record == model0.model_record)
+     | _, _ ->
+      assert False)
 
 let lemma_step_model_record_keys_consistent_for_role
   (role:endpoint_role)
@@ -6984,7 +7179,9 @@ let lemma_step_model_record_keys_consistent_for_role
        | M.TlsChangeCipherSpec ->
          assert (model1 == model0)
        | _ ->
-         assert False))
+         assert False)
+     | ConnProtectedHandshake step ->
+       assert False)
 
 let lemma_step_model_record_layer_delta
   (model0:connection_model)
@@ -7279,8 +7476,45 @@ let lemma_step_model_record_layer_delta
           assert (model_record_layer_delta model0 ev model1))
      | _, _ ->
        assert (model1.model_record == model0.model_record);
-       assert (model_record_layer_delta model0 ev model1)))
+       assert (model_record_layer_delta model0 ev model1))
+  | ConnProtectedHandshake step ->
+    assert (ev == ConnProtectedHandshake step);
+    (match step.protected_handshake_message, model0.model_control with
+     | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+       (match model1.model_handshake.hs_keys.ks_server_application_traffic with
+        | Some material ->
+          assert (model1.model_record.record_read ==
+            R.install_keys model0.model_record.record_read R.Application
+              material.traffic_key material.traffic_iv);
+          lemma_projected_install_keys_of_record
+            model0.model_record.record_read
+            R.Application
+            material.traffic_key
+            material.traffic_iv;
+          assert (model_record_layer_delta model0 ev model1)
+        | None -> assert False)
+     | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
+     | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
+     | M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+       if step.protected_handshake_head
+       then
+         begin
+           assert (model1.model_record == {
+             model0.model_record with
+               record_read = R.next_seq model0.model_record.record_read
+           });
+           lemma_projected_record_next_read model0.model_record;
+           assert (model_record_layer_delta model0 ev model1)
+         end
+       else
+         begin
+           assert (model1.model_record == model0.model_record);
+           assert (model_record_layer_delta model0 ev model1)
+         end
+     | _, _ ->
+       assert False))
 
+#restart-solver
 let lemma_step_model_pending_application_delta
   (model0:connection_model)
   (ev:conn_event)
@@ -7318,6 +7552,8 @@ let lemma_step_model_pending_application_delta
          model0.model_application.app_pending_received_raw)
      | _ ->
        assert (model1.model_application == model0.model_application))
+  | ConnProtectedHandshake _ ->
+    assert (model1.model_application == model0.model_application)
 
 let lemma_step_model_transcript_delta
   (model0:connection_model)
@@ -7353,6 +7589,7 @@ let lemma_step_model_transcript_delta
      | _, _ ->
        CL.lemma_append_empty_right t0;
        Seq.lemma_eq_refl model1.model_handshake.hs_transcript t0)
+  | ConnProtectedHandshake _ -> ()
 
 let lemma_step_model_app_log_delta
   (model0:connection_model)
@@ -7373,6 +7610,9 @@ let lemma_step_model_app_log_delta
      | _ ->
        append_l_nil app.CL.app_sent;
        append_l_nil app.CL.app_received)
+  | ConnProtectedHandshake _ ->
+    append_l_nil app.CL.app_sent;
+    append_l_nil app.CL.app_received
   | ConnNetworkEvent msg ->
     (match msg.CL.message_value with
      | M.TlsApplicationData bytes ->
@@ -7400,6 +7640,7 @@ let rec lemma_connection_log_trace_sent_tls
     lemma_connection_log_trace_sent_tls rest;
     match ev with
     | ConnNetworkEvent _ -> ()
+    | ConnProtectedHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -7421,6 +7662,7 @@ let rec lemma_connection_log_trace_received_tls
     lemma_connection_log_trace_received_tls rest;
     match ev with
     | ConnNetworkEvent _ -> ()
+    | ConnProtectedHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -7442,6 +7684,15 @@ let rec lemma_connection_log_trace_state_events
     lemma_connection_log_trace_state_events rest;
     match ev with
     | ConnNetworkEvent _ -> ()
+    | ConnProtectedHandshake step ->
+      (match step.protected_handshake_message with
+       | M.ClientHello _
+       | M.ServerHello _
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _
+       | M.HelloRetryRequest -> ())
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -7463,6 +7714,7 @@ let rec lemma_connection_log_trace_app_sent
     lemma_connection_log_trace_app_sent rest;
     match ev with
     | ConnNetworkEvent _ -> ()
+    | ConnProtectedHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -7484,6 +7736,7 @@ let rec lemma_connection_log_trace_app_received
     lemma_connection_log_trace_app_received rest;
     match ev with
     | ConnNetworkEvent _ -> ()
+    | ConnProtectedHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -8080,6 +8333,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
     with outer_fragment (sent_tls_inner_plaintext_fragment msg) plaintext
     and () )
 
+#restart-solver
 let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
   (sender:connection_model)
   (receiver:connection_model)
@@ -8344,6 +8598,16 @@ let lemma_event_raw_delta_legal_protected_single_parse_record
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      begin
+        lemma_raw_records_exactly_one_parse_record
+          raw_received
+          T.Application_data;
+        W.lemma_parse_record_implies_parse_record_wire raw_received
+      end
+    else ()
   | ConnNetworkEvent msg ->
     if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
     then ()
@@ -8371,6 +8635,17 @@ let lemma_event_raw_delta_legal_protected_parse_prefix
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      begin
+        lemma_raw_records_exactly_nonempty_parse_record
+          raw_received
+          T.Application_data
+          1;
+        W.lemma_parse_record_implies_parse_record_wire raw_received
+      end
+    else ()
   | ConnNetworkEvent msg ->
     if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
     then ()
@@ -8398,6 +8673,17 @@ let lemma_event_raw_delta_legal_protected_decompose_prefix
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      begin
+        lemma_raw_records_exactly_nonempty_decompose_prefix
+          raw_received
+          T.Application_data
+          1;
+        W.lemma_parse_record_implies_parse_record_wire raw_received
+      end
+    else ()
   | ConnNetworkEvent msg ->
     if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
     then ()
@@ -8429,6 +8715,14 @@ let lemma_event_raw_delta_legal_protected_segmented
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      lemma_raw_records_exactly_segmented
+        raw_received
+        T.Application_data
+        1
+    else ()
   | ConnNetworkEvent msg ->
     if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
     then ()
@@ -8898,6 +9192,7 @@ let lemma_conn_events_protected_raw_segmented_replay_cons
     raw_received
     final_model)
 
+#restart-solver
 let rec lemma_conn_events_raw_replay_protected_segmented
   (model:connection_model)
   (events:list conn_event)
@@ -9808,6 +10103,7 @@ let rec lemma_conn_events_sent_seal_replay_snoc
       (B.append tail_sent delta_sent)
       (B.append tail_received delta_received)
 
+#restart-solver
 let lemma_conn_events_received_decode_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -10609,6 +10905,7 @@ let lemma_initial_raw_to_message_replay_consistent
   lemma_initial_received_decode_replay_consistent cfg;
   lemma_initial_received_decode_key_schedule_replay_consistent cfg
 
+#restart-solver
 let lemma_connection_state_raw_to_message_replay
   (st:connection_state)
   : Lemma

@@ -33,11 +33,11 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
-open TLS13.Wire.Generated.ProtocolVersion
+open TLS13.Wire.Generated.OfferedVersion
 
 inline_for_extraction noextract let min_count = 1
 inline_for_extraction noextract let max_count = 127
-noextract type supportedVersionsClientHello = l:list protocolVersion{1 <= L.length l /\ L.length l <= 127}
+noextract type supportedVersionsClientHello = l:list offeredVersion{1 <= L.length l /\ L.length l <= 127}
 
 inline_for_extraction noextract let supportedVersionsClientHello_parser_kind = LP.strong_parser_kind 3 255 None
 
@@ -55,15 +55,15 @@ val supportedVersionsClientHello_jumper: LPS.jumper supportedVersionsClientHello
 
 val supportedVersionsClientHello_bytesize_eqn (x: supportedVersionsClientHello) : Lemma (supportedVersionsClientHello_bytesize x == 1 + (L.length x `op_Star` 2)) [SMTPat (supportedVersionsClientHello_bytesize x)]
 
-let supportedVersionsClientHello_lowtype = PPVCL.vclist_lowtype protocolVersion_lowtype
+let supportedVersionsClientHello_lowtype = PPVCL.vclist_lowtype offeredVersion_lowtype
 
-noextract let supportedVersionsClientHello_mid = list protocolVersion
+noextract let supportedVersionsClientHello_mid = list offeredVersion
 
 let supportedVersionsClientHello_vmatch : supportedVersionsClientHello_lowtype -> supportedVersionsClientHello_mid -> Pulse.Lib.Core.slprop =
-  PPVD.vmatch_vldata_strong 2 254 (LP.serialize_list _ protocolVersion_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv protocolVersion_vmatch protocolVersion_conv))
+  PPVD.vmatch_vldata_strong 2 254 (LP.serialize_list _ offeredVersion_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv offeredVersion_vmatch offeredVersion_conv))
 
 noextract let supportedVersionsClientHello_conv : supportedVersionsClientHello_mid -> GTot (FStar.Pervasives.Native.option supportedVersionsClientHello) =
-  PPC.synth_conv (PPVD.vldata_strong_conv 2 254 (LP.serialize_list _ protocolVersion_serializer) (fun (x: list protocolVersion) -> FStar.Pervasives.Native.Some x)) (LP.vldata_to_vlarray 2 254 protocolVersion_serializer 1 127 ())
+  PPC.synth_conv (PPVD.vldata_strong_conv 2 254 (LP.serialize_list _ offeredVersion_serializer) (fun (x: list offeredVersion) -> FStar.Pervasives.Native.Some x)) (LP.vldata_to_vlarray 2 254 offeredVersion_serializer 1 127 ())
 
 val read_supportedVersionsClientHello : PPB.copyful_parse supportedVersionsClientHello_vmatch supportedVersionsClientHello_parser supportedVersionsClientHello_conv
 

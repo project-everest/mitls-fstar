@@ -38,6 +38,16 @@ Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse
 export PATH := $(Z3_DIR):$(PATH)
 
+# Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
+# Pinned in scripts/z3-version.txt at the repo root -- single source of truth
+# shared with the root Makefile, scripts/install-z3.sh and the CI dev-container
+# cache key.
+Z3_VERSION_FILE ?= ../scripts/z3-version.txt
+Z3_VERSION ?= $(strip $(shell cat $(Z3_VERSION_FILE)))
+ifeq ($(Z3_VERSION),)
+$(error Could not read the pinned Z3 version from $(Z3_VERSION_FILE))
+endif
+
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
@@ -56,6 +66,7 @@ INCLUDES = \
   --include $(IMPL_DIR)
 
 FSTAR_FLAGS = \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
@@ -75,7 +86,7 @@ SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
 IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify clean check-admits help
+.PHONY: all verify clean check-admits help vcurl vcurl-demo
 
 all: verify
 
@@ -409,6 +420,27 @@ get-live-test: extract-loops
 	@echo "─────────────────────────────────────────────────────────────────"
 	@$(EXTRACT_DIR)/get_live_test
 
+# ── Demo: a "mini curl" over the verified GET client ───────────────
+# `make vcurl` just builds it; run it by hand:
+#     _extract/vcurl http://example.com/
+#     _extract/vcurl -i 127.0.0.1 18080 /
+# `make vcurl-demo` builds it and fetches http://example.com/ (needs egress).
+vcurl: extract-loops
+	@echo "Building vcurl, the mini-curl demo over the VERIFIED GET client ..."
+	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vcurl \
+	  $(VERIFIED_DIR)/vcurl.c \
+	  $(EXTRACT_DIR)/HTTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	@echo "Built $(EXTRACT_DIR)/vcurl.  Try:  $(EXTRACT_DIR)/vcurl http://example.com/"
+
+vcurl-demo: vcurl
+	@echo "─────────────────────────────────────────────────────────────────"
+	@echo " vcurl (VERIFIED request + parse)  ->  http://example.com/"
+	@echo "─────────────────────────────────────────────────────────────────"
+	@$(EXTRACT_DIR)/vcurl $(VCURL_URL)
+
+VCURL_URL ?= http://example.com/
+
 # ── Clean ──────────────────────────────────────────────────────────
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
@@ -428,5 +460,8 @@ help:
 	@echo "  make vloop-tests   - Run both framings' verified<->verified interop tests"
 	@echo "  make head-emit-test - Build + run the verified head-emitter byte-exact self-test"
 	@echo "  make chunk-stream-test - Build + run the verified multi-chunk reassembly self-test"
+	@echo "  make vcurl         - Build vcurl, a mini-curl demo over the verified GET client"
+	@echo "  make vcurl-demo    - Build vcurl and fetch VCURL_URL (default http://example.com/)"
+	@echo "  make -C interop build-progs - Build http_server, the browser-facing demo server"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  (no 'gen' target: the HTTP wire format is hand-written, not QuackyDucky)"

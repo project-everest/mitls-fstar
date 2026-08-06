@@ -62,6 +62,9 @@ For accepted network/local steps, the public postconditions prove that:
   recursive raw-record segmentation facts;
 - successful non-decode-error network input projects to decoded TLS messages and
   legal received events;
+- coalesced protected handshake messages are drained through verified client
+  events while raw record accounting advances exactly once for the enclosing
+  record;
 - protected received records expose record-layer open facts and read-key/IV
   provenance from the installed key schedule;
 - emitted protected records expose seal facts and write-key/IV provenance;
@@ -162,6 +165,30 @@ The reusable concrete runtime API is:
 - `runtime/tls13_server_driver.h`
 - `runtime/tls13_server_driver.c`
 
+The separate browser integration path is:
+
+- `src/impl/TLS13.Impl.Client.Engine.fsti`
+- `src/impl/TLS13.Impl.Client.Engine.fst`
+- `runtime/tls13_client_engine.h`
+- `runtime/tls13_client_engine.c`
+- `runtime/chromium/tls13_client_socket.h`
+- `runtime/chromium/tls13_client_socket.cc`
+- `runtime/chromium/chromium_src/net/socket/atlas_client_socket.h`
+- `runtime/chromium/chromium_src/net/socket/atlas_client_socket.cc`
+
+The verified engine is transport-neutral and performs one internal or supplied
+network/local step at a time. It exposes certificate-chain and
+CertificateVerify pauses rather than owning browser authentication policy. The
+portable Chromium adapter owns residual ciphertext, partial transport writes,
+queued plaintext, and asynchronous operation callbacks; all TLS transitions
+remain in the extracted engine. `make test-chromium-client-demo` exercises the
+portable path, while `make test-chromium-browser` exercises the actual Chromium
+binary and its out-of-process Network Service over a real TLS 1.3 HTTP/1.1
+exchange. The browser smoke is fail-closed and asserts the provider-selection
+diagnostic, so Chromium's BoringSSL TLS socket cannot satisfy it.
+`make test-chromium-browser-public` separately checks network-dependent Google
+and Microsoft top-level navigation through the same fail-closed provider.
+
 These C drivers are thin ABI wrappers around the extracted endpoint/canonical
 runtime path:
 
@@ -190,8 +217,10 @@ The active TCB surface is intentionally explicit.
 | Crypto primitives and entropy | `src/impl/extern/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, HACL* sources | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, and X25519. |
 | X509/signature validation | `src/impl/extern/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_karamel.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
 | TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_karamel.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. `Common_TCP.krml` is included in the bundle so KaRaMeL typechecks the exact TCP ABI; the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
+| ATLAS trace writer | `src/impl/extern/TLS13.Trace.fsti`, `c_stubs/atlas_trace.*`, `runtime/analyze_atlas_trace.py` | Explicit observational TCB. Verified code chooses event positions and metadata under an `emp -> emp` Pulse contract; the C writer supplies timestamps and process/thread/connection correlation and emits atomic JSONL records. Callers are forbidden to pass secrets, plaintext, certificates, or payload bytes. Disabled builds macro-eliminate calls without evaluating arguments. |
 | Extracted runtime infrastructure | F*, Pulse, KaRaMeL, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
 | Concrete C ABI wrapper | `runtime/tls13_client_driver.c` | Trusted allocation of the small wrapper object, status-to-error translation, and lifetime tracking around the extracted Pulse workflow. |
+| Browser adapter | `runtime/tls13_client_engine.c`, `runtime/chromium/tls13_client_socket.cc`, `runtime/chromium/chromium_src/net/socket/atlas_client_socket.cc` | Trusted capacity/state checks, async scheduling, partial-I/O buffering, callback translation, Chromium `CertVerifier` policy, and BoringSSL realization of the explicit CertificateVerify boundary. |
 
 ## What is implemented in C
 
@@ -201,6 +230,7 @@ The C code is kept to glue and TCB responsibilities:
 - the tiny extracted-TCP ABI shim in `common_tcp_karamel.c`;
 - the typed OpenSSL ABI shim in `tls13_openssl_karamel.c`;
 - crypto/X509 bridge code;
+- optional ATLAS JSONL trace emission and runtime connection correlation;
 - the small client/server runtime ABI wrappers.
 
 Protocol state transitions, key-schedule logic, record-layer logic, client step

@@ -22,14 +22,25 @@ module TLS13.ConnectionState.ProtectedWireServerFlightInversion
 **)
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module GCH = TLS13.Wire.Generated.ClientHello
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GCert = TLS13.Wire.Generated.Certificate
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GFin = TLS13.Wire.Generated.Finished
+module GSH = TLS13.Wire.Generated.ServerHello
+module L = FStar.List.Tot
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SMReplay = TLS13.Spec.StateMachine.Replay
 module CD = TLS13.Impl.Client.Driver
 module SD = TLS13.Impl.Server.Driver
+module CCShape = TLS13.ConnectionState.ClientCanonicalShape
+module PWHead = TLS13.ConnectionState.ProtectedWireHead
+module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module WStep = TLS13.System.WireStep
 module WFL = TLS13.Spec.WireFormatLemmas
 
@@ -121,8 +132,62 @@ let server_flight_pairs_conclusion (client server : CS.connection_state) : prop 
   | _, _, _, _, _, _, _, _ ->
     False
 
+(** The verified paired endpoint normalizes the client's raw protected server
+    flight to the ordinary network-event spine consumed by downstream proofs.
+
+    Opaque to SMT deliberately.  This is a sixteen-variable existential whose
+    body carries nested [forall]/[exists] over [L.memP].  Left transparent, its
+    definitional equation fired 3,085,362 times in a single query for
+    [lemma_finish_strong] -- twelve times the next most active quantifier --
+    each instantiation dragging in the nested membership quantifier and the
+    fuel-instrumented [memP] axioms.  Unfold it only where it is genuinely
+    needed, via [reveal_client_normalized_appdata_exact_spine]. **)
+[@@"opaque_to_smt"]
+let client_normalized_appdata_exact_spine (client:CS.connection_state) : prop =
+  exists (start:CS.handshake_start)
+         (ch:GCH.clientHello) (sh:GSH.serverHello)
+         (client_shared:C.x25519_shared_secret)
+         (region:list CS.conn_event)
+         (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+         (cv_validate:CS.local_event)
+         (cv:GCV.certificateVerify)
+         (cv_verify:CS.local_event)
+         (sf:GFin.finished)
+         (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
+         (tail:list CS.conn_event).
+    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee) raw_ee /\
+    PWHead.received_handshake_head_normal_form (M.Certificate cert) raw_cert /\
+    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv) raw_cv /\
+    PWHead.received_handshake_head_normal_form (M.Finished sf) raw_sf /\
+    (forall (e:CS.conn_event).
+      L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+    (exists (er:CS.conn_event).
+      L.memP er region /\
+      CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+    (exists (ew:CS.conn_event).
+      L.memP ew region /\
+      CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+    client.CS.cs_event_log ==
+      L.append
+        (PWSeg.client_cleartext_handshake_prefix_events
+          start ch sh client_shared)
+        (L.append region
+          (raw_ee ::
+           raw_cert ::
+           CS.ConnLocalEvent cv_validate ::
+           raw_cv ::
+           CS.ConnLocalEvent cv_verify ::
+           raw_sf ::
+           tail))
+
 val lemma_server_flight_pairs_from_replays_and_pairing
   (client server : CS.connection_state)
   : Lemma
       (requires server_flight_bridge_inputs client server)
       (ensures server_flight_pairs_conclusion client server)
+
+val lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing
+  (client server : CS.connection_state)
+  : Lemma
+      (requires server_flight_bridge_inputs client server)
+      (ensures client_normalized_appdata_exact_spine client)

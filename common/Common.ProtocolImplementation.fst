@@ -868,6 +868,460 @@ let lemma_local_process_sent_output_prefix
     Seq.lemma_eq_elim (output_prefix out_bytes result.process_produced_len) (Ghost.reveal produced);
     assert (Seq.equal sent1 (Seq.append sent0 (output_prefix out_bytes result.process_produced_len)))
 
+(* ==================================================================== *)
+(* Internal events                                                       *)
+(*                                                                       *)
+(* An INTERNAL event is a local event that the implementation selects     *)
+(* from its own state rather than receiving from its caller.  The         *)
+(* motivating case is a TLS record whose plaintext coalesces several      *)
+(* handshake messages: the record itself is one wire event, and each      *)
+(* further message it carries is an internal transition driven by         *)
+(* plaintext the implementation has already buffered.                     *)
+(*                                                                       *)
+(* Internal events are NOT a new event class in [Common.StateMachine].    *)
+(* They are a distinguished SUBSET of the existing local events, singled  *)
+(* out by [pi_internal].  This is deliberate.  The generic layers already *)
+(* implement exactly this notion: [Common.SystemProduct.product_step]     *)
+(* gates the local move families as quiet-to-quiet, and                   *)
+(* [Common.MachineProduct.mp_client_local] is already documented as "a    *)
+(* local event that emits nothing on the wire".  Introducing a fifth type *)
+(* parameter or a third [event] constructor would duplicate machinery     *)
+(* that is already present and correct.                                   *)
+(*                                                                       *)
+(* An internal event MAY emit wire output.  Nothing here forbids it, and  *)
+(* [mp_client_send] already models a local event that puts payload in     *)
+(* flight, so the distinction in the product is by wire output, not by    *)
+(* who chose the event.  TLS does not need it today, but a protocol that  *)
+(* answers a buffered request without a fresh network read does.          *)
+(* ==================================================================== *)
+
+(* The outcome of asking an implementation to make internal progress. *)
+type internal_status =
+  (* An internal transition was taken.  The abstract state advanced. *)
+  | InternalProgress
+  (* Nothing is pending.  It is safe to read the network. *)
+  | InternalQuiescent
+  (* Something IS pending, but no internal transition is currently
+     enabled: the implementation is waiting on a local action from its
+     caller.  Reading the network here would interleave a fresh record
+     into one that has not been fully consumed, so a scheduler must
+     treat this case as distinct from quiescence.
+
+     TLS reaches this state on every full handshake: after the
+     [Certificate] message of a coalesced server flight the client sits
+     at [HsCertificateValidated]'s predecessor with unconsumed plaintext
+     and no enabled step, because only the local event
+     [LocalValidateCertificate] can advance it. *)
+  | InternalBlocked
+  (* The pending work is unprocessable.  The abstract state moved to a
+     failed state, or did not move at all. *)
+  | InternalFailed
+
+noeq
+type internal_result = {
+  internal_status: internal_status;
+  internal_process: process_result;
+}
+
+(* Some internal transition is enabled in [st0]. *)
+let internal_step_enabled
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (is_internal:local_event -> bool)
+  (st0:state)
+  : prop =
+  exists (ev:local_event)
+         (st1:state)
+         (output:SM.step_output wire_message local_output).
+    is_internal ev /\
+    system.WFSM.wfsm_state_machine.SM.sm_step st0 (SM.LocalEvent ev) st1 output
+
+let no_internal_step_enabled
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (is_internal:local_event -> bool)
+  (st0:state)
+  : prop =
+  ~ (internal_step_enabled system is_internal st0)
+
+(* The no-op shape shared by [InternalQuiescent] and [InternalBlocked]:
+   nothing was consumed, nothing was produced, and neither the abstract
+   state nor the output buffer moved. *)
+let internal_no_progress
+  (#state:Type0)
+  (old_out out_bytes:TCP.bytes)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:internal_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list 'wm)
+  (local_outputs:list 'lo)
+  : prop =
+  result.internal_process.process_status == StepOk /\
+  result.internal_process.process_consumed_len == 0sz /\
+  result.internal_process.process_produced_len == 0sz /\
+  result.internal_process.process_app_len == 0sz /\
+  wire_outputs == [] /\
+  local_outputs == [] /\
+  same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
+  Seq.equal out_bytes old_out
+
+(* The correctness contract for [pi_process_internal].
+                                                                          
+   [InternalProgress] and [InternalFailed] are stated by REUSING
+   [local_process_correct] at an existentially quantified internal event.
+   That is the whole content of decision S1: an internal step IS a local
+   step whose event the implementation chose for itself, so it inherits
+   the refinement argument that local events already have rather than
+   needing a parallel one. *)
+let internal_process_correct
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (is_internal:local_event -> bool)
+  (pending:state -> prop)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:internal_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : prop =
+  SZ.v out_len == Seq.length old_out /\
+  Seq.length out_bytes == Seq.length old_out /\
+  result.internal_process.process_consumed_len == 0sz /\
+  (match result.internal_status with
+   | InternalProgress ->
+     result.internal_process.process_status == StepOk /\
+     (exists (ev:local_event).
+       is_internal ev /\
+       local_process_correct
+         system ev old_out out_bytes out_len
+         received0 sent0 st0
+         result.internal_process
+         received1 sent1 st1
+         wire_outputs local_outputs)
+   | InternalFailed ->
+     non_step_status result.internal_process.process_status /\
+     (exists (ev:local_event).
+       is_internal ev /\
+       local_process_correct
+         system ev old_out out_bytes out_len
+         received0 sent0 st0
+         result.internal_process
+         received1 sent1 st1
+         wire_outputs local_outputs)
+   | InternalQuiescent ->
+     ~ (pending st0) /\
+     no_internal_step_enabled system is_internal st0 /\
+     internal_no_progress
+       old_out out_bytes received0 sent0 st0
+       result received1 sent1 st1
+       wire_outputs local_outputs
+   | InternalBlocked ->
+     pending st0 /\
+     no_internal_step_enabled system is_internal st0 /\
+     internal_no_progress
+       old_out out_bytes received0 sent0 st0
+       result received1 sent1 st1
+       wire_outputs local_outputs)
+
+(* A stepped or failed internal result refines the state machine exactly
+   as the corresponding local result does.  Callers that already reason
+   over [local_process_correct] need nothing new. *)
+let lemma_internal_process_is_local_process
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (is_internal:local_event -> bool)
+  (pending:state -> prop)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:internal_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+    (requires
+      internal_process_correct
+        system is_internal pending old_out out_bytes out_len
+        received0 sent0 st0 result received1 sent1 st1
+        wire_outputs local_outputs /\
+      (result.internal_status == InternalProgress \/
+       result.internal_status == InternalFailed))
+    (ensures
+      exists (ev:local_event).
+        is_internal ev /\
+        local_process_correct
+          system ev old_out out_bytes out_len
+          received0 sent0 st0
+          result.internal_process
+          received1 sent1 st1
+          wire_outputs local_outputs)
+= ()
+
+(* Neither no-progress case moves the abstract state or the byte
+   histories, so a scheduler may poll for internal progress freely
+   without disturbing any refinement it has already established. *)
+let lemma_internal_no_progress_preserves_state
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (is_internal:local_event -> bool)
+  (pending:state -> prop)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:internal_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+    (requires
+      internal_process_correct
+        system is_internal pending old_out out_bytes out_len
+        received0 sent0 st0 result received1 sent1 st1
+        wire_outputs local_outputs /\
+      (result.internal_status == InternalQuiescent \/
+       result.internal_status == InternalBlocked))
+    (ensures
+      same_abstract_state received0 sent0 received1 sent1 st0 st1 /\
+      Seq.equal out_bytes old_out /\
+      result.internal_process.process_produced_len == 0sz)
+= ()
+
+(* ---------------------------------------------------------------- *)
+(* Compatibility for protocols with no internal events.              *)
+(*                                                                   *)
+(* A protocol whose every local event comes from its caller sets      *)
+(* [pi_internal] to [no_internal_events] and [pi_internal_pending] to *)
+(* [nothing_pending].  Its [pi_process_internal] then returns         *)
+(* [InternalQuiescent] unconditionally, discharged by the two lemmas  *)
+(* below, and its behaviour is unchanged.                             *)
+(* ---------------------------------------------------------------- *)
+
+(* [inline_for_extraction] matters here.  This is a classifier that ignores
+   its argument and returns a constant, but it returns [bool] rather than a
+   ghost type, so without this KaRaMeL emits a monomorphized definition per
+   instantiation whose parameter type is the protocol's local-event type.
+   That type is specification-only and is not in any extraction bundle, so the
+   emitted C referred to an undeclared type and failed to compile — see the
+   TFTP and YMODEM verified-loop bundles, which do extract
+   [Common.ProtocolImplementation].  Inlining folds the constant into any call
+   site and emits nothing otherwise. *)
+inline_for_extraction
+let no_internal_events (#local_event:Type0) (_:local_event) : bool = false
+
+let nothing_pending (#state:Type0) (_:state) : prop = False
+
+let lemma_no_internal_events_never_enabled
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (st0:state)
+  : Lemma
+    (no_internal_step_enabled system (no_internal_events #local_event) st0)
+= ()
+
+let lemma_no_internal_events_quiescent
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (system:WFSM.wire_format_state_machine state wire_message local_event local_output)
+  (old_out out_bytes:TCP.bytes)
+  (out_len:SZ.t)
+  (received0 sent0:TCP.bytes)
+  (st0:state)
+  (result:internal_result)
+  (received1 sent1:TCP.bytes)
+  (st1:state)
+  (wire_outputs:list wire_message)
+  (local_outputs:list local_output)
+  : Lemma
+    (requires
+      SZ.v out_len == Seq.length old_out /\
+      Seq.length out_bytes == Seq.length old_out /\
+      result.internal_status == InternalQuiescent /\
+      internal_no_progress
+        old_out out_bytes received0 sent0 st0
+        result received1 sent1 st1
+        wire_outputs local_outputs)
+    (ensures
+      internal_process_correct
+        system
+        (no_internal_events #local_event)
+        (nothing_pending #state)
+        old_out out_bytes out_len
+        received0 sent0 st0 result received1 sent1 st1
+        wire_outputs local_outputs)
+= ()
+
+(* The generic no-internal plumbing.  A protocol without internal events
+   needs three more field values beyond [no_internal_events] and
+   [nothing_pending]: two frame slprops and the processor itself.  All
+   three are protocol-independent, so they are supplied once here rather
+   than copied into every instance.
+
+   The frames are [emp]: an internal step of such a protocol demands no
+   resources and produces none, so whatever the caller holds is carried
+   across by framing. *)
+
+let no_internal_frame_pre
+  (#local_frame #state:Type0)
+  (_frame:local_frame)
+  (_st0:state)
+  (_out:array U8.t)
+  (_out_len:SZ.t)
+  (_old_out:TCP.bytes)
+  : slprop =
+  emp
+
+let no_internal_frame_post
+  (#local_frame #state #wire_message #local_output:Type0)
+  (_frame:local_frame)
+  (_result:internal_result)
+  (_old_out:TCP.bytes)
+  (_out_contents:TCP.bytes)
+  (_st0:state)
+  (_st1:state)
+  (_wire_outputs:list wire_message)
+  (_local_outputs:list local_output)
+  : slprop =
+  emp
+
+(* The quiescent internal processor.  It reports [InternalQuiescent]
+   unconditionally, which is sound because [no_internal_events] classifies
+   nothing as internal and [nothing_pending] is [False]: there is never
+   work for it to do.  Instances supply their own invariant and system as
+   the first two arguments and partially apply. *)
+fn quiescent_process_internal
+  (#impl #state #wire_message #local_event #local_output #local_frame:Type0)
+  (inv:impl -> TCP.bytes -> TCP.bytes -> state -> slprop)
+  (system:impl ->
+     GTot (WFSM.wire_format_state_machine state wire_message local_event local_output))
+  (i:impl)
+  (frame:local_frame)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (received0:Ghost.erased TCP.bytes)
+  (sent0:Ghost.erased TCP.bytes)
+  (st0:Ghost.erased state)
+  (old_out:Ghost.erased TCP.bytes)
+requires
+  inv i (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0) **
+  no_internal_frame_pre
+    #local_frame #state
+    frame
+    (Ghost.reveal st0)
+    out
+    out_len
+    (Ghost.reveal old_out) **
+  pts_to out (Ghost.reveal old_out) **
+  pure (SZ.v out_len == Seq.length (Ghost.reveal old_out))
+returns result:internal_result
+ensures exists* (received1:Ghost.erased TCP.bytes)
+                (sent1:Ghost.erased TCP.bytes)
+                (st1:Ghost.erased state)
+                (out_contents:TCP.bytes)
+                (wire_outputs:list wire_message)
+                (local_outputs:list local_output).
+  inv i (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1) **
+  no_internal_frame_post
+    #local_frame #state #wire_message #local_output
+    frame
+    result
+    (Ghost.reveal old_out)
+    out_contents
+    (Ghost.reveal st0)
+    (Ghost.reveal st1)
+    wire_outputs
+    local_outputs **
+  pts_to out out_contents **
+  pure (
+    internal_process_correct
+      (system i)
+      (no_internal_events #local_event)
+      (nothing_pending #state)
+      (Ghost.reveal old_out)
+      out_contents
+      out_len
+      (Ghost.reveal received0)
+      (Ghost.reveal sent0)
+      (Ghost.reveal st0)
+      result
+      (Ghost.reveal received1)
+      (Ghost.reveal sent1)
+      (Ghost.reveal st1)
+      wire_outputs
+      local_outputs)
+{
+  let result : internal_result = {
+    internal_status = InternalQuiescent;
+    internal_process = {
+      process_status = StepOk;
+      process_consumed_len = 0sz;
+      process_produced_len = 0sz;
+      process_app_len = 0sz;
+    };
+  };
+  unfold (no_internal_frame_pre
+    #local_frame #state
+    frame
+    (Ghost.reveal st0)
+    out
+    out_len
+    (Ghost.reveal old_out));
+  fold (no_internal_frame_post
+    #local_frame #state #wire_message #local_output
+    frame
+    result
+    (Ghost.reveal old_out)
+    (Ghost.reveal old_out)
+    (Ghost.reveal st0)
+    (Ghost.reveal st0)
+    ([] <: list wire_message)
+    ([] <: list local_output));
+  lemma_no_internal_events_quiescent
+    (system i)
+    (Ghost.reveal old_out)
+    (Ghost.reveal old_out)
+    out_len
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0)
+    result
+    (Ghost.reveal received0)
+    (Ghost.reveal sent0)
+    (Ghost.reveal st0)
+    ([] <: list wire_message)
+    ([] <: list local_output);
+  result
+}
+
 noextract
 class protocol_implementation
   (impl:Type0)
@@ -880,6 +1334,23 @@ class protocol_implementation
   pi_system:
     impl ->
       GTot (WFSM.wire_format_state_machine state wire_message local_event local_output);
+
+  (* The internal subset of the local events (decision S1).  An event
+     satisfying [pi_internal] is chosen by the implementation from its own
+     state; it is never supplied by a caller, and [pi_process_local]
+     refuses it. *)
+  pi_internal:
+    local_event ->
+    bool;
+
+  (* The implementation holds work that only an internal transition can
+     discharge.  This is what separates [InternalQuiescent] (nothing
+     pending, safe to read the network) from [InternalBlocked] (pending,
+     but waiting on a local action).  A protocol without internal events
+     sets this to [nothing_pending]. *)
+  pi_internal_pending:
+    state ->
+    prop;
 
   pi_invariant:
     impl ->
@@ -938,6 +1409,28 @@ class protocol_implementation
     local_event ->
     pi_local_frame ->
     process_result ->
+    TCP.bytes ->
+    TCP.bytes ->
+    state ->
+    state ->
+    list wire_message ->
+    list local_output ->
+    slprop;
+
+  (* Internal processing reuses [pi_local_frame]: an internal step needs
+     the same output buffers as a local step.  It takes no event, because
+     the event is determined by the state. *)
+  pi_internal_frame_pre:
+    pi_local_frame ->
+    state ->
+    array U8.t ->
+    SZ.t ->
+    TCP.bytes ->
+    slprop;
+
+  pi_internal_frame_post:
+    pi_local_frame ->
+    internal_result ->
     TCP.bytes ->
     TCP.bytes ->
     state ->
@@ -1139,7 +1632,9 @@ class protocol_implementation
            out_len
            (Ghost.reveal old_out) **
          pts_to out (Ghost.reveal old_out) **
-         pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
+         pure (
+           SZ.v out_len == Seq.length (Ghost.reveal old_out) /\
+           ~ (pi_internal ev)))
         (fun result ->
           exists* (received1:Ghost.erased TCP.bytes)
                   (sent1:Ghost.erased TCP.bytes)
@@ -1167,6 +1662,77 @@ class protocol_implementation
               local_process_correct
                 (pi_system i)
                 ev
+                (Ghost.reveal old_out)
+                out_contents
+                out_len
+                (Ghost.reveal received0)
+                (Ghost.reveal sent0)
+                (Ghost.reveal st0)
+                result
+                (Ghost.reveal received1)
+                (Ghost.reveal sent1)
+                (Ghost.reveal st1)
+                wire_outputs
+                local_outputs));
+
+  (* Make one step of internal progress, if any is available.
+
+     This is the operation a scheduler polls between network reads.  It is
+     total: it always returns, reporting through [internal_status] whether
+     it stepped, whether it is quiescent, whether it is blocked on a local
+     action, or whether the pending work is unprocessable.  Only
+     [InternalProgress] and [InternalFailed] move the abstract state; the
+     other two are observably no-ops, so polling is free. *)
+  pi_process_internal:
+    i:impl ->
+    frame:pi_local_frame ->
+    out:array U8.t ->
+    out_len:SZ.t ->
+    received0:Ghost.erased TCP.bytes ->
+    sent0:Ghost.erased TCP.bytes ->
+    st0:Ghost.erased state ->
+    old_out:Ghost.erased TCP.bytes ->
+      stt internal_result
+        (pi_invariant
+          i
+          (Ghost.reveal received0)
+          (Ghost.reveal sent0)
+          (Ghost.reveal st0) **
+         pi_internal_frame_pre
+           frame
+           (Ghost.reveal st0)
+           out
+           out_len
+           (Ghost.reveal old_out) **
+         pts_to out (Ghost.reveal old_out) **
+         pure (SZ.v out_len == Seq.length (Ghost.reveal old_out)))
+        (fun result ->
+          exists* (received1:Ghost.erased TCP.bytes)
+                  (sent1:Ghost.erased TCP.bytes)
+                  (st1:Ghost.erased state)
+                  (out_contents:TCP.bytes)
+                  (wire_outputs:list wire_message)
+                  (local_outputs:list local_output).
+            pi_invariant
+              i
+              (Ghost.reveal received1)
+              (Ghost.reveal sent1)
+              (Ghost.reveal st1) **
+            pi_internal_frame_post
+              frame
+              result
+              (Ghost.reveal old_out)
+              out_contents
+              (Ghost.reveal st0)
+              (Ghost.reveal st1)
+              wire_outputs
+              local_outputs **
+            pts_to out out_contents **
+            pure (
+              internal_process_correct
+                (pi_system i)
+                pi_internal
+                pi_internal_pending
                 (Ghost.reveal old_out)
                 out_contents
                 out_len

@@ -351,7 +351,7 @@ let lemma_yield_transition
 =
   ()
 
-#push-options "--z3refresh --z3rlimit 30 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 30 --split_queries always --z3seed 17"
 fn process
   (e:endpoint)
   (st:Ghost.erased endpoint_state)

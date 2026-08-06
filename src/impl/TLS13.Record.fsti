@@ -64,6 +64,10 @@ fn advance_seq (st: record_state)
            pure (U64.fits ('s.R.seq + 1))
   ensures is_record_state st (R.next_seq 's)
 
+fn restore_previous_seq (st: record_state)
+  requires is_record_state st (R.next_seq 's)
+  ensures is_record_state st 's
+
 fn install_keys
   (st: record_state)
   (#epoch: R.epoch)

@@ -117,6 +117,16 @@ fn http_client_run_length_full
     if U32.eq lv flen32 {
       let _nb = TCP.read_full ch body flen;
       let okb = Codec.http_recv_body body out flen;
+      (* Pin the postcondition's pure conjuncts one at a time.  Every one of them
+         is immediate from `http_recv_response`'s and `http_recv_body`'s
+         contracts, but discharging the whole seven-witness existential in a
+         single query costs more than rlimit 100 under Z3 4.15.3. *)
+      with o'. assert (pts_to out o');
+      assert (pure (Seq.length o' == SZ.v flen));
+      assert (pure (U32.v lv == SZ.v flen));
+      assert (pure (okb == true ==> body_ok o'));
+      assert (pure (okb == true ==>
+                    http_parse o' == Some (Msg_body o', Seq.empty #U8.t)));
       okb
     } else {
       false

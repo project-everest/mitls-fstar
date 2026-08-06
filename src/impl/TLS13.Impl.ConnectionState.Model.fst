@@ -172,6 +172,92 @@ let lemma_cipher_suites_match_first_chacha_offer
     lemma_cipher_suites_match_length wire len suites;
     assert False
 
+let rec lemma_signature_schemes_match_index_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+      (decreases i)
+=
+  if i = 0
+  then lemma_signature_schemes_match_first_rsa_offer wire len schemes
+  else
+    match schemes with
+    | scheme :: rest ->
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (Seq.index wire' (i - 1) == Seq.index wire i);
+      lemma_signature_schemes_match_index_rsa_offer wire' (len - 1) rest (i - 1)
+    | [] ->
+      lemma_signature_schemes_match_length wire len schemes;
+      assert False
+
+let rec lemma_cipher_suites_match_index_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+      (decreases i)
+=
+  if i = 0
+  then lemma_cipher_suites_match_first_chacha_offer wire len suites
+  else
+    match suites with
+    | suite :: rest ->
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (Seq.index wire' (i - 1) == Seq.index wire i);
+      lemma_cipher_suites_match_index_chacha_offer wire' (len - 1) rest (i - 1)
+    | [] ->
+      lemma_cipher_suites_match_length wire len suites;
+      assert False
+
+let lemma_signature_schemes_match_exists_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+=
+  let aux (i:nat)
+    : Lemma
+        (requires i < len /\ U16.v (Seq.index wire i) == 0x0804)
+        (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+    = lemma_signature_schemes_match_index_rsa_offer wire len schemes i
+  in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
+let lemma_cipher_suites_match_exists_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x1303))
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+=
+  let aux (i:nat)
+    : Lemma
+        (requires i < len /\ U16.v (Seq.index wire i) == 0x1303)
+        (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+    = lemma_cipher_suites_match_index_chacha_offer wire len suites i
+  in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
 // Phase 5: client_hello_of_start is now a faithful, total transparent `let` in
 // TLS13.Impl.ConnectionState.Model.fsti (it builds the canonical 5-extension
 // ClientHello, clamping invalid/unbounded start fields).  Nothing to define here.
@@ -192,8 +278,8 @@ let lemma_client_hello_of_start_matches
   //   B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640.
   // Reveal serialize_handshake to the generated serializer and compute the
   // exact bytesize of the canonical 5-extension ClientHello: it equals
-  //   117 + |sni| + 2*|cipher_suites| + 2*|signature_schemes|
-  // which under valid_start is at most 117 + 255 + 32 + 32 = 436 <= 16640.
+  //   149 + |sni| + 2*|cipher_suites| + 2*|signature_schemes|
+  // which under valid_start is at most 149 + 255 + 32 + 32 = 468 <= 16640.
   let sni = cho_sni start in
   let sa = cho_sa_data (cho_sa_list start) in
   let ks = start.CS.start_client_key_share_public in
@@ -217,8 +303,8 @@ let lemma_client_hello_of_start_matches
 // Server mirror of the client record-size reasoning inside
 // lemma_client_hello_of_start_matches: reveal serialize_handshake to the
 // generated serializer and compute the exact bytesize of the canonical
-// ServerHello.  It equals 90 (legacy_version TLS_1p2 + 32-byte random +
-// empty session-id echo + CHACHA cipher suite + null compression +
+// ServerHello.  It equals 122 (legacy_version TLS_1p2 + 32-byte random +
+// 32-byte session-id echo + CHACHA cipher suite + null compression +
 // [key_share(X25519, 32 bytes); supported_versions(TLS_1p3)]).  Structurally
 // identical to TLS13.Impl.Server.Send.lemma_mk_server_hello_witness_bytesize.
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
@@ -227,7 +313,7 @@ let lemma_server_hello_of_selection_bytesize
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 90)
+              (M.ServerHello (server_hello_of_selection sel))) == 122)
 = let sh = server_hello_of_selection sel in
   Rev.lemma_serialize_handshake_server_hello sh;
   GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
@@ -248,7 +334,7 @@ let lemma_server_hello_of_selection_bytesize
 // TLS13.Impl.Serializer.Handshake) by unfolding server_hello_of_selection and
 // the accessors (fuel for the 2-extension list walk).  The ServerHello
 // wire-profile bound (serialized handshake <= 16640) in
-// server_hello_matches_selection is discharged from the exact bytesize (90).
+// server_hello_matches_selection is discharged from the exact bytesize (122).
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_server_hello_of_selection_matches
   (sel:CS.server_handshake_selection)
@@ -1935,6 +2021,63 @@ let lemma_received_server_finished_state_evolves
     (received_server_finished_state st fin raw_received);
   assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves st (received_server_finished_state st fin raw_received));
   assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent (received_server_finished_state st fin raw_received))
+
+let lemma_protected_handshake_state_evolves
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnProtectedHandshake step) /\
+        Some? (CS.step_protected_handshake st.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received)
+      (ensures
+        TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+          st
+          (protected_handshake_state st step raw_received) /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+          (protected_handshake_state st step raw_received) /\
+        CS.legal_connection_delta
+          st
+          {
+            CS.delta_event = CS.ConnProtectedHandshake step;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = raw_received;
+          }
+          (protected_handshake_state st step raw_received))
+=
+  let ev = CS.ConnProtectedHandshake step in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  match CS.step_protected_handshake st.CS.cs_model step with
+  | None -> assert False
+  | Some model1 ->
+    assert (CS.step_model st.CS.cs_model ev ==
+      Some (protected_handshake_state st step raw_received).CS.cs_model);
+    assert (CS.legal_connection_delta
+      st
+      delta
+      (protected_handshake_state st step raw_received));
+    assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+      st
+      (protected_handshake_state st step raw_received));
+    FStar.ReflexiveTransitiveClosure.closure_step
+      TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+      st
+      (protected_handshake_state st step raw_received);
+    assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+      st
+      (protected_handshake_state st step raw_received));
+    assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+      (protected_handshake_state st step raw_received))
 
 let lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)

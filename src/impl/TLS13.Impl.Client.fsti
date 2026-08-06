@@ -24,6 +24,9 @@ type client = CR.connection_state
 let connection_exactly (c:client) (st:CS.connection_state) : slprop =
   CR.connection_exactly c st
 
+let connection_released (c:client) (st:CS.connection_state) : slprop =
+  CR.connection_released c st
+
 noextract
 let next_local_action_internal_input_ready
   (st:CS.connection_state)
@@ -242,6 +245,20 @@ fn control_snapshot
   ensures CR.connection_exactly c 'st0 **
           pure (CR.control_snapshot_matches snapshot 'st0)
 
+(** Does the client still hold undrained protected-handshake plaintext?
+
+    [true] means the pending buffer is empty, so no internal step is enabled.
+    The driver uses this to distinguish "the handshake reached
+    [ControlApplicationData]" from "the handshake is finished": reaching
+    application data with plaintext still buffered leaves internal work to do. *)
+fn protected_handshake_buffer_empty
+  (c:client)
+  requires CR.connection_exactly c 'st0
+  returns empty:bool
+  ensures CR.connection_exactly c 'st0 **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty 'st0.CS.cs_model)
+
 fn next_local_action
   (c:client)
   (network_out_len:SZ.t)
@@ -277,6 +294,51 @@ fn copy_certificate_leaf_der
                 | Some leaf ->
                   SZ.v copied_len == B.length leaf /\
                   Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
+                | None -> False))
+
+fn copy_certificate_chain
+  (c:client)
+  (chain_out:array U8.t)
+  (chain_out_len:SZ.t)
+  (offsets_out:array SZ.t)
+  (offsets_out_len:SZ.t)
+  (lens_out:array SZ.t)
+  (lens_out_len:SZ.t)
+  requires CR.connection_exactly c 'st0 **
+           pts_to chain_out 'old_chain_out **
+           pts_to offsets_out 'old_offsets_out **
+           pts_to lens_out 'old_lens_out **
+           pure (B.length 'old_chain_out == SZ.v chain_out_len /\
+                Seq.length 'old_offsets_out == SZ.v offsets_out_len /\
+                Seq.length 'old_lens_out == SZ.v lens_out_len /\
+                SZ.v chain_out_len == L.max_certificate_chain_bytes /\
+                SZ.v offsets_out_len == L.max_certificate_chain_entries /\
+                SZ.v lens_out_len == L.max_certificate_chain_entries /\
+                Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate)
+  returns snapshot:CR.certificate_chain_snapshot
+  ensures exists* chain_bytes offsets lens.
+          CR.connection_exactly c 'st0 **
+          pts_to chain_out chain_bytes **
+          pts_to offsets_out offsets **
+          pts_to lens_out lens **
+          pure (B.length chain_bytes == SZ.v chain_out_len /\
+                Seq.length offsets == SZ.v offsets_out_len /\
+                Seq.length lens == SZ.v lens_out_len /\
+                SZ.v snapshot.CR.certificate_chain_bytes_len <=
+                 B.length chain_bytes /\
+                SZ.v snapshot.CR.certificate_chain_cert_count <=
+                 Seq.length offsets /\
+                SZ.v snapshot.CR.certificate_chain_cert_count <=
+                 Seq.length lens /\
+                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+                | Some cert ->
+                  L.certificate_chain_matches
+                    chain_bytes
+                    (SZ.v snapshot.CR.certificate_chain_bytes_len)
+                    offsets
+                    lens
+                    (SZ.v snapshot.CR.certificate_chain_cert_count)
+                    (Sem.certificate_entries cert)
                 | None -> False))
 
 fn copy_certificate_verify_input
@@ -325,7 +387,7 @@ fn copy_certificate_verify_signature
                     (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
-fn process_network_bytes
+fn process_coalesced_network_bytes
   (c:client)
   (raw:array U8.t)
   (raw_len:SZ.t)
@@ -338,9 +400,10 @@ fn process_network_bytes
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
+                B.length 'old_network_out == SZ.v network_out_len /\
+                B.length 'old_app_out == SZ.v app_out_len /\
+                L.max_record_fragment_len <= SZ.v app_out_len /\
+                CT.client_end_to_end_invariant 'st0)
   returns buffer_resp: CT.client_buffer_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           CR.connection_exactly c st1 **
@@ -349,38 +412,55 @@ fn process_network_bytes
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.network_bytes_end_to_end_correct
+                CT.coalesced_network_bytes_end_to_end_correct
+                 'st0
+                 st1
+                 buffer_resp
+                 (Ghost.reveal 'raw_bytes)
+                 'old_network_out
+                 network_out_bytes
+                 'old_app_out
+                 app_out_bytes /\
+                CT.client_end_to_end_invariant st1 /\
+                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+                buffer_resp.CT.consumed_len == 0sz /\
+                WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+                WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
+                CT.response_stuttered
                   'st0
                   st1
-                  buffer_resp
-                  (Ghost.reveal 'raw_bytes)
+                  buffer_resp.CT.response
                   'old_network_out
                   network_out_bytes
                   'old_app_out
-                  app_out_bytes /\
-                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 CT.response_stuttered
-                   'st0
-                   st1
-                   buffer_resp.CT.response
-                   'old_network_out
-                   network_out_bytes
-                   'old_app_out
-                   app_out_bytes) /\
-                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
-                 buffer_resp.CT.consumed_len == 0sz /\
-                 WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
-                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None) /\
+                  app_out_bytes) /\
                 (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-                 0 < SZ.v buffer_resp.CT.consumed_len) /\
+                0 < SZ.v buffer_resp.CT.consumed_len) /\
                 (buffer_resp.CT.response.CT.status == CT.DecodeError ==>
-                 buffer_resp.CT.consumed_len == 0sz) /\
+                buffer_resp.CT.consumed_len == 0sz) /\
                 (buffer_resp.CT.response.CT.status == CT.IllegalTransition ==>
-                 buffer_resp.CT.consumed_len == 0sz) /\
+                buffer_resp.CT.consumed_len == 0sz) /\
                 (SZ.v buffer_resp.CT.response.CT.app_out_len > 0 ==>
-                 buffer_resp.CT.response.CT.status == CT.StepOk /\
-                 buffer_resp.CT.response.CT.network_out_len == 0sz) /\
-                (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==> False))
+                buffer_resp.CT.response.CT.status == CT.StepOk /\
+                buffer_resp.CT.response.CT.network_out_len == 0sz) /\
+                (buffer_resp.CT.response.CT.status == CT.OutputBufferTooSmall ==>
+                False))
+
+fn process_pending_protected_handshake
+  (c:client)
+  (empty:array U8.t)
+  requires CR.connection_exactly c 'st0 **
+           pts_to empty 'empty_bytes **
+           pure (Seq.equal (Ghost.reveal 'empty_bytes) B.empty /\
+                CT.client_end_to_end_invariant 'st0)
+  returns result:option CT.client_response
+  ensures exists* st1.
+          CR.connection_exactly c st1 **
+          pts_to empty 'empty_bytes **
+          pure (
+            CT.pending_protected_handshake_result_correct
+              'st0 st1 result /\
+            CT.client_end_to_end_invariant st1)
 
 fn process_local_event
   (c:client)
@@ -421,3 +501,8 @@ fn process_local_event
                 (resp.CT.status == CT.StepOk \/
                  resp.CT.status == CT.IllegalTransition \/
                  resp.CT.status == CT.ConnectionFailed))
+
+fn free_client
+  (c:client)
+  requires connection_exactly c 'st0
+  ensures connection_released c 'st0

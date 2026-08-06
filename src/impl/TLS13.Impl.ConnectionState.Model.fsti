@@ -41,6 +41,7 @@ module GFin = TLS13.Wire.Generated.Finished
 module U8 = FStar.UInt8
 module LL = FStar.List.Tot
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GHN = TLS13.Wire.Generated.HostName
 module GSN = TLS13.Wire.Generated.ServerName
 module GSNL = TLS13.Wire.Generated.ServerNameList
@@ -116,11 +117,20 @@ val lemma_signature_schemes_match_first_rsa_offer
                 U16.v (Seq.index wire 0) == 0x0804)
       (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
 
+
 noextract
 let client_hello_server_name_len_for (m:GCH.clientHello) : SZ.t =
   match Sem.clientHello_server_name m with
   | Some sn -> bounded_u16_sizet (B.length sn)
   | None -> 0sz
+
+(* Whether the ClientHello actually carried a server_name (SNI) extension.  The
+   extension is optional in RFC 6066 and absent whenever a client connects to a
+   bare IP literal, so this is genuinely a property of the message rather than a
+   precondition the server may impose. *)
+noextract
+let client_hello_has_sni (m:GCH.clientHello) : bool =
+  Some? (Sem.clientHello_server_name m)
 
 noextract
 let client_hello_cipher_suites_len_for (m:GCH.clientHello) : SZ.t =
@@ -149,6 +159,58 @@ val lemma_cipher_suites_match_first_chacha_offer
                 0 < len /\
                 len <= Seq.length wire /\
                 U16.v (Seq.index wire 0) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+
+/// Generalisation of [lemma_signature_schemes_match_first_rsa_offer] from the head
+/// of the offered list to an arbitrary position.  Real clients (curl, browsers)
+/// send rsa_pss_rsae_sha256 somewhere in the middle of a ~14-entry list, so the
+/// server has to be able to *select* it rather than require it first.
+val lemma_signature_schemes_match_index_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+/// Generalisation of [lemma_cipher_suites_match_first_chacha_offer] from the head
+/// of the offered list to an arbitrary position; see the signature-scheme analog.
+val lemma_cipher_suites_match_index_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+
+/// Existential forms, which is what a runtime linear scan can produce: the scan
+/// reports "some entry below [len] equals the target" without carrying the index.
+val lemma_signature_schemes_match_exists_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+val lemma_cipher_suites_match_exists_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x1303))
       (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
 
 noextract
@@ -242,7 +304,7 @@ let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 })
 
 noextract
 let cho_sv_ext : GECH.extensionClientHello
-  = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
+  = GECH.Extension_data_supported_versions ([GOV.Offered_TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
 
 noextract
 let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
@@ -264,7 +326,12 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
     GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
     let exts : GCH.clientHello_extensions = [sn_ext; sg_ext; sa_ext; ks_ext; sv_ext] in
     let comp : GCH.clientHello_legacy_compression_methods = Seq.create 1 0uy in
-    let sid : GCH.clientHello_legacy_session_id = B.empty in
+    (* RFC 8446 D.4 middlebox compatibility: send a non-empty, 32-byte
+       legacy_session_id.  Any 32-byte value is legal (RFC 8446 4.1.2), and both
+       fields travel in the same cleartext message, so we reuse the client
+       random rather than carrying a second 32-byte secret through the whole
+       handshake_start plumbing. *)
+    let sid : GCH.clientHello_legacy_session_id = r32 in
     { GCH.legacy_version = GPV.TLS_1p2;
       GCH.random = r32;
       GCH.legacy_session_id = sid;
@@ -304,6 +371,26 @@ let sho_random (sel:CS.server_handshake_selection)
           assert_norm (Seq.index GSHB.serverHello_body_cst 0 == 0xcfuy);
           Seq.create 32 0uy)
 
+(* The 32-byte legacy_session_id of the ClientHello currently stored in the
+   connection state -- i.e. exactly what the ServerHello must echo back for
+   RFC 8446 D.4 middlebox compatibility.  Ghost-only: the runtime value is
+   read out of the stored ClientHello mirror.  Defined for every state (the
+   all-zero default is never observable, because the ServerHello send path
+   runs only in HsClientHelloReceived). *)
+noextract
+let stored_client_hello_session_id (st:CS.connection_state)
+  : (b:Seq.seq U8.t { Seq.length b == 32 })
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch -> Sem.clientHello_session_id_32 ch
+    | None -> Seq.create 32 0uy
+
+(* clamp: the echoed legacy_session_id is fixed at 32 bytes (identity under
+   valid_selection; see the middlebox-compatibility note above). *)
+noextract
+let sho_session_id (sel:CS.server_handshake_selection)
+  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b == 32 })
+  = Sem.clientHello_session_id_32 sel.CS.server_selected_client_hello
+
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
 let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
@@ -324,7 +411,7 @@ let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHe
     GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     let exts : GSHBody.serverHelloBody_extensions = [ks_ext; sv_ext] in
-    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = B.empty in
+    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = sho_session_id sel in
     let body : GSHBody.serverHelloBody = {
       GSHBody.legacy_session_id_echo = sid;
       GSHBody.cipher_suite = cs;
@@ -506,7 +593,7 @@ val lemma_client_hello_of_start_matches
 
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
-// exactly 90 bytes (legacy_version TLS_1p2 + 32-byte random + empty session-id +
+// exactly 122 bytes (legacy_version TLS_1p2 + 32-byte random + 32-byte session-id echo +
 // CHACHA cipher suite + null compression + [X25519 key_share; supported_versions]).
 // Reveals serialize_handshake to the generated serializer and computes the
 // bytesize; used to discharge the transcript-length obligation inside
@@ -516,14 +603,14 @@ val lemma_server_hello_of_selection_bytesize
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 90)
+              (M.ServerHello (server_hello_of_selection sel))) == 122)
 
 // Server mirror: under valid_selection, the canonical server_hello_of_selection
 // satisfies the spec's server_hello_matches_selection: every
 // TLS13.Wire.Semantics accessor returns the corresponding `selection` field (the
 // clamp in server_hello_of_selection is an identity under valid_selection).
 // The <= 16640 conjunct in server_hello_matches_selection is discharged from the
-// exact 90-byte bytesize above (lemma_server_hello_of_selection_bytesize).
+// exact 122-byte bytesize above (lemma_server_hello_of_selection_bytesize).
 val lemma_server_hello_of_selection_matches
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)
@@ -1502,6 +1589,26 @@ let received_server_finished_state
         CL.message_value = M.TlsHandshake msg;
       }];
   }
+
+noextract
+let protected_handshake_state
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  match CS.step_protected_handshake st.CS.cs_model step with
+  | None -> st
+  | Some model1 ->
+    {
+      CS.cs_model = model1;
+      CS.cs_wire_log = {
+        CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+        CL.raw_received =
+          B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+      };
+      CS.cs_event_log =
+        st.CS.cs_event_log @ [CS.ConnProtectedHandshake step];
+    }
 
 let verified_server_finished_state
   (st:CS.connection_state)
@@ -2991,6 +3098,35 @@ val lemma_received_server_finished_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_server_finished_state st fin raw_received))
+
+val lemma_protected_handshake_state_evolves
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnProtectedHandshake step) /\
+        Some? (CS.step_protected_handshake st.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received)
+      (ensures
+        TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+          st
+          (protected_handshake_state st step raw_received) /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+          (protected_handshake_state st step raw_received) /\
+        CS.legal_connection_delta
+          st
+          {
+            CS.delta_event = CS.ConnProtectedHandshake step;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = raw_received;
+          }
+          (protected_handshake_state st step raw_received))
 
 val lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)

@@ -14,6 +14,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module L = TLS13.Impl.Messages
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
@@ -63,14 +64,14 @@ let lemma_receive_observation_network_witness
   (input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1 buffer_resp input
           old_network_out network_out old_app_out app_out)
       (ensures
         exists st_network st_before observed_input
                observed_old_network_out observed_network_out
                observed_old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             buffer_resp
@@ -85,7 +86,7 @@ let lemma_receive_observation_network_witness
   introduce exists st_network st_before observed_input
                    observed_old_network_out observed_network_out
                    observed_old_app_out observed_app_out.
-      CT.network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
         buffer_resp
@@ -105,7 +106,7 @@ let lemma_receive_observation_network_ok
   (input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1 buffer_resp input
           old_network_out network_out old_app_out app_out)
       (ensures
@@ -124,7 +125,7 @@ let lemma_receive_observation_network_ok
   eliminate exists st_network st_before observed_input
                    observed_old_network_out observed_network_out
                    observed_old_app_out observed_app_out.
-    CT.network_bytes_end_to_end_correct
+    D.drained_network_bytes_end_to_end_correct
       st_before
       st_network
       buffer_resp
@@ -151,7 +152,7 @@ let lemma_receive_observation_network_ok
       exists st_observed st_before' observed_input'
              observed_old_network_out' observed_network_out'
              observed_old_app_out' observed_app_out'.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before'
           st_observed
           buffer_resp
@@ -170,7 +171,7 @@ let lemma_receive_observation_network_ok
       introduce exists st_observed st_before' observed_input'
                        observed_old_network_out' observed_network_out'
                        observed_old_app_out' observed_app_out'.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before'
           st_observed
           buffer_resp
@@ -286,7 +287,7 @@ let lemma_control_snapshot_not_failed
   | CS.ControlClosed ->
     ()
 
-#push-options "--z3refresh --z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
 fn rec receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)
@@ -519,7 +520,7 @@ fn rec receive_application_data
             network.BN.completed_drive_pending_len;
           receive_workflow_response = buffer_resp;
         };
-        assert (pure (CT.network_bytes_end_to_end_correct
+        assert (pure (D.drained_network_bytes_end_to_end_correct
           'st0
           st_network
           buffer_resp
@@ -544,7 +545,7 @@ fn rec receive_application_data
         assert (pure (
           (receive_workflow_observation result)
             .client_receive_observed_response == buffer_resp));
-        assert (pure (CT.network_bytes_end_to_end_correct
+        assert (pure (D.drained_network_bytes_end_to_end_correct
           'st0
           st_network
           (receive_workflow_observation result)
@@ -558,7 +559,7 @@ fn rec receive_application_data
         assert (pure (exists st_observed st_before input
                             old_network_out observed_network_out
                             old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_observed
             (receive_workflow_observation result)
@@ -571,7 +572,7 @@ fn rec receive_application_data
         assert (pure (exists st_observed st_before input
                             old_network_out observed_network_out
                             old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_observed
             (receive_workflow_observation result)
@@ -642,7 +643,7 @@ fn rec receive_application_data
       BS.DriveYield network_result _ _ _ -> {
         let buffer_resp =
           network_result.buffered_network_read.network_read_buffer_resp;
-        assert (pure (CT.network_bytes_end_to_end_correct
+        assert (pure (D.drained_network_bytes_end_to_end_correct
           'st0
           st_network
           buffer_resp
@@ -692,7 +693,7 @@ fn rec receive_application_data
         if has_application_data {
           assert (pure (
             SZ.v buffer_resp.CT.response.CT.app_out_len > 0));
-          CT.lemma_network_bytes_app_out_positive_not_failed
+          D.lemma_drained_network_app_out_positive_not_failed
             'st0
             st_network
             buffer_resp

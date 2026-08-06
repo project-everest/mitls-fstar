@@ -118,13 +118,26 @@ let lemma_serialize_all_single (w:CW.wire_message)
 (** The system is quiescent when nothing is in flight. **)
 let tls_quiescent (s:tls_system_state) : prop = MP.Quiet? s.channel
 
-(** Both endpoints have completed the handshake and installed application keys,
-    at the canonical no-tail completion boundary (event log length exactly 16 on
-    each side — the corrected handshake-completion length; see
-    `TLS13.Impl.Driver.PairingNoTail`/`PairingNoTailServerShape`).  Pinning the
-    boundary length is what makes the `clean16` byte-trace entry predicate
-    available at a ready+quiescent state, from which the protected-flight
-    projection witnesses (FACT 4) are derived on demand. **)
+(** Both endpoints have finished the handshake and installed application keys.
+
+    Per endpoint this is the driver's readiness predicate, which carries the
+    end-to-end invariant, `ControlApplicationData`, and the application record
+    keys.  On the client it additionally carries
+    `CS.protected_handshake_buffer_empty`, which is what makes readiness imply
+    `TLS13.System.Internal.tls_settled`; see `lemma_application_ready_settled`
+    for why the state machine's `Sent Finished` guard was needed as well.
+
+    NOTE: this predicate does *not* pin the event log to any particular length.
+    An earlier version of this comment claimed it pinned each side to exactly 16
+    events and that the pinning was what made the `clean16` byte-trace route
+    available.  Neither is true: no `== 16` constraint appears anywhere in the
+    development, and the FACT-4 producer `lemma_pw_establish` takes only
+    reachability, byte pairing, both-endpoint readiness, hello key-share
+    agreement, the four hellos and the role conditions — the same bundle as
+    `ProtectedWireClientFinishedInversion.client_finished_bridge_inputs`.  The
+    event-log prefix/suffix split that the `PairingNoTail*` lemmas need is
+    supplied by *their own* explicit byte-trace hypotheses, not derived from
+    readiness. **)
 let tls_application_ready (s:tls_system_state) : prop =
   TLS13.Impl.Client.Driver.client_driver_application_ready s.client /\
   TLS13.Impl.Server.Driver.server_driver_application_ready s.server
@@ -783,6 +796,7 @@ let tls_machine_iface
     as its hypothesis and used to read the gate off that hypothesis now takes an
     explicit `MP.Quiet? a.channel` precondition. **)
 
+#restart-solver
 let tls_step_client_send (a b:tls_system_state) : prop =
   MP.mp_client_send tls_machine_iface a b
 
@@ -1335,6 +1349,19 @@ let lemma_cc_client_send
              returns _
              with _pf2.
                W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
+        | CS.ConnProtectedHandshake _ ->
+          // Internal event: raw_sent is empty, exactly as for a local event.
+          eliminate exists server_ch.
+            CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw
+          returns _
+          with _pw.
+            (eliminate exists fragment.
+               W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+               W.parse_tls_message T.Handshake fragment ==
+                 Some (M.TlsHandshake (M.ClientHello server_ch))
+             returns _
+             with _pf2b.
+               W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
         | CS.ConnNetworkEvent nmsg ->
           (match nmsg.CL.message_value with
            | M.TlsHandshake (M.ClientHello ch) ->
@@ -1368,6 +1395,7 @@ let lemma_cc_client_send
 
 (** FACTS 1–5 across a client SEND (client emits one record; needs field
     stability + config→profile at CH-send + carried cleartext for the channel). **)
+#restart-solver
 val lemma_wire_facts_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ MP.Quiet? a.channel /\ tls_step_client_send a b)
           (ensures ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
@@ -1696,9 +1724,8 @@ let lemma_wire_facts_deliver_to_client a b =
   with _pd. (
     lemma_client_step_shape a.client c' (SM.WireEvent wire) out;
     Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent
-          { CL.message_direction = CL.Received; CL.message_value = msg } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (EC.client_wire_received_event a.client wire conn_ev /\
        CS.legal_connection_delta a.client
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
@@ -1707,13 +1734,30 @@ let lemma_wire_facts_deliver_to_client a b =
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
        SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection a.client wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
     returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
     with _ps. (
       assert (WStep.hs_hellos_stable a.client.CS.cs_model c'.CS.cs_model);
-      let conn_ev = CS.ConnNetworkEvent
-        { CL.message_direction = CL.Received; CL.message_value = msg } in
+      match conn_ev with
+      | CS.ConnLocalEvent _ -> ()
+      | CS.ConnProtectedHandshake _ ->
+        // A protected handshake receipt touches neither hello field, so FACTS
+        // 1-3 and the coupling transfer from a unchanged.
+        assert (forall (dir:CS.direction) (sh:GSH.serverHello).
+          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
+                      CL.message_value = M.TlsHandshake (M.ServerHello sh) }));
+        lemma_step_preserves_server_hello a.client.CS.cs_model conn_ev c'.CS.cs_model;
+        assert (forall (dir:CS.direction) (ch:GCH.clientHello).
+          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
+        lemma_step_preserves_client_hello_legal a.client.CS.cs_model conn_ev c'.CS.cs_model;
+        assert (ch_wire_equiv b);
+        assert (sh_wire_equiv b);
+        assert (hello_key_shares_ok b);
+        assert (hello_coupling b)
+      | CS.ConnNetworkEvent dm ->
+      let msg = dm.CL.message_value in
+      assert (EC.network_input_message_projection a.client wire msg);
       (match msg with
        | M.TlsHandshake (M.ServerHello client_sh) ->
          // ServerHello receive: hs_server_hello is installed; hs_client_hello is
@@ -1900,6 +1944,7 @@ let lemma_client_step_e2e
     the immutable config, the real work only fires when the pre-state is already
     valid; otherwise the post-guard is false and the obligation is vacuous. **)
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#restart-solver
 let lemma_server_step_e2e
   (st0 st1:CS.connection_state)
   (e:SM.event CW.wire_message CTy.server_local_event)
@@ -2534,6 +2579,7 @@ let lemma_server_wire_recv_into_appdata_shape
 
 (** SERVER step-level: a SEND (nonempty wire output) never enters application data. **)
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 60 --split_queries always"
+#restart-solver
 let lemma_server_send_not_into_appdata
   (st0:CS.connection_state) (local:CTy.server_local_event)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -2681,12 +2727,16 @@ let lemma_server_appdata_installed_backward
     | CS.ConnLocalEvent _ -> ()
 #pop-options
 
-(** FACT-4 ESTABLISHMENT producer (ROUTE B).  From a ready+quiescent BOTH-ready
-    boundary-16 state with the byte-level reachability/pairing facts, the hello
+(** FACT-4 ESTABLISHMENT producer (ROUTE B).  From a quiescent state with both
+    endpoints ready, the byte-level reachability/pairing facts, the hello
     key-share agreement, and no rekeying, the `clean16` producer supplies the
     protected projection-pair witnesses.  This is exactly the middle block of
     `lemma_ready_quiescent_agrees`, factored out so it can be invoked at the
-    server-verify instant. **)
+    server-verify instant.
+
+    The `requires` clause below is the whole truth about what this needs; in
+    particular there is no constraint on event-log length (see the note on
+    `tls_application_ready`). **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 let lemma_pw_establish (s:tls_system_state)
   : Lemma
@@ -3146,7 +3196,15 @@ let lemma_client_step_preserves_stage_ok
     with _pf.
       (match d.CS.delta_event with
        | CS.ConnLocalEvent _ -> ()
-       | CS.ConnNetworkEvent _ -> ())
+       | CS.ConnNetworkEvent dm ->
+         // Split on the direction: the network arm carries every control
+         // advance the client makes, and since the client-Finished send became
+         // guarded on the pending buffer the combined query no longer fits in
+         // the rlimit.  Each direction on its own is cheap.
+         (match dm.CL.message_direction with
+          | CL.Sent -> ()
+          | CL.Received -> ())
+       | CS.ConnProtectedHandshake _ -> ())
 #pop-options
 
 (** SERVER.  `server_stage_ok` alone is NOT inductive per-step: at the wide

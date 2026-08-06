@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module BS = Common.BufferedStream
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module DS = TLS13.Impl.Client.Driver.State
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -121,7 +122,7 @@ let completed_drive_correct
   | BS.DriveYield network consumed _ _ ->
     let buffer_resp =
       network.DS.buffered_network_read.DS.network_read_buffer_resp in
-    CT.network_bytes_end_to_end_correct
+    D.drained_network_bytes_end_to_end_correct
       st0
       st1
       buffer_resp
@@ -136,7 +137,7 @@ let completed_drive_correct
   | BS.DriveReject network error _ ->
     let buffer_resp =
       network.DS.buffered_network_read.DS.network_read_buffer_resp in
-    CT.network_bytes_end_to_end_correct
+    D.drained_network_bytes_end_to_end_correct
       st0
       st1
       buffer_resp

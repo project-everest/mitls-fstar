@@ -60,6 +60,33 @@ let local_output_buffer
   pts_to out old_out **
   pure (Seq.length old_out == SZ.v out_len)
 
+(* An endpoint may never hand an INTERNAL event to the driver.  Internal
+   events are chosen by the implementation from its own state and are
+   discharged by [pi_process_internal]; routing one through the local path
+   would let a caller step the implementation past buffered work it has
+   not yet accounted for.  [pi_process_local] refuses such an event, and
+   this predicate is where the endpoint discharges that obligation. *)
+let action_not_internal
+  (#impl:Type0)
+  (#state:Type0)
+  (#wire_message:Type0)
+  (#local_event:Type0)
+  (#local_output:Type0)
+  (protocol:CPI.protocol_implementation
+    impl
+    state
+    wire_message
+    local_event
+    local_output)
+  (action:endpoint_action
+    protocol.CPI.pi_network_frame
+    local_event
+    protocol.CPI.pi_local_frame)
+  : prop =
+  match action with
+  | EndpointLocal ev _ -> ~ (protocol.CPI.pi_internal ev)
+  | _ -> True
+
 noextract
 class protocol_endpoint
   (impl:Type0)
@@ -157,7 +184,8 @@ class protocol_endpoint
             cfg
             frame
             (Ghost.reveal st)
-            action);
+            action **
+          pure (action_not_internal protocol action));
 
   pe_cancel_action:
     i:impl ->

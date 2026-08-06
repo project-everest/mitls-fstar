@@ -38,6 +38,7 @@ module GESK = TLS13.Wire.Generated.ExtensionClientHello_extension_data_key_share
 module GESV = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_versions
 module GESG = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_groups
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GPN = TLS13.Wire.Generated.ProtocolName
@@ -186,7 +187,7 @@ val lemma_reveal_ch_extensions_cons_sv
   (tl:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-           (if FStar.List.Tot.mem GPV.TLS_1p3 svl
+           (if FStar.List.Tot.mem GOV.Offered_TLS_1p3 svl
             then reveal_ch_extensions tl sn ks true ss
             else None))
 

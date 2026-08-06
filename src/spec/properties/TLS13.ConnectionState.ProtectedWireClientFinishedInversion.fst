@@ -25,8 +25,10 @@ module PWBase = TLS13.ConnectionState.ProtectedWireBase
 module PWReplay = TLS13.ConnectionState.ProtectedWireReplay
 module PWSFlight = TLS13.ConnectionState.ProtectedWireServerFlight
 module PWHead = TLS13.ConnectionState.ProtectedWireHead
+module PWNorm = TLS13.ConnectionState.ProtectedWireNormalize
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module PWStaged = TLS13.ConnectionState.ProtectedWireStaged
+module SFInv = TLS13.ConnectionState.ProtectedWireServerFlightInversion
 module Pairing = TLS13.Impl.Driver.Pairing
 module R = TLS13.Record.Spec
 module RR = TLS13.Wire.Spec.Reveal.Record
@@ -240,9 +242,30 @@ let lemma_step_preserves_secrets
           m.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
         Some? m1.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
 =
+  (* The case split is written out one constructor at a time rather than left to
+     a `| _ -> ()` catch-all: under Z3 4.15.3 the single catch-all query no
+     longer closes within rlimit 100 at ifuel 4, because it has to invert
+     `local_event` (13 constructors) inside `conn_event` in one go.  Enumerating
+     the arms gives the solver the inversion for free, and each arm is then a
+     small, independent query. *)
   match ev with
-  | CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> ()
-  | _ -> ()
+  | CS.ConnNetworkEvent _ -> ()
+  | CS.ConnProtectedHandshake _ -> ()
+  | CS.ConnLocalEvent lev ->
+    match lev with
+    | CS.LocalStartHandshake _ -> ()
+    | CS.LocalStartServer -> ()
+    | CS.LocalSelectServerParameters _ -> ()
+    | CS.LocalDeriveSharedSecret _ -> ()
+    | CS.LocalInstallTrafficKeys _ -> ()
+    | CS.LocalInstallTrafficKeysForRole _ -> ()
+    | CS.LocalValidateCertificate _ -> ()
+    | CS.LocalVerifyCertificateSignature _ -> ()
+    | CS.LocalSignCertificateVerify _ -> ()
+    | CS.LocalVerifyFinished _ -> ()
+    | CS.LocalVerifyClientFinished _ -> ()
+    | CS.LocalDeliverApplicationData _ -> ()
+    | CS.LocalFail _ -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
@@ -687,6 +710,7 @@ let rec lemma_region_preserves_transcript_sent
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
+#restart-solver
 let rec lemma_region_preserves_transcript_received
   (m:CS.connection_model) (evs:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
@@ -1384,6 +1408,7 @@ let lemma_replay_cong_sent
       (ensures SMReplay.conn_events_sent_seal_replay m l2 a b f)
   = ()
 
+#restart-solver
 let lemma_replay_cong_recv
   (m:CS.connection_model) (l1 l2:list CS.conn_event) (a b:B.bytes) (f:CS.connection_model)
   : Lemma
@@ -1426,6 +1451,7 @@ let lemma_step_preserves_config (m:CS.connection_model) (ev:CS.conn_event) (m1:C
   : Lemma (requires CS.step_model m ev == Some m1)
           (ensures m1.CS.model_config == m.CS.model_config)
   = match ev with
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnLocalEvent local -> ()
     | CS.ConnNetworkEvent msg -> ()
 
@@ -2094,6 +2120,7 @@ let rec lemma_cr_region_preserves_read_installed_sent
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+#restart-solver
 let rec lemma_cr_region_read_installed_sent
   (m:CS.connection_model) (region:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
@@ -2435,7 +2462,7 @@ let lemma_forall_server_install_empty_recv (region:list CS.conn_event)
     L.for_all_mem Region.is_empty_recv_ev region
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
 let lemma_client_side_cf (s:sysp)
   : Lemma (requires client_finished_bridge_inputs s.client s.server)
           (ensures client_pkg_exists s)
@@ -2451,14 +2478,24 @@ let lemma_client_side_cf (s:sysp)
   assert (WStep.client_reachable (CS.initial cfg_c) s.client);
   assert (cfg_c.CS.config_role == CS.ClientEndpoint);
   assert (CCShape.log_has_no_received_ccs s.client.CS.cs_event_log);
-  CCShape.lemma_client_canonical_appdata_exact_spine cfg_c s.client;
+  SFInv.lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing
+    s.client s.server;
+  (* [client_normalized_appdata_exact_spine] is opaque_to_smt; unfold it here,
+     the one place that destructs it. *)
+  reveal_opaque (`%SFInv.client_normalized_appdata_exact_spine)
+    SFInv.client_normalized_appdata_exact_spine;
   eliminate exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
                    (client_shared:C.x25519_shared_secret)
                    (region:list CS.conn_event)
                    (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
                    (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
                    (cv_verify:CS.local_event) (sf:GFin.finished)
+                   (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
                    (tail:list CS.conn_event).
+    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee) raw_ee /\
+    PWHead.received_handshake_head_normal_form (M.Certificate cert) raw_cert /\
+    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv) raw_cv /\
+    PWHead.received_handshake_head_normal_form (M.Finished sf) raw_sf /\
     (forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
     (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
     (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
@@ -2466,19 +2503,25 @@ let lemma_client_side_cf (s:sysp)
       L.append
         (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
         (L.append region
-           (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+           (raw_ee ::
+            raw_cert ::
             CS.ConnLocalEvent cv_validate ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+            raw_cv ::
             CS.ConnLocalEvent cv_verify ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+            raw_sf ::
             tail))
   returns client_pkg_exists s
   with _.
   (
     let prefix = PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared in
+    (* The log carries the RAW flight; the network-event spine [cflight] is its
+       normal form, and the two denote the same replay
+       ([PWNorm.lemma_normalize_flight_sent]). *)
+    let raw_cflight =
+      raw_ee :: raw_cert :: CS.ConnLocalEvent cv_validate ::
+      raw_cv :: CS.ConnLocalEvent cv_verify :: raw_sf :: tail in
     let cflight = client_flight_tail ee cert cv_validate cv cv_verify sf tail in
-    let suffix = L.append region cflight in
+    let suffix = L.append region raw_cflight in
     assert (s.client.CS.cs_event_log == L.append prefix suffix);
     (* ---- SENT-seal branch ---- *)
     lemma_replay_cong_sent m0 s.client.CS.cs_event_log (L.append prefix suffix) cs cr final;
@@ -2494,16 +2537,33 @@ let lemma_client_side_cf (s:sysp)
     (
       lemma_client_prefix_model_sent cfg_c start ch sh client_shared ps_sent ps_recv mp;
       lemma_client_prefix_sent_bytes cfg_c start ch sh client_shared ps_sent ps_recv mp;
-      PWReplay.lemma_conn_events_sent_seal_replay_append_split mp region cflight suf_sent suf_recv final;
+      PWReplay.lemma_conn_events_sent_seal_replay_append_split mp region raw_cflight suf_sent suf_recv final;
       eliminate exists (mc:CS.connection_model)
                        (rg_sent rg_recv fl_sent fl_recv:B.bytes).
         Seq.equal suf_sent (B.append rg_sent fl_sent) /\
         Seq.equal suf_recv (B.append rg_recv fl_recv) /\
         SMReplay.conn_events_sent_seal_replay mp region rg_sent rg_recv mc /\
-        SMReplay.conn_events_sent_seal_replay mc cflight fl_sent fl_recv final
+        SMReplay.conn_events_sent_seal_replay mc raw_cflight fl_sent fl_recv final
       returns client_pkg_exists s
       with _.
       (
+        PWNorm.lemma_normalize_flight_sent mc
+          (M.EncryptedExtensions ee) (M.Certificate cert)
+          (M.CertificateVerify cv) (M.Finished sf)
+          raw_ee raw_cert raw_cv raw_sf
+          cv_validate cv_verify tail
+          fl_sent fl_recv final;
+        assert (PWNorm.normal_flight
+                  (M.EncryptedExtensions ee) (M.Certificate cert)
+                  (M.CertificateVerify cv) (M.Finished sf)
+                  cv_validate cv_verify tail
+                == cflight);
+        lemma_replay_cong_sent mc
+          (PWNorm.normal_flight
+            (M.EncryptedExtensions ee) (M.Certificate cert)
+            (M.CertificateVerify cv) (M.Finished sf)
+            cv_validate cv_verify tail)
+          cflight fl_sent fl_recv final;
         lemma_forall_client_install_empty_sent region;
         Region.lemma_empty_sent_tail_collapses mp region rg_sent rg_recv mc;
         lemma_cw_region_write_installed mp region rg_sent rg_recv mc;
@@ -2842,6 +2902,7 @@ let lemma_peel_client_flight
   )))))))
 #pop-options
 
+#restart-solver
 let server_flight_chain
   (ms final_s:CS.connection_model) (mat_write:CS.traffic_key_material)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
@@ -3291,7 +3352,7 @@ let lemma_cf_producer_core (s:sysp)
   )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
 let lemma_finish_cf (s:sysp)
   (ms:CS.connection_model)
   (mat_write_s mat_read_s:CS.traffic_key_material)
@@ -3331,6 +3392,11 @@ let lemma_finish_cf (s:sysp)
   assert (Seq.equal fl_sent_c fl_recv_s);
   (* ---- SH agreement (ss = server sent, cr = client received) ---- *)
   Seq.lemma_eq_elim ss cr;
+  assert (Seq.equal ss
+            (B.append
+              (W.serialize_record T.Handshake
+                (W.serialize_handshake (M.ServerHello sh_c)))
+              sh_rest_c));
   lemma_front_handshake_record_agree
     (W.serialize_handshake (M.ServerHello sh_s))
     (W.serialize_handshake (M.ServerHello sh_c))
@@ -3540,6 +3606,7 @@ let lemma_server_step_classify
          m1.CS.model_config.CS.config_role == CS.ServerEndpoint))
   =
   match ev with
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg ->
     match msg.CL.message_value with
@@ -3562,6 +3629,7 @@ let lemma_server_step_classify
    byte-neutral on the sent stream (preserving record_write/control), or is a
    ChangeCipherSpec send whose sent delta parses as a cleartext CCS record. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
+#restart-solver
 let lemma_client_step_classify
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   (ds dr:B.bytes)
@@ -3584,6 +3652,7 @@ let lemma_client_step_classify
            c <= B.length ds))
   =
   match ev with
+  | CS.ConnProtectedHandshake _ -> ()
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg ->
     match msg.CL.message_value with

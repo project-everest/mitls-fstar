@@ -38,6 +38,7 @@ fn write_error_response (resp_buf: Vec.vec U8.t)
 }
 
 (** Write Result response (tag 1, then big-endian value) **)
+#push-options "--z3rlimit 30"
 fn write_result_response (resp_buf: Vec.vec U8.t) (value: U32.t)
   requires Vec.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
   ensures exists* (resp_bytes1: bytes).
@@ -68,13 +69,16 @@ fn write_result_response (resp_buf: Vec.vec U8.t) (value: U32.t)
     Seq.index resp_bytes1 4 == Cast.uint32_to_uint8 value
   ));
   
-  // These lemmas establish the proof chain:
-  // 1. shift_right + uint32_to_uint8 produces n_to_be_bX values
-  lemma_write_result_bytes value;
-  // 2. n_to_be components reconstruct the value
-  lemma_n_to_be_correct (U32.v value);
-  // 3. SMT connects these to be_to_n via arithmetic
+  // The big-endian arithmetic is discharged entirely by this pure lemma.  Do
+  // not inline it: leaving `be_to_n (Seq.slice _ 1 5) == U32.v value` to the
+  // Pulse VC makes Z3 4.15.3 diverge without ever consuming rlimit.
+  lemma_write_result_be_to_n value resp_bytes1;
+  // Pin the decoded value so the `ensures` existential can be discharged by
+  // matching hypotheses rather than by re-running the arithmetic.
+  assert (pure (Seq.length resp_bytes1 == 5));
+  assert (pure (be_to_n (Seq.slice resp_bytes1 1 5) == U32.v value))
 }
+#pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 fn process_peek

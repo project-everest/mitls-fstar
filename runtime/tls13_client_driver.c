@@ -1,6 +1,7 @@
 #include "tls13_client_driver.h"
 
 #include "TLS13_Impl_Client_Driver.h"
+#include "atlas_trace.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +16,9 @@
 struct tls13_client_driver_s {
   TLS13_Impl_Client_Driver_client_driver verified_driver;
   bool connected;
+#if ATLAS_ENABLE_LOGGING
+  uint64_t trace_connection;
+#endif
   char last_error[256];
 };
 
@@ -73,6 +77,7 @@ static int driver_fail_status(
 
 static void abort_connected_driver(tls13_client_driver *driver) {
   if (driver != NULL && driver->connected) {
+    atlas_trace_set_connection(driver->trace_connection);
     TLS13_Impl_Client_Driver_abort(driver->verified_driver);
     driver->connected = false;
   }
@@ -163,6 +168,10 @@ int tls13_client_driver_connect_with_config(
   if (driver == NULL) {
     return 1;
   }
+#if ATLAS_ENABLE_LOGGING
+  driver->trace_connection = atlas_trace_new_connection();
+  atlas_trace_set_connection(driver->trace_connection);
+#endif
 
   driver->verified_driver =
       TLS13_Impl_Client_Driver_new_client_with_auth_config(
@@ -241,6 +250,7 @@ int tls13_client_driver_send_application_data(
   uint8_t empty_payload = 0u;
   uint8_t *payload_input =
       payload_len == 0u ? &empty_payload : (uint8_t *)(void *)payload;
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_send(
           driver->verified_driver, payload_input, payload_len);
@@ -283,6 +293,7 @@ int tls13_client_driver_receive_application_data(
   }
   *out_len = 0u;
 
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_client_receive_result result =
       TLS13_Impl_Client_Driver_receive(
           driver->verified_driver,
@@ -315,6 +326,7 @@ int tls13_client_driver_close(
     return 0;
   }
 
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_close(
           driver->verified_driver,
@@ -341,6 +353,7 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
   if (driver->connected) {
     abort_connected_driver(driver);
   }
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_free(driver->verified_driver);
   free(driver);
 }

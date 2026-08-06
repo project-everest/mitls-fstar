@@ -98,6 +98,138 @@ let is_client_hs_install_dir (d:CS.traffic_direction) (ev:CS.conn_event) : bool 
     install.CS.install_direction = d
   | _ -> false
 
+(** Project an authenticated protected-handshake step to the received
+    handshake message it contributes to the top-level audit trace. *)
+let canonical_event (ev:CS.conn_event) : CS.conn_event =
+  match ev with
+  | CS.ConnProtectedHandshake step ->
+    CS.ConnNetworkEvent ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake step.CS.protected_handshake_message;
+    })
+  | _ -> ev
+
+let rec canonical_log (events:list CS.conn_event) : Tot (list CS.conn_event)
+  (decreases events)
+=
+  match events with
+  | [] -> []
+  | ev :: rest -> canonical_event ev :: canonical_log rest
+
+(** A received handshake message, as a conn_event. *)
+let recv_handshake_ev (msg:M.handshake_msg) : CS.conn_event =
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake msg;
+  }
+
+(** A DELIVERY GROUP: the run of consecutive client events by which the client
+    takes delivery of exactly one received handshake message.
+
+    Today a group is always a singleton -- either a cleartext
+    [ConnNetworkEvent], or a protected step, which [canonical_event] projects
+    to the same network event.
+
+    Once record receipt is separated from message processing (see
+    INTERNAL_EVENT_PLAN.md), a protected group becomes a record event followed
+    by the internal step that consumes it, and this predicate gains one case.
+    Stating the spine over groups rather than over single events is what keeps
+    that later change from perturbing the surrounding argument: the group is
+    the unit that pairs with ONE sender event, because the sender emits exactly
+    one record per handshake message
+    ([protected_record_count Sent msg == 1]). *)
+let delivers_handshake (grp:list CS.conn_event) (msg:M.handshake_msg) : prop =
+  match grp with
+  | [ev] -> canonical_event ev == recv_handshake_ev msg
+  | _ -> False
+
+(** While every delivery group is a singleton, the group IS its message
+    event.  Consumers use this to descend from the group-shaped spine to the
+    single event, without committing the spine's statement to singletons. *)
+val lemma_delivers_handshake_singleton
+  (grp:list CS.conn_event) (msg:M.handshake_msg)
+  : Lemma
+      (requires delivers_handshake grp msg)
+      (ensures
+        Cons? grp /\
+        grp == [L.hd grp] /\
+        canonical_event (L.hd grp) == recv_handshake_ev msg)
+
+(** The actual raw encrypted-flight suffix, retaining protected head/drain
+    events while identifying their canonical handshake messages.
+
+    The suffix is an append of delivery groups rather than a cons-chain of
+    single events; with singleton groups [L.append [x] l] reduces to [x :: l],
+    so this is the same statement as before. *)
+let raw_flight_spine
+  (raw_suffix:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (tail:list CS.conn_event)
+  : prop =
+  exists (g_ee g_cert g_cv g_sf raw_tail:list CS.conn_event).
+    raw_suffix ==
+      L.append g_ee
+        (L.append g_cert
+          (CS.ConnLocalEvent cv_validate ::
+            L.append g_cv
+              (CS.ConnLocalEvent cv_verify ::
+                L.append g_sf raw_tail))) /\
+    delivers_handshake g_ee (M.EncryptedExtensions ee) /\
+    delivers_handshake g_cert (M.Certificate cert) /\
+    delivers_handshake g_cv (M.CertificateVerify cv) /\
+    delivers_handshake g_sf (M.Finished sf) /\
+    canonical_log raw_tail == tail
+
+val lemma_client_raw_suffix_flight_spine
+  (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (client_shared:C.x25519_shared_secret)
+  (region raw_suffix log:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (tail:list CS.conn_event)
+  : Lemma
+      (requires
+        (forall (e:CS.conn_event).
+           L.memP e region ==> is_client_hs_install e == true) /\
+        log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events
+              start ch sh client_shared)
+            (L.append region raw_suffix) /\
+        canonical_log log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events
+              start ch sh client_shared)
+            (L.append region
+              (CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+               } ::
+               CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.Certificate cert);
+               } ::
+               CS.ConnLocalEvent cv_validate ::
+               CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+               } ::
+               CS.ConnLocalEvent cv_verify ::
+               CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Received;
+                 CL.message_value = M.TlsHandshake (M.Finished sf);
+               } ::
+               tail)))
+      (ensures
+        raw_flight_spine raw_suffix ee cert cv_validate cv cv_verify sf tail)
+
 (* ------------------------------------------------------------------ *)
 (* Top lemma                                                           *)
 (* ------------------------------------------------------------------ *)
@@ -123,7 +255,13 @@ val lemma_client_canonical_appdata_exact_spine
           (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
           (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
           (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
-          s.CS.cs_event_log ==
+          (exists (raw_suffix:list CS.conn_event).
+             s.CS.cs_event_log ==
+               L.append
+                 (PWSeg.client_cleartext_handshake_prefix_events
+                   start ch sh client_shared)
+                 (L.append region raw_suffix)) /\
+          canonical_log s.CS.cs_event_log ==
             L.append
               (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
               (L.append region

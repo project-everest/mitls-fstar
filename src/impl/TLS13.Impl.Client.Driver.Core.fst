@@ -19,6 +19,7 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module CTypes = TLS13.Impl.CanonicalTypes
 module EC = TLS13.Spec.Endpoint.Client
 module ID = FStar.IndefiniteDescription
@@ -135,7 +136,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   (input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0
           st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
@@ -150,7 +151,7 @@ let lemma_client_buffered_network_io_step_correct_intro
 =
   FStar.Classical.exists_intro
     (fun old_app_out' ->
-      CT.network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st0 st1
         result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
         input old_network_out network_out old_app_out' app_out)
@@ -158,7 +159,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   FStar.Classical.exists_intro
     (fun old_network_out' ->
       exists old_app_out'.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
           input old_network_out' network_out old_app_out' app_out)
@@ -166,7 +167,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   FStar.Classical.exists_intro
     (fun input' ->
       exists old_network_out' old_app_out'.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
           input' old_network_out' network_out old_app_out' app_out)
@@ -174,7 +175,7 @@ let lemma_client_buffered_network_io_step_correct_intro
   FStar.Classical.exists_intro
     (fun st_before ->
       exists input' old_network_out' old_app_out'.
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st_before st1
           result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
           input' old_network_out' network_out old_app_out' app_out)
@@ -195,6 +196,26 @@ fn driver_control_snapshot
     as (C.connection_exactly d.driver_client 'st0);
   close_driver_connection d;
   snapshot
+}
+
+(** Is the pending protected-handshake buffer drained?  See
+    [TLS13.Impl.Client.protected_handshake_buffer_empty]. *)
+fn driver_protected_handshake_buffer_empty
+  (d:driver)
+  requires driver_exactly d 'st0 'buffered 'pending_len
+  returns empty:bool
+  ensures driver_exactly d 'st0 'buffered 'pending_len **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty 'st0.CS.cs_model)
+{
+  open_driver_connection d;
+  rewrite (C.connection_exactly d.driver_client 'st0)
+    as (CR.connection_exactly d.driver_client 'st0);
+  let empty = C.protected_handshake_buffer_empty d.driver_client;
+  rewrite (CR.connection_exactly d.driver_client 'st0)
+    as (C.connection_exactly d.driver_client 'st0);
+  close_driver_connection d;
+  empty
 }
 
 fn driver_copy_certificate_leaf_der
@@ -1372,7 +1393,8 @@ fn rec driver_handshake
                  (CT.client_end_to_end_invariant 'st0 ==>
                   CT.client_end_to_end_invariant st1) /\
                  (result.driver_workflow_status == DriverWorkflowOk ==>
-                  st1.CS.cs_model.CS.model_control == CS.ControlApplicationData))
+                  st1.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                  CS.protected_handshake_buffer_empty st1.CS.cs_model))
   decreases (SZ.v fuel)
 {
   let no_op_resp = {
@@ -1427,11 +1449,18 @@ fn rec driver_handshake
       assert (driver_exactly d.top_driver_core st_snapshot 'buffered buffered_len);
     assert (pure (st_snapshot.CS.cs_model.CS.model_config ==
       'st0.CS.cs_model.CS.model_config));
+    // Reaching ControlApplicationData is not on its own the end of the
+    // handshake: a coalesced record can leave protected-handshake plaintext
+    // still buffered, and that plaintext is internal work the driver owes.
+    // Report Ok only once it is drained, so that `client_driver_application_ready`
+    // really does mean "nothing left to do".
+    let buffer_drained = driver_protected_handshake_buffer_empty d.top_driver_core;
     fold (top_driver_exactly d st_snapshot 'buffered buffered_len);
-    let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
+    let app_ready = snapshot.CR.snapshot_control_tag = 2uy && buffer_drained;
     if app_ready {
       assert (pure (CR.control_snapshot_matches snapshot st_snapshot));
       assert (pure (st_snapshot.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+      assert (pure (CS.protected_handshake_buffer_empty st_snapshot.CS.cs_model));
       {
         driver_workflow_status = DriverWorkflowOk;
         driver_workflow_rx_len = buffered_len;

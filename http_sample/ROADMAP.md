@@ -246,3 +246,313 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       `protocol_implementation` dictionary is not Low-star, and
       `extract_loops.sh` drives an explicit module list, so the generated C is
       unchanged.
+
+## Demo drivers
+
+Two programs make the verified stack directly demonstrable. Neither contains any
+HTTP logic of its own: they do argument parsing, socket setup and printing, and
+hand every wire byte to the extracted Pulse code.
+
+* **Server — `interop/http_server.c`.** An origin server whose request parse and
+  response emission both run through verified extracted code.
+
+      make -C interop build-progs
+      cd /tmp/demo && .../_extract/http_server 18080 index.html
+
+  Then open `http://127.0.0.1:18080/` in a browser. It speaks keep-alive,
+  honours `Connection: close`, enforces the verified smuggling / size / method
+  guards, echoes `POST` bodies (Content-Length *and* chunked), and serves TLS
+  when `HTTP_TLS_CERT` / `HTTP_TLS_KEY` are set. Note for demos: it binds
+  **0.0.0.0**, serves **one fixed file for every path**, and sends no
+  `Content-Type` (browsers MIME-sniff).
+
+* **Client — `verified/vcurl.c`.** A "mini curl" over the verified GET client.
+
+      make vcurl
+      _extract/vcurl http://example.com/     # body to stdout
+      _extract/vcurl -i http://127.0.0.1:18080/   # head + body
+      _extract/vcurl -H http://example.com/       # head only
+      make vcurl-demo VCURL_URL=http://example.com/
+
+  `http_get` emits the request head, reads to EOF, parses the status line and
+  recovers the body framing; `http_get_body_chunked_var` reassembles chunked
+  bodies with minimal-width hex sizes. https is out of scope on this side — use
+  the server's TLS mode to demo that direction.
+
+  `verified/get_live_test.c` (`make get-live-test`) remains the CI-guarded
+  pass/fail smoke test of the same path against `example.com`; it prints a
+  one-line verdict and SKIPs cleanly without network egress.
+
+
+## Verified TLS termination (HTTPS with no OpenSSL on the server path)
+
+`http_server` has a third transport backend that terminates TLS with the
+repository's **verified** TLS 1.3 server (`src/impl/TLS13.Impl.Server.*`, driven
+through `runtime/tls13_server_driver.h`) instead of OpenSSL.  With it, the whole
+server path -- record layer *and* HTTP/1.1 codec -- is extracted Pulse code.
+
+    make http-sample-vtls-server     # builds http_sample/_extract/http_server_vtls
+    make test-http-sample-vtls       # end-to-end: verified HTTP over verified TLS
+
+    HTTP_TLS_BACKEND=verified \
+    HTTP_TLS_CERT=test/certs/leaf.der \
+    HTTP_TLS_KEY=test/certs/leaf.key \
+      http_sample/_extract/http_server_vtls 18443 index.html
+
+Implementation notes:
+
+* The backend is compiled in only under `-DHTTP_VERIFIED_TLS`, so the ordinary
+  `make -C interop build-progs` binary is unchanged and does not depend on the
+  TLS13 bundle.  `HTTP_TLS_BACKEND` selects `openssl` (default) or `verified`.
+* The `io_t` transport seam in `http_server.c` already isolated reads/writes, so
+  only `io_read` / `io_write` / `io_close` and the accept path changed.  The
+  verified driver returns one record's plaintext at a time, so `io_read` parks
+  the remainder and hands the HTTP readers a byte stream.
+* The verified driver owns its own listener (`tls13_server_config_new` binds and
+  listens), so the plaintext `socket`/`bind`/`listen` path is skipped.
+* `HTTP_TLS_CERT` must be the leaf certificate in **DER** form for this backend
+  (the verified X.509 path consumes DER); `HTTP_TLS_KEY` stays a PEM key.
+* The HTTP translation units are compiled separately from the TLS13 bundle: they
+  are extracted against the *variadic* `Common.TCP` stub declarations, which
+  clash with the bundle's strict `Common_TCP.h`.
+
+### Client profile the verified server accepts (measured)
+
+The verified server implements the repository's first cryptographic profile only
+(TLS 1.3, `TLS_CHACHA20_POLY1305_SHA256`, X25519, `rsa_pss_rsae_sha256`), but it
+now *selects* those from whatever the client offers rather than demanding an
+exact list.  What a ClientHello must satisfy today:
+
+| Requirement | Browsers / curl |
+| --- | --- |
+| `cipher_suites` **contains** `TLS_CHACHA20_POLY1305_SHA256` (<= 64 entries) | yes |
+| `signature_algorithms` **contains** `rsa_pss_rsae_sha256` (<= 32 entries) | yes |
+| `key_share` offers X25519 | yes (browsers/new curl also offer X25519MLKEM768, tolerated) |
+| ClientHello <= 8192 bytes | yes (~1800 bytes with a post-quantum key share) |
+| ~~a `server_name` (SNI) extension is present~~ | **CLOSED** -- SNI is now optional |
+
+`supported_groups` is tolerant, TLS 1.2 legacy suites in the list are tolerated,
+GREASE values (including in `supported_versions`, see below) and unknown
+extensions parse as `Unknown_*`, and
+middlebox-compatibility mode is required (Gap A).  Measured: a completely
+unpinned `curl` and a completely unpinned `openssl s_client` both handshake and
+get `HTTP/1.1 200`.
+
+### Gap A (middlebox compatibility) is CLOSED
+
+The verified server now echoes the ClientHello `legacy_session_id` in its
+ServerHello (RFC 8446 D.4), proved end to end in F*/Pulse: the parser stores the
+offered session id in the connection state, and the ServerHello serializer emits
+it.  Receiving the client's dummy `ChangeCipherSpec` was already modelled as a
+no-op, and RFC 8446 only *SHOULD*s the server-sent CCS, so nothing else was
+needed.  `make test-openssl-sclient` and `make test-http-sample-vtls` now run
+with middlebox-compatibility mode **enabled**, as every real client does.
+
+Implementation note: the session id is fixed at exactly **32 bytes** (what every
+middlebox-compat client sends), which keeps the whole ClientHello/ServerHello
+wire image a constant size.  A ClientHello carrying a different session-id length
+still parses, but is normalised to all-zeros, so such a client (e.g.
+`openssl s_client -no_middlebox`) will reject the ServerHello.  Wire sizes grew
+accordingly: ServerHello handshake message 90 -> 122 bytes, ServerHello record
+95 -> 127 bytes.
+
+**Known conformance gap.**  RFC 8446 4.1.3 requires the echo to be *the contents
+of* `ClientHello.legacy_session_id`, and a client receiving a mismatch MUST abort
+with `illegal_parameter`.  Emitting 32 zero bytes for a client that offered a
+zero-length session id therefore violates that MUST.  RFC 8446 4.1.2 only permits
+two shapes -- 32 bytes (compatibility mode) or zero-length -- and every mainstream
+client uses the 32-byte form, so the affected population is clients that
+deliberately disable compatibility mode.  The failure is fail-closed (the client
+aborts; there is no downgrade or silent acceptance), and it replaces the previous,
+larger non-conformance in the opposite direction (an always-empty echo, which
+broke every browser).  Closing it means either storing the true session-id length
+and emitting a variable-length echo (making the ServerHello wire image
+variable-size, 90..122 bytes) or refusing the handshake with an alert when the
+offered session id is not exactly 32 bytes.
+
+### Gaps B and C (cipher-suite / signature-algorithm selection) are CLOSED
+
+The original diagnosis -- that the literal list equality in
+`supported_client_hello_fields_profile`
+(`src/spec/properties/TLS13.Spec.WireFormatLemmas.fsti`) was the runtime gate --
+was **wrong**.  That predicate is only used in the paired client+server
+reasoning (`TLS13.System*`, `TLS13.Impl.Driver.Pairing`); it is not on the server
+accept path, and it was not touched.  Likewise, OpenSSL's
+`TLS_EMPTY_RENEGOTIATION_INFO_SCSV` was never a problem -- unknown suites simply
+parse as `Unknown_cipherSuite`.
+
+The real gate was `can_select_supported_server_parameters_runtime`
+(`src/impl/TLS13.Impl.ConnectionState.Queries.fst`), which read only
+`cipher_suites[0]` and `signature_algorithms[0]` and required them to be exactly
+chacha20-poly1305 / `rsa_pss_rsae_sha256` -- a *head-of-list* test.  This is now
+a bounded Pulse linear scan (`scan_u16_for`) over the whole offered list, with
+the supporting offer lemmas in `TLS13.Impl.ConnectionState.Model` generalised
+from "index 0" to "some index `i`" (by induction on `i`) and then existentially
+packaged.  No spec change, no wire-format change.
+
+The storage caps were also raised, since real clients offer long lists (default
+curl sends 31 cipher suites, Chrome pads with GREASE):
+`max_cipher_suites` 16 -> **64** and `max_signature_schemes` 16 -> **32**
+(`TLS13.Impl.ConnectionState.Bounds.fsti`, mirrored in `TLS13.Impl.Messages`
+and `TLS13.Messages`).  The *outgoing* ClientHello we ourselves emit is still
+bounded at 16/16 by `Model.valid_start`; that bound is now checked explicitly at
+runtime in `client_hello_start_nonempty_runtime` instead of being read off the
+cap.
+
+### Gap D (SNI was mandatory) is CLOSED
+
+`TLS13.Impl.Server.Network` used to reject any ClientHello without a
+`server_name` extension, so `curl https://127.0.0.1:PORT/` failed (curl does not
+send SNI for IP literals) while `curl --resolve localhost:...` succeeded.
+
+The root cause was not a policy decision but an *overloaded invariant*: in
+`client_hello_metadata_exactly` (`TLS13.Impl.ConnectionState.Repr.fsti`) the
+`has_server_name` flag doubled as the "a ClientHello is stored" marker
+(`Some m ==> has_server_name == true`), even though presence is already tracked
+separately by `client_hello_present`.  The accept path therefore had to demand
+`has_server_name == true` just to be able to store the message.
+
+The invariant is now faithful -- `has_server_name == client_hello_has_sni m` --
+so the flag records what the client actually sent.  Consequently:
+
+* the accept-path preconditions ask for
+  `lch.client_hello_has_server_name == client_hello_has_sni ch` instead of
+  `== true`, and the stored server-name length is only pinned when SNI is present;
+* `TLS13.Impl.ConnectionState.Network` normalises the stored length to 0 when SNI
+  is absent, keeping the invariant tight rather than merely weakening it;
+* `can_select_supported_server_parameters_runtime` no longer includes
+  `has_server_name` in its accept gate (`client_hello_present` already covers it);
+* the SNI-less rejection branch in `TLS13.Impl.Server.Network` is gone.
+
+The spec never required SNI: `sni_policy_accepts None _ = True`
+(`TLS13.Spec.StateMachine`), and the runtime server config sets
+`server_sni_policy = None`.  A server that *does* set an SNI policy still gets
+the RFC 6066 matching behaviour, unchanged.
+
+### ClientHello size (was a 512-byte cliff edge)
+
+`max_client_hello_len` used to be **512 bytes**, which is exactly the size
+OpenSSL pads a small ClientHello to.  Older clients therefore landed precisely on
+the limit and worked, while anything a few bytes larger was rejected -- with no
+alert, just a dropped connection, surfacing as
+`error:0A000126:SSL routines::unexpected eof while reading` on the client and
+`verified TLS handshake failed: (no driver)` in the server log.
+
+The trigger in practice is the **post-quantum `X25519MLKEM768` key share**, which
+OpenSSL 3.5+ / recent curl and current browsers offer by default; it adds ~1200
+bytes, giving a ~1800-byte ClientHello.  `curl --curves X25519` was a reliable
+workaround because it drops that share.
+
+The bound is now **8192**, verified end to end: a synthetic 1732-byte
+ClientHello carrying an `X25519MLKEM768` share *ahead of* the X25519 share is
+accepted (the parser skips key-share entries for groups it does not implement).
+Cost is one ~8 KB per-connection buffer
+(`TLS13.Impl.ConnectionState.Repr.fst`, `alloc_empty_sized_bytes`).
+
+**Still open:** an over-size or otherwise unacceptable ClientHello is answered by
+closing the connection rather than by a `decode_error` / `handshake_failure`
+alert.  That is fail-closed and safe, but it makes misconfiguration hard to
+diagnose.  Emitting an alert requires producing a record from a state where no
+connection has been established yet, so it is a non-trivial proof change.
+
+### GREASE in `supported_versions` (why Chrome/Edge failed but Firefox worked)
+
+RFC 8701 (GREASE) has clients advertise reserved `0x?A?A` values in several
+ClientHello fields so that servers stay tolerant of future extensions.  Chrome
+and Edge put a GREASE value **first** in the `supported_versions` extension;
+Firefox does not GREASE that particular field -- which is exactly why Firefox
+handshook with the verified backend and Chrome/Edge did not.
+
+Root cause: in `tls.qd.rfc`, `CipherSuite` is declared `enum /*@open*/` (unknown
+values round-trip as `Unknown_cipherSuite`) but `ProtocolVersion` was a **closed**
+enum.  A GREASE entry therefore failed to parse, which failed the whole
+ClientHello parse, and the connection was dropped.  Isolated with a synthetic
+269-byte ClientHello whose only Chrome-specific feature was the GREASE version.
+
+Fix: a **new open enum `OfferedVersion`**, used *only* by
+`SupportedVersionsClientHello.versions`:
+
+```
+enum /*@open*/ { Offered_TLS_1p2(0x0303), Offered_TLS_1p3(0x0304), (0xFFFF) }
+  OfferedVersion;
+```
+
+`ProtocolVersion` deliberately stays **closed**, because its remaining uses
+(`legacy_version`, which must be 0x0303, and the ServerHello `selected_version`,
+which must be 0x0304) are single fixed-value fields where strictness is correct.
+Opening `ProtocolVersion` instead would have rippled through ~100 references in
+12 files, including every `legacy_record_version` match in `TLS13.Wire.Spec`.
+This matches RFC 8446 4.2.1, which requires the server to ignore versions it does
+not recognise in the client's offered list.
+
+The change is confined to the QuackyDucky source, the two regenerated modules
+(plus the new `TLS13.Wire.Generated.OfferedVersion`), and a mechanical
+`GPV.TLS_1p3` -> `GOV.Offered_TLS_1p3` propagation through the spec-level
+`ch_extensions` scan, the ClientHello parser's `scan_ch_supported_versions`, and
+the client-side ClientHello serializer.  Measured after the fix: a full
+Chrome-like 1771-byte ClientHello (GREASE in cipher suites, groups, key shares,
+extensions *and* versions, plus an `X25519MLKEM768` key share, ALPS, ECH GREASE
+and certificate compression) gets a ServerHello.
+
+### Serving a browser: the demo server is pre-forked
+
+Closing the parse-level gaps was necessary but not sufficient: with a real
+browser the server answered the first request and then wedged, with every
+process parked in `read()` (`Common_TCP_read` <- `Common_BufferedTCP_read_more`
+<- the verified receive loop).  Two unverified-glue problems, both about
+*availability*, not about the protocol:
+
+1. **The accept loop was strictly serial.**  HTTP/1.1 keep-alive means a
+   connection stays open after a response, so the single process sat in `read()`
+   on connection #1 while the browser's other connections were never accepted.
+   Browsers make this immediate: they open several connections at once and
+   *pre-connect* (open TCP, send nothing until a subresource is needed), and on
+   the verified path the whole handshake also runs inside
+   `tls13_server_driver_accept_with_config`, so even a silent pre-connect
+   blocked the loop.  `http_server` now **pre-forks a pool of workers**
+   (`HTTP_WORKERS`, default 8) that all accept on the shared listener -- the
+   verified listener is created once in `tls13_server_config_new`, before the
+   fork.  The supervisor forwards `SIGTERM`/`SIGINT` to the pool, respawns
+   workers that die, and workers set `PR_SET_PDEATHSIG` so `kill <server-pid>`
+   (what the test harness does) never leaves the port held.
+
+2. **Idle connections were never timed out on the verified path.**  The
+   plaintext path armed `SO_RCVTIMEO` in `http_server.c`, but on the verified
+   path the socket is accepted *inside* the driver and was never reachable.
+   `common_tcp_accept` now arms a receive timeout on every accepted socket
+   (`COMMON_TCP_ACCEPT_TIMEOUT_SECS`, default 15s, 0 disables), which also
+   bounds the handshake.  A timeout alone was not enough: `Common_TCP_read` maps
+   any short read to "0 bytes", which the verified receive loop treats as *need
+   more input* and retries against its fuel budget -- so an idle connection was
+   retried `fuel x timeout` instead of being dropped.  `common_tcp_read_fd` now
+   makes a timeout **terminal** by half-closing the socket, so subsequent reads
+   report a clean end-of-stream and the worker is released at once.
+
+Measured: 6 silent pre-connects followed by 6 real requests all return `200` in
+0.3s; with every worker deliberately pinned by a silent connection the next
+request still succeeds, one idle timeout later.
+
+### Status
+
+A completely unpinned `curl` and a completely unpinned `openssl s_client` now
+handshake with the verified backend and get `HTTP/1.1 200`, with or without SNI:
+
+```sh
+make http-sample-vtls-server
+HTTP_TLS_BACKEND=verified HTTP_TLS_CERT=test/certs/leaf.der \
+  HTTP_TLS_KEY=test/certs/leaf.key \
+  http_sample/_extract/http_server_vtls 18443 index.html &
+
+# hostname (sends SNI), trusting the test CA
+curl --cacert test/certs/ca.pem --resolve localhost:18443:127.0.0.1 \
+  https://localhost:18443/
+# bare IP literal (no SNI)
+curl -k https://127.0.0.1:18443/
+```
+
+OpenSSL nevertheless remains the *default* backend (`HTTP_TLS_BACKEND=openssl`),
+since the verified path still lacks HelloRetryRequest, resumption, client auth,
+KeyUpdate and ALPN, only offers chacha20-poly1305 + `rsa_pss_rsae_sha256` +
+X25519, and a real browser has not yet been tested.
+`interop/vtls_client.c` is a small OpenSSL probe used by
+`make test-http-sample-vtls`.

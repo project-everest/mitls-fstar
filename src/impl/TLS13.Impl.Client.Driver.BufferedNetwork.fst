@@ -21,6 +21,10 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
+module D = TLS13.Impl.Client.Drain
+module DL = TLS13.Impl.Client.DrainLoop
+module DP = TLS13.Impl.Client.DrainProgress
+module V = Pulse.Lib.Vec
 module DS = TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.State
 
@@ -103,7 +107,7 @@ let result_valid
   : prop =
   let buffer_resp =
     result.buffered_network_read.network_read_buffer_resp in
-  CT.network_bytes_end_to_end_correct
+  D.drained_network_bytes_end_to_end_correct
     before.endpoint_connection
     after.endpoint_connection
     buffer_resp
@@ -132,7 +136,7 @@ let lemma_result_valid_preserves
     result.buffered_network_read.network_read_buffer_resp in
   let prefix =
     Ghost.reveal result.buffered_network_read.network_read_prefix in
-  CT.lemma_network_bytes_end_to_end_correct_preserves_config
+  D.lemma_drained_network_preserves_config
     before.endpoint_connection
     after.endpoint_connection
     response
@@ -143,7 +147,7 @@ let lemma_result_valid_preserves
     after.endpoint_app_out;
   if CT.client_end_to_end_invariant before.endpoint_connection
   then
-    CT.lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant
+    D.lemma_drained_network_preserves_invariant
       before.endpoint_connection
       after.endpoint_connection
       response
@@ -338,6 +342,14 @@ fn process
     sent);
   BT.recall_model
     e.endpoint_driver.top_buffered_driver_core.buffered_driver_channel;
+  // Expose client_end_to_end_invariant, which process_coalesced_network_bytes
+  // demands; the fact survives the re-fold in Pulse's logical context.
+  unfold (buffered_driver_canonical_progress
+    e.endpoint_driver.top_buffered_driver_core
+    (Ghost.reveal st).endpoint_connection);
+  fold (buffered_driver_canonical_progress
+    e.endpoint_driver.top_buffered_driver_core
+    (Ghost.reveal st).endpoint_connection);
   let view =
     BT.borrow_pending
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_channel;
@@ -350,7 +362,7 @@ fn process
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       (Ghost.reveal st).endpoint_connection);
   let buffer_resp =
-    C.process_network_bytes
+    C.process_coalesced_network_bytes
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       (BT.view_data view)
       (BT.view_length view)
@@ -374,7 +386,7 @@ fn process
     (C.connection_exactly
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
       st1);
-  assert (pure (CT.network_bytes_end_to_end_correct
+  assert (pure (CT.coalesced_network_bytes_end_to_end_correct
     (Ghost.reveal st).endpoint_connection
     st1
     buffer_resp
@@ -383,6 +395,15 @@ fn process
     network_out_bytes
     (Ghost.reveal st).endpoint_app_out
     app_out_bytes));
+  CP.lemma_client_coalesced_network_bytes_step_correct
+    (Ghost.reveal st).endpoint_connection
+    st1
+    buffer_resp
+    (BT.pending (Ghost.reveal model))
+    (Ghost.reveal st).endpoint_network_out
+    network_out_bytes
+    (Ghost.reveal st).endpoint_app_out
+    app_out_bytes;
   lemma_network_bytes_wire_lengths
     (Ghost.reveal st).endpoint_connection
     st1
@@ -442,7 +463,20 @@ fn process
         e.endpoint_app_out_buffer
         (Ghost.reveal st).endpoint_app_out);
     W.lemma_record_prefix_incomplete_bound (BT.pending (Ghost.reveal model));
+    assert (pure (Seq.length (BT.pending (Ghost.reveal model)) < 5 + 16640));
+    assert (pure (BT.capacity (Ghost.reveal model) == 65535));
+    assert (pure (Seq.length (BT.pending (Ghost.reveal model)) <
+      BT.capacity (Ghost.reveal model)));
     assert (pure (BT.can_read (Ghost.reveal model)));
+    D.lemma_coalesced_implies_drained_network
+      (Ghost.reveal st).endpoint_connection
+      st1
+      buffer_resp
+      (BT.pending (Ghost.reveal model))
+      (Ghost.reveal st).endpoint_network_out
+      network_out_bytes
+      (Ghost.reveal st).endpoint_app_out
+      app_out_bytes;
     let result = {
       buffered_network_read = read_result;
       buffered_network_new_len = read_result.network_read_len;
@@ -573,7 +607,7 @@ fn process
       (Ghost.reveal st).endpoint_app_out
       app_out_bytes
       (Ghost.reveal committed);
-    lemma_network_bytes_logged_received_exact_when_nonfailed
+    lemma_coalesced_logged_received_exact_when_nonfailed
       (Ghost.reveal st).endpoint_connection
       st1
       buffer_resp
@@ -622,7 +656,7 @@ fn process
     unfold (buffered_driver_canonical_progress
       e.endpoint_driver.top_buffered_driver_core
       (Ghost.reveal st).endpoint_connection);
-    CP.lemma_client_network_progress
+    CP.lemma_client_coalesced_network_progress
       (Ghost.reveal st).endpoint_connection
       st1
       buffer_resp
@@ -631,9 +665,59 @@ fn process
       network_out_bytes
       (Ghost.reveal st).endpoint_app_out
       app_out_bytes;
-    CT.lemma_network_bytes_end_to_end_correct_preserves_config
+    CP.lemma_client_coalesced_preserves_config
       (Ghost.reveal st).endpoint_connection
       st1
+      buffer_resp
+      (BT.pending (Ghost.reveal model))
+      (Ghost.reveal st).endpoint_network_out
+      network_out_bytes
+      (Ghost.reveal st).endpoint_app_out
+      app_out_bytes;
+    // A protected record can carry several coalesced handshake messages, and
+    // the receive primitive applies only the head one.  Unlike the engine,
+    // which drains across successive polls, this driver owns the socket and so
+    // must run the internal drain to completion here.
+    // NB: the empty payload is heap-allocated rather than a 0-length stack
+    // array.  `let mut p = [| 0uy; 0sz |]` verifies and extracts, but KaRaMeL
+    // emits `uint8_t p[0U]`, which is a GNU extension rather than ISO C.  A
+    // zero-length `V.alloc` costs one portable `calloc(0)` per record and is
+    // the idiom the engine already uses for `engine_empty_payload`.
+    let empty_payload = V.alloc 0uy 0sz;
+    V.to_array_pts_to empty_payload;
+    rewrite
+      (C.connection_exactly
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        st1)
+      as
+      (CR.connection_exactly
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        st1);
+    let drain_quiescent =
+      DL.drain_pending
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        (V.vec_to_array empty_payload);
+    with st1d. assert (
+      CR.connection_exactly
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        st1d);
+    rewrite
+      (CR.connection_exactly
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        st1d)
+      as
+      (C.connection_exactly
+        e.endpoint_driver.top_buffered_driver_core.buffered_driver_client
+        st1d);
+    V.to_vec_pts_to empty_payload;
+    V.free empty_payload;
+    D.lemma_drained_facts st1 st1d;
+    DP.lemma_drained_progress st1 st1d;
+    D.lemma_drained_nonfailed_previous_imp st1 st1d;
+    D.lemma_drained_network_intro
+      (Ghost.reveal st).endpoint_connection
+      st1
+      st1d
       buffer_resp
       (BT.pending (Ghost.reveal model))
       (Ghost.reveal st).endpoint_network_out
@@ -642,10 +726,10 @@ fn process
       app_out_bytes;
     MR.update
       e.endpoint_driver.top_buffered_driver_core.buffered_driver_progress
-      st1;
-    assert (pure (CT.client_end_to_end_invariant st1));
+      st1d;
+    assert (pure (CT.client_end_to_end_invariant st1d));
     assert (pure (
-      st1.CS.cs_model.CS.model_config ==
+      st1d.CS.cs_model.CS.model_config ==
         (Ghost.reveal
           e.endpoint_driver.top_buffered_driver_core.buffered_driver_initial)
           .CS.cs_model.CS.model_config));
@@ -655,10 +739,10 @@ fn process
           e.endpoint_driver.top_buffered_driver_core.buffered_driver_initial)));
     fold (buffered_driver_canonical_progress
       e.endpoint_driver.top_buffered_driver_core
-      st1);
+      st1d);
     fold (buffered_driver_indexed
       e.endpoint_driver.top_buffered_driver_core
-      st1
+      st1d
       (BT.pending model')
       remaining
       model'
@@ -666,14 +750,14 @@ fn process
       (Ghost.reveal new_committed)
       (Ghost.reveal sent'));
     let st' : Ghost.erased endpoint_state = Ghost.hide {
-      endpoint_connection = st1;
+      endpoint_connection = st1d;
       endpoint_network_out = network_out_bytes;
       endpoint_app_out = app_out_bytes;
     };
     rewrite
       (buffered_driver_indexed
         e.endpoint_driver.top_buffered_driver_core
-        st1
+        st1d
         (BT.pending model')
         remaining
         model'

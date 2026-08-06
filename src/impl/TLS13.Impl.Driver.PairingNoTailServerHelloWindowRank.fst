@@ -326,7 +326,8 @@ let lemma_server_hello_window_rank_step
         CS.step_model model ev == Some model')
       (ensures
         CS.ControlFailed? model'.CS.model_control \/
-        server_hello_window_rank model <= server_hello_window_rank model' + 1)
+        (server_hello_window_rank model <= server_hello_window_rank model' + 1 /\
+         server_hello_window_control model'.CS.model_control))
 =
   CSL.lemma_step_model_preserves_config model ev model';
   match model'.CS.model_control with
@@ -358,6 +359,13 @@ let lemma_server_hello_window_rank_step
         | _, _ ->
           assert (CS.step_local_event model local == None);
           assert False))
+    | CS.ConnProtectedHandshake step ->
+      assert_norm (
+        CS.legal_event model (CS.ConnProtectedHandshake step) ==
+        CS.legal_protected_handshake_step model step);
+      assert (CS.legal_protected_handshake_step model step);
+      assert (model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+      assert False
     | CS.ConnNetworkEvent msg ->
       assert (CS.legal_tls_message
         model
@@ -615,6 +623,15 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
       server_hello_window_rank model <= FStar.List.Tot.length (ev :: rest)
     with _.
     (
+      (match ev with
+       | CS.ConnProtectedHandshake step ->
+         assert_norm (
+           CS.legal_event model (CS.ConnProtectedHandshake step) ==
+           CS.legal_protected_handshake_step model step);
+         assert (CS.legal_protected_handshake_step model step);
+         assert (model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+         assert False
+       | _ -> ());
       match model.CS.model_control with
       | CS.ControlApplicationData ->
         CSL.lemma_step_model_preserves_config model ev model1;
@@ -654,6 +671,9 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
           assert False)
       | _ ->
         lemma_server_hello_window_rank_step model ev model1;
+        assert (CS.ControlFailed? model1.CS.model_control \/
+          (server_hello_window_rank model <= server_hello_window_rank model1 + 1 /\
+           server_hello_window_control model1.CS.model_control));
         (match model1.CS.model_control with
         | CS.ControlFailed _ ->
           PNI.lemma_conn_events_raw_replay_from_failed_results_failed
