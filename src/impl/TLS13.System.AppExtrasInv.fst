@@ -1741,3 +1741,913 @@ let lemma_cfif_client_send (a b:SY.tls_system_state)
       )
     )
 #pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    ESTABLISHMENT + PRESERVATION of `ASP.channel_seal_ok` — the six step families.
+
+    `channel_seal_ok` is a property of the IN-FLIGHT payload, so it is VACUOUS at
+    every `Quiet` post-state: the two locals keep the channel `Quiet` and the two
+    deliveries exit to `Quiet`.  Only the two SENDS do work, and they must
+    ESTABLISH all three components from scratch.  This mirrors the layout of
+    `HSP.lemma_hscs_*` for the handshake-epoch sibling `hs_channel_seal_ok`.
+
+    THE THREE COMPONENTS AT A SEND (stated for the client send; the server send is
+    the mirror).  Write `snap == a.client.cs_model` (the PRE-send snapshot) and let
+    the receiver be the frozen `a.server`.
+
+      * FORWARD `App (snap_wr) ==> App (rd receiver)`.  RECORD-LEVEL on both sides.
+        Route, and it is a "get the fact from the STEP/consistency, not the
+        invariant" route on its first half:
+          - `App (wr client)` ==> `Some? hs_client_finished` by
+            `ORD.lemma_client_write_app_finished`, i.e. by the CLIENT-side
+            write-once marker shape, which is available from
+            `connection_state_consistent` alone.  This is exactly the fact that a
+            client installs its application WRITE record keys ONLY atomically at
+            its Finished send — `install_record_keys` is a NO-OP on
+            `(TrafficApplication, TrafficWrite)` (StateMachine.fst:399-400) and
+            `install_record_keys_for_role` special-cases app-write for the SERVER
+            role only, so the optional `LocalInstallTrafficKeys` local CANNOT move
+            the client's app write epoch.
+          - `Some? hs_client_finished ==> App (rd server)` is `fdac`'s SECOND half,
+            whose gate `~(MP.ToServer? channel)` is discharged by the `Quiet`
+            pre-state.
+        The server send is the mirror with `ORD.lemma_consistent_server_flight_
+        marker_shape` (whose last conjunct is `App (wr server) ==> Some?
+        hs_server_finished`) and `fdac`'s FIRST half.
+
+      * CONTROL-GATED BACKWARD `CAD (ctrl receiver) ==> App (snap_wr)`.  This is
+        LITERALLY `appdata_write_coupling` at the pre-state:
+          - client send: conjunct 1, `CAD (ctrl server) ==> App (wr client)`.  This
+            is precisely why conjunct 1 had to be UNGATED — under the old `Quiet?`
+            gate it would still fire here (the pre-state IS Quiet), but it could not
+            be established at the deliveries, so the clause was not available.
+          - server send: conjunct 2, `Quiet /\ CAD (ctrl client) /\ ~Failed (ctrl
+            server) ==> App (wr server)`.  All three gate halves are in hand: the
+            pre-state is `Quiet`, `CAD (ctrl b.client) == CAD (ctrl a.client)` since
+            the client is frozen, and `~ControlFailed (a.server)` comes FROM THE STEP
+            via `HSP.lemma_sent_step_not_failed`.
+
+      * BRIDGE under `App (snap_wr)`.  Three sub-facts:
+          - key/iv material agreement — RECORD-LEVEL, `peer_record_material_agrees`
+            at the application traffic id, taken from `app_material_agreement a`,
+            which is gated on `cf_delivered a == App (wr client) /\ App (rd server)`.
+            At the CLIENT send both halves are already in hand (the arm gate gives
+            the first, FORWARD gives the second).  At the SERVER send neither is,
+            so the send's own pre-control is enumerated first
+            (`lemma_server_send_app_write_at_cad`) and `awc` conjunct 1 plus
+            `CSL.lemma_connection_application_ready_record_epochs_installed` supply
+            the two halves.
+          - single-record protected seal + serialize/parse roundtrip, from the
+            App-epoch analogues of `HSP.lemma_*_send_seal_rt` below.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+(** VACUITY — every `Quiet` post-state.  Covers all four non-send families. **)
+let lemma_cso_quiet (s:SY.tls_system_state)
+  : Lemma (requires MP.Quiet? s.channel) (ensures ASP.channel_seal_ok s)
+  = ()
+
+(** APP-EPOCH CLEARTEXT EXCLUSION (client).  The App-epoch analogue of
+    `HSP.lemma_client_gate_excludes`.  The `Sent` cleartext messages are
+    `ClientHello`, `ServerHello` and `ChangeCipherSpec`.  CCS is excluded by
+    hypothesis (it comes from the send's message-class lemma); `ServerHello` has no
+    `ClientEndpoint`-legal `Sent` arm; and `ClientHello` is `Sent`-legal only at
+    `ControlNew`, where the client-side write-once marker shape forces the write
+    epoch to be non-`Application`.
+
+    NOTE the asymmetry with the handshake-epoch sibling: that one additionally
+    concludes `~(M.TlsKeyUpdate? sent)` (a KeyUpdate send needs app keys, which a
+    handshake-epoch sender lacks).  At the APPLICATION epoch a KeyUpdate send is
+    perfectly legal, so `~KeyUpdate` is NOT derivable here and is instead taken as
+    a hypothesis by the seal lemmas below and discharged at the call site from
+    `tls_no_rekeying`. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_client_app_gate_excludes (st0:CS.connection_state) (sent:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st0 /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        CS.legal_tls_message st0.CS.cs_model CL.Sent sent /\
+        ~(M.TlsChangeCipherSpec? sent) /\
+        R.Application? st0.CS.cs_model.CS.model_record.CS.record_write.R.epoch)
+      (ensures CS.network_message_is_cleartext CL.Sent sent == false)
+  = ORD.lemma_consistent_client_finished_marker_shape st0
+#pop-options
+
+(** APP-EPOCH CLEARTEXT EXCLUSION (server).  Mirror; `ServerHello` is `Sent`-legal
+    only at `HsClientHelloReceived`, which the server-side flight marker shape
+    pins to a non-`Application` write epoch, and `ClientHello` has no
+    `ServerEndpoint`-legal `Sent` arm. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_server_app_gate_excludes (st0:CS.connection_state) (sent:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st0 /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        CS.legal_tls_message st0.CS.cs_model CL.Sent sent /\
+        ~(M.TlsChangeCipherSpec? sent) /\
+        R.Application? st0.CS.cs_model.CS.model_record.CS.record_write.R.epoch)
+      (ensures CS.network_message_is_cleartext CL.Sent sent == false)
+  = ORD.lemma_consistent_server_flight_marker_shape st0
+#pop-options
+
+(** SEND-TIME SEAL + ROUNDTRIP at the APPLICATION write epoch (client).  Body is
+    the App-epoch transcription of `HSP.lemma_client_send_seal_rt`: the emitted
+    `out` is a single wire record, so `ASP.lemma_client_send_count` gives
+    `protected_record_count Sent sent == 1` (this holds even for a multi-fragment
+    `TlsApplicationData` payload — the count is forced to 1 by the single emitted
+    record, see `ASP.lemma_send_single_record_count`), the App gate lemma gives
+    `~cleartext`, and `HSP.lemma_send_seal`/`HSP.lemma_send_roundtrip` are
+    epoch-agnostic. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_client_send_seal_rt_app
+  (st0 c':CS.connection_state) (local:CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st0 /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        EC.client_step st0 (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [w] /\
+        c'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+        ~(M.TlsKeyUpdate? sent) /\
+        R.Application? st0.CS.cs_model.CS.model_record.CS.record_write.R.epoch)
+      (ensures
+        SMCan.sent_single_protected_message_seal st0.CS.cs_model sent (SY.emitted_raw out) /\
+        HSP.roundtrip sent)
+  = ASP.lemma_client_send_count st0 c' local out w sent;
+    HSP.lemma_client_send_msg_class st0 c' local out w sent;
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      EC.client_representation_matches st0 local conn_ev /\
+      EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty
+    returns
+      SMCan.sent_single_protected_message_seal st0.CS.cs_model sent (SY.emitted_raw out) /\
+      HSP.roundtrip sent
+    with _pf.
+    (
+      L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
+      assert (conn_ev == SMKM.sent_tls_event sent);
+      SY.lemma_serialize_all_single w;
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
+      assert (CS.legal_tls_message st0.CS.cs_model CL.Sent sent);
+      assert (CS.network_message_raw_delta_legal st0.CS.cs_model
+                ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw_sent);
+      lemma_client_app_gate_excludes st0 sent;
+      assert (CS.raw_records_exactly raw_sent T.Application_data 1);
+      HSP.lemma_rre_nonempty raw_sent;
+      HSP.lemma_send_seal st0.CS.cs_model sent raw_sent;
+      HSP.lemma_send_roundtrip st0.CS.cs_model sent
+    )
+#pop-options
+
+(** SEND-TIME SEAL + ROUNDTRIP at the APPLICATION write epoch (server).  Mirror. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_server_send_seal_rt_app
+  (st0 s':CS.connection_state) (local:CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+  (sent:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st0 /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ES.server_step st0 (SM.LocalEvent local) s' out /\
+        out.SM.so_wire_outputs == [w] /\
+        s'.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+        ~(M.TlsKeyUpdate? sent) /\
+        R.Application? st0.CS.cs_model.CS.model_record.CS.record_write.R.epoch)
+      (ensures
+        SMCan.sent_single_protected_message_seal st0.CS.cs_model sent (SY.emitted_raw out) /\
+        HSP.roundtrip sent)
+  = ASP.lemma_server_send_count st0 s' local out w sent;
+    HSP.lemma_server_send_msg_class st0 s' local out w sent;
+    eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      ES.server_representation_matches local conn_ev /\
+      ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+      ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+      SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty
+    returns
+      SMCan.sent_single_protected_message_seal st0.CS.cs_model sent (SY.emitted_raw out) /\
+      HSP.roundtrip sent
+    with _pf.
+    (
+      L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
+      assert (conn_ev == SMKM.sent_tls_event sent);
+      SY.lemma_serialize_all_single w;
+      Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) raw_sent;
+      assert (CS.legal_tls_message st0.CS.cs_model CL.Sent sent);
+      assert (CS.network_message_raw_delta_legal st0.CS.cs_model
+                ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw_sent);
+      lemma_server_app_gate_excludes st0 sent;
+      assert (CS.raw_records_exactly raw_sent T.Application_data 1);
+      HSP.lemma_rre_nonempty raw_sent;
+      HSP.lemma_send_seal st0.CS.cs_model sent raw_sent;
+      HSP.lemma_send_roundtrip st0.CS.cs_model sent
+    )
+#pop-options
+
+(** PRE-CONTROL ENUMERATION at a server send with the application WRITE epoch
+    installed.  A `Sent` step is possible only from the controls that have a `Sent`
+    arm in `step_tls_message`; the server flight marker shape kills every early
+    server control (`ControlNew` .. `HsServerEncryptedFlightSent` all force a
+    non-`Application` write epoch), `HsServerFinishedVerified` is a CLIENT stage
+    that a consistent server never occupies (`lemma_consistent_server_not_shsfv`),
+    `HsClientFinishedReceived`/`Verified` are canonically unreachable
+    (`lemma_consistent_not_cfr` / `lemma_consistent_not_cfv`), and the closure
+    controls have no `Sent` arm at all.  What is left is
+    `ControlApplicationData`.
+
+    TWO HYPOTHESES THAT ARE NOT DECORATIVE, both found by two-run (each one
+    removed re-opens a control):
+
+      * `SY.server_stage_ok st` — `connection_state_consistent` alone does NOT
+        confine a server to server-side handshake stages, and the CCS arm below
+        fires at `ControlHandshaking _` for EVERY stage, so without the stage
+        predicate the client-side stages (`HsServerHelloReceived`,
+        `HsCertificateReceived`, ...) all survive.  The server flight marker shape
+        says nothing about them.
+
+      * `~(M.TlsChangeCipherSpec? msg)` — `M.TlsChangeCipherSpec, ControlHandshaking
+        _` (StateMachine.fst, the arm just above the catch-all) is `Some model` in
+        BOTH directions and at EVERY handshake stage.  So a server sitting at
+        `HsServerFinishedSent` with its application write keys already installed by
+        the OPTIONAL role-local (`install_record_keys_for_role`,
+        `traffic_install_allowed_at_stage_for_role` allows `(ServerEndpoint,
+        TrafficApplication, TrafficWrite)` exactly at that stage — the 0.5-RTT
+        window) can take a `Sent` CCS step with an `Application` write epoch.  That
+        is a genuine `Some`-arm, not an artefact: the conclusion really is
+        `CAD \/ (HsServerFinishedSent /\ CCS)`, and the CCS disjunct is discharged
+        at the call site by `HSP.lemma_server_send_msg_class`, which proves the
+        driver never emits a CCS record. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_server_send_app_write_at_cad
+  (st:CS.connection_state) (m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st /\
+        SY.server_stage_ok st /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        ~(M.TlsChangeCipherSpec? msg) /\
+        R.Application? st.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+        CS.step_tls_message st.CS.cs_model CL.Sent msg == Some m')
+      (ensures CS.ControlApplicationData? st.CS.cs_model.CS.model_control)
+  = ORD.lemma_consistent_server_flight_marker_shape st;
+    SNCFR.lemma_consistent_not_cfr st;
+    SNCFR.lemma_consistent_not_cfv st;
+    SNCFR.lemma_consistent_server_not_shsfv st
+#pop-options
+
+(** SUBSTANTIVE — CLIENT SEND (post channel `MP.ToServer p`, `p.pl_snap ==
+    a.client.cs_model`, `b.server == a.server`).  All three components as laid out
+    in the section header. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_cso_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_send a b /\ SY.tls_no_rekeying b)
+      (ensures ASP.channel_seal_ok b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c';
+                    channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    returns ASP.channel_seal_ok b
+    with _pf.
+    (
+      let p : SY.tls_payload =
+        { SY.pl_raw = SY.emitted_raw out;
+          SY.pl_snap = a.client.CS.cs_model;
+          SY.pl_sent = sent } in
+      assert (b.channel == MP.ToServer p);
+      assert (b.server == a.server);
+      ASP.lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      // FORWARD — RECORD-level on both sides.
+      introduce R.Application? (ASP.snap_wr p).R.epoch ==>
+                R.Application? (ASP.rd b.server).R.epoch
+      with _g.
+      (
+        ORD.lemma_client_write_app_finished a.client;
+        assert (ASP.finished_delivered_appread_coupling a)
+      );
+      // CONTROL-GATED BACKWARD — `appdata_write_coupling a` conjunct 1 (ungated).
+      introduce CS.ControlApplicationData? (SY.ctrl b.server) ==>
+                R.Application? (ASP.snap_wr p).R.epoch
+      with _g. (assert (ASP.appdata_write_coupling a));
+      // BRIDGE.
+      introduce R.Application? (ASP.snap_wr p).R.epoch ==>
+                ASP.inflight_bridge_ready p.SY.pl_snap b.server.CS.cs_model
+                  p.SY.pl_sent p.SY.pl_raw
+      with _g.
+      (
+        // COMP 1 — RECORD-level key/iv agreement, via `cf_delivered a`.
+        ORD.lemma_client_write_app_finished a.client;
+        assert (ASP.finished_delivered_appread_coupling a);
+        assert (ASP.cf_delivered a);
+        assert (ASP.app_material_agreement a);
+        assert (SMKM.peer_record_material_agrees
+                  (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) a.client a.server);
+        // COMP 2 + COMP 3 — seal + roundtrip.  ~KeyUpdate from `tls_no_rekeying b`.
+        assert (SMCorr.connection_state_no_key_update_trace c');
+        ASP.lemma_sent_not_key_update c' sent;
+        lemma_client_send_seal_rt_app a.client c' local out w sent
+      )
+    )
+#pop-options
+
+(** SUBSTANTIVE — SERVER SEND (post channel `MP.ToClient p`, `p.pl_snap ==
+    a.server.cs_model`, `b.client == a.client`).  Mirror, except that the BRIDGE's
+    `cf_delivered a` is NOT free here and is obtained by enumerating the send's own
+    pre-control (see `lemma_server_send_app_write_at_cad`). **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+let lemma_cso_server_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_server_send a b /\ SY.tls_no_rekeying b)
+      (ensures ASP.channel_seal_ok b)
+  = SY.lemma_server_send_shape a b;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s';
+                    channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
+    returns ASP.channel_seal_ok b
+    with _pf.
+    (
+      let p : SY.tls_payload =
+        { SY.pl_raw = SY.emitted_raw out;
+          SY.pl_snap = a.server.CS.cs_model;
+          SY.pl_sent = sent } in
+      assert (b.channel == MP.ToClient p);
+      assert (b.client == a.client);
+      ASP.lemma_server_send_pins_model a.server s' local out sent;
+      assert (CS.step_tls_message a.server.CS.cs_model CL.Sent sent == Some s'.CS.cs_model);
+      // FROM THE STEP: the sender is not failed.  Feeds `awc` conjunct 2's gate.
+      // Two-run: DECORATIVE at ifuel 4 (Z3 enumerates the `Sent` arms inline).
+      // DO NOT DELETE AS DEAD WEIGHT: it is the machine-checked discharge of the
+      // `~ControlFailed?` half of conjunct 2's gate, without which the appeal to
+      // `appdata_write_coupling` below has no recorded justification.
+      HSP.lemma_sent_step_not_failed a.server.CS.cs_model s'.CS.cs_model sent;
+      // FORWARD — RECORD-level on both sides.
+      introduce R.Application? (ASP.snap_wr p).R.epoch ==>
+                R.Application? (ASP.rd b.client).R.epoch
+      with _g.
+      (
+        ORD.lemma_consistent_server_flight_marker_shape a.server;
+        assert (ASP.finished_delivered_appread_coupling a)
+      );
+      // CONTROL-GATED BACKWARD — `appdata_write_coupling a` conjunct 2, whose three
+      // gate halves are: `Quiet? a.channel` (hypothesis), `CAD (ctrl a.client)`
+      // (the client is frozen, so `ctrl b.client == ctrl a.client`), and
+      // `~ControlFailed (ctrl a.server)` (from the step, just above).
+      introduce CS.ControlApplicationData? (SY.ctrl b.client) ==>
+                R.Application? (ASP.snap_wr p).R.epoch
+      with _g. (assert (ASP.appdata_write_coupling a));
+      // BRIDGE.
+      introduce R.Application? (ASP.snap_wr p).R.epoch ==>
+                ASP.inflight_bridge_ready p.SY.pl_snap b.client.CS.cs_model
+                  p.SY.pl_sent p.SY.pl_raw
+      with _g.
+      (
+        // COMP 1 — RECORD-level key/iv agreement.  `cf_delivered a` is assembled
+        // from the enumerated pre-control: CAD(server) gives App(wr client) by
+        // `awc` conjunct 1, and App(rd server) by the CAD record-epoch producer.
+        HSP.lemma_server_send_msg_class a.server s' local out w sent;
+        lemma_server_send_app_write_at_cad a.server s'.CS.cs_model sent;
+        assert (CS.ControlApplicationData? (SY.ctrl a.server));
+        CSL.lemma_connection_appdata_keys_installed_for_role CS.ServerEndpoint a.server;
+        CSL.lemma_connection_application_ready_record_epochs_installed
+          CS.ServerEndpoint a.server;
+        assert (ASP.appdata_write_coupling a);
+        assert (ASP.cf_delivered a);
+        assert (ASP.app_material_agreement a);
+        assert (SMKM.peer_record_material_agrees
+                  (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) a.client a.server);
+        // COMP 2 + COMP 3 — seal + roundtrip.  ~KeyUpdate from `tls_no_rekeying b`.
+        assert (SMCorr.connection_state_no_key_update_trace s');
+        ASP.lemma_sent_not_key_update s' sent;
+        lemma_server_send_seal_rt_app a.server s' local out w sent
+      )
+    )
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    THE AGGREGATION — `lemma_app_extras_preserved` over all TWELVE clauses.
+
+    Six per-family lemmas, one per honest transition, each discharging all twelve
+    clauses of `ASP.app_extras`, then a single `move_requires_2` roll-up in the
+    style of `SY.lemma_inv_preserved`.
+
+    WHERE EACH CLAUSE'S FAMILY LIVES.  `app_seq_pairing`, the in-flight trio
+    (`inflight_sender_stepped` / `inflight_single_record` /
+    `inflight_raw_delta_legal`), `inflight_snap_handshake_write` and
+    `read_write_coupling` are proved in ASP; `app_material_agreement` and
+    `client_hs_write_record_slot_link` in AMF; `hs_material_agreement` in HMF;
+    `channel_seal_ok`, `appdata_write_coupling` and
+    `finished_delivered_appread_coupling` here.
+
+    THE FIVE VACUITY ROUTES.  Four clauses are properties of the IN-FLIGHT payload
+    and are therefore vacuous at a `Quiet` post-state (`ASP.lemma_quiet_inflight_
+    vacuous` for the trio, `lemma_ishw_quiet` for the snapshot-write clause, and
+    `lemma_cso_quiet` for the seal); `read_write_coupling` is vacuous at every
+    non-`ToServer` post-state (`ASP.lemma_rwc_not_to_server`).  Between them these
+    cover the two locals and the two deliveries for five of the twelve clauses,
+    which is why only the sends carry real work there.
+
+    THE THREE EXTRA HYPOTHESES beyond `app_extras a` itself:
+
+      * `sf_inflight_finished a` / `cf_inflight_finished a` — consumed by the fdac
+        deliveries (the companion message-identity clauses; they are preserved by
+        their own families in this module and are carried alongside `app_extras`
+        in `stream2_combined_inv`).
+      * `HSP.hs_seq_pairing a` / `HSP.hs_channel_seal_ok a` — consumed by the fdac
+        deliveries and by `lemma_awc_deliver_to_server` (the faithful-decode
+        bridge).
+      * `SY.server_config_valid_e2e a.server` — consumed ONLY by
+        `AMF.lemma_ama_deliver_to_server`, which needs it at the POST server state.
+        It is a function of the IMMUTABLE server config, so
+        `SY.lemma_sys_step_preserves_server_config` transports it across the step;
+        it is carried (not derived) for exactly the reason spelled out at
+        `SY.tls_stream_inv` — the impl-side certificate-chain bound is not derivable
+        from spec-level reachability, so it is assumed at entry and carried.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+(** VACUITY — `inflight_snap_handshake_write` at a `Quiet` post-state. **)
+let lemma_ishw_quiet (s:SY.tls_system_state)
+  : Lemma (requires MP.Quiet? s.channel)
+          (ensures ASP.inflight_snap_handshake_write s)
+  = ()
+
+(** CLIENT SEND. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_ae_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_send a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = ASP.lemma_asp_client_send a b;
+    AMF.lemma_ama_client_send a b;
+    lemma_cso_client_send a b;
+    ASP.lemma_asp_client_send_inflight a b;
+    ASP.lemma_asp_client_send_snap_handshake_write a b;
+    ASP.lemma_rwc_client_send a b;
+    lemma_awc_client_send a b;
+    HMF.lemma_hma_client_send a b;
+    AMF.lemma_chwsl_client_send a b;
+    lemma_fdac_client_send a b
+#pop-options
+
+(** SERVER SEND.  `read_write_coupling` is vacuous: the post channel is
+    `ToClient`. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_ae_server_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        MP.Quiet? a.channel /\ SY.tls_step_server_send a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = SY.lemma_server_send_shape a b;
+    ASP.lemma_asp_server_send a b;
+    AMF.lemma_ama_server_send a b;
+    lemma_cso_server_send a b;
+    ASP.lemma_asp_server_send_inflight a b;
+    ASP.lemma_asp_server_send_snap_handshake_write a b;
+    ASP.lemma_rwc_not_to_server b;
+    lemma_awc_server_send a b;
+    HMF.lemma_hma_server_send a b;
+    AMF.lemma_chwsl_server_send a b;
+    lemma_fdac_server_send a b
+#pop-options
+
+(** CLIENT LOCAL.  Channel unchanged (`Quiet`), so five clauses are vacuous. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_ae_client_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_local a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = assert (MP.Quiet? b.channel);
+    ASP.lemma_asp_client_local a b;
+    AMF.lemma_ama_client_local a b;
+    lemma_cso_quiet b;
+    ASP.lemma_quiet_inflight_vacuous b;
+    lemma_ishw_quiet b;
+    ASP.lemma_rwc_not_to_server b;
+    lemma_awc_client_local a b;
+    HMF.lemma_hma_client_local a b;
+    AMF.lemma_chwsl_client_local a b;
+    lemma_fdac_client_local a b
+#pop-options
+
+(** SERVER LOCAL.  Mirror. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_ae_server_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        MP.Quiet? a.channel /\ SY.tls_step_server_local a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = assert (MP.Quiet? b.channel);
+    ASP.lemma_asp_server_local a b;
+    AMF.lemma_ama_server_local a b;
+    lemma_cso_quiet b;
+    ASP.lemma_quiet_inflight_vacuous b;
+    lemma_ishw_quiet b;
+    ASP.lemma_rwc_not_to_server b;
+    lemma_awc_server_local a b;
+    HMF.lemma_hma_server_local a b;
+    AMF.lemma_chwsl_server_local a b;
+    lemma_fdac_server_local a b
+#pop-options
+
+(** DELIVER TO CLIENT.  Post channel `Quiet`, so five clauses are vacuous.  Two
+    clauses (`app_seq_pairing`, `app_material_agreement`) have UNBUNDLED families
+    that take the delivery's components explicitly, so the shape is opened once
+    here; `hs_material_agreement` splits on whether this delivery FLIPS the
+    client's `hs_server_finished_verified` flag. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_ae_deliver_to_client (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        SY.tls_step_deliver_to_client a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = SY.lemma_deliver_to_client_shape a b;
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      b == { a with client = c'; channel = MP.Quiet }
+    returns ASP.app_extras b
+    with _pf.
+    (
+      ASP.lemma_asp_deliver_to_client a wire c' out raw snap sent;
+      AMF.lemma_ama_deliver_to_client a wire c' out raw snap sent;
+      lemma_cso_quiet b;
+      ASP.lemma_quiet_inflight_vacuous b;
+      lemma_ishw_quiet b;
+      ASP.lemma_rwc_not_to_server b;
+      lemma_awc_deliver_to_client a b;
+      FStar.Classical.move_requires_2 HMF.lemma_hma_deliver_to_client_nonflip a b;
+      FStar.Classical.move_requires_2 HMF.lemma_hma_deliver_to_client_flip a b;
+      AMF.lemma_chwsl_deliver_to_client a b;
+      lemma_fdac_deliver_to_client a b
+    )
+#pop-options
+
+(** DELIVER TO SERVER.  Mirror.  `AMF.lemma_ama_deliver_to_server` additionally
+    needs `SY.server_config_valid_e2e` at the POST server state; the config is
+    immutable, so it transports across the step. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_ae_deliver_to_server (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        SY.server_config_valid_e2e a.server /\
+        SY.tls_step_deliver_to_server a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = SY.lemma_deliver_to_server_shape a b;
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      b == { a with server = s'; channel = MP.Quiet }
+    returns ASP.app_extras b
+    with _pf.
+    (
+      // Two-run: DECORATIVE at the current fuel settings (Z3 re-derives config
+      // immutability inline).  DO NOT DELETE AS DEAD WEIGHT: it is the
+      // machine-checked transport of `server_config_valid_e2e` from `a.server`
+      // to `s'`, which is what makes the `ASP.lemma_ama_deliver_to_server` call
+      // below legal.  Without it that step rests on an inline derivation that a
+      // future fuel change could silently lose.
+      SY.lemma_cfg_pres_deliver_to_server a b;
+      assert (SY.server_config_valid_e2e s');
+      ASP.lemma_asp_deliver_to_server a wire s' out raw snap sent;
+      ASP.lemma_ama_deliver_to_server a wire s' out raw snap sent;
+      lemma_cso_quiet b;
+      ASP.lemma_quiet_inflight_vacuous b;
+      lemma_ishw_quiet b;
+      ASP.lemma_rwc_not_to_server b;
+      lemma_awc_deliver_to_server a b;
+      HMF.lemma_hma_deliver_to_server a b;
+      AMF.lemma_chwsl_deliver_to_server a b;
+      lemma_fdac_deliver_to_server a b
+    )
+#pop-options
+
+(** THE ROLL-UP.  Same shape as `SY.lemma_inv_preserved`: `move_requires_2` on the
+    six families, letting the machine-product case analysis pick the one that
+    applies.  The `MP.Quiet? a.channel` hypothesis carried by the four non-delivery
+    families is supplied by `MP.lemma_step_channel_cases` (a step out of a directed
+    channel is the matching delivery, and nothing else). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_app_extras_preserved (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ ASP.app_extras a /\
+        sf_inflight_finished a /\ cf_inflight_finished a /\
+        HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        SY.server_config_valid_e2e a.server /\
+        SY.tls_sys_step a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures ASP.app_extras b)
+  = MP.lemma_step_channel_cases SY.tls_machine_iface a b;
+    FStar.Classical.move_requires_2 lemma_ae_client_send a b;
+    FStar.Classical.move_requires_2 lemma_ae_server_send a b;
+    FStar.Classical.move_requires_2 lemma_ae_deliver_to_client a b;
+    FStar.Classical.move_requires_2 lemma_ae_deliver_to_server a b;
+    FStar.Classical.move_requires_2 lemma_ae_client_local a b;
+    FStar.Classical.move_requires_2 lemma_ae_server_local a b
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════════
+    THE STREAM-2 INVARIANT LAYER.
+
+    `stream2_extras` is the five-conjunct bundle that the application-data pairing
+    argument runs on:
+
+      `ASP.app_extras` (the twelve clauses) /\ `sf_inflight_finished` /\
+      `cf_inflight_finished` /\ `HSP.hs_seq_pairing` /\ `HSP.hs_channel_seal_ok`
+
+    The last four are NOT decoration.  They are MUTUALLY inductive with
+    `app_extras`: the fdac deliveries and `lemma_awc_deliver_to_server` consume
+    `hs_seq_pairing`/`hs_channel_seal_ok` (the faithful-decode bridge) and the two
+    companion message-identity clauses, while `HSP.lemma_hsp_deliver_to_*` and the
+    two `hscs` deliveries consume `app_extras`.  Neither half is inductive alone,
+    so they must be carried — and preserved — TOGETHER.
+
+    `stream2_combined_inv` layers this on `SY.stream_combined_inv` under the same
+    `tls_no_rekeying` gate that `SY.combined_inv` uses, so that (i) `TLS13.System.fst`
+    and its 26-conjunct `tls_system_inv` stay BYTE-IDENTICAL, and (ii) the RTC
+    induction sees a predicate that is closed under the rekey-permitting step, with
+    the gate recovered backwards by `SY.lemma_no_key_update_backward`.
+    ═══════════════════════════════════════════════════════════════════════════ **)
+
+let stream2_extras (s:SY.tls_system_state) : prop =
+  ASP.app_extras s /\
+  sf_inflight_finished s /\
+  cf_inflight_finished s /\
+  HSP.hs_seq_pairing s /\
+  HSP.hs_channel_seal_ok s
+
+(** CLIENT SEND. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_s2_client_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_send a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_client_send a b;
+    lemma_sfif_client_send a b;
+    lemma_cfif_client_send a b;
+    HSP.lemma_hsp_client_send a b;
+    HSP.lemma_hscs_client_send a b
+#pop-options
+
+(** SERVER SEND. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_s2_server_send (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_server_send a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_server_send a b;
+    lemma_sfif_server_send a b;
+    lemma_cfif_server_send a b;
+    HSP.lemma_hsp_server_send a b;
+    HSP.lemma_hscs_server_send a b
+#pop-options
+
+(** CLIENT LOCAL. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_s2_client_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_local a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_client_local a b;
+    lemma_sfif_client_local a b;
+    lemma_cfif_client_local a b;
+    HSP.lemma_hsp_client_local a b;
+    HSP.lemma_hscs_client_local a b
+#pop-options
+
+(** SERVER LOCAL. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_s2_server_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_server_local a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_server_local a b;
+    lemma_sfif_server_local a b;
+    lemma_cfif_server_local a b;
+    HSP.lemma_hsp_server_local a b;
+    HSP.lemma_hscs_server_local a b
+#pop-options
+
+(** DELIVER TO CLIENT.  `HSP`'s two families are UNBUNDLED, so the shape is opened
+    once more here (the `app_extras` half already opened it inside
+    `lemma_ae_deliver_to_client`; the two openings are independent). **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_s2_deliver_to_client (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        SY.server_config_valid_e2e a.server /\
+        SY.tls_step_deliver_to_client a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_deliver_to_client a b;
+    lemma_sfif_deliver_to_client a b;
+    lemma_cfif_deliver_to_client a b;
+    SY.lemma_deliver_to_client_shape a b;
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      b == { a with client = c'; channel = MP.Quiet }
+    returns HSP.hs_seq_pairing b /\ HSP.hs_channel_seal_ok b
+    with _pf.
+    (
+      HSP.lemma_hsp_deliver_to_client a wire c' out raw snap sent;
+      HSP.lemma_hscs_deliver_to_client a wire c' out raw snap sent
+    )
+#pop-options
+
+(** DELIVER TO SERVER.  Mirror. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_s2_deliver_to_server (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        SY.server_config_valid_e2e a.server /\
+        SY.tls_step_deliver_to_server a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_deliver_to_server a b;
+    lemma_sfif_deliver_to_server a b;
+    lemma_cfif_deliver_to_server a b;
+    SY.lemma_deliver_to_server_shape a b;
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      b == { a with server = s'; channel = MP.Quiet }
+    returns HSP.hs_seq_pairing b /\ HSP.hs_channel_seal_ok b
+    with _pf.
+    (
+      HSP.lemma_hsp_deliver_to_server a wire s' out raw snap sent;
+      // Two-run: the `hscs` call is DECORATIVE (that lemma is itself `= ()`, the
+      // post-state channel being `MP.Quiet`), unlike the `hsp` call above, whose
+      // removal is an Error 19.  DO NOT DELETE AS DEAD WEIGHT: it records which
+      // producer discharges `hs_channel_seal_ok b`, so that if that conjunct ever
+      // stops being vacuous at a `Quiet` post-state the obligation is already wired.
+      HSP.lemma_hscs_deliver_to_server a wire s' out raw snap sent
+    )
+#pop-options
+
+(** THE FIVE-CONJUNCT ROLL-UP. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_stream2_extras_preserved (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        SY.server_config_valid_e2e a.server /\
+        SY.tls_sys_step a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = MP.lemma_step_channel_cases SY.tls_machine_iface a b;
+    FStar.Classical.move_requires_2 lemma_s2_client_send a b;
+    FStar.Classical.move_requires_2 lemma_s2_server_send a b;
+    FStar.Classical.move_requires_2 lemma_s2_deliver_to_client a b;
+    FStar.Classical.move_requires_2 lemma_s2_deliver_to_server a b;
+    FStar.Classical.move_requires_2 lemma_s2_client_local a b;
+    FStar.Classical.move_requires_2 lemma_s2_server_local a b
+#pop-options
+
+(** The initial state satisfies all five conjuncts.  Each is vacuous or trivial
+    there: the channel is `MP.Quiet` (killing every in-flight clause and both
+    `hs_channel_seal_ok` arms), both endpoints are at `ControlNew` with zero
+    sequence numbers and `Initial` record epochs, and every `Some?`-marker
+    antecedent (`hs_client_finished`, `hs_server_finished`, `cf_delivered`) is
+    `None`. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_initial_stream2_extras (cfg_c cfg_s:CS.connection_config)
+  : Lemma (stream2_extras (SY.initial_tls_system cfg_c cfg_s))
+  = ASP.lemma_initial_app_extras cfg_c cfg_s
+#pop-options
+
+(** The combined predicate carried through the RTC induction.  Same shape as
+    `SY.stream_combined_inv`: the extras are gated on `SY.tls_no_rekeying`,
+    because the step relation permits rekeying and the gate is only recovered
+    BACKWARDS (by `SY.lemma_no_key_update_backward`) once the post-state is known
+    to be non-rekeyed. **)
+let stream2_combined_inv (s:SY.tls_system_state) : prop =
+  SY.stream_combined_inv s /\
+  (SY.tls_no_rekeying s ==> stream2_extras s)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_stream2_combined_inv_preserved (x y:SY.tls_system_state)
+  : Lemma (requires stream2_combined_inv x /\ SY.tls_sys_step x y)
+          (ensures stream2_combined_inv y)
+  = SY.lemma_stream_combined_inv_preserved x y;
+    introduce SY.tls_no_rekeying y ==> stream2_extras y
+    with _nr.
+    (
+      // The gate travels backwards along the step, unlocking `combined_inv x`'s
+      // structural invariant AND `stream2_extras x`.
+      SY.lemma_no_key_update_backward x y;
+      assert (SY.tls_system_inv x);
+      assert (stream2_extras x);
+      // `server_config_valid_e2e` is carried UNGATED by `SY.stream_combined_inv`,
+      // which is exactly why `lemma_stream2_extras_preserved` can demand it.
+      assert (SY.server_config_valid_e2e x.server);
+      SY.lemma_inv_preserved x y;
+      lemma_stream2_extras_preserved x y
+    )
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_initial_stream2_combined_inv (cfg_c cfg_s:CS.connection_config)
+  : Lemma
+      (requires
+        cfg_c.CS.config_role == CS.ClientEndpoint /\
+        cfg_s.CS.config_role == CS.ServerEndpoint /\
+        WFL.supported_client_config_wire_profile cfg_c /\
+        SY.server_config_valid_e2e (CS.initial cfg_s))
+      (ensures stream2_combined_inv (SY.initial_tls_system cfg_c cfg_s))
+  = SY.lemma_initial_stream_combined_inv cfg_c cfg_s;
+    lemma_initial_stream2_extras cfg_c cfg_s
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    THE REACHABILITY PAYOFF.
+
+    Every reachable, non-rekeyed state with a valid server config satisfies the
+    structural stream invariant AND the five-conjunct extras bundle — in
+    particular `ASP.app_extras`, whose `app_seq_pairing` clause is the hypothesis
+    of `lemma_app_pairing_implies_stream_integrity`.
+
+    Mirror of `SY.lemma_reachable_stream_inv`, with the same entry hypotheses.
+    ───────────────────────────────────────────────────────────────────────── **)
+val lemma_reachable_stream2_inv (cfg_c cfg_s:CS.connection_config) (s:SY.tls_system_state)
+  : Lemma (requires cfg_c.CS.config_role == CS.ClientEndpoint /\
+                    cfg_s.CS.config_role == CS.ServerEndpoint /\
+                    WFL.supported_client_config_wire_profile cfg_c /\
+                    SY.server_config_valid_e2e (CS.initial cfg_s) /\
+                    SY.tls_no_rekeying s /\
+                    RTC.closure SY.tls_sys_step (SY.initial_tls_system cfg_c cfg_s) s)
+          (ensures SY.tls_stream_inv s /\ stream2_extras s)
+let lemma_reachable_stream2_inv cfg_c cfg_s s =
+  lemma_initial_stream2_combined_inv cfg_c cfg_s;
+  FStar.Classical.forall_intro_2
+    (FStar.Classical.move_requires_2 lemma_stream2_combined_inv_preserved);
+  RTC.stable_on_closure SY.tls_sys_step stream2_combined_inv ()
