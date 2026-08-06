@@ -154,6 +154,7 @@ ROOT_FILES = \
   src/impl/TLS13.System.HsSeqPairing.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
   src/spec/properties/TLS13.ConnectionState.RecordKeyEpoch.fst \
+  src/spec/properties/TLS13.ConnectionState.AppDataBufferEmpty.fst \
   src/spec/properties/TLS13.ConnectionState.ServerHelloSelectionLink.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeSeqZero.fst \
   src/impl/TLS13.System.Ordering.fst \

@@ -52,6 +52,7 @@ module SNCFR = TLS13.System.ServerNotCFR
 module GFin = TLS13.Wire.Generated.Finished
 module ID   = FStar.IndefiniteDescription
 module RTC  = FStar.ReflexiveTransitiveClosure
+module ADBE = TLS13.ConnectionState.AppDataBufferEmpty
 
 (** ─────────────────────────────────────────────────────────────────────────
     COMPANION to `finished_delivered_appread_coupling` (fdac).  NOT a replacement:
@@ -157,6 +158,28 @@ let lemma_protected_decode_read_key_present
   = ()
 #pop-options
 
+(** HEAD REFUTATION UNDER AN EMPTY BYTE DELTA (the `ConnProtectedHandshake`
+    companion for every LOCAL family in this module).
+
+    `CS.event_raw_delta_legal` charges a HEAD protected-handshake step with
+    `CS.raw_records_exactly raw_received T.Application_data 1`, i.e. exactly one
+    `Application_data` record; with `raw_received == B.empty` the appdata count is
+    `0 =!= 1`.  So under an empty byte delta only TAIL steps survive, and a TAIL
+    step RESTORES `record_read` from the pre-state for every non-`Finished`
+    message (`Finished` installs the `R.Application` read epoch), leaves
+    `record_write` alone, and otherwise writes only the `hb_*` handshake buffers
+    via `CS.set_pending_protected_handshake`. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_protected_head_impossible_empty
+  (m:CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires CS.event_raw_delta_legal m (CS.ConnProtectedHandshake step) B.empty B.empty)
+      (ensures step.CS.protected_handshake_head == false)
+  = if step.CS.protected_handshake_head
+    then (WStep.lemma_protected_raw_count_one B.empty;
+          WStep.lemma_raw_appdata_count_empty ())
+#pop-options
+
 (** Skeleton sanity lemma — confirms the module compiles and is wired into the
     build.  Replaced/kept as the families and aggregation land. **)
 let _appextrasinv_wired (s:SY.tls_system_state)
@@ -200,6 +223,11 @@ let lemma_client_local_preserves_app_read
        | CS.ControlHandshaking _ ->
          CSL.lemma_handshaking_nonfinal_read_not_application st
        | _ -> ())
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
+         restores/raises the read slot, freezes the write slot, and writes only the
+         `hb_*` buffers. *)
+      lemma_protected_head_impossible_empty st.CS.cs_model step
 #pop-options
 
 #push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
@@ -225,6 +253,11 @@ let lemma_server_local_preserves_app_read
        | CS.ControlHandshaking _ ->
          CSL.lemma_handshaking_nonfinal_read_not_application st
        | _ -> ())
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
+         `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
+         SERVER can never take a protected-handshake step. *)
+      ()
 #pop-options
 
 
@@ -261,6 +294,11 @@ let lemma_client_local_preserves_client_finished
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
+         restores/raises the read slot, freezes the write slot, and writes only the
+         `hb_*` buffers. *)
+      lemma_protected_head_impossible_empty st.CS.cs_model step
 #pop-options
 
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 120 --split_queries always"
@@ -281,6 +319,11 @@ let lemma_server_local_preserves_server_finished
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
+         `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
+         SERVER can never take a protected-handshake step. *)
+      ()
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -477,6 +520,182 @@ let lemma_recv_preserves_client_finished
         `lemma_recv_finished_installs_app_read` (role-free) lands `App(rd c')`.  The
         `ControlFailed` sub-case is subsumed by that last lemma (a Finished into a
         failed peer blocks, contradicting `step == Some c'`). **)
+(** ═══════════════════════════════════════════════════════════════════════
+    COALESCED PROTECTED-HANDSHAKE DELIVERY HELPERS (agentic's new client wire arm).
+
+    `origin/agentic` extended `EC.client_wire_received_event` so a delivered record
+    may be consumed by a HEAD `CS.ConnProtectedHandshake` step rather than a
+    `ConnNetworkEvent`.  These five model-level helpers are what the new arm of
+    `lemma_fdac_deliver_to_client` needs; each is the protected-step analogue of the
+    `ConnNetworkEvent` helper it sits next to.
+    ═══════════════════════════════════════════════════════════════════════ **)
+
+(** Slice-of-everything, needed to line the two decode predicates up. **)
+let lemma_slice_all (f:B.bytes) : Lemma (Seq.slice f 0 (B.length f) == f)
+  = Seq.lemma_eq_elim (Seq.slice f 0 (B.length f)) f
+
+(** (H1) A HEAD protected-handshake decode OPENS the record under the receiver's
+    READ state, so the read key is present.  Analogue of
+    `lemma_protected_decode_read_key_present`. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_protected_head_decode_read_key_present
+  (model:CS.connection_model) (step:CS.protected_handshake_step) (raw:B.bytes)
+  : Lemma
+      (requires SMCan.received_protected_handshake_head_decode model step raw)
+      (ensures Some? model.CS.model_record.CS.record_read.R.key)
+  = ()
+#pop-options
+
+(** Inversion of `W.parse_tls_message` at `T.Handshake`: it succeeds ONLY via the
+    `W.parse_handshake` arm with FULL consumption, so a successful parse and a
+    successful `parse_handshake` of the same bytes agree on the message. **)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_parse_tls_handshake_inv
+  (f:B.bytes) (hm0 hm:M.handshake_msg) (n:nat)
+  : Lemma
+      (requires
+        W.parse_tls_message T.Handshake f == Some (M.TlsHandshake hm0) /\
+        W.parse_handshake f == Some (hm, n))
+      (ensures hm0 == hm)
+  = W.lemma_parse_tls_message_handshake_some f hm0
+#pop-options
+
+(** (H2) THE RECORD -> MESSAGE BRIDGE for a HEAD step.  If the SAME record `raw`
+    both single-protected-message-decodes to `sent` and head-decodes to `step`, then
+    `sent` IS the step's handshake message.
+
+    Everything in sight is FUNCTIONAL: `W.parse_record_wire raw` pins the outer
+    fragment; `R.open_record` (a function of the read state, the header AAD and the
+    outer fragment) pins `opened`; `W.parse_plaintext opened` pins the plaintext.
+    The head decode then says `plaintext.fragment == step.protected_handshake_fragment`
+    and (at `offset == 0`, which `CS.legal_protected_handshake_step` forces on a HEAD
+    step) `W.parse_handshake` of that whole fragment yields
+    `step.protected_handshake_message`; the single-message decode says
+    `W.parse_tls_message T.Handshake plaintext.fragment == Some sent`, which unfolds
+    to the SAME `W.parse_handshake` call with full consumption.  Injectivity of
+    `Some` closes it. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 300 --split_queries always"
+let lemma_protected_head_decode_functional
+  (model:CS.connection_model) (step:CS.protected_handshake_step)
+  (sent:M.tls_message) (raw:B.bytes)
+  : Lemma
+      (requires
+        SMCan.received_single_protected_message_decode model sent raw /\
+        SMCan.received_protected_handshake_head_decode model step raw /\
+        step.CS.protected_handshake_offset == 0 /\
+        M.TlsHandshake? sent)
+      (ensures M.TlsHandshake?._0 sent == step.CS.protected_handshake_message)
+  = lemma_slice_all step.CS.protected_handshake_fragment;
+    eliminate exists (of1:B.bytes) (op1:B.bytes) (pl1:M.plaintext).
+      (W.parse_record_wire raw == Some (T.Application_data, of1, B.length raw) /\
+       SMCan.received_record_opened model raw of1 op1 /\
+       W.parse_plaintext op1 == Some pl1 /\
+       W.parse_tls_message pl1.M.content_type pl1.M.fragment == Some sent)
+    returns M.TlsHandshake?._0 sent == step.CS.protected_handshake_message
+    with _h1.
+    (
+      eliminate exists (of2:B.bytes) (op2:B.bytes) (pl2:M.plaintext).
+        (W.parse_record_wire raw == Some (T.Application_data, of2, B.length raw) /\
+         SMCan.received_record_opened model raw of2 op2 /\
+         W.parse_plaintext op2 == Some pl2 /\
+         pl2.M.content_type == T.Handshake /\
+         Seq.equal pl2.M.fragment step.CS.protected_handshake_fragment /\
+         step.CS.protected_handshake_offset <=
+           B.length step.CS.protected_handshake_fragment /\
+         W.parse_handshake
+           (Seq.slice
+             step.CS.protected_handshake_fragment
+             step.CS.protected_handshake_offset
+             (B.length step.CS.protected_handshake_fragment)) ==
+           Some
+             (step.CS.protected_handshake_message,
+              step.CS.protected_handshake_consumed))
+      returns M.TlsHandshake?._0 sent == step.CS.protected_handshake_message
+      with _h2.
+      (
+        (* `W.parse_record_wire raw` is a FUNCTION: `of1 == of2`. *)
+        assert (of1 == of2);
+        (* `R.open_record` is a FUNCTION of the read state, the header AAD and the
+           outer fragment, so the two openings coincide: `op1 == op2`. *)
+        assert (SMCan.received_record_opened model raw of1 op1);
+        assert (SMCan.received_record_opened model raw of1 op2);
+        eliminate exists (rs1:R.direction_state).
+          (R.open_record model.CS.model_record.CS.record_read
+             (SMCan.record_header_aad raw) of1 == Some (op1, rs1))
+        returns op1 == op2
+        with _r1.
+        (
+          eliminate exists (rs2:R.direction_state).
+            (R.open_record model.CS.model_record.CS.record_read
+               (SMCan.record_header_aad raw) of1 == Some (op2, rs2))
+          returns op1 == op2
+          with _r2. ()
+        );
+        assert (pl1 == pl2);
+        Seq.lemma_eq_elim pl2.M.fragment step.CS.protected_handshake_fragment;
+        assert (W.parse_handshake step.CS.protected_handshake_fragment ==
+                  Some (step.CS.protected_handshake_message,
+                        step.CS.protected_handshake_consumed));
+        assert (W.parse_tls_message T.Handshake
+                  step.CS.protected_handshake_fragment == Some sent);
+        lemma_parse_tls_handshake_inv
+          step.CS.protected_handshake_fragment
+          (M.TlsHandshake?._0 sent)
+          step.CS.protected_handshake_message
+          step.CS.protected_handshake_consumed
+      )
+    )
+#pop-options
+
+(** (H3) A protected-handshake step carrying a `Finished` installs the APPLICATION
+    read epoch -- `CS.step_protected_handshake` does NOT restore `record_read` on the
+    `Finished` arm (head or tail), so the install from
+    `CS.step_handshake_message _ CL.Received (M.Finished _)` survives. **)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+let lemma_protected_finished_installs_app_read
+  (m m':CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnProtectedHandshake step) /\
+        CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+        M.Finished? step.CS.protected_handshake_message)
+      (ensures R.Application? m'.CS.model_record.CS.record_read.R.epoch)
+  = ()
+#pop-options
+
+(** (H4) APPLICATION read epoch preserved FORWARD.  EE / Cert / CV advance
+    `record_read` with `R.next_seq` (epoch-preserving) or restore it from the
+    pre-state (tail); `Finished` installs `R.Application`.  Either way `App` in,
+    `App` out. **)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+let lemma_protected_preserves_app_read
+  (m m':CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnProtectedHandshake step) /\
+        CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+        R.Application? m.CS.model_record.CS.record_read.R.epoch)
+      (ensures R.Application? m'.CS.model_record.CS.record_read.R.epoch)
+  = ()
+#pop-options
+
+(** (H5) The CLIENT's own `hs_client_finished` is untouched.  A protected-handshake
+    step is a `CL.Received` handshake step, and the only writers of
+    `hs_client_finished` are `LocalVerifyClientFinished` (server-role local) and the
+    client's own SEND of its Finished. **)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+let lemma_protected_preserves_client_finished
+  (m m':CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnProtectedHandshake step) /\
+        CS.step_model m (CS.ConnProtectedHandshake step) == Some m')
+      (ensures
+        m'.CS.model_handshake.CS.hs_client_finished ==
+        m.CS.model_handshake.CS.hs_client_finished)
+  = ()
+#pop-options
+
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
 let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
   : Lemma
@@ -500,19 +719,81 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
     (
       let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
       assert (a.channel == MP.ToClient p);
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent
-            { CL.message_direction = CL.Received; CL.message_value = msg } in
-         SMCan.canonical_wire_step a.client c' conn_ev
+      EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
+      eliminate exists (conn_ev0:CS.conn_event).
+        (EC.client_wire_received_event a.client wire conn_ev0 /\
+         SMCan.canonical_wire_step a.client c' conn_ev0
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection a.client wire msg /\
-         EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+         EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
       returns ASP.finished_delivered_appread_coupling b
-      with _pd.
+      with _inv.
       (
+        match conn_ev0 with
+        | CS.ConnLocalEvent _ ->
+          (* `EC.client_wire_received_event` is `False` on a local event. *)
+          ()
+        | CS.ConnProtectedHandshake step ->
+          (* NEW ARM.  The delivered record is consumed by a HEAD protected-handshake
+             step.  SECOND half is passive (H5).  FIRST half splits on the PRE-state
+             client read epoch exactly as the `ConnNetworkEvent` arm does:
+               * APP: monotone forward by (H4);
+               * ~APP: the in-flight message is pinned to a `Finished` by
+                 `sf_inflight_finished a`; the HEAD decode opens the record under the
+                 client's read state, giving the read key (H1) and hence — with ~APP
+                 — the RECORD-level gate `Handshake?(rd a.client)`; the carried
+                 `inflight_snap_handshake_write` gives the snapshot half; the seal
+                 bridge then yields the single-message decode of the SAME record, and
+                 (H2) identifies the step's handshake message WITH the sealed
+                 `Finished`; (H3) lands `App(rd c')`. *)
+          Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+          assert (step.CS.protected_handshake_head);
+          assert (CS.legal_event a.client.CS.cs_model conn_ev0);
+          assert (CS.step_model a.client.CS.cs_model conn_ev0 == Some c'.CS.cs_model);
+          lemma_protected_preserves_client_finished
+            a.client.CS.cs_model c'.CS.cs_model step;
+          introduce
+            Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_server_finished
+            ==> R.Application? (ASP.rd c').R.epoch
+          with _hsf.
+          (
+            if R.Application? (ASP.rd a.client).R.epoch then
+              lemma_protected_preserves_app_read
+                a.client.CS.cs_model c'.CS.cs_model step
+            else
+            (
+              assert (M.TlsHandshake? sent /\ M.Finished? (M.TlsHandshake?._0 sent));
+              assert (~(CS.network_message_is_cleartext CL.Sent sent));
+              assert (ASP.inflight_snap_handshake_write a);
+              assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+              assert (ASP.inflight_raw_delta_legal a /\ ASP.inflight_single_record a);
+              assert (CS.network_message_raw_delta_legal snap
+                        ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+              assert (CS.raw_records_exactly raw T.Application_data 1);
+              HSP.lemma_rre_nonempty raw;
+              (* HEAD decode projection of the client's own wire step. *)
+              assert (SMCan.received_protected_handshake_head_decode
+                        a.client.CS.cs_model step raw);
+              lemma_protected_head_decode_read_key_present a.client.CS.cs_model step raw;
+              RKE.lemma_connection_consistent_read_key_present_not_initial a.client;
+              assert (R.Handshake? (ASP.rd a.client).R.epoch);
+              assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
+              CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+                snap a.client.CS.cs_model sent raw;
+              assert (step.CS.protected_handshake_offset == 0);
+              lemma_protected_head_decode_functional
+                a.client.CS.cs_model step sent raw;
+              assert (M.TlsHandshake? sent);
+              assert (M.Finished? step.CS.protected_handshake_message);
+              lemma_protected_finished_installs_app_read
+                a.client.CS.cs_model c'.CS.cs_model step
+            )
+          )
+        | CS.ConnNetworkEvent tm ->
+        let msg : M.tls_message = tm.CL.message_value in
         let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in
+        assert (conn_ev0 == conn_ev);
         Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
         assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
         // SECOND half (passive): a client RECEIVE preserves `hs_client_finished`, so
@@ -769,6 +1050,11 @@ let lemma_client_local_preserves_app_write
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
+         restores/raises the read slot, freezes the write slot, and writes only the
+         `hb_*` buffers. *)
+      lemma_protected_head_impossible_empty st.CS.cs_model step
 #pop-options
 
 #push-options "--fuel 3 --ifuel 8 --z3rlimit 120 --split_queries always"
@@ -789,6 +1075,11 @@ let lemma_server_local_preserves_app_write
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
+         `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
+         SERVER can never take a protected-handshake step. *)
+      ()
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -883,6 +1174,11 @@ let lemma_client_local_cad_backward
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
+         restores/raises the read slot, freezes the write slot, and writes only the
+         `hb_*` buffers. *)
+      lemma_protected_head_impossible_empty st.CS.cs_model step
 #pop-options
 
 #push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
@@ -904,6 +1200,11 @@ let lemma_server_local_cad_backward
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
+         `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
+         SERVER can never take a protected-handshake step. *)
+      ()
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
@@ -1048,6 +1349,9 @@ let lemma_awc_conjunct2_from_inv (s:SY.tls_system_state)
         ~(CS.ControlFailed? (SY.ctrl s.server)))
       (ensures R.Application? (ASP.wr s.server).R.epoch)
   = CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client;
+    (* Since the merge, `client_driver_application_ready` carries
+       `CS.protected_handshake_buffer_empty`; supply it as a reachability fact. *)
+    ADBE.lemma_connection_appdata_protected_handshake_buffer_empty s.client;
     assert (SY.client_ready s);
     assert (SY.server_post_cf s);
     SNCFR.lemma_consistent_not_cfr s.server;
@@ -1257,24 +1561,39 @@ let lemma_awc_deliver_to_client (a b:SY.tls_system_state)
     returns ASP.appdata_write_coupling b
     with _pf.
     (
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent
-            { CL.message_direction = CL.Received; CL.message_value = msg } in
-         SMCan.canonical_wire_step a.client c' conn_ev
+      EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
+      eliminate exists (conn_ev0:CS.conn_event).
+        (EC.client_wire_received_event a.client wire conn_ev0 /\
+         SMCan.canonical_wire_step a.client c' conn_ev0
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection a.client wire msg /\
-         EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+         EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
       returns ASP.appdata_write_coupling b
-      with _pd.
+      with _inv.
       (
         Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
-        assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
+        (* CONJUNCT 1 is a WRITE-EPOCH forward, and BOTH client wire arms freeze the
+           client's write slot: a `CL.Received` network step
+           (`AMF.lemma_recv_preserves_write_epoch`) and, since the merge, a HEAD
+           `CS.ConnProtectedHandshake` step, which routes through
+           `CS.step_handshake_message _ CL.Received _` and therefore never touches
+           `record_write` (`HSP.lemma_protected_preserves_wr_full`).
+           CONJUNCT 2 is channel-shape-only and reads `tls_system_inv b` directly, so
+           it is arm-independent. *)
         introduce
           CS.ControlApplicationData? (SY.ctrl b.server)
           ==> R.Application? (ASP.wr b.client).R.epoch
         with _.
-          AMF.lemma_recv_preserves_write_epoch a.client.CS.cs_model msg c'.CS.cs_model;
+        (
+          match conn_ev0 with
+          | CS.ConnLocalEvent _ -> ()
+          | CS.ConnProtectedHandshake step ->
+            HSP.lemma_protected_preserves_wr_full
+              a.client.CS.cs_model c'.CS.cs_model step
+          | CS.ConnNetworkEvent tm ->
+            AMF.lemma_recv_preserves_write_epoch
+              a.client.CS.cs_model tm.CL.message_value c'.CS.cs_model
+        );
         introduce
           ( MP.Quiet? b.channel /\
             CS.ControlApplicationData? (SY.ctrl b.client) /\

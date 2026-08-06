@@ -40,6 +40,7 @@ module CS   = TLS13.Spec.StateMachine
 module M    = TLS13.Messages
 module CL   = TLS13.ConnectionLog
 module R    = TLS13.Record.Spec
+module T    = TLS13.Types
 module B    = TLS13.Bytes
 module L    = FStar.List.Tot
 module Seq  = FStar.Seq
@@ -187,6 +188,16 @@ let lemma_client_local_preserves_write_epoch
   = match ce with
     | CS.ConnLocalEvent lev ->
       lemma_client_local_event_preserves_write_epoch m lev m'
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM.  A HEAD protected step is charged
+         `raw_records_exactly raw_received Application_data 1`, which `B.empty`
+         cannot satisfy, so only TAIL steps reach here.  Either way the step
+         routes through `CS.step_handshake_message _ CL.Received _`, and NO
+         `CL.Received` arm touches `record_write` at all -- the write epoch is
+         literally unchanged, so the implication is trivial. *)
+      if step.CS.protected_handshake_head
+      then WStep.lemma_ws_raw_records_nonempty_parse_record B.empty T.Application_data 1
+      else ()
     | CS.ConnNetworkEvent dm ->
       ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
 #pop-options
@@ -207,6 +218,15 @@ let lemma_server_local_preserves_read_epoch
   = match ce with
     | CS.ConnLocalEvent lev ->
       lemma_server_local_event_preserves_read_epoch m lev m'
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
+         `model.model_config.config_role == CS.ClientEndpoint` as its FIRST
+         conjunct, and this dispatch is gated on `config_role == ServerEndpoint`.
+         A server can therefore never take a protected-handshake step.  (This is
+         NOT an `assert False` off a vacuous hypothesis: the exclusion is the
+         explicit role conjunct of `legal_protected_handshake_step`.) *)
+      assert (CS.legal_protected_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ClientEndpoint)
     | CS.ConnNetworkEvent dm ->
       ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
 #pop-options
@@ -296,6 +316,28 @@ let lemma_ama_client_local (a b:SY.tls_system_state)
           (match ce with
            | CS.ConnLocalEvent lev ->
              AB.lemma_client_step_appboth_preserves_record_material a.client c' ce
+           | CS.ConnProtectedHandshake step ->
+             (* NEW ARM.  The empty byte-delta forces a TAIL step (a HEAD step is
+                charged exactly one `Application_data` record by
+                `CS.event_raw_delta_legal`).  Two sub-cases:
+                - message is NOT `Finished`: `CS.step_protected_handshake`
+                  RESTORES `record_read` from the pre-state, and no `CL.Received`
+                  arm of `CS.step_handshake_message` touches `record_write`, so
+                  `record_mat_eq` holds on the nose -- no key material moves.
+                - message IS `Finished`: the atomic client arm lands at
+                  `HsServerFinishedVerified`, where
+                  `CSL.lemma_client_finished_verified_write_epoch_not_application`
+                  forces `(wr c').epoch =!= R.Application`.  That contradicts
+                  `ASP.cf_delivered b`, whose first conjunct is
+                  `R.Application? (wr b.client)`.  VACUOUS -- and note this is a
+                  CONTROL/epoch exclusion, not an appeal to a vacuous hypothesis. *)
+             (match step.CS.protected_handshake_message with
+              | M.Finished _ ->
+                assert (SMR.connection_state_consistent c');
+                assert (c'.CS.cs_model.CS.model_control
+                          == CS.ControlHandshaking CS.HsServerFinishedVerified);
+                CSL.lemma_client_finished_verified_write_epoch_not_application c'
+              | _ -> ())
            | CS.ConnNetworkEvent dm ->
              ASP.lemma_network_empty_delta_record_unchanged_ungated
                a.client.CS.cs_model dm c'.CS.cs_model);
@@ -380,24 +422,44 @@ let lemma_ama_deliver_to_client
                 SMKM.supported_profile_application_record_material_agrees b.client b.server
     with _cfd.
     (
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev = CS.ConnNetworkEvent
-            { CL.message_direction = CL.Received; CL.message_value = msg } in
-         CS.legal_connection_delta a.client
-           { CS.delta_event = conn_ev;
-             CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-             CS.delta_raw_received = CW.wire_serialize wire } c' /\
-         SMCan.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
-           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
-         SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+      EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
+      eliminate exists (conn_ev0:CS.conn_event).
+        (EC.client_wire_received_event a.client wire conn_ev0 /\
+         SMCan.canonical_wire_step a.client c' conn_ev0
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
-         EC.network_input_message_projection a.client wire msg /\
-         EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+         EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
       returns SMKM.supported_profile_application_record_material_agrees b.client b.server
       with _pd.
       (
+      match conn_ev0 with
+      | CS.ConnLocalEvent _ -> ()   // `client_wire_received_event` is False here
+      | CS.ConnProtectedHandshake step ->
+        (* NEW ARM (HEAD protected handshake, the new client wire-receive shape).
+           `AB.record_mat_eq` compares only epoch/key/static_iv -- NOT seq -- so the
+           `R.next_seq` bump of the EncryptedExtensions/Certificate/CertificateVerify
+           arms moves nothing it observes.  The only material-moving arm is the
+           atomic `Finished` install, and that lands the client at
+           `HsServerFinishedVerified`, where
+           `CSL.lemma_client_finished_verified_write_epoch_not_application`
+           forces `(wr c').epoch =!= R.Application`, contradicting `ASP.cf_delivered b`
+           (whose first conjunct is `R.Application? (wr b.client)`).  VACUOUS by a
+           control/epoch exclusion, not by a vacuous hypothesis. *)
+        (match step.CS.protected_handshake_message with
+         | M.Finished _ ->
+           assert (SMR.connection_state_consistent c');
+           assert (c'.CS.cs_model.CS.model_control
+                     == CS.ControlHandshaking CS.HsServerFinishedVerified);
+           CSL.lemma_client_finished_verified_write_epoch_not_application c'
+         | _ ->
+           assert (ASP.cf_delivered a);
+           assert (AB.record_mat_eq a.client.CS.cs_model.CS.model_record
+                                    c'.CS.cs_model.CS.model_record))
+      | CS.ConnNetworkEvent tm ->
+        let msg : M.tls_message = tm.CL.message_value in
         let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in
+        assert (conn_ev0 == conn_ev);
         Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
         assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
         ASP.lemma_recv_not_key_update c' msg;

@@ -22,10 +22,15 @@ module TLS13.System.ServerSfsRecovery
   obligation.  Given a Quiet post-flip state `b` whose CLIENT sits at
   `HsServerFinishedVerified`, it proves two byte-count facts about the SERVER:
 
-    * SENT ≥ 4 :  `raw_appdata_count b.server.raw_sent >= 4`
-                  (client verified ⇒ client received ≥ 4 protected records
-                   [SlotMono.lemma_client_flag_recv_ge4]; byte-pairing at Quiet
+    * SENT ≥ 1 :  `raw_appdata_count b.server.raw_sent >= 1`
+                  (client verified ⇒ client received ≥ 1 protected record
+                   [SlotMono.lemma_client_flag_recv_ge1]; byte-pairing at Quiet
                    transfers the count to the server's SENT log).
+                  NOTE: this was ≥ 4 until the coalesced-protected-flight spec
+                  change; a TAIL `ConnProtectedHandshake` step is charged ZERO
+                  received bytes, so the client-side `≥ 4` is now FALSE.  See
+                  `lemma_flip_server_sent_ge1` and RESIDUAL 2 at
+                  `lemma_flip_recovers_server_sfs`.
 
     * RECV = 0 :  `raw_appdata_count b.server.raw_received == 0`
                   (a client at `HsServerFinishedVerified` is pre-application-data,
@@ -33,7 +38,7 @@ module TLS13.System.ServerSfsRecovery
                    [WStep.lemma_client_preappdata_sent_no_appdata]; byte-pairing
                    transfers 0 to the server's RECEIVED log).
 
-  From SENT ≥ 4 the server is past the pre-flight region, so it is NOT at
+  From SENT ≥ 1 the server is past the pre-flight region, so it is NOT at
   `HsClientHelloReceived` (see `lemma_flip_server_not_client_hello_received`),
   which is one of the two server exclusions the non-ready handshake agreement
   producer needs.
@@ -145,18 +150,31 @@ let lemma_consistent_client_sfv_flag_shape (st:CS.connection_state)
     assert (p st)
 
 (* ================================================================== *)
-(* SENT >= 4 : the server has SENT at least four protected records.    *)
+(* SENT >= 1 : the server has SENT at least one protected record.      *)
+(*                                                                     *)
+(* THIS LEMMA USED TO SAY `>= 4`, AND THAT IS NOW FALSE.               *)
+(* The old derivation read the client's RECEIVED record count off its  *)
+(* control (`HsServerFinishedVerified` ==> four protected records      *)
+(* received) and transported it to the server through `byte_pairing`.  *)
+(* The coalesced-protected-flight spec change killed the client half:  *)
+(* a TAIL `CS.ConnProtectedHandshake` step is charged                  *)
+(* `Seq.equal raw_received B.empty` by `CS.event_raw_delta_legal`, so  *)
+(* a client can drain EncryptedExtensions|Certificate|CertificateVerify*)
+(* |Finished out of ONE record (one HEAD step plus three TAIL steps)   *)
+(* and reach `HsServerFinishedVerified` having received exactly ONE    *)
+(* record.  `SLM.lemma_client_flag_recv_ge1` is the strongest true     *)
+(* client-side bound, hence `>= 1` here.                               *)
 (* ================================================================== *)
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-let lemma_flip_server_sent_ge4 (b:SY.tls_system_state)
+let lemma_flip_server_sent_ge1 (b:SY.tls_system_state)
   : Lemma
       (requires
         SY.tls_system_inv b /\ MP.Quiet? b.channel /\
         b.client.CS.cs_model.CS.model_control
           == CS.ControlHandshaking CS.HsServerFinishedVerified)
       (ensures
-        WStep.raw_appdata_count b.server.CS.cs_wire_log.CL.raw_sent >= 4)
+        WStep.raw_appdata_count b.server.CS.cs_wire_log.CL.raw_sent >= 1)
   = // roles + reachability + byte pairing come out of the transparent invariant
     assert (SY.client_byte_reachable b);
     assert (SY.byte_pairing b);
@@ -165,8 +183,8 @@ let lemma_flip_server_sent_ge4 (b:SY.tls_system_state)
     // control HsServerFinishedVerified ==> the verified flag is set
     lemma_consistent_client_sfv_flag_shape b.client;
     assert (b.client.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified);
-    // flag ==> client has RECEIVED >= 4 protected records
-    SLM.lemma_client_flag_recv_ge4 b.client.CS.cs_model.CS.model_config b.client;
+    // flag ==> client has RECEIVED >= 1 protected record
+    SLM.lemma_client_flag_recv_ge1 b.client.CS.cs_model.CS.model_config b.client;
     // byte pairing at Quiet: server.raw_sent == client.raw_received
     let ss = b.server.CS.cs_wire_log.CL.raw_sent in
     let cr = b.client.CS.cs_wire_log.CL.raw_received in
@@ -204,6 +222,97 @@ let lemma_flip_server_recv_eq0 (b:SY.tls_system_state)
 #pop-options
 
 (* ================================================================== *)
+(* SERVER-SIDE MESSAGE-FAITHFUL COUNT: SENT <= marker (pre-appdata).   *)
+(*                                                                     *)
+(* SOUNDNESS ARGUMENT (this is the fact that survived the coalesced-   *)
+(* flight spec change, and WHY it survived):                           *)
+(*                                                                     *)
+(*  (3) `CS.protected_record_count` reads                              *)
+(*        | CL.Sent, M.TlsApplicationData bytes -> ...                 *)
+(*        | _, _                                -> 1                   *)
+(*      so every `CL.Sent` HANDSHAKE message emits EXACTLY ONE          *)
+(*      Application_data record.  The server's record count is          *)
+(*      therefore message-faithful: records sent == flight markers set. *)
+(*                                                                     *)
+(*  (4) `CS.legal_protected_handshake_step` pins                        *)
+(*        model.model_config.config_role == CS.ClientEndpoint          *)
+(*      as its FIRST conjunct.  A server can therefore NEVER take a     *)
+(*      `ConnProtectedHandshake` step, so the zero-byte TAIL path --    *)
+(*      the path that de-synchronises records from messages on the      *)
+(*      client -- is STRUCTURALLY UNAVAILABLE on the send side.         *)
+(*                                                                     *)
+(* IF EITHER (3) OR (4) EVER CHANGES -- if a `CL.Sent` handshake        *)
+(* message comes to emit other than one record, or if a server is ever  *)
+(* allowed to take a protected-handshake step -- THIS LEMMA DIES, and   *)
+(* with it every server-side control exclusion below.                   *)
+(*                                                                     *)
+(* This is a strictly server-side statement: it mentions only the       *)
+(* server's own reachability, control and wire log.  It does NOT route  *)
+(* through the client and does NOT use byte-pairing.                    *)
+(* ================================================================== *)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_preappdata_sent_le_marker
+  (cfg:CS.connection_config)
+  (server:CS.connection_state)
+  : Lemma (requires
+            WStep.server_reachable (CS.initial cfg) server /\
+            WStep.pre_appdata_ctrl server.CS.cs_model.CS.model_control /\
+            cfg.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            WStep.server_flight_shape server.CS.cs_model /\
+            WStep.raw_appdata_count server.CS.cs_wire_log.CL.raw_sent
+              <= WStep.server_sent_marker_count server.CS.cs_model)
+  = let init : ES.server_initial_state = CS.initial cfg in
+    let sm = WStep.server_sm init in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                    CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches sm init trace server
+    returns
+      WStep.server_flight_shape server.CS.cs_model /\
+      WStep.raw_appdata_count server.CS.cs_wire_log.CL.raw_sent
+        <= WStep.server_sent_marker_count server.CS.cs_model
+    with _.
+    (
+      WStep.lemma_server_trace_sent_marker init init server trace;
+      PNTWL.lemma_server_trace_wire_logs_match init init trace server;
+      let out_msgs = SM.trace_wire_outputs trace in
+      let sm_bytes = WF.serialize_all CW.tls_record_wire_format out_msgs in
+      assert (init.CS.cs_wire_log.CL.raw_sent == B.empty);
+      assert (WStep.server_sent_marker_count init.CS.cs_model == 0);
+      assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_sent sm_bytes) sm_bytes);
+      assert (Seq.equal server.CS.cs_wire_log.CL.raw_sent sm_bytes);
+      WStep.lemma_raw_appdata_count_serialize_all out_msgs;
+      WStep.lemma_raw_appdata_count_seq_equal server.CS.cs_wire_log.CL.raw_sent sm_bytes
+    )
+#pop-options
+
+(* ================================================================== *)
+(* SERVER NOT PRE-FLIGHT: every `server_pre_flight_ctrl` control has   *)
+(* all four flight markers unset, hence (by the message-faithful count *)
+(* above) SENT == 0, contradicting SENT >= 1.                          *)
+(* ================================================================== *)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_flip_server_not_pre_flight (b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv b /\ MP.Quiet? b.channel /\
+        b.client.CS.cs_model.CS.model_control
+          == CS.ControlHandshaking CS.HsServerFinishedVerified)
+      (ensures
+        ~(WStep.server_pre_flight_ctrl b.server.CS.cs_model.CS.model_control))
+  = lemma_flip_server_sent_ge1 b;
+    assert (SY.server_byte_reachable b);
+    assert (b.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    introduce
+      WStep.server_pre_flight_ctrl b.server.CS.cs_model.CS.model_control ==> False
+    with _.
+      lemma_server_preappdata_sent_le_marker
+        b.server.CS.cs_model.CS.model_config b.server
+#pop-options
+
+(* ================================================================== *)
 (* SERVER != HsClientHelloReceived, a non-ready-agreement exclusion.   *)
 (* ================================================================== *)
 
@@ -217,18 +326,8 @@ let lemma_flip_server_not_client_hello_received (b:SY.tls_system_state)
       (ensures
         b.server.CS.cs_model.CS.model_control
           =!= CS.ControlHandshaking CS.HsClientHelloReceived)
-  = lemma_flip_server_sent_ge4 b;
-    assert (SY.server_byte_reachable b);
-    assert (b.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
-    // at HsClientHelloReceived the server has SENT 0 protected records
-    // (pre-flight, pre-application-data ==> sent <= 4 marker == 0), contradicting
-    // SENT >= 4.
-    introduce
-      b.server.CS.cs_model.CS.model_control
-        == CS.ControlHandshaking CS.HsClientHelloReceived ==> False
-    with _.
-      WStep.lemma_server_preappdata_sent_le4
-        b.server.CS.cs_model.CS.model_config b.server
+  = // HsClientHelloReceived is a `server_pre_flight_ctrl` control.
+    lemma_flip_server_not_pre_flight b
 #pop-options
 
 (* ================================================================== *)
@@ -477,8 +576,8 @@ let lemma_server_preappdata_sent_ge4_finished
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 (**
   Recover the server's control as EXACTLY `HsServerFinishedSent` at the
-  deliver-to-client FLIP post-state, MODULO the one residual the sanctioned
-  record-counting method cannot discharge: `~(ControlFailed? b.server)`.
+  deliver-to-client FLIP post-state, MODULO the TWO residuals the sanctioned
+  record-counting method cannot discharge.
 
   Exclusions:
    * `server_stage_shape b.server`  — reachable-server control→field shape:
@@ -486,11 +585,29 @@ let lemma_server_preappdata_sent_ge4_finished
    * S-region floor + RECV = 0       — kills
        { HsClientFinishedReceived, HsClientFinishedVerified,
          ControlApplicationData, ControlClosing, ControlClosed }.
-   * `~ControlFailed?`  (hypothesis)  — kills ControlFailed (THE RESIDUAL).
-   * The four remaining pre-SFS controls are pre-application-data with
-       `raw_appdata_count raw_sent <= server_sent_marker_count <= 3`
-       (`hs_server_finished == None`), contradicting SENT >= 4 — so
-       `Some? hs_server_finished`, leaving `HsServerFinishedSent` alone.
+   * `~ControlFailed?`  (hypothesis)  — kills ControlFailed (RESIDUAL 1).
+   * SENT >= 1 + the server-side message-faithful count — kills the four
+       `server_pre_flight_ctrl` controls { ControlNew, HsAwaitingClientHello,
+       HsClientHelloReceived, HsServerHelloSent }, all of which have marker 0
+       and hence SENT == 0.
+   * `~(HsServerEncryptedFlightSent)`  (hypothesis)  — RESIDUAL 2, NEW.
+
+  ── RESIDUAL 2 IS NEW AND IS FORCED BY A SPEC CHANGE, NOT BY PROOF DEBT ──────
+  `HsServerEncryptedFlightSent` used to be excluded by SENT >= 4 (the server
+  there has `hs_server_finished == None`, so marker <= 3, so SENT <= 3).  That
+  exclusion is GONE because the client-side `>= 4` it rested on is now FALSE:
+  `CS.event_raw_delta_legal` charges a TAIL `CS.ConnProtectedHandshake` step
+  `Seq.equal raw_received B.empty`, and `CS.legal_protected_handshake_step`
+  places NO constraint tying `protected_handshake_fragment` to the bytes of the
+  record the HEAD step was charged.  So a client can reach
+  `HsServerFinishedVerified` after receiving a single record, against a server
+  that has sent only its EncryptedExtensions.  Under the present model the
+  conclusion WITHOUT residual 2 is not merely unproven, it is FALSE.
+
+  Closing residual 2 needs a genuine record→message bridge on the client side
+  (the `TLS13.ConnectionState.ProtectedWire*` round-trip), i.e. a client floor
+  keyed on MESSAGES delivered rather than on records received.  It cannot be
+  recovered by counting.
 **)
 let lemma_flip_recovers_server_sfs (b:SY.tls_system_state)
   : Lemma
@@ -498,11 +615,14 @@ let lemma_flip_recovers_server_sfs (b:SY.tls_system_state)
         SY.tls_system_inv b /\ MP.Quiet? b.channel /\
         b.client.CS.cs_model.CS.model_control
           == CS.ControlHandshaking CS.HsServerFinishedVerified /\
-        ~(CS.ControlFailed? b.server.CS.cs_model.CS.model_control))
+        ~(CS.ControlFailed? b.server.CS.cs_model.CS.model_control) /\
+        b.server.CS.cs_model.CS.model_control
+          =!= CS.ControlHandshaking CS.HsServerEncryptedFlightSent)
       (ensures
         b.server.CS.cs_model.CS.model_control
           == CS.ControlHandshaking CS.HsServerFinishedSent)
-  = lemma_flip_server_sent_ge4 b;
+  = lemma_flip_server_sent_ge1 b;
+    lemma_flip_server_not_pre_flight b;
     lemma_flip_server_recv_eq0 b;
     assert (SY.server_byte_reachable b);
     assert (b.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -512,10 +632,5 @@ let lemma_flip_recovers_server_sfs (b:SY.tls_system_state)
     introduce server_s_flag b.server.CS.cs_model == 1 ==> False
     with _.
       lemma_server_S_received_ge1
-        b.server.CS.cs_model.CS.model_config b.server;
-    // S excluded and ControlFailed excluded  ⇒  pre-application-data.
-    assert (WStep.pre_appdata_ctrl b.server.CS.cs_model.CS.model_control);
-    // pre-application-data and SENT >= 4  ⇒  hs_server_finished set.
-    lemma_server_preappdata_sent_ge4_finished
-      b.server.CS.cs_model.CS.model_config b.server
+        b.server.CS.cs_model.CS.model_config b.server
 #pop-options

@@ -86,6 +86,22 @@ let lemma_step_model_ctrl_not_cfr
   = match ev with
     | CS.ConnNetworkEvent dm ->
       lemma_step_tls_not_cfr m dm.CL.message_direction dm.CL.message_value m'
+    | CS.ConnProtectedHandshake step ->
+      (* `step_protected_handshake` is a RECEIVED handshake message step: it
+         routes through `step_handshake_message m CL.Received
+         step.protected_handshake_message`, and the two post-processing steps
+         it applies afterwards (`record_adjusted`, which only rewrites
+         `model_record`, and `set_pending_protected_handshake`, which only
+         rewrites `model_handshake.hs_buffers`) both LEAVE `model_control`
+         untouched.  So the control of `m'` is exactly the control of the
+         `step_handshake_message` result, and the existing handshake dispatch
+         lemma applies verbatim. *)
+      (match CS.step_handshake_message m CL.Received
+               step.CS.protected_handshake_message with
+       | Some stepped ->
+         lemma_step_handshake_not_cfr m CL.Received
+           step.CS.protected_handshake_message stepped
+       | None -> ())
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_cfr m lev m'
 #pop-options
@@ -217,6 +233,19 @@ let lemma_step_model_not_shsfv
   = match ev with
     | CS.ConnNetworkEvent dm ->
       lemma_step_tls_not_shsfv m dm.CL.message_direction dm.CL.message_value m'
+    | CS.ConnProtectedHandshake step ->
+      (* `legal_protected_handshake_step` supplies exactly the hypothesis the
+         handshake dispatch lemma needs: `legal_handshake_message m CL.Received
+         step.protected_handshake_message`.  The post-processing that
+         `step_protected_handshake` applies on top of `step_handshake_message`
+         rewrites only `model_record` and `model_handshake.hs_buffers`, so both
+         `model_control` and `model_config` are those of the stepped model. *)
+      (match CS.step_handshake_message m CL.Received
+               step.CS.protected_handshake_message with
+       | Some stepped ->
+         lemma_step_handshake_not_shsfv m CL.Received
+           step.CS.protected_handshake_message stepped
+       | None -> ())
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_shsfv m lev m'
 #pop-options
@@ -337,6 +366,15 @@ let lemma_step_model_not_cfv
   = match ev with
     | CS.ConnNetworkEvent dm ->
       lemma_step_tls_not_cfv m dm.CL.message_direction dm.CL.message_value m'
+    | CS.ConnProtectedHandshake step ->
+      (* Same routing as above; this lemma needs no legality at all, since no
+         `step_handshake_message` arm ever produces `HsClientFinishedVerified`. *)
+      (match CS.step_handshake_message m CL.Received
+               step.CS.protected_handshake_message with
+       | Some stepped ->
+         lemma_step_handshake_not_cfv m CL.Received
+           step.CS.protected_handshake_message stepped
+       | None -> ())
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_cfv m lev m'
 #pop-options

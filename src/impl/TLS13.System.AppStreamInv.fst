@@ -243,6 +243,23 @@ let lemma_network_empty_delta_not_appdata
     end
 #pop-options
 
+(** A `CS.ConnProtectedHandshake` step leaves BOTH application streams unchanged,
+    at ANY byte delta (this is the non-empty-delta companion of
+    `lemma_step_empty_delta_streams`'s new arm): `CS.step_protected_handshake`
+    routes through `CS.step_handshake_message _ CL.Received _`, which never touches
+    `model_application.app_log`, and then rewrites only `model_record` and the
+    `hb_*` handshake buffers. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+let lemma_protected_step_streams
+  (m m':CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnProtectedHandshake step) /\
+        CS.step_model m (CS.ConnProtectedHandshake step) == Some m')
+      (ensures Seq.equal (m_sent m') (m_sent m) /\ Seq.equal (m_recv m') (m_recv m))
+  = ()
+#pop-options
+
 (** DISPATCH: any legal empty-byte-delta step leaves both streams unchanged.  This
     is what the four LOCAL families consume (a local step emits no wire output, so
     `ASP.lemma_{client,server}_local_extract` hands back exactly this shape). **)
@@ -264,6 +281,14 @@ let lemma_step_empty_delta_streams
       lemma_step_tls_streams m m' dm.CL.message_direction dm.CL.message_value;
       Seq.append_empty_r (m_sent m);
       Seq.append_empty_r (m_recv m)
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM.  `CS.step_protected_handshake` routes through
+         `CS.step_handshake_message _ CL.Received _` -- a HANDSHAKE step, which never
+         touches `model_application.app_log` -- and then rewrites only
+         `model_record` and the `hb_*` handshake buffers via
+         `CS.set_pending_protected_handshake`.  Both application streams are
+         therefore literally unchanged. *)
+      ()
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
@@ -830,24 +855,50 @@ let lemma_asi_deliver_to_client_raw
   = let b : SY.tls_system_state = { a with client = c'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
     assert (a.channel == MP.ToClient p);
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent
-          { CL.message_direction = CL.Received; CL.message_value = msg } in
-       CS.legal_connection_delta a.client
-         { CS.delta_event = conn_ev;
-           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-           CS.delta_raw_received = CW.wire_serialize wire } c' /\
-       SMCan.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
-         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
-       SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+    EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
+    eliminate exists (conn_ev0:CS.conn_event).
+      (EC.client_wire_received_event a.client wire conn_ev0 /\
+       SMCan.canonical_wire_step a.client c' conn_ev0
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection a.client wire msg /\
-       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+       EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
     returns app_stream_pairing b
-    with _pd.
+    with _inv.
     (
+      match conn_ev0 with
+      | CS.ConnLocalEvent _ ->
+        (* `EC.client_wire_received_event` is `False` on a local event. *)
+        ()
+      | CS.ConnProtectedHandshake step ->
+        (* NEW ARM (coalesced protected handshake).  The delivered record is consumed
+           by a HEAD protected-handshake step, which moves NO application bytes
+           (`lemma_protected_step_streams`), so the client's received stream is
+           frozen.  What must still be shown is that the IN-FLIGHT payload carried no
+           application bytes either -- otherwise the `sc` equality would lose them
+           when the channel returns to `MP.Quiet`.  That is settled WITHOUT any
+           record->message bridge: a client taking a legal protected-handshake step
+           sits at one of the four `legal_handshake_message` RECEIVE controls, where
+           `CSL.lemma_handshaking_nonfinal_read_not_application` forces its read
+           epoch OFF `R.Application` (`ASP.lemma_protected_step_read_not_application`);
+           the FORWARD conjunct of `ASP.channel_seal_ok a` therefore rules out
+           `App? (snap_wr p)`, and `lemma_sc_nonapp_snapshot_no_bytes` gives
+           `SY.app_bytes_of p == B.empty`. *)
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+        lemma_protected_step_streams a.client.CS.cs_model c'.CS.cs_model step;
+        ASP.lemma_step_preserves_closing a.client.CS.cs_model c'.CS.cs_model conn_ev0;
+        ASP.lemma_protected_step_read_not_application a.client step;
+        assert (~(R.Application? (ASP.snap_wr p).R.epoch));
+        lemma_sc_nonapp_snapshot_no_bytes a p;
+        let cr = SY.app_stream_received a.client in
+        Seq.append_empty_r cr;
+        Seq.append_empty_r (SY.app_stream_received b.client);
+        Seq.append_empty_r (SY.app_stream_received a.server);
+        assert (Seq.equal (SY.app_stream_received b.client) cr)
+      | CS.ConnNetworkEvent tm ->
+      let msg : M.tls_message = tm.CL.message_value in
       let conn_ev = CS.ConnNetworkEvent
         { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (conn_ev0 == conn_ev);
       Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
       assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
       lemma_step_tls_streams a.client.CS.cs_model c'.CS.cs_model CL.Received msg;

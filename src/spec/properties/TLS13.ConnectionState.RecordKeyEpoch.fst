@@ -63,6 +63,17 @@ let lemma_step_model_shape
   helpers ();
   match ev with
   | CS.ConnNetworkEvent msg -> ()
+  | CS.ConnProtectedHandshake step ->
+    (* A protected-handshake step is a RECEIVED handshake message step.  The
+       `step_handshake_message` result already satisfies `model_shape` by the
+       same enumeration that discharges the `ConnNetworkEvent` arm (the
+       pattern helpers cover `next_seq` / `advance_direction_records` /
+       `install_keys`).  The extra post-processing can only IMPROVE matters:
+       `record_adjusted` either keeps the stepped record state or restores
+       `record_read` from the PRE-state `model` (which satisfies `dir_shape`
+       by hypothesis), and `set_pending_protected_handshake` touches only
+       `model_handshake.hs_buffers`. *)
+    ()
   | CS.ConnLocalEvent local -> ()
 #pop-options
 

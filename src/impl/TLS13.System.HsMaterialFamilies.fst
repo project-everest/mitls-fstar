@@ -64,6 +64,8 @@ module SNCP = TLS13.ConnectionState.ServerNoCcsFromPairing
 module SSR  = TLS13.System.ServerSfsRecovery
 module CSLemmas = TLS13.ConnectionState.Lemmas
 module W    = TLS13.Wire.Spec
+module L    = FStar.List.Tot
+module SMCan = TLS13.Spec.StateMachine.Canonical
 
 (* ================================================================== *)
 (* The traffic id and the consequent predicate                         *)
@@ -248,7 +250,29 @@ let lemma_client_reachable_not_sfr
 #pop-options
 
 (** A client LOCAL-event step from a non-SFR control never freshly sets the
-    verified flag (the only local flag-set is `LocalVerifyFinished` at SFR). **)
+    verified flag ... EXCEPT via the coalesced protected handshake.
+
+    ── STATEMENT CHANGE, FORCED BY A SPEC CHANGE WE DID NOT MAKE ───────────────
+    This lemma used to conclude plain monotonicity
+      `st1.flag ==> st0.flag`.
+    That is now FALSE.  `origin/agentic` added the client local event
+    `CTy.ClientProcessPendingHandshake`, which `EC.client_local_event_matches`
+    maps to a TAIL `CS.ConnProtectedHandshake` step:
+
+        | ClientProcessPendingHandshake, CS.ConnProtectedHandshake step ->
+            step.protected_handshake_head == false
+
+    A client sitting at `HsCertificateVerifyVerified` (which is NOT
+    `HsServerFinishedReceived`, so the old hypothesis does not exclude it) with a
+    buffered server `Finished` can therefore drain it with a LOCAL event and set
+    `hs_server_finished_verified` in one step.
+
+    The conclusion is weakened to a DISJUNCTION: either the flag was already set,
+    or the step landed at `HsServerFinishedVerified` -- which is where the atomic
+    `CL.Received, M.Finished` arm of `CS.step_handshake_message` puts a client, and
+    is exactly the entry condition of the ControlFailed-aware flip producer
+    `lemma_establish_cf`.  Both call sites below discharge the new disjunct with
+    that producer, so no downstream statement changes. **)
 #push-options "--fuel 4 --ifuel 10 --z3rlimit 400 --split_queries always"
 let lemma_client_localevent_flag_mono
   (st0 st1:CS.connection_state) (local:CTy.client_local_event)
@@ -258,8 +282,45 @@ let lemma_client_localevent_flag_mono
         st0.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedReceived)
       (ensures
         (st1.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==>
-         st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified))
+         (st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified \/
+          st1.CS.cs_model.CS.model_control
+            == CS.ControlHandshaking CS.HsServerFinishedVerified)))
   = ()
+#pop-options
+
+(** At a client SEND the flip disjunct above is IMPOSSIBLE: the emitted event is
+    pinned to `SMKM.sent_tls_event sent` by the event-log shape
+    (`CS.legal_connection_delta` appends exactly `delta_event`), and
+    `sent_tls_event` is a `CS.ConnNetworkEvent`.  A `ClientProcessPendingHandshake`
+    would append a `CS.ConnProtectedHandshake`, so it cannot be this step, and
+    plain flag monotonicity is recovered. **)
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 400 --split_queries always"
+let lemma_client_sendevent_flag_mono
+  (st0 st1:CS.connection_state) (local:CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  (sent:M.tls_message)
+  : Lemma
+      (requires EC.client_step st0 (SM.LocalEvent local) st1 out /\
+        st0.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedReceived /\
+        st1.CS.cs_event_log == st0.CS.cs_event_log @ [SMKM.sent_tls_event sent])
+      (ensures
+        (st1.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==>
+         st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified))
+  = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (CTy.client_local_event_matches st0 local conn_ev /\
+       EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       SMCan.canonical_wire_step st0 st1 conn_ev raw_sent B.empty)
+    returns
+      (st1.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==>
+       st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified)
+    with _.
+    (
+      assert (st1.CS.cs_event_log == st0.CS.cs_event_log @ [conn_ev]);
+      L.append_length_inv_tail st0.CS.cs_event_log [conn_ev]
+                               st0.CS.cs_event_log [SMKM.sent_tls_event sent];
+      assert (conn_ev == SMKM.sent_tls_event sent)
+    )
 #pop-options
 
 (* ================================================================== *)
@@ -553,7 +614,7 @@ let lemma_hma_client_send (a b:SY.tls_system_state)
     (
       WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
       lemma_client_reachable_not_sfr a.client.CS.cs_model.CS.model_config a.client;
-      lemma_client_localevent_flag_mono a.client c' local out;
+      lemma_client_sendevent_flag_mono a.client c' local out sent;
       lemma_hma_client_transfer a b
     )
 #pop-options
@@ -576,7 +637,24 @@ let lemma_hma_client_local (a b:SY.tls_system_state)
       WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
       lemma_client_reachable_not_sfr a.client.CS.cs_model.CS.model_config a.client;
       lemma_client_localevent_flag_mono a.client c' local out;
-      lemma_hma_client_transfer a b
+      (* NEW DISJUNCT (coalesced protected handshake): a `ClientProcessPendingHandshake`
+         local event can drain a buffered server `Finished` and set the verified
+         flag FRESH, landing at `HsServerFinishedVerified`.  The channel is still
+         `Quiet` here (`tls_step_client_local` emits no wire output), and
+         `SY.tls_system_inv b` is a hypothesis, so the ControlFailed-AWARE flip
+         producer `lemma_establish_cf` applies directly -- it needs only the client
+         control plus both slots, NOT the server at `HsServerFinishedSent`.  Note
+         this is a SLOT-level producer; no record-level material is inferred. *)
+      if a.client.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified
+      then lemma_hma_client_transfer a b
+      else
+        introduce
+          ( b.client.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified /\
+            Some? b.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+            Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
+          ==> ks_agree b.client b.server
+        with _ante.
+          lemma_establish_cf b
     )
 #pop-options
 

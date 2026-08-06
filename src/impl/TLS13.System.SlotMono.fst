@@ -33,19 +33,50 @@ module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
 module R     = TLS13.Record.Spec
 
 (** The field-keyed client RECEIVE floor: once the client has verified the server
-    Finished, it has received the whole 4-record protected server flight; before
-    that, the floor is the exact control-keyed receive potential.  Being keyed on
-    the persistent field `hs_server_finished_verified` (never cleared), the floor
-    survives a later fail into `ControlFailed`, unlike `client_recv_potential`. **)
+    Finished it has received at least ONE protected record; before that, the floor
+    is the saturating-at-one `client_recv_min_potential`.  Being keyed on the
+    persistent field `hs_server_finished_verified` (never cleared), the floor
+    survives a later fail into `ControlFailed`, unlike any control-keyed count.
+
+    ── WHY THE BOUND IS `1` AND NOT `4` ─────────────────────────────────────────
+    This floor USED to read `if flag then 4 else client_recv_potential control`,
+    i.e. "a client that verified the server Finished has received the whole
+    FOUR-record protected server flight".  THAT IS NOW FALSE, and it was falsified
+    by the internal-event (coalesced protected handshake) work, not by a proof
+    problem here.  Do NOT assume `1` was always the natural bound.
+
+    The witness: a SINGLE protected record carrying
+    `EncryptedExtensions|Certificate|CertificateVerify|Finished` is delivered by
+    one HEAD `ConnProtectedHandshake` step followed by three TAIL steps, and
+    `CS.event_raw_delta_legal` charges a TAIL step `Seq.equal raw_received
+    B.empty` -- zero bytes.  So the client reaches `hs_server_finished_verified`
+    with `raw_appdata_count raw_received == 1`.
+
+    `TLS13.System.WireStep` made the matching change upstream: its per-step client
+    RECV lemma (`lemma_client_step_recv_potential`) is now stated over
+    `client_recv_min_potential` (which saturates at 1) rather than the
+    control-keyed `client_recv_potential`.  `client_recv_potential` survives as a
+    MESSAGE count and is still used for the region-internal UPPER charge, but it
+    is no longer a lower bound on RECORDS received.
+
+    `1` is the strongest bound this technique can now support, and it is all the
+    only consumer (`lemma_flag_excludes_server_hello_sent`, below) needs: it is
+    contradicted against a server that has sent ZERO protected records. **)
 let client_recv_floor (m:CS.connection_model) : nat =
   if m.CS.model_handshake.CS.hs_server_finished_verified
-  then 4
-  else WStep.client_recv_potential m.CS.model_control
+  then 1
+  else WStep.client_recv_min_potential m
 
 (** Model-level flag facts: a legal client step (a) never clears the verified
     flag, and (b) can only SET the flag fresh by moving to a control whose receive
     potential is already 4 (the two atomic server-Finished transitions land in
-    `HsServerFinishedVerified`). **)
+    `HsServerFinishedVerified`), which in particular has
+    `client_recv_min_potential == 1`.
+
+    Conjunct (b) is stated over the CONTROL potential and remains TRUE -- it is a
+    statement about where the flag-setting transitions LAND, not about how many
+    records were received to get there.  Conjunct (c) is the record-side fact the
+    floor telescoping actually consumes. **)
 #push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
 let lemma_client_flag_facts
   (m:CS.connection_model) (conn_ev:CS.conn_event) (m':CS.connection_model)
@@ -59,7 +90,10 @@ let lemma_client_flag_facts
            m'.CS.model_handshake.CS.hs_server_finished_verified) /\
         ((~(m.CS.model_handshake.CS.hs_server_finished_verified) /\
           m'.CS.model_handshake.CS.hs_server_finished_verified) ==>
-           WStep.client_recv_potential m'.CS.model_control >= 4))
+           WStep.client_recv_potential m'.CS.model_control >= 4) /\
+        ((~(m.CS.model_handshake.CS.hs_server_finished_verified) /\
+          m'.CS.model_handshake.CS.hs_server_finished_verified) ==>
+           WStep.client_recv_min_potential m' >= 1))
   = ()
 #pop-options
 
@@ -120,22 +154,31 @@ let rec lemma_client_trace_recv_floor
 #pop-options
 
 (** A reachable client that has VERIFIED the server Finished has RECEIVED at least
-    four ApplicationData-typed records. **)
+    ONE ApplicationData-typed record.
+
+    ── THIS LEMMA USED TO SAY `>= 4`, AND THAT IS NOW FALSE ─────────────────────
+    See the `client_recv_floor` comment above for the falsifying witness: a single
+    protected record carrying `EncryptedExtensions|Certificate|CertificateVerify|
+    Finished` is drained by one HEAD plus three TAIL `ConnProtectedHandshake`
+    steps, and `CS.event_raw_delta_legal` charges a TAIL step ZERO received bytes.
+    Such a client reaches `hs_server_finished_verified` having received exactly
+    ONE record.  `1` is the strongest true bound; do not read it as the bound this
+    argument "naturally" gives. **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-let lemma_client_flag_recv_ge4
+let lemma_client_flag_recv_ge1
   (cfg:CS.connection_config)
   (client:CS.connection_state)
   : Lemma (requires
             WStep.client_reachable (CS.initial cfg) client /\
             client.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified /\
             cfg.CS.config_role == CS.ClientEndpoint)
-          (ensures WStep.raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 4)
+          (ensures WStep.raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 1)
   = let init : EC.client_initial_state = CS.initial cfg in
     let sm = WStep.client_sm init in
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace client
-    returns WStep.raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 4
+    returns WStep.raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 1
     with _.
     (
       lemma_client_trace_recv_floor init init client trace;
@@ -202,8 +245,11 @@ let lemma_flag_excludes_server_hello_sent (a:SY.tls_system_state)
     assert (SY.server_byte_reachable a);
     assert (a.MP.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
     assert (a.MP.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
-    // Client side: the verified flag forces >= 4 received protected records.
-    lemma_client_flag_recv_ge4 a.MP.client.CS.cs_model.CS.model_config a.MP.client;
+    // Client side: the verified flag forces >= 1 received protected record.
+    // (This was `>= 4` before the coalesced-protected-flight spec change; `1` is
+    // now the strongest true bound, and it is all this contradiction needs,
+    // because the server side below gives exactly ZERO.)
+    lemma_client_flag_recv_ge1 a.MP.client.CS.cs_model.CS.model_config a.MP.client;
     // Server side: if the server were at HsServerHelloSent it would have SENT 0,
     // contradicting the byte-pairing lower bound.
     introduce

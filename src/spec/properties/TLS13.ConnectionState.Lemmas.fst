@@ -11737,6 +11737,7 @@ let lemma_step_model_preserves_handshake_secret_requires_shared_secret
 =
   match ev with
   | ConnNetworkEvent _ -> ()
+  | ConnProtectedHandshake _ -> ()
   | ConnLocalEvent _ -> ()
 #pop-options
 
@@ -12195,6 +12196,16 @@ let lemma_step_model_preserves_first_epoch_handshake_traffic_material_slots_matc
        lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
          model0 model1)
   | ConnNetworkEvent msg ->
+    lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+      model0 model1
+  | ConnProtectedHandshake step ->
+    (* A protected-handshake step is a RECEIVED handshake message step, so it
+       is covered by exactly the same reasoning as the `ConnNetworkEvent` arm:
+       no `step_handshake_message` arm writes a first-epoch handshake traffic
+       slot, `ks_handshake_secret`, or the `TH_SH` checkpoint.  The extra
+       post-processing rewrites only `model_record` and
+       `model_handshake.hs_buffers`, neither of which the slot/checkpoint
+       predicates read. *)
     lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
       model0 model1
 

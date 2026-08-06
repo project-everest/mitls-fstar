@@ -1030,6 +1030,27 @@ let lemma_step_empty_delta_preserves_app_seq
   = match ce with
     | CS.ConnLocalEvent lev ->
       lemma_step_local_event_preserves_app_seq m m' lev
+    | CS.ConnProtectedHandshake step ->
+      (* NEW ARM (coalesced protected handshake).  Two sub-cases:
+         - HEAD: `CS.event_raw_delta_legal` charges a head step
+             `raw_records_exactly raw_received Application_data 1`,
+           which `B.empty` cannot satisfy -- so this sub-case is refuted by the
+           empty-byte-delta hypothesis, exactly as the protected `ConnNetworkEvent`
+           sub-case is refuted in `lemma_network_empty_delta_record_unchanged_ungated`.
+         - TAIL: charged ZERO bytes, so it really does occur here.  It routes
+           through `CS.step_handshake_message m CL.Received msg`, which NEVER
+           touches `record_write` on a `CL.Received` arm, so `m_wseq` is immediate.
+           For `m_rseq`: on a non-`Finished` message `step_protected_handshake`
+           RESTORES `record_read` from the pre-state, so `m_rseq` is unchanged; on
+           `Finished` the read direction is `R.install_keys`-ed to the Application
+           epoch at seq 0, so `m_rseq m' == 0`, and the pre-state is at
+           `ControlHandshaking` (every `legal_handshake_message` arm is), so the
+           handshaking-seq-zero hypothesis gives `m_rseq m == 0` too.  This is the
+           same argument `lemma_step_local_event_preserves_app_seq` makes for a
+           key-installing local event. *)
+      if step.CS.protected_handshake_head
+      then WStep.lemma_ws_raw_records_nonempty_parse_record B.empty T.Application_data 1
+      else ()
     | CS.ConnNetworkEvent dm ->
       lemma_network_empty_delta_record_unchanged_ungated m dm m'
 #pop-options
@@ -2205,6 +2226,58 @@ let lemma_client_recv_msg_not_cleartext
     else ()
 #pop-options
 
+(** MODEL-LEVEL: the seq effect of a legal `ConnProtectedHandshake` step (the
+    coalesced-protected-flight event agentic added to `CS.conn_event`).
+
+    `CS.step_protected_handshake` routes through
+    `CS.step_handshake_message m CL.Received msg`, and NO `CL.Received` arm of
+    `step_handshake_message` touches `record_write` -- hence `m_wseq` is frozen,
+    exactly as for a received network message (`lemma_recv_preserves_write`).
+
+    For the READ side: the four supported messages are
+    `EncryptedExtensions | Certificate | CertificateVerify | Finished`.  The first
+    three advance `record_read` by `R.next_seq`, which PRESERVES the epoch, so a
+    non-Application read epoch stays non-Application and the projection stays 0.
+    `Finished` is the atomic install arm: `record_read` becomes
+    `R.install_keys ... R.Application ...`, i.e. the Application epoch at seq 0,
+    so the projection is again 0.  (On a TAIL step the non-`Finished` cases
+    additionally RESTORE `record_read` from the pre-state, which only makes the
+    conclusion easier.) **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 100 --split_queries always"
+let lemma_protected_step_seq
+  (m m':CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event m (CS.ConnProtectedHandshake step) /\
+        CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+        (m_rd m).R.epoch =!= R.Application)
+      (ensures m_wseq m' == m_wseq m /\ m_rseq m' == 0 /\ m_rseq m == 0)
+  = ()
+#pop-options
+
+(** The control of a client taking a legal protected-handshake step is one of the
+    four `legal_handshake_message` RECEIVE controls, none of which is
+    `HsServerFinishedVerified` or `HsClientFinishedReceived` -- so
+    `CSL.lemma_handshaking_nonfinal_read_not_application` applies and the client's
+    READ epoch is NOT `Application`. **)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 100 --split_queries always"
+let lemma_protected_step_read_not_application
+  (st:CS.connection_state) (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnProtectedHandshake step))
+      (ensures (rd st).R.epoch =!= R.Application)
+  = assert (CS.legal_handshake_message st.CS.cs_model CL.Received
+              step.CS.protected_handshake_message);
+    assert (CS.ControlHandshaking? st.CS.cs_model.CS.model_control);
+    assert (st.CS.cs_model.CS.model_control
+              =!= CS.ControlHandshaking CS.HsServerFinishedVerified);
+    assert (st.CS.cs_model.CS.model_control
+              =!= CS.ControlHandshaking CS.HsClientFinishedReceived);
+    CSL.lemma_handshaking_nonfinal_read_not_application st
+#pop-options
+
 (** ═══════════════════════════════════════════════════════════════════════════
     STAGE (b) PRESERVATION — DELIVERY TO CLIENT (mirror of `lemma_asp_deliver_to_server`).
 
@@ -2240,24 +2313,56 @@ let lemma_asp_deliver_to_client
     assert (app_seq_pairing a /\ channel_seal_ok a /\
             inflight_sender_stepped a /\ inflight_single_record a);
     assert (a.channel == MP.ToClient p);
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent
-          { CL.message_direction = CL.Received; CL.message_value = msg } in
-       CS.legal_connection_delta a.client
-         { CS.delta_event = conn_ev;
-           CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
-           CS.delta_raw_received = CW.wire_serialize wire } c' /\
-       SMCan.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev
-         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
-       SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
+    EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
+    eliminate exists (conn_ev0:CS.conn_event).
+      (EC.client_wire_received_event a.client wire conn_ev0 /\
+       SMCan.canonical_wire_step a.client c' conn_ev0
+         (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
-       EC.network_input_message_projection a.client wire msg /\
-       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
+       EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
     returns app_seq_pairing b
-    with _pd.
+    with _inv.
     (
+      match conn_ev0 with
+      | CS.ConnLocalEvent _ ->
+        // `EC.client_wire_received_event` is `False` on a local event.
+        ()
+      | CS.ConnProtectedHandshake step ->
+        (* NEW ARM (coalesced protected handshake).  `origin/agentic` extended the
+           client's WIRE receive path so that a wire record may be consumed by a
+           HEAD `ConnProtectedHandshake` step instead of a `ConnNetworkEvent`.
+
+           BOTH pairing directions close WITHOUT any record->message bridge:
+
+           * `cs_seq_ok b` (client writes / server reads).  The step routes through
+             `CS.step_handshake_message _ CL.Received _`, which never touches
+             `record_write`, so `app_wseq c' == app_wseq a.client`; the server is
+             untouched.  `cs_seq_ok a` transfers.
+
+           * `sc_seq_ok b` (server writes / client reads).  Split on the seal:
+             - `App? (snap_wr p)`: the FORWARD conjunct of `channel_seal_ok a`
+               gives `App? (rd a.client)`.  But a client taking a legal protected
+               handshake step sits at one of the four `legal_handshake_message`
+               RECEIVE controls, where `CSL.lemma_handshaking_nonfinal_read_not_application`
+               forces the read epoch OFF `Application`.  VACUOUS.
+             - `~App? (snap_wr p)`: then `snap_app_wseq p == 0` and `rin_app p == 0`,
+               so `lemma_sent_wseq_delta` gives `app_wseq a.server == 0`; and
+               `lemma_protected_step_seq` gives `app_rseq c' == 0` (next_seq is
+               epoch-preserving off Application; the `Finished` install lands at
+               Application seq 0).  0 == 0. *)
+        lemma_protected_step_read_not_application a.client step;
+        lemma_protected_step_seq a.client.CS.cs_model c'.CS.cs_model step;
+        introduce not_closing (SY.ctrl c') ==> app_wseq a.server == app_rseq c'
+        with _live.
+        (
+          lemma_sent_wseq_delta snap a.server.CS.cs_model sent;
+          assert (~(R.Application? (snap_wr p).R.epoch))
+        )
+      | CS.ConnNetworkEvent tm ->
+      let msg : M.tls_message = tm.CL.message_value in
       let conn_ev = CS.ConnNetworkEvent
         { CL.message_direction = CL.Received; CL.message_value = msg } in
+      assert (conn_ev0 == conn_ev);
       Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
       // The model step the client just took: step_tls_message ... Received msg.
       assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);

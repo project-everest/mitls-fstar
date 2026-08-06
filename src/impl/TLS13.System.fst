@@ -30,6 +30,7 @@ module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
 module P   = TLS13.Impl.Driver.Pairing
 module CSL = TLS13.ConnectionState.Lemmas
+module ADBE = TLS13.ConnectionState.AppDataBufferEmpty
 module SM  = Common.StateMachine
 module CW  = TLS13.Spec.Endpoint.Wire
 module CTy = TLS13.Impl.CanonicalTypes
@@ -674,7 +675,14 @@ let lemma_appdata_implies_client_ready
         SMR.connection_state_consistent s.client /\
         ctrl s.client == CS.ControlApplicationData)
       (ensures client_ready s)
-= CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client
+= CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client;
+  (* Since the internal-event work landed, `client_driver_application_ready`
+     also carries `CS.protected_handshake_buffer_empty` (it is what makes
+     readiness imply `TLS13.System.Internal.tls_settled`).  Reachability
+     supplies it: the client can only reach `ControlApplicationData` by sending
+     its own Finished, whose legality guard demands an empty pending buffer,
+     and no legal step at `ControlApplicationData` can refill it. *)
+  ADBE.lemma_connection_appdata_protected_handshake_buffer_empty s.client
 
 (** Server readiness at appdata, given the config-validity hypothesis (supplied
     by the `tls_stream_inv` conjunct below).  `server_e2e s` + validity discharges
@@ -2155,6 +2163,19 @@ let lemma_step_model_preserves_pending
   = match ev with
     | CS.ConnNetworkEvent msg ->
       lemma_step_tls_preserves_pending model0 msg.CL.message_direction msg.CL.message_value model1
+    | CS.ConnProtectedHandshake step ->
+      (* `step_protected_handshake` routes through `step_handshake_message
+         model0 CL.Received step.protected_handshake_message` and then rewrites
+         only `model_record` and `model_handshake.hs_buffers`, so the pending
+         plaintext is exactly the stepped model's.  `step_tls_message` on a
+         `M.TlsHandshake` IS `step_handshake_message` (StateMachine.fst), so the
+         existing dispatch lemma applies verbatim. *)
+      (match CS.step_handshake_message model0 CL.Received
+               step.CS.protected_handshake_message with
+       | Some stepped ->
+         lemma_step_tls_preserves_pending model0 CL.Received
+           (M.TlsHandshake step.CS.protected_handshake_message) stepped
+       | None -> ())
     | CS.ConnLocalEvent local ->
       lemma_step_local_preserves_pending model0 local model1
 #pop-options
