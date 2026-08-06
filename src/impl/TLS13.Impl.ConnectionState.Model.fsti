@@ -1905,8 +1905,9 @@ let received_key_update_not_requested_state
   received_key_update_state st M.UpdateNotRequested raw_received
 
 noextract
-let sent_key_update_response_state
+let sent_key_update_state
   (st:CS.connection_state)
+  (req:M.key_update_request)
   (raw_sent:B.bytes)
   : CS.connection_state =
   let model0 = st.CS.cs_model in
@@ -1932,10 +1933,8 @@ let sent_key_update_response_state
                 CS.ks_client_application_traffic = Some new_client_app;
             };
         };
-        CS.model_application = {
-          model0.CS.model_application with
-            CS.app_key_update_response_pending = false;
-        };
+        CS.model_application =
+          CS.sent_key_update_response model0.CS.model_application req;
     } in
     {
       CS.cs_model = model1;
@@ -1947,11 +1946,18 @@ let sent_key_update_response_state
         st.CS.cs_event_log @
         [CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+          CL.message_value = M.TlsKeyUpdate req;
         }];
     }
   | None ->
     st
+
+noextract
+let sent_key_update_response_state
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : CS.connection_state =
+  sent_key_update_state st M.UpdateNotRequested raw_sent
 
 noextract
 let delivered_application_data_state
@@ -2085,6 +2091,9 @@ val lemma_close_notify_alert_fragment_generated:
 
 noextract
 
+let key_update_fragment (req:M.key_update_request) : B.bytes =
+  B.of_list [24uy; 0uy; 0uy; 1uy; W.key_update_request_byte req]
+
 let key_update_response_fragment : B.bytes =
   B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]
 
@@ -2120,8 +2129,9 @@ let can_send_close_notify
     })
     raw_sent
 
-let can_send_key_update
+let can_send_key_update_gen
   (st:CS.connection_state)
+  (req:M.key_update_request)
   (raw_sent:B.bytes)
   : GTot prop =
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
@@ -2132,20 +2142,19 @@ let can_send_key_update
      counterpart [lemma_received_key_update_state_evolves] carries the same
      hypothesis. *)
   st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-  st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
   Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   CS.legal_event
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+      CL.message_value = M.TlsKeyUpdate req;
     }) /\
   CS.event_raw_delta_legal
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+      CL.message_value = M.TlsKeyUpdate req;
     })
     raw_sent
     B.empty /\
@@ -2153,9 +2162,20 @@ let can_send_key_update
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+      CL.message_value = M.TlsKeyUpdate req;
     })
     raw_sent
+
+(* Responding to a peer KeyUpdate additionally requires the response to be
+   outstanding.  Spontaneous initiation uses [can_send_key_update_gen]
+   directly: the spec admits it for either endpoint and either request form,
+   so no pending-response flag is involved. *)
+let can_send_key_update
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+  can_send_key_update_gen st M.UpdateNotRequested raw_sent
 
 let can_send_application_data_sizes
   (payload_len:SZ.t)
@@ -3495,6 +3515,31 @@ val lemma_received_key_update_not_requested_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_key_update_not_requested_state st raw_received))
+
+val lemma_sent_key_update_state_evolves
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+                can_send_key_update_gen st req raw_sent)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+                 st
+                 (sent_key_update_state st req raw_sent) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+                 (sent_key_update_state st req raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsKeyUpdate req;
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_key_update_state st req raw_sent))
 
 val lemma_sent_key_update_response_state_evolves
   (st:CS.connection_state)

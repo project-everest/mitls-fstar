@@ -1085,6 +1085,30 @@ let lemma_serialize_tls_message_key_update_not_requested ()
   Seq.lemma_eq_elim lhs rhs;
   assert (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) == (T.Handshake, lhs))
 
+let lemma_serialize_tls_message_key_update_requested ()
+  : Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateRequested) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 1uy]))
+=
+  let lhs = append3 (u8 24) (u24 1) (u8 1) in
+  let rhs = B.of_list [24uy; 0uy; 0uy; 1uy; 1uy] in
+  lemma_byte_v 24;
+  lemma_byte_v 0;
+  lemma_byte_v 1;
+  assert (B.length lhs == 5);
+  assert (B.length rhs == 5);
+  assert (forall (i:nat{i < B.length lhs}). Seq.index lhs i == Seq.index rhs i);
+  Seq.lemma_eq_intro lhs rhs;
+  Seq.lemma_eq_elim lhs rhs;
+  assert (serialize_tls_message (M.TlsKeyUpdate M.UpdateRequested) == (T.Handshake, lhs))
+
+let lemma_serialize_tls_message_key_update (req:M.key_update_request)
+  : Lemma (serialize_tls_message (M.TlsKeyUpdate req) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; key_update_request_byte req]))
+=
+  match req with
+  | M.UpdateNotRequested -> lemma_serialize_tls_message_key_update_not_requested ()
+  | M.UpdateRequested -> lemma_serialize_tls_message_key_update_requested ()
+
 let parse_tls_record (input:B.bytes) : GTot (option (M.tls_record & nat)) =
   match parse_record input with
   | Some (content_type, fragment, consumed) ->
