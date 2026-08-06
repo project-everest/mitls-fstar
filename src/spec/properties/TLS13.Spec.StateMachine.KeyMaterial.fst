@@ -401,6 +401,106 @@ let expected_traffic_secret_for_state
         base
         transcript)
   | _, _ -> None
+(**
+  ── Epoch-indexed application traffic secrets ─────────────────────────────
+
+  `expected_traffic_secret_for_state` gives the *epoch-0* traffic secret: the
+  one derived directly from the base secret and the transcript.  RFC 8446
+  §7.2 says that each KeyUpdate replaces an application traffic secret by
+  `application_traffic_secret_update` of its predecessor, so after `n` updates
+  the live secret is the `n`-fold iterate.  These definitions name that
+  iterate and the epoch counter, so that predicates which today are guarded by
+  "no KeyUpdate has occurred" can instead be stated at the current epoch.
+ **)
+let rec application_traffic_secret_after
+  (secret:K.traffic_secret)
+  (n:nat)
+  : Tot K.traffic_secret (decreases n) =
+  if n = 0 then secret
+  else application_traffic_secret_after (K.application_traffic_secret_update secret) (n - 1)
+
+(**
+  The traffic label an event rotates, if any.  A KeyUpdate rotates exactly one
+  direction's application traffic secret: the sender's write key when we send
+  it, and the peer's write key — our read key — when we receive it.  Which
+  label that is depends on our role, exactly as in `rotate_application_traffic`.
+ **)
+let conn_event_key_update_label
+  (role:endpoint_role)
+  (ev:conn_event)
+  : option traffic_label =
+  match ev with
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsKeyUpdate _ ->
+       Some
+         (traffic_label_for_endpoint_direction
+           role
+           (match msg.CL.message_direction with
+            | CL.Sent -> TrafficWrite
+            | CL.Received -> TrafficRead))
+     | _ -> None)
+  | ConnProtectedHandshake _ -> None
+  | ConnLocalEvent _ -> None
+
+(** How many times `l`'s application traffic secret has been rotated. **)
+let rec key_update_count_for_label
+  (role:endpoint_role)
+  (events:list conn_event)
+  (l:traffic_label)
+  : Tot nat (decreases events) =
+  match events with
+  | [] -> 0
+  | ev :: rest ->
+    (if conn_event_key_update_label role ev = Some l then 1 else 0)
+    + key_update_count_for_label role rest l
+
+let connection_state_key_update_count
+  (st:connection_state)
+  (l:traffic_label)
+  : nat =
+  key_update_count_for_label
+    st.cs_model.model_config.config_role
+    st.cs_event_log
+    l
+
+(**
+  The traffic secret expected *at the state's current epoch*.  For handshake
+  traffic this is the epoch-0 secret (handshake secrets are never rotated);
+  for application traffic it is the epoch-0 secret advanced by the number of
+  KeyUpdates recorded for that label.
+ **)
+let expected_traffic_secret_at_epoch
+  (traffic_id:labeled_traffic_epoch)
+  (st:connection_state)
+  : GTot (option K.traffic_secret) =
+  match expected_traffic_secret_for_state traffic_id st with
+  | None -> None
+  | Some secret ->
+    (match traffic_id.traffic_id_epoch with
+     | TrafficHandshake -> Some secret
+     | TrafficApplication ->
+       Some
+         (application_traffic_secret_after
+           secret
+           (connection_state_key_update_count st traffic_id.traffic_id_label)))
+
+(**
+  At epoch 0 the two agree definitionally; this is the bridge that lets the
+  existing no-KeyUpdate reasoning be re-read as epoch-indexed reasoning.
+ **)
+let lemma_expected_traffic_secret_at_epoch_zero
+  (traffic_id:labeled_traffic_epoch)
+  (st:connection_state)
+  : Lemma
+      (requires
+        traffic_id.traffic_id_epoch == TrafficHandshake \/
+        connection_state_key_update_count st traffic_id.traffic_id_label == 0)
+      (ensures
+        expected_traffic_secret_at_epoch traffic_id st ==
+        expected_traffic_secret_for_state traffic_id st)
+= ()
+
 let expected_derived_key_material
   (key_id:derived_key_id)
   (st:connection_state)
@@ -475,6 +575,190 @@ let first_epoch_application_traffic_material_no_key_update_invariant
   : prop =
   connection_state_no_key_update_trace st /\
   first_epoch_application_traffic_material_slots_match_expected st
+(**
+  Rotation commutes with iteration: advancing `n+1` epochs is the same as
+  updating the `n`-epoch secret once.  `application_traffic_secret_after`
+  iterates from the *front*, so this needs an induction; it is the step rule
+  that a KeyUpdate transition appeals to.
+ **)
+let rec lemma_application_traffic_secret_after_succ
+  (secret:K.traffic_secret)
+  (n:nat)
+  : Lemma
+      (ensures
+        application_traffic_secret_after secret (n + 1) ==
+        K.application_traffic_secret_update (application_traffic_secret_after secret n))
+      (decreases n)
+= if n = 0 then ()
+  else
+    lemma_application_traffic_secret_after_succ
+      (K.application_traffic_secret_update secret)
+      (n - 1)
+
+let traffic_material_matches_expected_at_count
+  (traffic_id:labeled_traffic_epoch)
+  (st:connection_state)
+  (n:nat)
+  : prop =
+  match
+    traffic_material_for_label
+      st.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    expected_traffic_secret_for_state traffic_id st
+  with
+  | Some material, Some secret ->
+    let expected = application_traffic_secret_after secret n in
+    Seq.equal material.traffic_secret expected /\
+    Seq.equal material.traffic_key (K.derive_aead_key expected) /\
+    Seq.equal material.traffic_iv (K.derive_aead_iv expected)
+  | _, _ ->
+    False
+
+(**
+  The epoch-indexed counterpart of
+  `traffic_material_matches_expected_derived_material`, taking the epoch from
+  the state's own event log.  It additionally pins the stored `traffic_secret`,
+  not just the derived key and IV.  That extra conjunct is what makes the
+  predicate *inductive* across a KeyUpdate: the rotated material is
+  `traffic_key_material_for_secret` of the update of the stored secret, so
+  without knowing the stored secret one cannot identify the rotated key and IV.
+ **)
+let traffic_material_matches_expected_at_epoch
+  (traffic_id:labeled_traffic_epoch)
+  (st:connection_state)
+  : prop =
+  traffic_material_matches_expected_at_count
+    traffic_id
+    st
+    (match traffic_id.traffic_id_epoch with
+     | TrafficHandshake -> 0
+     | TrafficApplication ->
+       connection_state_key_update_count st traffic_id.traffic_id_label)
+
+(**
+  Rotating the material advances its epoch by one.  This is the step rule a
+  KeyUpdate transition appeals to, and the reason
+  `traffic_material_matches_expected_at_count` pins the stored secret.
+ **)
+let lemma_updated_traffic_key_material_advances_count
+  (secret:K.traffic_secret)
+  (n:nat)
+  (material:traffic_key_material)
+  : Lemma
+      (requires
+        Seq.equal material.traffic_secret (application_traffic_secret_after secret n))
+      (ensures
+        (let rotated = updated_traffic_key_material material in
+         Seq.equal
+           rotated.traffic_secret
+           (application_traffic_secret_after secret (n + 1)) /\
+         Seq.equal
+           rotated.traffic_key
+           (K.derive_aead_key (application_traffic_secret_after secret (n + 1))) /\
+         Seq.equal
+           rotated.traffic_iv
+           (K.derive_aead_iv (application_traffic_secret_after secret (n + 1)))))
+=
+  lemma_application_traffic_secret_after_succ secret n;
+  Seq.lemma_eq_elim
+    material.traffic_secret
+    (application_traffic_secret_after secret n)
+
+(**
+  The epoch-indexed replacement for
+  `first_epoch_application_traffic_material_slots_match_expected`.  Note there
+  is no `connection_state_no_key_update_trace` guard: the epoch counter absorbs
+  the KeyUpdates instead of the invariant excluding them.
+ **)
+let application_traffic_material_slots_match_expected_at_counts
+  (st:connection_state)
+  (nc:nat)
+  (ns:nat)
+  : prop =
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_client_application_traffic ==>
+      traffic_material_matches_expected_at_count
+        (traffic_id TrafficApplication ClientTraffic)
+        st
+        nc) /\
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_server_application_traffic ==>
+      traffic_material_matches_expected_at_count
+        (traffic_id TrafficApplication ServerTraffic)
+        st
+        ns)
+
+let application_traffic_material_slots_match_expected_at_epoch
+  (st:connection_state)
+  : prop =
+  application_traffic_material_slots_match_expected_at_counts
+    st
+    (connection_state_key_update_count st ClientTraffic)
+    (connection_state_key_update_count st ServerTraffic)
+
+(**
+  Event logs grow by *append*, but the count is defined head-first; these are
+  the two rules a step lemma needs.  The first says a non-rotating event leaves
+  every epoch alone, the second that a KeyUpdate advances exactly the label it
+  names and no other.
+ **)
+let rec lemma_key_update_count_for_label_append
+  (role:endpoint_role)
+  (events:list conn_event)
+  (ev:conn_event)
+  (l:traffic_label)
+  : Lemma
+      (ensures
+        key_update_count_for_label role (events @ [ev]) l ==
+        key_update_count_for_label role events l +
+          (if conn_event_key_update_label role ev = Some l then 1 else 0))
+      (decreases events)
+= match events with
+  | [] -> ()
+  | _ :: rest -> lemma_key_update_count_for_label_append role rest ev l
+
+let lemma_key_update_count_for_label_append_other
+  (role:endpoint_role)
+  (events:list conn_event)
+  (ev:conn_event)
+  (l:traffic_label)
+  : Lemma
+      (requires conn_event_key_update_label role ev =!= Some l)
+      (ensures
+        key_update_count_for_label role (events @ [ev]) l ==
+        key_update_count_for_label role events l)
+= lemma_key_update_count_for_label_append role events ev l
+
+let lemma_key_update_count_for_label_append_same
+  (role:endpoint_role)
+  (events:list conn_event)
+  (ev:conn_event)
+  (l:traffic_label)
+  : Lemma
+      (requires conn_event_key_update_label role ev == Some l)
+      (ensures
+        key_update_count_for_label role (events @ [ev]) l ==
+        key_update_count_for_label role events l + 1)
+= lemma_key_update_count_for_label_append role events ev l
+
+(**
+  A trace with no KeyUpdate at all sits at epoch 0 for every label — the bridge
+  that lets the existing `connection_state_no_key_update_trace` reasoning be
+  re-read as the zero case of the epoch-indexed reasoning.
+ **)
+let rec lemma_conn_events_no_key_update_count_zero
+  (role:endpoint_role)
+  (events:list conn_event)
+  (l:traffic_label)
+  : Lemma
+      (requires conn_events_no_key_update events == true)
+      (ensures key_update_count_for_label role events l == 0)
+      (decreases events)
+= match events with
+  | [] -> ()
+  | _ :: rest -> lemma_conn_events_no_key_update_count_zero role rest l
+
 let base_secret_inputs_agree
   (base_id:base_secret_id)
   (client:connection_state)
