@@ -151,6 +151,7 @@ ROOT_FILES = \
   src/impl/TLS13.System.AppExtrasInv.fst \
   src/impl/TLS13.System.AppStreamInv.fst \
   src/impl/TLS13.System.StreamTemporal.fst \
+  src/impl/TLS13.System.StreamTemporal.Realized.fst \
   src/impl/TLS13.System.HsSeqPairing.fst \
   src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
   src/spec/properties/TLS13.ConnectionState.RecordKeyEpoch.fst \

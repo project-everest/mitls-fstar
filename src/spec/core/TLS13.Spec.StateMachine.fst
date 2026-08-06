@@ -309,6 +309,25 @@ let initial (cfg:connection_config) : connection_state = {
   cs_wire_log = empty_wire_log;
   cs_event_log = [];
 }
+(** A configuration carries a server credential.  This is a PROTOCOL-level
+    well-formedness fact, not an implementation bound: the step relation already
+    demands it at `LocalStartServer` / `ControlNew`, and every server-side
+    transition that reads a credential matches on `config_server`.  Naming it
+    here lets the implementation and the system-level proofs share one
+    definition instead of respelling `Some? ...config_server` inline.
+
+    NOTE the deliberate layering.  This predicate says only that the credential
+    is PRESENT; it says nothing about how large the chain may be.  Any bound on
+    the chain length is a property of a particular implementation's buffers, NOT
+    of the protocol, so it does not belong here -- see
+    `TLS13.Impl.ConnectionState.Repr.server_config_valid`, which conjoins this
+    predicate with the implementation's own bound. **)
+let config_server_present (cfg:connection_config) : prop =
+  Some? cfg.config_server
+
+let server_config_present (st:connection_state) : prop =
+  config_server_present st.cs_model.model_config
+
 let fail_model (model:connection_model) (err:T.tls_error) : connection_model =
   { model with model_control = ControlFailed err; model_failure = Some err }
 let with_handshake_stage
