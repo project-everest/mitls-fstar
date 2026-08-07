@@ -91,6 +91,77 @@ type server_receive_result = {
   server_receive_len: SZ.t;
 }
 
+(** {1 Generic channel vocabulary}
+
+  These classify [server_workflow_status] for
+  [Common.ChannelImplementation]: which outcomes appended to the application
+  log, and which left the channel usable.  [send]/[receive] below are stated
+  directly in these terms, and [server_channel_implementation] at the end of
+  this interface instantiates the class on them.
+**)
+
+(* The channel's view of a message is the bytes themselves. *)
+noextract
+let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
+
+noextract
+let channel_send_succeeded (status:server_workflow_status) : bool =
+  match status with
+  | ServerWorkflowOk -> true
+  | _ -> false
+
+(* A send leaves the channel reusable exactly for success and for the
+   payload-too-large rejection, which does not step the connection.  A hard
+   step failure is terminal. *)
+noextract
+let channel_send_reusable (status:server_workflow_status) : bool =
+  match status with
+  | ServerWorkflowOk -> true
+  | ServerWorkflowPayloadTooLarge -> true
+  | _ -> false
+
+noextract
+let channel_receive_succeeded (result:server_receive_result) : bool =
+  match result.server_receive_status with
+  | ServerWorkflowOk -> true
+  | _ -> false
+
+noextract
+let channel_receive_length (result:server_receive_result) : SZ.t =
+  result.server_receive_len
+
+(* A receive leaves the channel reusable for exactly the statuses where the
+   connection stays open.  A peer close and a hard step failure are both
+   terminal.  The cases are listed explicitly so the live set cannot silently
+   admit an unintended status. *)
+noextract
+let channel_receive_reusable (result:server_receive_result) : bool =
+  match result.server_receive_status with
+  | ServerWorkflowOk -> true
+  | ServerWorkflowNeedMoreInput -> true
+  | ServerWorkflowExhausted -> true
+  | ServerWorkflowOutputBufferTooSmall -> true
+  | _ -> false
+
+noextract
+let server_driver_is_closed (d:server_driver) : slprop =
+  exists* st certificate_chain credential_identity.
+    DS.top_server_driver_closed d st certificate_chain credential_identity
+
+(* The channel state after a public [send]/[receive].  A reusable outcome
+   leaves the channel invariant; a terminal one disposes the transport, so the
+   caller is left owning a closed driver and nothing else. *)
+noextract
+let server_channel_after_operation
+  (d:server_driver)
+  (reusable:bool)
+  (wire_received wire_sent pending:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  if reusable
+  then DS.top_server_channel_inv d wire_received wire_sent pending app_log
+  else server_driver_is_closed d
+
 noextract
 let server_driver_application_ready
   (st:CS.connection_state)
@@ -281,16 +352,27 @@ fn send
     pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
   returns status:server_workflow_status
   ensures
-    pts_to payload (Ghost.reveal payload_bytes) **
-    (match status with
-     | ServerWorkflowOk
-     | ServerWorkflowPayloadTooLarge ->
-       exists* wire_received1 wire_sent1 pending1 app_log1.
-         DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
-     | _ ->
-       exists* st certificate_chain credential_identity.
-         DS.top_server_driver_closed d st certificate_chain credential_identity)
+    exists* wire_received1 wire_sent1 pending1 app_log1.
+      server_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1 **
+      pts_to payload (Ghost.reveal payload_bytes) **
+      pure (
+        CI.send_transition
+          channel_message_of_bytes
+          channel_send_succeeded
+          status
+          (Ghost.reveal payload_bytes)
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          (Ghost.reveal app_log0)
+          wire_received1
+          wire_sent1
+          app_log1)
 
 (* Server-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
    form: [true] sends [update_requested], asking the peer to rotate its own
@@ -312,15 +394,21 @@ fn send_key_update
       (Ghost.reveal app_log0)
   returns status:server_workflow_status
   ensures
-    (match status with
-     | ServerWorkflowOk
-     | ServerWorkflowPayloadTooLarge ->
-       exists* wire_received1 wire_sent1 pending1 app_log1.
-         DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
-     | _ ->
-       exists* st certificate_chain credential_identity.
-         DS.top_server_driver_closed d st certificate_chain credential_identity)
+    exists* wire_received1 wire_sent1 pending1 app_log1.
+      server_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1 **
+      pure (
+        CPI.histories_ahead
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          wire_received1
+          wire_sent1 /\
+        app_log1 == Ghost.reveal app_log0)
 
 fn receive
   (d:server_driver)
@@ -344,21 +432,30 @@ fn receive
     pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
   returns result:server_receive_result
   ensures
-    exists* output.
+    exists* wire_received1 wire_sent1 pending1 app_log1 output.
+      server_channel_after_operation
+        d
+        (channel_receive_reusable result)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1 **
       pts_to out output **
       pure (
         B.length output == SZ.v out_len /\
-        SZ.v result.server_receive_len <= SZ.v out_len) **
-      (match result.server_receive_status with
-       | ServerWorkflowOk
-       | ServerWorkflowExhausted
-       | ServerWorkflowOutputBufferTooSmall ->
-         exists* wire_received1 wire_sent1 pending1 app_log1.
-           DS.top_server_channel_inv
-             d wire_received1 wire_sent1 pending1 app_log1
-       | _ ->
-         exists* st certificate_chain credential_identity.
-           DS.top_server_driver_closed d st certificate_chain credential_identity)
+        SZ.v (channel_receive_length result) <= SZ.v out_len /\
+        CI.receive_transition
+          channel_message_of_bytes
+          channel_receive_succeeded
+          channel_receive_length
+          result
+          output
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          (Ghost.reveal app_log0)
+          wire_received1
+          wire_sent1
+          app_log1)
 
 fn close
   (d:server_driver)
@@ -386,152 +483,11 @@ fn free
     DS.top_server_driver_closed d 'st 'certificate_chain 'credential_identity
   ensures DS.top_server_driver_released d 'st
 
-(** {1 Generic channel interface}
-
-  The production server driver as a [Common.ChannelImplementation]
-  instance.  The send and receive statuses are those of the buffered layer
-  ([BSend.send_status], [BR.receive_result]) rather than
-  [server_workflow_status], because the class demands that a failure leave the
-  connection in the *terminal* state — owned but protocol-invalid — whereas the
-  [send]/[receive] entry points above additionally close the transport.
-**)
-
-noextract
-let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
-
-noextract
-let channel_send_succeeded (status:BSend.send_status) : bool =
-  BSend.send_succeeded status
-
-(* A send leaves the channel reusable exactly for success and for the
-   payload-too-large rejection, which does not step the connection.  A hard
-   step failure is terminal. *)
-noextract
-let channel_send_reusable (status:BSend.send_status) : bool =
-  match status with
-  | BSend.BufferedSendOk -> true
-  | BSend.BufferedSendPayloadTooLarge -> true
-  | BSend.BufferedSendFailed -> false
-
-noextract
-let channel_receive_succeeded (result:BR.receive_result) : bool =
-  BR.receive_succeeded result
-
-noextract
-let channel_receive_length (result:BR.receive_result) : SZ.t =
-  result.BR.receive_len
-
-(* A receive leaves the channel reusable for exactly the statuses where the
-   connection stays open.  A peer close and a hard step failure are both
-   terminal. *)
-noextract
-let channel_receive_reusable (result:BR.receive_result) : bool =
-  match result.BR.receive_status with
-  | BR.BufferedReceiveOk -> true
-  | BR.BufferedReceiveExhausted -> true
-  | BR.BufferedReceiveOutputBufferTooSmall -> true
-  | BR.BufferedReceiveClosed -> false
-  | BR.BufferedReceiveFailed -> false
-
-(* Send with the mandated KeyUpdate reply (RFC 8446 4.6.3) flushed first: an
-   endpoint that received [update_requested] must send its own KeyUpdate
-   before its next application-data record, so this is the obligation's real
-   deadline.  Composition with [CI.send_transition] works because the inserted
-   record only extends the wire history and a KeyUpdate leaves the application
-   log alone. *)
-fn channel_send
-  (d:server_driver)
-  (wire_received0:Ghost.erased B.bytes)
-  (wire_sent0:Ghost.erased B.bytes)
-  (pending0:Ghost.erased B.bytes)
-  (app_log0:Ghost.erased (CI.application_log B.bytes))
-  (payload:array U8.t)
-  (payload_bytes:Ghost.erased B.bytes)
-  (payload_len:SZ.t)
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received0)
-      (Ghost.reveal wire_sent0)
-      (Ghost.reveal pending0)
-      (Ghost.reveal app_log0) **
-    pts_to payload (Ghost.reveal payload_bytes) **
-    pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
-  returns status:BSend.send_status
-  ensures
-    exists* wire_received1 wire_sent1 pending1 app_log1.
-      (if channel_send_reusable status
-       then
-         DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
-       else
-         DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1) **
-      pts_to payload (Ghost.reveal payload_bytes) **
-      pure (
-        CI.send_transition
-          channel_message_of_bytes
-          channel_send_succeeded
-          status
-          (Ghost.reveal payload_bytes)
-          (Ghost.reveal wire_received0)
-          (Ghost.reveal wire_sent0)
-          (Ghost.reveal app_log0)
-          wire_received1
-          wire_sent1
-          app_log1)
-
-(* Receive, then discharge any mandated KeyUpdate reply before returning to the
-   application.  A failed reply is reported as a failed receive; the
-   application log is unaffected by a KeyUpdate, so the receive equation still
-   holds for the data delivered by the receive itself. *)
-fn channel_receive
-  (d:server_driver)
-  (wire_received0:Ghost.erased B.bytes)
-  (wire_sent0:Ghost.erased B.bytes)
-  (pending0:Ghost.erased B.bytes)
-  (app_log0:Ghost.erased (CI.application_log B.bytes))
-  (out:array U8.t)
-  (old_output:Ghost.erased B.bytes)
-  (out_len:SZ.t)
-  (local_fuel:SZ.t)
-  (network_fuel:SZ.t)
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received0)
-      (Ghost.reveal wire_sent0)
-      (Ghost.reveal pending0)
-      (Ghost.reveal app_log0) **
-    pts_to out (Ghost.reveal old_output) **
-    pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
-  returns result:BR.receive_result
-  ensures
-    exists* wire_received1 wire_sent1 pending1 app_log1 output.
-      (if channel_receive_reusable result
-       then
-         DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
-       else
-         DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1) **
-      pts_to out output **
-      pure (
-        B.length output == SZ.v out_len /\
-        SZ.v (channel_receive_length result) <= SZ.v out_len /\
-        CI.receive_transition
-          channel_message_of_bytes
-          channel_receive_succeeded
-          channel_receive_length
-          result
-          output
-          (Ghost.reveal wire_received0)
-          (Ghost.reveal wire_sent0)
-          (Ghost.reveal app_log0)
-          wire_received1
-          wire_sent1
-          app_log1)
-
+(** The production server driver as a [Common.ChannelImplementation]
+    instance.  [ci_send] and [ci_receive] are the terminal-preserving cores of
+    [send] and [receive] above: the class requires a failure to leave the
+    connection owned but protocol-invalid, whereas the public entry points
+    additionally dispose the transport. **)
 noextract
 val server_channel_implementation
   : CI.channel_implementation
@@ -542,6 +498,6 @@ val server_channel_implementation
       CTypes.server_local_event
       EAPI.local_output
       B.bytes
-      BSend.send_status
-      BR.receive_result
+      server_workflow_status
+      server_receive_result
       SP.server_protocol_implementation

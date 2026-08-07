@@ -230,281 +230,25 @@ fn accept_with_listener
   }
 }
 
-fn send
-  (d:server_driver)
-  (wire_received0:Ghost.erased B.bytes)
-  (wire_sent0:Ghost.erased B.bytes)
-  (pending0:Ghost.erased B.bytes)
-  (app_log0:Ghost.erased (CI.application_log B.bytes))
-  (payload:array U8.t)
-  (payload_bytes:Ghost.erased B.bytes)
-  (payload_len:SZ.t)
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received0)
-      (Ghost.reveal wire_sent0)
-      (Ghost.reveal pending0)
-      (Ghost.reveal app_log0) **
-    pts_to payload (Ghost.reveal payload_bytes) **
-    pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
-  returns status:server_workflow_status
-  ensures
-    pts_to payload (Ghost.reveal payload_bytes) **
-    (match status with
-     | ServerWorkflowOk
-     | ServerWorkflowPayloadTooLarge ->
-       exists* wire_received1 wire_sent1 pending1 app_log1.
-         DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
-     | _ ->
-       exists* st certificate_chain credential_identity.
-         DS.top_server_driver_closed d st certificate_chain credential_identity)
-{
-  let status =
-    BS.run
-      d wire_received0 wire_sent0 pending0 app_log0
-      payload payload_len;
-  match status {
-    BS.BufferedSendOk -> { ServerWorkflowOk }
-    BS.BufferedSendPayloadTooLarge -> { ServerWorkflowPayloadTooLarge }
-    BS.BufferedSendFailed -> {
-      with wire_received1 wire_sent1 app_log1.
-        assert (DS.top_server_channel_terminal
-          d wire_received1 wire_sent1 app_log1);
-      BC.abort_terminal
-        d
-        (Ghost.hide wire_received1)
-        (Ghost.hide wire_sent1)
-        (Ghost.hide app_log1);
-      ServerWorkflowStepFailed
-    }
-  }
-}
+inline_for_extraction
+let channel_send_reusable_runtime (status:server_workflow_status) : bool =
+  match status with
+  | ServerWorkflowOk -> true
+  | ServerWorkflowPayloadTooLarge -> true
+  | _ -> false
 
-fn send_key_update
-  (d:server_driver)
-  (wire_received0:Ghost.erased B.bytes)
-  (wire_sent0:Ghost.erased B.bytes)
-  (pending0:Ghost.erased B.bytes)
-  (app_log0:Ghost.erased (CI.application_log B.bytes))
-  (request:bool)
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received0)
-      (Ghost.reveal wire_sent0)
-      (Ghost.reveal pending0)
-      (Ghost.reveal app_log0)
-  returns status:server_workflow_status
-  ensures
-    (match status with
-     | ServerWorkflowOk
-     | ServerWorkflowPayloadTooLarge ->
-       exists* wire_received1 wire_sent1 pending1 app_log1.
-         DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
-     | _ ->
-       exists* st certificate_chain credential_identity.
-         DS.top_server_driver_closed d st certificate_chain credential_identity)
-{
-  let status =
-    BS.run_key_update
-      d wire_received0 wire_sent0 pending0 app_log0
-      request;
-  match status {
-    BS.BufferedSendOk -> { ServerWorkflowOk }
-    BS.BufferedSendPayloadTooLarge -> { ServerWorkflowPayloadTooLarge }
-    BS.BufferedSendFailed -> {
-      with wire_received1 wire_sent1 app_log1.
-        assert (DS.top_server_channel_terminal
-          d wire_received1 wire_sent1 app_log1);
-      BC.abort_terminal
-        d
-        (Ghost.hide wire_received1)
-        (Ghost.hide wire_sent1)
-        (Ghost.hide app_log1);
-      ServerWorkflowStepFailed
-    }
-  }
-}
+inline_for_extraction
+let channel_receive_reusable_runtime (result:server_receive_result) : bool =
+  match result.server_receive_status with
+  | ServerWorkflowOk -> true
+  | ServerWorkflowNeedMoreInput -> true
+  | ServerWorkflowExhausted -> true
+  | ServerWorkflowOutputBufferTooSmall -> true
+  | _ -> false
 
-fn receive
-  (d:server_driver)
-  (wire_received0:Ghost.erased B.bytes)
-  (wire_sent0:Ghost.erased B.bytes)
-  (pending0:Ghost.erased B.bytes)
-  (app_log0:Ghost.erased (CI.application_log B.bytes))
-  (out:array U8.t)
-  (old_output:Ghost.erased B.bytes)
-  (out_len:SZ.t)
-  (local_fuel:SZ.t)
-  (network_fuel:SZ.t)
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received0)
-      (Ghost.reveal wire_sent0)
-      (Ghost.reveal pending0)
-      (Ghost.reveal app_log0) **
-    pts_to out (Ghost.reveal old_output) **
-    pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
-  returns result:server_receive_result
-  ensures
-    exists* output.
-      pts_to out output **
-      pure (
-        B.length output == SZ.v out_len /\
-        SZ.v result.server_receive_len <= SZ.v out_len) **
-      (match result.server_receive_status with
-       | ServerWorkflowOk
-       | ServerWorkflowExhausted
-       | ServerWorkflowOutputBufferTooSmall ->
-         exists* wire_received1 wire_sent1 pending1 app_log1.
-           DS.top_server_channel_inv
-             d wire_received1 wire_sent1 pending1 app_log1
-       | _ ->
-         exists* st certificate_chain credential_identity.
-           DS.top_server_driver_closed d st certificate_chain credential_identity)
-{
-  let received =
-    BR.run
-      d wire_received0 wire_sent0 pending0 app_log0
-      out out_len network_fuel;
-  match received.BR.receive_status {
-    BR.BufferedReceiveOk -> {
-      // RFC 8446 4.6.3: a peer KeyUpdate with update_requested must be answered
-      // with our own update_not_requested *before* the next Application Data
-      // record.  The receive above records the obligation; discharge it here,
-      // while we still own the channel and before returning to the
-      // application.  No-op when nothing is pending.
-      with wire_received1 wire_sent1 pending1 app_log1.
-        assert (DS.top_server_channel_inv
-          d wire_received1 wire_sent1 pending1 app_log1);
-      let ku =
-        BS.run_key_update_response
-          d
-          (Ghost.hide wire_received1)
-          (Ghost.hide wire_sent1)
-          (Ghost.hide pending1)
-          (Ghost.hide app_log1);
-      match ku {
-        BS.BufferedSendFailed -> {
-          with wire_received2 wire_sent2 app_log2.
-            assert (DS.top_server_channel_terminal
-              d wire_received2 wire_sent2 app_log2);
-          BC.abort_terminal
-            d
-            (Ghost.hide wire_received2)
-            (Ghost.hide wire_sent2)
-            (Ghost.hide app_log2);
-          {
-            server_receive_status = ServerWorkflowStepFailed;
-            server_receive_len = received.BR.receive_len;
-          }
-        }
-        BS.BufferedSendOk -> {
-          {
-            server_receive_status = ServerWorkflowOk;
-            server_receive_len = received.BR.receive_len;
-          }
-        }
-        BS.BufferedSendPayloadTooLarge -> {
-          // Unreachable: run_key_update_response sends a fixed 27-byte record
-          // into the driver's own output buffer, which is far larger.
-          {
-            server_receive_status = ServerWorkflowOk;
-            server_receive_len = received.BR.receive_len;
-          }
-        }
-      }
-    }
-    BR.BufferedReceiveExhausted -> {
-      {
-        server_receive_status = ServerWorkflowExhausted;
-        server_receive_len = received.BR.receive_len;
-      }
-    }
-    BR.BufferedReceiveOutputBufferTooSmall -> {
-      {
-        server_receive_status = ServerWorkflowOutputBufferTooSmall;
-        server_receive_len = received.BR.receive_len;
-      }
-    }
-    BR.BufferedReceiveClosed -> {
-      with wire_received1 wire_sent1 app_log1.
-        assert (DS.top_server_channel_terminal
-          d wire_received1 wire_sent1 app_log1);
-      BC.abort_terminal
-        d
-        (Ghost.hide wire_received1)
-        (Ghost.hide wire_sent1)
-        (Ghost.hide app_log1);
-      {
-        server_receive_status = ServerWorkflowClosed;
-        server_receive_len = received.BR.receive_len;
-      }
-    }
-    BR.BufferedReceiveFailed -> {
-      with wire_received1 wire_sent1 app_log1.
-        assert (DS.top_server_channel_terminal
-          d wire_received1 wire_sent1 app_log1);
-      BC.abort_terminal
-        d
-        (Ghost.hide wire_received1)
-        (Ghost.hide wire_sent1)
-        (Ghost.hide app_log1);
-      {
-        server_receive_status = ServerWorkflowStepFailed;
-        server_receive_len = received.BR.receive_len;
-      }
-    }
-  }
-}
-
-fn close
-  (d:server_driver)
-  (wire_received:Ghost.erased B.bytes)
-  (wire_sent:Ghost.erased B.bytes)
-  (pending:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  (wait_for_peer:bool)
-  (network_fuel:SZ.t)
-  requires
-    DS.top_server_channel_inv
-      d
-      (Ghost.reveal wire_received)
-      (Ghost.reveal wire_sent)
-      (Ghost.reveal pending)
-      (Ghost.reveal app_log)
-  returns status:server_workflow_status
-  ensures
-    exists* st certificate_chain credential_identity.
-      DS.top_server_driver_closed d st certificate_chain credential_identity
-{
-  let status =
-    BC.run
-      d wire_received wire_sent pending app_log
-      wait_for_peer network_fuel;
-  match status {
-    BC.BufferedCloseClosed -> { ServerWorkflowClosed }
-    BC.BufferedCloseExhausted -> { ServerWorkflowExhausted }
-    BC.BufferedCloseFailed -> { ServerWorkflowStepFailed }
-  }
-}
-
-fn free
-  (d:server_driver)
-  requires
-    DS.top_server_driver_closed d 'st 'certificate_chain 'credential_identity
-  ensures DS.top_server_driver_released d 'st
-{
-  Trace.emit Trace.server_free 0UL 0UL 0UL;
-  BL.free d
-}
-
-(* Convert the buffered layer's [match]-shaped postcondition into the
-   [if]-shaped one the channel class demands. *)
+(* The terminal-preserving core of [send]: it maps the buffered layer's
+   [match]-shaped postcondition onto the channel class's [if]-shaped one and
+   leaves a failed connection owned-but-invalid rather than disposing it. *)
 fn channel_send_core
   (d:server_driver)
   (wire_received0:Ghost.erased B.bytes)
@@ -523,7 +267,7 @@ fn channel_send_core
       (Ghost.reveal app_log0) **
     pts_to payload (Ghost.reveal payload_bytes) **
     pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
-  returns status:BS.send_status
+  returns status:server_workflow_status
   ensures
     exists* wire_received1 wire_sent1 pending1 app_log1.
       (if channel_send_reusable status
@@ -560,14 +304,14 @@ fn channel_send_core
         (DS.top_server_channel_inv
           d wire_received1 wire_sent1 pending1 app_log1)
         as
-        (if channel_send_reusable BS.BufferedSendOk
+        (if channel_send_reusable ServerWorkflowOk
          then
            DS.top_server_channel_inv
              d wire_received1 wire_sent1 pending1 app_log1
          else
            DS.top_server_channel_terminal
              d wire_received1 wire_sent1 app_log1);
-      BS.BufferedSendOk
+      ServerWorkflowOk
     }
     BS.BufferedSendPayloadTooLarge -> {
       with wire_received1 wire_sent1 pending1 app_log1.
@@ -577,14 +321,14 @@ fn channel_send_core
         (DS.top_server_channel_inv
           d wire_received1 wire_sent1 pending1 app_log1)
         as
-        (if channel_send_reusable BS.BufferedSendPayloadTooLarge
+        (if channel_send_reusable ServerWorkflowPayloadTooLarge
          then
            DS.top_server_channel_inv
              d wire_received1 wire_sent1 pending1 app_log1
          else
            DS.top_server_channel_terminal
              d wire_received1 wire_sent1 app_log1);
-      BS.BufferedSendPayloadTooLarge
+      ServerWorkflowPayloadTooLarge
     }
     BS.BufferedSendFailed -> {
       with wire_received1 wire_sent1 app_log1.
@@ -594,18 +338,25 @@ fn channel_send_core
         (DS.top_server_channel_terminal
           d wire_received1 wire_sent1 app_log1)
         as
-        (if channel_send_reusable BS.BufferedSendFailed
+        (if channel_send_reusable ServerWorkflowStepFailed
          then
            DS.top_server_channel_inv
              d wire_received1 wire_sent1 wire_received1 app_log1
          else
            DS.top_server_channel_terminal
              d wire_received1 wire_sent1 app_log1);
-      BS.BufferedSendFailed
+      ServerWorkflowStepFailed
     }
   }
 }
 
+(* Send with the mandated KeyUpdate reply (RFC 8446 4.6.3) flushed first: an
+   endpoint that received [update_requested] must send its own KeyUpdate before
+   its next application-data record, so this is the obligation's real deadline.
+   Flushing at the head rather than the tail is also what makes the composition
+   sound: the inserted record only extends the wire history and a KeyUpdate
+   leaves the application log alone, so a failed flush is reportable as a failed
+   send with the log unchanged. *)
 fn channel_send
   (d:server_driver)
   (wire_received0:Ghost.erased B.bytes)
@@ -624,7 +375,7 @@ fn channel_send
       (Ghost.reveal app_log0) **
     pts_to payload (Ghost.reveal payload_bytes) **
     pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
-  returns status:BS.send_status
+  returns status:server_workflow_status
   ensures
     exists* wire_received1 wire_sent1 pending1 app_log1.
       (if channel_send_reusable status
@@ -659,14 +410,14 @@ fn channel_send
         (DS.top_server_channel_terminal
           d wire_received1 wire_sent1 app_log1)
         as
-        (if channel_send_reusable BS.BufferedSendFailed
+        (if channel_send_reusable ServerWorkflowStepFailed
          then
            DS.top_server_channel_inv
              d wire_received1 wire_sent1 wire_received1 app_log1
          else
            DS.top_server_channel_terminal
              d wire_received1 wire_sent1 app_log1);
-      BS.BufferedSendFailed
+      ServerWorkflowStepFailed
     }
     BS.BufferedSendOk -> {
       with wire_received1 wire_sent1 pending1 app_log1.
@@ -729,6 +480,219 @@ fn channel_send
   }
 }
 
+fn send
+  (d:server_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
+  (payload_len:SZ.t)
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0) **
+    pts_to payload (Ghost.reveal payload_bytes) **
+    pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
+  returns status:server_workflow_status
+  ensures
+    exists* wire_received1 wire_sent1 pending1 app_log1.
+      server_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1 **
+      pts_to payload (Ghost.reveal payload_bytes) **
+      pure (
+        CI.send_transition
+          channel_message_of_bytes
+          channel_send_succeeded
+          status
+          (Ghost.reveal payload_bytes)
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          (Ghost.reveal app_log0)
+          wire_received1
+          wire_sent1
+          app_log1)
+{
+  let status =
+    channel_send
+      d wire_received0 wire_sent0 pending0 app_log0
+      payload payload_bytes payload_len;
+  with wire_received1 wire_sent1 pending1 app_log1.
+    assert ((if channel_send_reusable status
+             then
+               DS.top_server_channel_inv
+                 d wire_received1 wire_sent1 pending1 app_log1
+             else
+               DS.top_server_channel_terminal
+                 d wire_received1 wire_sent1 app_log1) **
+            pts_to payload (Ghost.reveal payload_bytes));
+  let reusable = channel_send_reusable_runtime status;
+  assert (pure (reusable == channel_send_reusable status));
+  if reusable {
+    rewrite
+      (if channel_send_reusable status
+       then
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.top_server_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.top_server_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1);
+    rewrite
+      (DS.top_server_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1)
+      as
+      (server_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    status
+  } else {
+    rewrite
+      (if channel_send_reusable status
+       then
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.top_server_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.top_server_channel_terminal
+        d wire_received1 wire_sent1 app_log1);
+    BC.abort_terminal
+      d
+      (Ghost.hide wire_received1)
+      (Ghost.hide wire_sent1)
+      (Ghost.hide app_log1);
+    fold (server_driver_is_closed d);
+    rewrite
+      (server_driver_is_closed d)
+      as
+      (server_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    status
+  }
+}
+
+(* Server-initiated KeyUpdate (RFC 8446 4.6.3).  A KeyUpdate carries no
+   application message, so the application log is preserved outright; only the
+   wire history moves. *)
+fn send_key_update
+  (d:server_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0)
+  returns status:server_workflow_status
+  ensures
+    exists* wire_received1 wire_sent1 pending1 app_log1.
+      server_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1 **
+      pure (
+        CPI.histories_ahead
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          wire_received1
+          wire_sent1 /\
+        app_log1 == Ghost.reveal app_log0)
+{
+  let buffered =
+    BS.run_key_update
+      d wire_received0 wire_sent0 pending0 app_log0
+      request;
+  match buffered {
+    BS.BufferedSendOk -> {
+      with wire_received1 wire_sent1 pending1 app_log1.
+        assert (DS.top_server_channel_inv
+          d wire_received1 wire_sent1 pending1 app_log1);
+      rewrite
+        (DS.top_server_channel_inv
+          d wire_received1 wire_sent1 pending1 app_log1)
+        as
+        (server_channel_after_operation
+          d
+          (channel_send_reusable ServerWorkflowOk)
+          wire_received1
+          wire_sent1
+          pending1
+          app_log1);
+      ServerWorkflowOk
+    }
+    BS.BufferedSendPayloadTooLarge -> {
+      with wire_received1 wire_sent1 pending1 app_log1.
+        assert (DS.top_server_channel_inv
+          d wire_received1 wire_sent1 pending1 app_log1);
+      rewrite
+        (DS.top_server_channel_inv
+          d wire_received1 wire_sent1 pending1 app_log1)
+        as
+        (server_channel_after_operation
+          d
+          (channel_send_reusable ServerWorkflowPayloadTooLarge)
+          wire_received1
+          wire_sent1
+          pending1
+          app_log1);
+      ServerWorkflowPayloadTooLarge
+    }
+    BS.BufferedSendFailed -> {
+      with wire_received1 wire_sent1 app_log1.
+        assert (DS.top_server_channel_terminal
+          d wire_received1 wire_sent1 app_log1);
+      BC.abort_terminal
+        d
+        (Ghost.hide wire_received1)
+        (Ghost.hide wire_sent1)
+        (Ghost.hide app_log1);
+      fold (server_driver_is_closed d);
+      rewrite
+        (server_driver_is_closed d)
+        as
+        (server_channel_after_operation
+          d
+          (channel_send_reusable ServerWorkflowStepFailed)
+          wire_received1
+          wire_sent1
+          wire_received1
+          app_log1);
+      ServerWorkflowStepFailed
+    }
+  }
+}
+
+(* The terminal-preserving core of [receive]. *)
 fn channel_receive_core
   (d:server_driver)
   (wire_received0:Ghost.erased B.bytes)
@@ -748,7 +712,7 @@ fn channel_receive_core
       (Ghost.reveal app_log0) **
     pts_to out (Ghost.reveal old_output) **
     pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
-  returns result:BR.receive_result
+  returns result:server_receive_result
   ensures
     exists* wire_received1 wire_sent1 pending1 app_log1 output.
       (if channel_receive_reusable result
@@ -775,12 +739,16 @@ fn channel_receive_core
           wire_sent1
           app_log1)
 {
-  let result =
+  let buffered =
     BR.run
       d wire_received0 wire_sent0 pending0 app_log0
       out out_len network_fuel;
-  match result.BR.receive_status {
+  match buffered.BR.receive_status {
     BR.BufferedReceiveOk -> {
+      let result = {
+        server_receive_status = ServerWorkflowOk;
+        server_receive_len = buffered.BR.receive_len;
+      };
       with wire_received1 wire_sent1 pending1 app_log1.
         assert (DS.top_server_channel_inv
           d wire_received1 wire_sent1 pending1 app_log1);
@@ -798,6 +766,10 @@ fn channel_receive_core
       result
     }
     BR.BufferedReceiveExhausted -> {
+      let result = {
+        server_receive_status = ServerWorkflowExhausted;
+        server_receive_len = buffered.BR.receive_len;
+      };
       with wire_received1 wire_sent1 pending1 app_log1.
         assert (DS.top_server_channel_inv
           d wire_received1 wire_sent1 pending1 app_log1);
@@ -815,6 +787,10 @@ fn channel_receive_core
       result
     }
     BR.BufferedReceiveOutputBufferTooSmall -> {
+      let result = {
+        server_receive_status = ServerWorkflowOutputBufferTooSmall;
+        server_receive_len = buffered.BR.receive_len;
+      };
       with wire_received1 wire_sent1 pending1 app_log1.
         assert (DS.top_server_channel_inv
           d wire_received1 wire_sent1 pending1 app_log1);
@@ -832,6 +808,10 @@ fn channel_receive_core
       result
     }
     BR.BufferedReceiveClosed -> {
+      let result = {
+        server_receive_status = ServerWorkflowClosed;
+        server_receive_len = buffered.BR.receive_len;
+      };
       with wire_received1 wire_sent1 app_log1.
         assert (DS.top_server_channel_terminal
           d wire_received1 wire_sent1 app_log1);
@@ -849,6 +829,10 @@ fn channel_receive_core
       result
     }
     BR.BufferedReceiveFailed -> {
+      let result = {
+        server_receive_status = ServerWorkflowStepFailed;
+        server_receive_len = buffered.BR.receive_len;
+      };
       with wire_received1 wire_sent1 app_log1.
         assert (DS.top_server_channel_terminal
           d wire_received1 wire_sent1 app_log1);
@@ -868,6 +852,11 @@ fn channel_receive_core
   }
 }
 
+(* Receive with the mandated KeyUpdate reply flushed first.  Flushing at the
+   *head* is what makes this composable: were the reply attempted after a
+   successful receive, a failed reply would leave the channel terminal after
+   the application log had already moved, and no [server_receive_result] could
+   describe that. *)
 fn channel_receive
   (d:server_driver)
   (wire_received0:Ghost.erased B.bytes)
@@ -888,7 +877,7 @@ fn channel_receive
       (Ghost.reveal app_log0) **
     pts_to out (Ghost.reveal old_output) **
     pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
-  returns result:BR.receive_result
+  returns result:server_receive_result
   ensures
     exists* wire_received1 wire_sent1 pending1 app_log1 output.
       (if channel_receive_reusable result
@@ -923,8 +912,8 @@ fn channel_receive
         assert (DS.top_server_channel_terminal
           d wire_received1 wire_sent1 app_log1);
       let failed = {
-        BR.receive_status = BR.BufferedReceiveFailed;
-        BR.receive_len = 0sz;
+        server_receive_status = ServerWorkflowStepFailed;
+        server_receive_len = 0sz;
       };
       rewrite
         (DS.top_server_channel_terminal
@@ -1002,6 +991,165 @@ fn channel_receive
   }
 }
 
+fn receive
+  (d:server_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0) **
+    pts_to out (Ghost.reveal old_output) **
+    pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
+  returns result:server_receive_result
+  ensures
+    exists* wire_received1 wire_sent1 pending1 app_log1 output.
+      server_channel_after_operation
+        d
+        (channel_receive_reusable result)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1 **
+      pts_to out output **
+      pure (
+        B.length output == SZ.v out_len /\
+        SZ.v (channel_receive_length result) <= SZ.v out_len /\
+        CI.receive_transition
+          channel_message_of_bytes
+          channel_receive_succeeded
+          channel_receive_length
+          result
+          output
+          (Ghost.reveal wire_received0)
+          (Ghost.reveal wire_sent0)
+          (Ghost.reveal app_log0)
+          wire_received1
+          wire_sent1
+          app_log1)
+{
+  let result =
+    channel_receive
+      d wire_received0 wire_sent0 pending0 app_log0
+      out old_output out_len local_fuel network_fuel;
+  with wire_received1 wire_sent1 pending1 app_log1 output.
+    assert ((if channel_receive_reusable result
+             then
+               DS.top_server_channel_inv
+                 d wire_received1 wire_sent1 pending1 app_log1
+             else
+               DS.top_server_channel_terminal
+                 d wire_received1 wire_sent1 app_log1) **
+            pts_to out output);
+  let reusable = channel_receive_reusable_runtime result;
+  assert (pure (reusable == channel_receive_reusable result));
+  if reusable {
+    rewrite
+      (if channel_receive_reusable result
+       then
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.top_server_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.top_server_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1);
+    rewrite
+      (DS.top_server_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1)
+      as
+      (server_channel_after_operation
+        d
+        (channel_receive_reusable result)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    result
+  } else {
+    rewrite
+      (if channel_receive_reusable result
+       then
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.top_server_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.top_server_channel_terminal
+        d wire_received1 wire_sent1 app_log1);
+    BC.abort_terminal
+      d
+      (Ghost.hide wire_received1)
+      (Ghost.hide wire_sent1)
+      (Ghost.hide app_log1);
+    fold (server_driver_is_closed d);
+    rewrite
+      (server_driver_is_closed d)
+      as
+      (server_channel_after_operation
+        d
+        (channel_receive_reusable result)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    result
+  }
+}
+
+fn close
+  (d:server_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  (wait_for_peer:bool)
+  (network_fuel:SZ.t)
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  returns status:server_workflow_status
+  ensures
+    exists* st certificate_chain credential_identity.
+      DS.top_server_driver_closed d st certificate_chain credential_identity
+{
+  let status =
+    BC.run
+      d wire_received wire_sent pending app_log
+      wait_for_peer network_fuel;
+  match status {
+    BC.BufferedCloseClosed -> { ServerWorkflowClosed }
+    BC.BufferedCloseExhausted -> { ServerWorkflowExhausted }
+    BC.BufferedCloseFailed -> { ServerWorkflowStepFailed }
+  }
+}
+
+fn free
+  (d:server_driver)
+  requires
+    DS.top_server_driver_closed d 'st 'certificate_chain 'credential_identity
+  ensures DS.top_server_driver_released d 'st
+{
+  Trace.emit Trace.server_free 0UL 0UL 0UL;
+  BL.free d
+}
+
 noextract
 let server_channel_implementation
   : CI.channel_implementation
@@ -1012,8 +1160,8 @@ let server_channel_implementation
       CTypes.server_local_event
       EAPI.local_output
       B.bytes
-      BS.send_status
-      BR.receive_result
+      server_workflow_status
+      server_receive_result
       SP.server_protocol_implementation
   =
   {
