@@ -10,6 +10,9 @@ module BC = TLS13.Impl.Server.Driver.BufferedChannel
 module BN = TLS13.Impl.Server.Driver.BufferedNetwork
 module BT = Common.BufferedTCP
 module CI = Common.ChannelImplementation
+module CImpl = TLS13.Impl.Server.ChannelImplementation
+module CLog = TLS13.Impl.Server.ChannelLog
+module CPI = Common.ProtocolImplementation
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -22,6 +25,7 @@ module Seq = FStar.Seq
 module SM = TLS13.Spec.StateMachine.ClientTrace
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
+module TChannel = TLS13.Impl.Channel
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module Box = Pulse.Lib.Box
@@ -335,28 +339,61 @@ fn run
      | BufferedSendPayloadTooLarge ->
        exists* wire_received1 wire_sent1 pending1 app_log1.
          DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
+           d wire_received1 wire_sent1 pending1 app_log1 **
+         pure (
+           CI.send_transition
+             channel_message_of_bytes
+             send_succeeded
+             status
+             (Ghost.reveal 'payload_bytes)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal app_log0)
+             wire_received1
+             wire_sent1
+             app_log1)
      | BufferedSendFailed ->
        exists* wire_received1 wire_sent1 app_log1.
          DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1)
+           d wire_received1 wire_sent1 app_log1 **
+         pure (
+           CI.send_transition
+             channel_message_of_bytes
+             send_succeeded
+             status
+             (Ghost.reveal 'payload_bytes)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal app_log0)
+             wire_received1
+             wire_sent1
+             app_log1))
 {
+  CImpl.take_channel_snapshot
+    d wire_received0 wire_sent0 pending0 app_log0;
   BC.open_channel_invariant
     d wire_received0 wire_sent0 pending0 app_log0;
   with st0 certificate_chain credential_identity.
     assert (DS.top_server_driver_connected
       d st0 certificate_chain credential_identity
       (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_received0);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
   assert_norm (SM.max_application_data_fragment_len == 16384);
   let too_large = SZ.gt payload_len 16384sz;
   if too_large {
-    BC.pack_connected_channel
+    BC.pack_connected_channel_invariant
       d
       (Ghost.hide st0)
       (Ghost.hide certificate_chain)
       (Ghost.hide credential_identity)
       wire_received0
       wire_sent0;
+    drop_ (DS.top_server_channel_snapshot
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0));
     BufferedSendPayloadTooLarge
   } else {
     let ready = query_application_ready d;
@@ -368,6 +405,11 @@ fn run
         (Ghost.hide credential_identity)
         wire_received0
         wire_sent0;
+      drop_ (DS.top_server_channel_snapshot
+        d
+        (Ghost.reveal wire_received0)
+        (Ghost.reveal wire_sent0)
+        (Ghost.reveal app_log0));
       BufferedSendFailed
     } else {
       lemma_send_ready
@@ -476,6 +518,26 @@ fn run
         committed1 concrete_buffered_len);
       fold (DS.top_server_driver_connected
         d st1 certificate_chain credential_identity received1 sent1);
+      CImpl.recall_tcp_history
+        d
+        wire_received0
+        wire_sent0
+        app_log0
+        (Ghost.hide st1)
+        (Ghost.hide certificate_chain)
+        (Ghost.hide credential_identity)
+        (Ghost.hide received1)
+        (Ghost.hide sent1);
+      drop_ (DS.top_server_channel_snapshot
+        d
+        (Ghost.reveal wire_received0)
+        (Ghost.reveal wire_sent0)
+        (Ghost.reveal app_log0));
+      CLog.lemma_local_send_application_log
+        st0 st1 result.BN.local_write_resp
+        (Ghost.reveal 'payload_bytes)
+        network_out1
+        app_out1;
       let ok = result.BN.local_write_resp.ST.status = ST.StepOk;
       if ok {
         lemma_local_send_application_data_control
@@ -483,7 +545,7 @@ fn run
           (Ghost.reveal 'payload_bytes)
           network_out1
           app_out1;
-        BC.pack_connected_channel
+        BC.pack_connected_channel_invariant
           d
           (Ghost.hide st1)
           (Ghost.hide certificate_chain)
@@ -653,18 +715,36 @@ fn run_key_update
      | BufferedSendPayloadTooLarge ->
        exists* wire_received1 wire_sent1 pending1 app_log1.
          DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
+           d wire_received1 wire_sent1 pending1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0)
      | BufferedSendFailed ->
        exists* wire_received1 wire_sent1 app_log1.
          DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1)
+           d wire_received1 wire_sent1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0))
 {
+  CImpl.take_channel_snapshot
+    d wire_received0 wire_sent0 pending0 app_log0;
   BC.open_channel_invariant
     d wire_received0 wire_sent0 pending0 app_log0;
   with st0 certificate_chain credential_identity.
     assert (DS.top_server_driver_connected
       d st0 certificate_chain credential_identity
       (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_received0);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
   let ready = query_application_ready d;
   if (ready = false) {
     BC.pack_connected_channel_terminal
@@ -674,6 +754,11 @@ fn run_key_update
       (Ghost.hide credential_identity)
       wire_received0
       wire_sent0;
+    drop_ (DS.top_server_channel_snapshot
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0));
     BufferedSendFailed
   } else {
     let kind = key_update_kind request;
@@ -787,6 +872,27 @@ fn run_key_update
       committed1 concrete_buffered_len);
     fold (DS.top_server_driver_connected
       d st1 certificate_chain credential_identity received1 sent1);
+    CImpl.recall_tcp_history
+      d
+      wire_received0
+      wire_sent0
+      app_log0
+      (Ghost.hide st1)
+      (Ghost.hide certificate_chain)
+      (Ghost.hide credential_identity)
+      (Ghost.hide received1)
+      (Ghost.hide sent1);
+    drop_ (DS.top_server_channel_snapshot
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0));
+    CLog.lemma_local_event_preserves_application_log
+      st0 st1 result.BN.local_write_resp
+      kind
+      empty_payload1
+      network_out1
+      app_out1;
     let ok = result.BN.local_write_resp.ST.status = ST.StepOk;
     if ok {
       lemma_local_send_key_update_control
@@ -795,7 +901,7 @@ fn run_key_update
         empty_payload1
         network_out1
         app_out1;
-      BC.pack_connected_channel
+      BC.pack_connected_channel_invariant
         d
         (Ghost.hide st1)
         (Ghost.hide certificate_chain)
@@ -846,11 +952,25 @@ fn run_key_update_response
      | BufferedSendPayloadTooLarge ->
        exists* wire_received1 wire_sent1 pending1 app_log1.
          DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
+           d wire_received1 wire_sent1 pending1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0)
      | BufferedSendFailed ->
        exists* wire_received1 wire_sent1 app_log1.
          DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1)
+           d wire_received1 wire_sent1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0))
 {
   BC.open_channel_invariant
     d wire_received0 wire_sent0 pending0 app_log0;
@@ -858,25 +978,45 @@ fn run_key_update_response
     assert (DS.top_server_driver_connected
       d st0 certificate_chain credential_identity
       (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_received0);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
   let ready = query_application_ready d;
   let pending = query_key_update_response_pending d;
-  BC.pack_connected_channel
+  BC.pack_connected_channel_invariant
     d
     (Ghost.hide st0)
     (Ghost.hide certificate_chain)
     (Ghost.hide credential_identity)
     wire_received0
     wire_sent0;
-  with wire_received1 wire_sent1 pending1 app_log1.
+  with pending1.
     assert (DS.top_server_channel_inv
-      d wire_received1 wire_sent1 pending1 app_log1);
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      pending1
+      (TChannel.application_log st0));
+  rewrite
+    (DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      pending1
+      (TChannel.application_log st0))
+    as
+    (DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      pending1
+      (Ghost.reveal app_log0));
   if (ready && pending) {
     run_key_update
       d
-      (Ghost.hide wire_received1)
-      (Ghost.hide wire_sent1)
+      wire_received0
+      wire_sent0
       (Ghost.hide pending1)
-      (Ghost.hide app_log1)
+      app_log0
       false
   } else {
     BufferedSendOk

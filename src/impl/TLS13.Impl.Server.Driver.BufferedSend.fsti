@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CI = Common.ChannelImplementation
+module CPI = Common.ProtocolImplementation
 module DS = TLS13.Impl.Server.Driver.State
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -15,6 +16,20 @@ type send_status =
   | BufferedSendOk
   | BufferedSendPayloadTooLarge
   | BufferedSendFailed
+
+(* The channel's view of a payload is the payload itself: the server's
+   application log records raw byte messages. *)
+noextract
+let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
+
+(* Only [BufferedSendOk] actually appends the payload to the application sent
+   log.  [BufferedSendPayloadTooLarge] rejects before stepping and
+   [BufferedSendFailed] fails the connection, and neither moves the log. *)
+noextract
+let send_succeeded (status:send_status) : bool =
+  match status with
+  | BufferedSendOk -> true
+  | _ -> false
 
 fn query_application_ready
   (d:DS.top_server_driver)
@@ -70,11 +85,35 @@ fn run
      | BufferedSendPayloadTooLarge ->
        exists* wire_received1 wire_sent1 pending1 app_log1.
          DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
+           d wire_received1 wire_sent1 pending1 app_log1 **
+         pure (
+           CI.send_transition
+             channel_message_of_bytes
+             send_succeeded
+             status
+             (Ghost.reveal 'payload_bytes)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal app_log0)
+             wire_received1
+             wire_sent1
+             app_log1)
      | BufferedSendFailed ->
        exists* wire_received1 wire_sent1 app_log1.
          DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1)
+           d wire_received1 wire_sent1 app_log1 **
+         pure (
+           CI.send_transition
+             channel_message_of_bytes
+             send_succeeded
+             status
+             (Ghost.reveal 'payload_bytes)
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal app_log0)
+             wire_received1
+             wire_sent1
+             app_log1))
 
 (* Server-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
    form: [true] asks the peer to rotate its own sending key in reply,
@@ -102,11 +141,25 @@ fn run_key_update
      | BufferedSendPayloadTooLarge ->
        exists* wire_received1 wire_sent1 pending1 app_log1.
          DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
+           d wire_received1 wire_sent1 pending1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0)
      | BufferedSendFailed ->
        exists* wire_received1 wire_sent1 app_log1.
          DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1)
+           d wire_received1 wire_sent1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0))
 
 (* Discharges the RFC 8446 4.6.3 KeyUpdate response obligation if one is
    outstanding; a no-op otherwise.  Intended to be called after a receive. *)
@@ -130,8 +183,22 @@ fn run_key_update_response
      | BufferedSendPayloadTooLarge ->
        exists* wire_received1 wire_sent1 pending1 app_log1.
          DS.top_server_channel_inv
-           d wire_received1 wire_sent1 pending1 app_log1
+           d wire_received1 wire_sent1 pending1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0)
      | BufferedSendFailed ->
        exists* wire_received1 wire_sent1 app_log1.
          DS.top_server_channel_terminal
-           d wire_received1 wire_sent1 app_log1)
+           d wire_received1 wire_sent1 app_log1 **
+         pure (
+           CPI.histories_ahead
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             wire_received1
+             wire_sent1 /\
+           app_log1 == Ghost.reveal app_log0))

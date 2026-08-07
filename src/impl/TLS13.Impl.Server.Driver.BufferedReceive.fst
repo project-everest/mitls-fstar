@@ -11,6 +11,9 @@ module BN = TLS13.Impl.Server.Driver.BufferedNetwork
 module BS = Common.BufferedStream
 module BT = Common.BufferedTCP
 module CI = Common.ChannelImplementation
+module CImpl = TLS13.Impl.Server.ChannelImplementation
+module CLog = TLS13.Impl.Server.ChannelLog
+module CPI = Common.ProtocolImplementation
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
@@ -21,6 +24,7 @@ module S = TLS13.Impl.Server
 module Seq = FStar.Seq
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
+module TChannel = TLS13.Impl.Channel
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module Box = Pulse.Lib.Box
@@ -272,6 +276,76 @@ let lemma_yield_preserves_not_failed
         network.BN.buffered_network_read.BN.network_read_prefix)
   | _ -> assert False
 
+(* The application log moves by exactly the delivered application output.
+   Every non-[DriveYield] outcome leaves it alone: [DriveExhausted] does not
+   step the state at all, [DriveReject] steps with a non-[StepOk] status, and
+   the remaining two outcomes are impossible. *)
+noextract
+let drive_delivered_len (result:BN.completed_drive) : GTot nat =
+  match result.BN.completed_drive_outcome with
+  | BS.DriveYield network _ _ _ ->
+    SZ.v (network.BN.buffered_network_read.BN.network_read_buffer_resp)
+      .ST.response.ST.app_out_len
+  | _ -> 0
+
+#push-options "--split_queries always"
+let lemma_drive_application_log
+  (st0 st1:CS.connection_state)
+  (old_output output:B.bytes)
+  (result:BN.completed_drive)
+  : Lemma
+      (requires
+        (exists old_network_out network_out.
+          BN.completed_drive_correct
+            st0 st1 old_network_out network_out old_output output result))
+      (ensures
+        (let n = drive_delivered_len result in
+         TChannel.application_log st1 ==
+           (if n <> 0 && n <= B.length output
+            then
+              CI.append_received
+                (TChannel.application_log st0)
+                (Seq.slice output 0 n)
+            else TChannel.application_log st0)))
+=
+  let old_network_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun old_network_out -> exists network_out.
+        BN.completed_drive_correct
+          st0 st1 old_network_out network_out old_output output result) in
+  let network_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out ->
+        BN.completed_drive_correct
+          st0 st1 old_network_out network_out old_output output result) in
+  match result.BN.completed_drive_outcome with
+  | BS.DriveExhausted -> ()
+  | BS.DriveYield network _ _ _ ->
+    let buffer_resp =
+      network.BN.buffered_network_read.BN.network_read_buffer_resp in
+    CLog.lemma_network_step_application_log
+      st0
+      st1
+      buffer_resp
+      (Ghost.reveal network.BN.buffered_network_read.BN.network_read_prefix)
+      network_out
+      output
+  | BS.DriveReject network error _ ->
+    let buffer_resp =
+      network.BN.buffered_network_read.BN.network_read_buffer_resp in
+    CLog.lemma_network_step_application_log
+      st0
+      st1
+      buffer_resp
+      (Ghost.reveal network.BN.buffered_network_read.BN.network_read_prefix)
+      network_out
+      output
+  | BS.DriveProgress _ _ _ -> assert False
+  | BS.DriveBufferFull _ _ -> assert False
+#pop-options
+
 #push-options "--z3rlimit 20 --split_queries always --z3seed 17"
 fn rec receive_loop
   (d:DS.top_server_driver)
@@ -296,7 +370,14 @@ fn rec receive_loop
         B.length output == SZ.v out_len /\
         SZ.v result.loop_len <= SZ.v out_len /\
         (receive_status_reusable result.loop_status ==>
-          ST.server_connection_control_not_failed st1))
+          ST.server_connection_control_not_failed st1) /\
+        TChannel.application_log st1 ==
+          (if BufferedReceiveOk? result.loop_status
+           then
+             CI.append_received
+               (TChannel.application_log 'st0)
+               (Seq.slice output 0 (SZ.v result.loop_len))
+           else TChannel.application_log 'st0))
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
@@ -311,6 +392,8 @@ fn rec receive_loop
         DS.top_server_driver_connected
           d st1 'certificate_chain 'credential_identity received1 sent1 **
         pts_to out output);
+    lemma_drive_application_log
+      'st0 st1 (Ghost.reveal 'old_output) output drive;
     match drive.BN.completed_drive_outcome {
       BS.DriveExhausted -> {
         {
@@ -347,11 +430,13 @@ fn rec receive_loop
           buffer_resp.ST.response.ST.app_out_len;
         if (application_len <> 0sz) {
           assert (pure (SZ.v application_len <= SZ.v out_len));
+          assert (pure (drive_delivered_len drive == SZ.v application_len));
           {
             loop_status = BufferedReceiveOk;
             loop_len = application_len;
           }
         } else {
+          assert (pure (drive_delivered_len drive == 0));
           let control = query_control d;
           let closed = control.CR.snapshot_control_tag = 4uy;
           if closed {
@@ -489,13 +574,41 @@ fn run
        | BufferedReceiveOutputBufferTooSmall ->
          exists* wire_received1 wire_sent1 pending1 app_log1.
            DS.top_server_channel_inv
-             d wire_received1 wire_sent1 pending1 app_log1
+             d wire_received1 wire_sent1 pending1 app_log1 **
+           pure (
+             CI.receive_transition
+               channel_message_of_bytes
+               receive_succeeded
+               receive_result_length
+               result
+               output
+               (Ghost.reveal wire_received0)
+               (Ghost.reveal wire_sent0)
+               (Ghost.reveal app_log0)
+               wire_received1
+               wire_sent1
+               app_log1)
        | BufferedReceiveClosed
        | BufferedReceiveFailed ->
          exists* wire_received1 wire_sent1 app_log1.
            DS.top_server_channel_terminal
-             d wire_received1 wire_sent1 app_log1)
+             d wire_received1 wire_sent1 app_log1 **
+           pure (
+             CI.receive_transition
+               channel_message_of_bytes
+               receive_succeeded
+               receive_result_length
+               result
+               output
+               (Ghost.reveal wire_received0)
+               (Ghost.reveal wire_sent0)
+               (Ghost.reveal app_log0)
+               wire_received1
+               wire_sent1
+               app_log1))
 {
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_received0);
+  CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
   let output_fits = SZ.lte DS.driver_app_out_capacity out_len;
   if (output_fits = false) {
     {
@@ -503,6 +616,8 @@ fn run
       receive_len = 0sz;
     }
   } else {
+    CImpl.take_channel_snapshot
+      d wire_received0 wire_sent0 pending0 app_log0;
     BC.open_channel_invariant
       d wire_received0 wire_sent0 pending0 app_log0;
     with st0 certificate_chain credential_identity.
@@ -516,9 +631,24 @@ fn run
         DS.top_server_driver_connected
           d st1 certificate_chain credential_identity received1 sent1 **
         pts_to out output);
+    CImpl.recall_tcp_history
+      d
+      wire_received0
+      wire_sent0
+      app_log0
+      (Ghost.hide st1)
+      (Ghost.hide certificate_chain)
+      (Ghost.hide credential_identity)
+      (Ghost.hide received1)
+      (Ghost.hide sent1);
+    drop_ (DS.top_server_channel_snapshot
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0));
     match loop.loop_status {
       BufferedReceiveOk -> {
-        BC.pack_connected_channel
+        BC.pack_connected_channel_invariant
           d
           (Ghost.hide st1)
           (Ghost.hide certificate_chain)
@@ -531,7 +661,7 @@ fn run
         }
       }
       BufferedReceiveExhausted -> {
-        BC.pack_connected_channel
+        BC.pack_connected_channel_invariant
           d
           (Ghost.hide st1)
           (Ghost.hide certificate_chain)
@@ -544,7 +674,7 @@ fn run
         }
       }
       BufferedReceiveOutputBufferTooSmall -> {
-        BC.pack_connected_channel
+        BC.pack_connected_channel_invariant
           d
           (Ghost.hide st1)
           (Ghost.hide certificate_chain)
