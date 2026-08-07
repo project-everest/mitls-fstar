@@ -148,9 +148,39 @@ let server_driver_is_closed (d:server_driver) : slprop =
   exists* st certificate_chain credential_identity.
     DS.top_server_driver_closed d st certificate_chain credential_identity
 
-(* The channel state after a public [send]/[receive].  A reusable outcome
-   leaves the channel invariant; a terminal one disposes the transport, so the
-   caller is left owning a closed driver and nothing else. *)
+(* The driver's terminal state, in the indexed form the channel class asks for.
+
+   The class requires a [ci_terminal_inv i wire_received wire_sent app_log] but
+   places no constraint whatsoever on it: it is mentioned only in the failure
+   branch of [ci_send]/[ci_receive] and nowhere else.  It is simply "you still
+   own the endpoint, but no protocol claim is made about it".
+
+   We take that state to be the *closed* driver rather than the intermediate
+   [DS.top_server_channel_terminal].  A failed send or receive means the
+   connection control has already failed, so there is nothing graceful left to
+   do with the endpoint, and disposing the transport immediately is the only
+   policy this driver ever wants.  Choosing it here is what lets the public API
+   and the class instance be the same functions: see the note on
+   [server_channel_implementation] below.
+
+   The wire and log indices are ignored, since a closed driver no longer
+   indexes them.  The corresponding transition facts are not lost -- they are
+   still asserted in the [pure] conjunct of [send]/[receive] on every branch. *)
+noextract
+let server_channel_closed
+  (d:server_driver)
+  (_wire_received _wire_sent:B.bytes)
+  (_app_log:CI.application_log B.bytes)
+  : slprop =
+  server_driver_is_closed d
+
+(* The channel state after a [send]/[receive].  A reusable outcome leaves the
+   channel invariant; a terminal one disposes the transport, so the caller is
+   left owning a closed driver and nothing else.
+
+   This is definitionally the shape [CI.ci_send]/[CI.ci_receive] demand of
+   their postconditions, with [ci_channel_inv := DS.top_server_channel_inv] and
+   [ci_terminal_inv := server_channel_closed]. *)
 noextract
 let server_channel_after_operation
   (d:server_driver)
@@ -160,7 +190,7 @@ let server_channel_after_operation
   : slprop =
   if reusable
   then DS.top_server_channel_inv d wire_received wire_sent pending app_log
-  else server_driver_is_closed d
+  else server_channel_closed d wire_received wire_sent app_log
 
 noextract
 let server_driver_application_ready
@@ -484,10 +514,14 @@ fn free
   ensures DS.top_server_driver_released d 'st
 
 (** The production server driver as a [Common.ChannelImplementation]
-    instance.  [ci_send] and [ci_receive] are the terminal-preserving cores of
-    [send] and [receive] above: the class requires a failure to leave the
-    connection owned but protocol-invalid, whereas the public entry points
-    additionally dispose the transport. **)
+    instance.
+
+    There is deliberately no separate "channel" API: [ci_send] and [ci_receive]
+    are literally [send] and [receive] above, and [ci_send_usable] /
+    [ci_receive_usable] are literally [channel_send_reusable] /
+    [channel_receive_reusable].  Everything this interface exposes is exactly
+    what is verified against the class, and there is exactly one way to send
+    and one way to receive on a server channel. **)
 noextract
 val server_channel_implementation
   : CI.channel_implementation
