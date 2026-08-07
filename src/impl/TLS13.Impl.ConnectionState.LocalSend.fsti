@@ -61,6 +61,15 @@ fn write_close_notify_alert
             pure (B.length alert_bytes == 2 /\
                   Seq.equal alert_bytes (close_notify_alert_fragment ()))
 
+fn write_key_update
+  (handshake:array U8.t)
+  (req:M.key_update_request)
+  requires ArrPts.pts_to handshake (Seq.create 5 0uy)
+  ensures exists* handshake_bytes.
+            ArrPts.pts_to handshake handshake_bytes **
+            pure (B.length handshake_bytes == 5 /\
+                  Seq.equal handshake_bytes (key_update_fragment req))
+
 fn write_key_update_response
   (handshake:array U8.t)
   requires ArrPts.pts_to handshake (Seq.create 5 0uy)
@@ -283,6 +292,8 @@ fn try_send_key_update
   (c:connection_state)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
+  (req:M.key_update_request)
+  (need_pending:bool)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to network_out 'old_network_out **
@@ -292,14 +303,51 @@ fn try_send_key_update
             exists* raw_sent network_out_bytes.
               connection_exactly
                 c
-                (sent_key_update_response_state
+                (sent_key_update_state
                   st0
+                  req
                   raw_sent) **
               ArrPts.pts_to network_out network_out_bytes **
               pure (B.length network_out_bytes == SZ.v network_out_len /\
                     27 <= B.length network_out_bytes /\
-                    can_send_key_update
+                    can_send_key_update_gen
                       st0
+                      req
+                      raw_sent /\
+                    (exists outer_fragment.
+                       W.parse_record (Seq.slice network_out_bytes 0 27) ==
+                         Some (T.Application_data, outer_fragment, 27)) /\
+                    Seq.equal
+                      raw_sent
+                      (Seq.slice network_out_bytes 0 27))
+          else
+            connection_exactly c st0 **
+            ArrPts.pts_to network_out 'old_network_out)
+
+fn server_try_send_key_update
+  (c:connection_state)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (req:M.key_update_request)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to network_out 'old_network_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len)
+  returns ok: bool
+  ensures (if ok then
+            exists* raw_sent network_out_bytes.
+              connection_exactly
+                c
+                (server_sent_key_update_state
+                  st0
+                  req
+                  raw_sent) **
+              ArrPts.pts_to network_out network_out_bytes **
+              pure (B.length network_out_bytes == SZ.v network_out_len /\
+                    27 <= B.length network_out_bytes /\
+                    server_can_send_key_update
+                      st0
+                      req
                       raw_sent /\
                     (exists outer_fragment.
                        W.parse_record (Seq.slice network_out_bytes 0 27) ==

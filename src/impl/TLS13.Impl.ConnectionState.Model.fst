@@ -2571,6 +2571,72 @@ let lemma_received_ignored_post_handshake_state_evolves
   assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (received_ignored_post_handshake_state st body raw_received))
 
+let lemma_server_received_key_update_state_evolves
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ServerEndpoint /\
+                Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsKeyUpdate req;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+                 st
+                 (server_received_key_update_state st req raw_received) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+                 (server_received_key_update_state st req raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsKeyUpdate req;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (server_received_key_update_state st req raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsKeyUpdate req;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (server_received_key_update_state st req raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (server_received_key_update_state st req raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+    st
+    (server_received_key_update_state st req raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+    st
+    (server_received_key_update_state st req raw_received);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+    st
+    (server_received_key_update_state st req raw_received));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+    (server_received_key_update_state st req raw_received))
+
 let lemma_received_key_update_state_evolves
   (st:CS.connection_state)
   (req:M.key_update_request)
@@ -2729,6 +2795,62 @@ let lemma_sent_key_update_state_evolves
     (sent_key_update_state st req raw_sent));
   assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
     (sent_key_update_state st req raw_sent))
+
+let lemma_server_sent_key_update_state_evolves
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+                server_can_send_key_update st req raw_sent)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+                 st
+                 (server_sent_key_update_state st req raw_sent) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+                 (server_sent_key_update_state st req raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsKeyUpdate req;
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (server_sent_key_update_state st req raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate req;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (server_sent_key_update_state st req raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (server_sent_key_update_state st req raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+    st
+    (server_sent_key_update_state st req raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+    st
+    (server_sent_key_update_state st req raw_sent);
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+    st
+    (server_sent_key_update_state st req raw_sent));
+  assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+    (server_sent_key_update_state st req raw_sent))
 
 let lemma_sent_key_update_response_state_evolves
   (st:CS.connection_state)

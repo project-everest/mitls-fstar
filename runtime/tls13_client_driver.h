@@ -39,6 +39,15 @@ int tls13_client_driver_send_application_data(
     const uint8_t *payload,
     size_t payload_len);
 
+/* Sends a TLS 1.3 KeyUpdate (RFC 8446 4.6.3), rotating this endpoint's
+ * application write key.  When [request_peer_update] is true the peer is asked
+ * to rotate its own sending key in reply (update_requested); otherwise the
+ * KeyUpdate is a bare rotation (update_not_requested).  Returns 0 on success.
+ * On failure the channel is closed, matching the verified contract. */
+int tls13_client_driver_send_key_update(
+    tls13_client_driver *driver,
+    bool request_peer_update);
+
 int tls13_client_driver_receive_application_data(
     tls13_client_driver *driver,
     uint8_t *out,

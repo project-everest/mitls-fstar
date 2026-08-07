@@ -86,7 +86,12 @@ int main(int argc, char **argv) {
   for (unsigned round = 0; exchange_ok && round < ECHO_ROUNDS; ++round) {
     received_len = 0;
     memset(received, 0, sizeof received);
+    /* Client-INITIATED rekey, on top of the peer-driven ones above: this
+       drives the verified client's KeyUpdate send path spontaneously rather
+       than as the mandated reply to the peer, so its own write key rotates
+       an extra time each round. */
     exchange_ok =
+        tls13_client_driver_send_key_update(driver, false) == 0 &&
         tls13_client_driver_send_application_data(driver, ping, sizeof ping) == 0 &&
         tls13_client_driver_receive_application_data(
             driver,

@@ -269,6 +269,28 @@ int tls13_client_driver_send_application_data(
   return 1;
 }
 
+int tls13_client_driver_send_key_update(
+    tls13_client_driver *driver,
+    bool request_peer_update) {
+  if (driver == NULL) {
+    return 1;
+  }
+  if (!driver->connected) {
+    return driver_fail(driver, "key_update: TLS channel is closed");
+  }
+
+  atlas_trace_set_connection(driver->trace_connection);
+  TLS13_Impl_Client_Driver_driver_workflow_status status =
+      TLS13_Impl_Client_Driver_send_key_update(
+          driver->verified_driver, request_peer_update);
+  if (status == TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
+    return 0;
+  }
+  (void)driver_fail_status(driver, "key_update", status);
+  driver->connected = false;
+  return 1;
+}
+
 static bool receive_status_is_retryable(
     TLS13_Impl_Client_Driver_driver_workflow_status status) {
   return status == TLS13_Impl_Client_Driver_State_DriverWorkflowNeedMoreInput ||

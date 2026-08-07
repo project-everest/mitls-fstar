@@ -304,6 +304,34 @@ fn send
               wire_sent1
               app_log1)
 
+(* Client-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
+   form: [true] sends [update_requested], asking the peer to rotate its own
+   sending key in reply; [false] sends [update_not_requested], rotating only our
+   write key.  A KeyUpdate carries no application message, so there is no
+   application-log transition to state. *)
+fn send_key_update
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          client_channel_after_operation
+            d
+            (channel_send_reusable status)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1
+
 fn receive
   (d:client_driver)
   (wire_received0:Ghost.erased B.bytes)

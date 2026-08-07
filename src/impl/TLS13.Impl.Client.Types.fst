@@ -129,6 +129,9 @@ type local_event_kind =
   | LocalSendClientFinished
   | LocalSendApplicationData
   | LocalSendKeyUpdate
+  (** Spontaneous, client-initiated rotation carrying [update_requested];
+      [LocalSendKeyUpdate] is the [update_not_requested] response form. *)
+  | LocalSendKeyUpdateRequested
   | LocalSendCloseNotify
   | LocalFail
   (** Internal event; see [EC.ClientProcessPendingHandshake]. *)
@@ -2197,6 +2200,9 @@ let local_event_kind_matches
   | LocalSendKeyUpdate, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
     msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+  | LocalSendKeyUpdateRequested, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateRequested
   | LocalStartHandshake, CS.ConnLocalEvent (CS.LocalStartHandshake _) -> True
   | LocalDeriveSharedSecret, CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> True
   | LocalInstallClientHandshakeTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
@@ -4717,7 +4723,8 @@ let lemma_local_event_kind_matches_network_is_sent
   | LocalSendClientHello
   | LocalSendClientFinished
   | LocalSendCloseNotify
-  | LocalSendKeyUpdate -> ()
+  | LocalSendKeyUpdate
+  | LocalSendKeyUpdateRequested -> ()
   | _ -> ()
 
 let lemma_local_event_kind_matches_protected_is_tail
@@ -7124,6 +7131,84 @@ let lemma_local_send_application_data_stepok_preserves_not_failed
      | _ -> assert False)
   | CS.ConnProtectedHandshake _ -> assert False
   | CS.ConnLocalEvent _ -> assert False
+
+(* A successful TLS KeyUpdate message step keeps control = ControlApplicationData. *)
+let lemma_step_tls_key_update_control
+  (model0 model1:CS.connection_model) (dir:CS.direction) (req:M.key_update_request)
+  : Lemma
+      (requires CS.step_tls_message model0 dir (M.TlsKeyUpdate req) == Some model1)
+      (ensures model1.CS.model_control == CS.ControlApplicationData)
+=
+  match model0.CS.model_control with
+  | CS.ControlApplicationData ->
+    (match dir with
+     | CL.Sent -> ()
+     | CL.Received -> ())
+  | _ -> assert False
+
+(* A successful client-initiated KeyUpdate send preserves not-failed control.
+   Mirrors [lemma_local_send_application_data_stepok_preserves_not_failed];
+   [kind] stays symbolic over the two KeyUpdate ABI kinds, so the event-shape
+   obligations are discharged under an explicit case split. *)
+let lemma_local_send_key_update_stepok_preserves_not_failed
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        (kind == LocalSendKeyUpdate \/ kind == LocalSendKeyUpdateRequested) /\
+        local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out /\
+        resp.status == StepOk)
+      (ensures connection_control_not_failed st1)
+=
+  assert (legal_handled_local_response
+    st0 st1 resp kind payload network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+  assert (legal_local_response
+    st0 st1 resp kind payload ev raw_sent raw_received network_out app_out);
+  assert (local_event_kind_matches st0 kind payload ev);
+  assert (legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsKeyUpdate req ->
+       assert (CS.step_tls_message
+         st0.CS.cs_model msg.CL.message_direction (M.TlsKeyUpdate req)
+         == Some st1.CS.cs_model);
+       lemma_step_tls_key_update_control
+         st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction req
+     | _ ->
+       (match kind with
+        | LocalSendKeyUpdate -> assert False
+        | LocalSendKeyUpdateRequested -> assert False))
+  | CS.ConnProtectedHandshake _ ->
+    (match kind with
+     | LocalSendKeyUpdate -> assert False
+     | LocalSendKeyUpdateRequested -> assert False)
+  | CS.ConnLocalEvent _ ->
+    (match kind with
+     | LocalSendKeyUpdate -> assert False
+     | LocalSendKeyUpdateRequested -> assert False)
 
 #pop-options
 

@@ -541,6 +541,208 @@ fn channel_receive
   }
 }
 
+(* Channel-level client-initiated KeyUpdate.  Mirrors [channel_send] but with
+   an empty payload and no application-log transition: a KeyUpdate carries no
+   application message, so the only obligation is that the channel invariant is
+   re-established on success and the driver is aborted on failure. *)
+fn channel_send_key_update
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          (if channel_send_reusable status
+           then
+             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1)
+{
+  CChannel.take_channel_snapshot
+    d wire_received0 wire_sent0 pending0 app_log0;
+  CChannel.open_channel_invariant
+    d wire_received0 wire_sent0 pending0 app_log0;
+  with st0.
+    assert (DS.client_driver_connected
+      d st0 (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  assert (pure (CT.connection_control_not_failed st0));
+  let status = DSend.run_key_update d request;
+  with st1 transport_received1 transport_sent1.
+    assert (DS.client_driver_connected
+      d st1 transport_received1 transport_sent1);
+  CChannel.recall_tcp_history
+    d
+    wire_received0
+    wire_sent0
+    app_log0
+    (Ghost.hide st1)
+    (Ghost.hide transport_received1)
+    (Ghost.hide transport_sent1);
+  drop_ (DS.client_channel_snapshot
+    d
+    (Ghost.reveal wire_received0)
+    (Ghost.reveal wire_sent0)
+    (Ghost.reveal app_log0));
+  let reusable = channel_send_reusable_runtime status;
+  assert (pure (reusable == channel_send_reusable status));
+  if reusable {
+    assert (pure (status == DS.DriverWorkflowOk \/
+                  status == DS.DriverWorkflowPayloadTooLarge));
+    assert (pure (CT.connection_control_not_failed st1));
+    CChannel.pack_connected_channel_invariant
+      d
+      (Ghost.hide st1)
+      (Ghost.hide transport_received1)
+      (Ghost.hide transport_sent1);
+    with pending1.
+      assert (DS.client_channel_inv
+        d transport_received1 transport_sent1 pending1
+        (TChannel.application_log st1));
+    rewrite (DS.client_channel_inv
+      d transport_received1 transport_sent1 pending1
+      (TChannel.application_log st1))
+      as (if channel_send_reusable status
+          then DS.client_channel_inv
+            d transport_received1 transport_sent1 pending1
+            (TChannel.application_log st1)
+          else DS.client_channel_terminal
+            d transport_received1 transport_sent1
+            (TChannel.application_log st1));
+    status
+  } else {
+    CChannel.pack_connected_channel_terminal
+      d
+      (Ghost.hide st1)
+      (Ghost.hide transport_received1)
+      (Ghost.hide transport_sent1);
+    rewrite (DS.client_channel_terminal
+      d transport_received1 transport_sent1
+      (TChannel.application_log st1))
+      as (if channel_send_reusable status
+          then DS.client_channel_inv
+            d transport_received1 transport_sent1 transport_received1
+            (TChannel.application_log st1)
+          else DS.client_channel_terminal
+            d transport_received1 transport_sent1
+            (TChannel.application_log st1));
+    status
+  }
+}
+
+(* Client-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
+   form: [true] sends [update_requested], asking the peer to rotate its own
+   sending key in reply; [false] sends [update_not_requested], rotating only our
+   write key. *)
+fn send_key_update
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          client_channel_after_operation
+            d
+            (channel_send_reusable status)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1
+{
+  let status =
+    channel_send_key_update
+      d wire_received0 wire_sent0 pending0 app_log0
+      request;
+  with wire_received1 wire_sent1 pending1 app_log1.
+    assert (
+      (if channel_send_reusable status
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1));
+  let reusable = channel_send_reusable_runtime status;
+  assert (pure (reusable == channel_send_reusable status));
+  if reusable {
+    assert (pure (channel_send_reusable status == true));
+    rewrite
+      (if channel_send_reusable status
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.client_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1);
+    rewrite
+      (DS.client_channel_inv
+        d wire_received1 wire_sent1 pending1 app_log1)
+      as
+      (client_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    status
+  } else {
+    assert (pure (channel_send_reusable status == false));
+    rewrite
+      (if channel_send_reusable status
+       then
+         DS.client_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+       else
+         DS.client_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+      as
+      (DS.client_channel_terminal
+        d wire_received1 wire_sent1 app_log1);
+    CChannel.open_terminal
+      d
+      (Ghost.hide wire_received1)
+      (Ghost.hide wire_sent1)
+      (Ghost.hide app_log1);
+    DClose.abort d;
+    with st1. assert (DS.client_driver_closed d st1);
+    rewrite
+      (DS.client_driver_closed d st1)
+      as
+      (client_driver_closed d st1);
+    fold (client_driver_is_closed d);
+    rewrite
+      (client_driver_is_closed d)
+      as
+      (client_channel_after_operation
+        d
+        (channel_send_reusable status)
+        wire_received1
+        wire_sent1
+        pending1
+        app_log1);
+    status
+  }
+}
+
 fn send
   (d:client_driver)
   (wire_received0:Ghost.erased B.bytes)

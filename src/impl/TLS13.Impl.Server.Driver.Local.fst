@@ -862,6 +862,10 @@ let lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
     assert (server_driver_selection_present_when_required st1)
   | ST.LocalSendCloseNotify ->
     assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendKeyUpdate ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendKeyUpdateRequested ->
+    assert (server_driver_selection_present_when_required st1)
   | ST.LocalFail ->
     assert (server_driver_selection_present_when_required st1);
   assert (server_driver_supported_profile_selection st1 credential_identity)

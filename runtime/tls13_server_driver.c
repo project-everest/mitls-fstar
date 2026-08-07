@@ -294,6 +294,28 @@ int tls13_server_driver_send_application_data(
   return 1;
 }
 
+int tls13_server_driver_send_key_update(
+    tls13_server_driver *driver,
+    bool request_peer_update) {
+  if (driver == NULL) {
+    return 1;
+  }
+  if (driver->state != TLS13_SERVER_DRIVER_READY) {
+    return driver_fail(driver, "key_update: TLS channel is closed");
+  }
+
+  atlas_trace_set_connection(driver->trace_connection);
+  TLS13_Impl_Server_Driver_server_workflow_status status =
+      TLS13_Impl_Server_Driver_send_key_update(
+          driver->verified_driver, request_peer_update);
+  if (status == TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+    return 0;
+  }
+  (void)driver_fail_status(driver, "key_update", status);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
+  return 1;
+}
+
 int tls13_server_driver_receive_application_data(
     tls13_server_driver *driver,
     uint8_t *out,

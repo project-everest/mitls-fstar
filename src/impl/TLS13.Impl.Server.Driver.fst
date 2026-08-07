@@ -275,6 +275,53 @@ fn send
   }
 }
 
+fn send_key_update
+  (d:server_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0)
+  returns status:server_workflow_status
+  ensures
+    (match status with
+     | ServerWorkflowOk
+     | ServerWorkflowPayloadTooLarge ->
+       exists* wire_received1 wire_sent1 pending1 app_log1.
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+     | _ ->
+       exists* st certificate_chain credential_identity.
+         DS.top_server_driver_closed d st certificate_chain credential_identity)
+{
+  let status =
+    BS.run_key_update
+      d wire_received0 wire_sent0 pending0 app_log0
+      request;
+  match status {
+    BS.BufferedSendOk -> { ServerWorkflowOk }
+    BS.BufferedSendPayloadTooLarge -> { ServerWorkflowPayloadTooLarge }
+    BS.BufferedSendFailed -> {
+      with wire_received1 wire_sent1 app_log1.
+        assert (DS.top_server_channel_terminal
+          d wire_received1 wire_sent1 app_log1);
+      BC.abort_terminal
+        d
+        (Ghost.hide wire_received1)
+        (Ghost.hide wire_sent1)
+        (Ghost.hide app_log1);
+      ServerWorkflowStepFailed
+    }
+  }
+}
+
 fn receive
   (d:server_driver)
   (wire_received0:Ghost.erased B.bytes)

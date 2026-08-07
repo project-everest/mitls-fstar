@@ -2610,7 +2610,8 @@ fn process_local_event
      | CT.LocalSendKeyUpdate -> 13UL
      | CT.LocalSendCloseNotify -> 14UL
      | CT.LocalFail -> 15UL
-     | CT.LocalProcessPendingHandshake -> 16UL)
+     | CT.LocalProcessPendingHandshake -> 16UL
+     | CT.LocalSendKeyUpdateRequested -> 17UL)
     (SZ.sizet_to_uint64 payload_len)
     0UL;
   let resp =

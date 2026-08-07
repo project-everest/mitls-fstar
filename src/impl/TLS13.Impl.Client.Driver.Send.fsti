@@ -48,3 +48,38 @@ fn run
                 client_driver_received_log_accounted st1 received1 /\
                 ((status == DriverWorkflowOk \/ status == DriverWorkflowPayloadTooLarge) ==>
                   CT.connection_control_not_failed st1))
+
+(**
+  Client-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
+  form: [true] sends [update_requested], asking the peer to rotate its own
+  sending key in reply; [false] sends [update_not_requested], rotating only our
+  write key.  The payload is empty, so unlike [run] there is no length bound to
+  test and no payload-too-large outcome.
+**)
+fn run_key_update
+  (d:client_driver)
+  (request:bool)
+  requires client_driver_connected d 'st0 'received0 'sent0 **
+           pure (CT.connection_control_not_failed 'st0)
+  returns status:driver_workflow_status
+  ensures exists* st1 received1 sent1.
+          client_driver_connected d st1 received1 sent1 **
+          pure (client_driver_key_update_correct
+                 'st0
+                 st1
+                 status
+                 (if request
+                  then CT.LocalSendKeyUpdateRequested
+                  else CT.LocalSendKeyUpdate)
+                 (Ghost.reveal 'sent0)
+                 sent1 /\
+                st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
+                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                client_driver_received_log_accounted
+                  'st0
+                  (Ghost.reveal 'received0) /\
+                client_driver_sent_log_exact st1 sent1 /\
+                client_driver_received_log_accounted st1 received1 /\
+                (status == DriverWorkflowOk ==>
+                  CT.connection_control_not_failed st1))

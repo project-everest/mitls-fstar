@@ -493,7 +493,9 @@ let lemma_local_event_wire_lengths
            | ST.LocalSendCertificate
            | ST.LocalSendCertificateVerify
            | ST.LocalSendServerFinished
-           | ST.LocalSendCloseNotify ->
+           | ST.LocalSendCloseNotify
+           | ST.LocalSendKeyUpdate
+           | ST.LocalSendKeyUpdateRequested ->
              assert (msg.CL.message_direction == CL.Sent);
              assert False
            | _ ->

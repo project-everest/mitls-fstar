@@ -993,3 +993,29 @@ fn mark_received_key_update
             c
             (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+
+fn mark_server_received_key_update
+  (c:connection_state)
+  (raw:array U8.t)
+  (requested:bool)
+  (#req:erased M.key_update_request)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+                 (requested ==> req == M.UpdateRequested) /\
+                 (requested == false ==> req == M.UpdateNotRequested) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsKeyUpdate req;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes

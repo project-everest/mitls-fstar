@@ -285,6 +285,36 @@ fn send
        exists* st certificate_chain credential_identity.
          DS.top_server_driver_closed d st certificate_chain credential_identity)
 
+(* Server-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
+   form: [true] sends [update_requested], asking the peer to rotate its own
+   sending key in reply; [false] sends [update_not_requested], rotating only
+   our write key.  The connection remains usable for application data. *)
+fn send_key_update
+  (d:server_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0)
+  returns status:server_workflow_status
+  ensures
+    (match status with
+     | ServerWorkflowOk
+     | ServerWorkflowPayloadTooLarge ->
+       exists* wire_received1 wire_sent1 pending1 app_log1.
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+     | _ ->
+       exists* st certificate_chain credential_identity.
+         DS.top_server_driver_closed d st certificate_chain credential_identity)
+
 fn receive
   (d:server_driver)
   (wire_received0:Ghost.erased B.bytes)

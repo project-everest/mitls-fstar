@@ -148,6 +148,14 @@ let next_local_action_sound
       FStar.UInt64.fits
         (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
       27 <= SZ.v network_out_len
+    (* Spontaneous initiation: no pending-response obligation is required. *)
+    | CT.LocalSendKeyUpdateRequested ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+      FStar.UInt64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      27 <= SZ.v network_out_len
     | _ ->
       False)
   else

@@ -175,6 +175,32 @@ let client_driver_send_correct
     st1.CS.cs_wire_log.CL.raw_received
     st0.CS.cs_wire_log.CL.raw_received
 
+(* Client-initiated KeyUpdate (RFC 8446 4.6.3).  The payload is empty and there
+   is no length bound to test, so unlike [client_driver_send_correct] there is
+   no payload-too-large case; [kind] selects the request form. *)
+noextract
+let client_driver_key_update_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (status:driver_workflow_status)
+  (kind:CT.local_event_kind)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : prop =
+  (exists resp.
+     client_driver_local_write_correct
+       st0
+       st1
+       resp
+       kind
+       B.empty
+       sent
+       sent' /\
+     client_driver_send_status_correct status resp) /\
+  Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    st0.CS.cs_wire_log.CL.raw_received
+
 noextract
 let client_driver_close_status_correct
   (wait_for_peer:bool)
@@ -1679,7 +1705,8 @@ let lemma_local_event_wire_lengths
            | CT.LocalSendClientHello
            | CT.LocalSendClientFinished
            | CT.LocalSendCloseNotify
-           | CT.LocalSendKeyUpdate ->
+           | CT.LocalSendKeyUpdate
+           | CT.LocalSendKeyUpdateRequested ->
              assert (msg.CL.message_direction == CL.Sent);
              assert False
            | _ ->

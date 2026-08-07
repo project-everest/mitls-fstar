@@ -2495,7 +2495,7 @@ let lemma_pw_establish (s:tls_system_state)
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** ROUTE A — a CLIENT-changing step whose client is at application data. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30 --split_queries always"
 let lemma_pw_pres_client_appdata_route_a
   (a b:tls_system_state)
   (e:SM.event CW.wire_message CTy.client_local_event)

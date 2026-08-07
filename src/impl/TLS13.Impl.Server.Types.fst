@@ -62,6 +62,8 @@ type local_event_kind =
   | LocalSendServerFinished
   | LocalSendApplicationData
   | LocalSendCloseNotify
+  | LocalSendKeyUpdate
+  | LocalSendKeyUpdateRequested
   | LocalFail
 
 type local_payload_kind =
@@ -490,6 +492,18 @@ let server_local_event_input_ready
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
     Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
+  | LocalSendKeyUpdate ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
+  | LocalSendKeyUpdateRequested ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
   | LocalSendCertificate ->
     // Plain readiness for the Certificate flight.  Mirrors
     // next_local_action_sound/LocalSendCertificate exactly (with payload == empty
@@ -889,6 +903,12 @@ let local_event_kind_matches
   | LocalSendCloseNotify, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
     msg.CL.message_value == M.TlsAlert T.Close_notify
+  | LocalSendKeyUpdate, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+  | LocalSendKeyUpdateRequested, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateRequested
   | LocalStartServer, CS.ConnLocalEvent CS.LocalStartServer ->
     True
   | LocalSelectServerParameters, CS.ConnLocalEvent (CS.LocalSelectServerParameters _) ->
@@ -950,6 +970,46 @@ let local_event_supported_profile
     False
   | _, _ ->
     True
+
+(* The two KeyUpdate ABI kinds are only ever paired with the matching request
+   form.  Bundling the three kind-indexed obligations here lets the shared
+   send path keep [kind] symbolic. *)
+let lemma_key_update_kind_facts
+  (kind:local_event_kind)
+  (req:M.key_update_request)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        ((kind == LocalSendKeyUpdate /\ req == M.UpdateNotRequested) \/
+         (kind == LocalSendKeyUpdateRequested /\ req == M.UpdateRequested)) /\
+        ev == CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsKeyUpdate req;
+              })
+      (ensures
+        local_event_kind_matches kind payload ev /\
+        local_payload_matches_app_sent_delta kind payload ev /\
+        local_event_supported_profile kind payload ev)
+=
+  ()
+
+let lemma_key_update_kind_input_ready
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+        (kind == LocalSendKeyUpdate \/ kind == LocalSendKeyUpdateRequested) /\
+        server_local_event_input_ready st kind payload)
+      (ensures
+        Seq.equal payload B.empty /\
+        st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        Some?
+          st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+=
+  ()
 
 noextract
 let legal_response_for_event
@@ -1574,6 +1634,15 @@ let server_network_step_ok_consumed_prefix
       st1 ==
        CM.received_change_cipher_spec_state
          st0
+         raw_received /\
+      Seq.equal
+       raw_received
+       (server_network_consumed_prefix resp input)) \/
+    (exists req raw_received.
+      st1 ==
+       CM.server_received_key_update_state
+         st0
+         req
          raw_received /\
       Seq.equal
        raw_received

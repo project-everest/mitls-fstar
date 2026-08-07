@@ -4666,7 +4666,9 @@ let lemma_server_api_event_raw_received_empty
     | ST.LocalSendCertificate
     | ST.LocalSendCertificateVerify
     | ST.LocalSendServerFinished
-    | ST.LocalSendCloseNotify ->
+    | ST.LocalSendCloseNotify
+    | ST.LocalSendKeyUpdate
+    | ST.LocalSendKeyUpdateRequested ->
       assert (msg.CL.message_direction == CL.Sent)
     | _ ->
       assert False

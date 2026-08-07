@@ -1110,7 +1110,7 @@ let record_app_epoch_coupling (m:CS.connection_model) : prop =
      Some? (app_traffic_slot keys
              (CS.traffic_label_for_endpoint_direction role CS.TrafficRead)))
 
-#push-options "--fuel 4 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30 --split_queries always"
 let lemma_step_record_app_epoch_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma

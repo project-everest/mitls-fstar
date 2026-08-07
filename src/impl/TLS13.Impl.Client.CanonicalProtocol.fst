@@ -434,7 +434,8 @@ let lemma_client_api_event_raw_received_empty
     | CT.LocalSendClientHello
     | CT.LocalSendClientFinished
     | CT.LocalSendCloseNotify
-    | CT.LocalSendKeyUpdate ->
+    | CT.LocalSendKeyUpdate
+    | CT.LocalSendKeyUpdateRequested ->
       assert (msg.CL.message_direction == CL.Sent)
     | _ ->
       assert False
