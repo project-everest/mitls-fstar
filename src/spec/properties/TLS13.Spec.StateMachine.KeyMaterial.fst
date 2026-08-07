@@ -680,6 +680,25 @@ let application_traffic_material_slots_match_expected_at_epoch
     (connection_state_key_update_count st ServerTraffic)
 
 (**
+  The epoch-indexed replacement for
+  `supported_profile_application_traffic_material_matches_expected`.  Where the
+  latter pins both application traffic slots to the *epoch-0* derived material,
+  this pins each to the material of its own epoch, so it survives KeyUpdates.
+
+  Two states satisfying this predicate hold the same application traffic
+  material exactly when their epoch-0 secrets agree *and* their KeyUpdate
+  counts agree label by label; the count agreement is what a rekeying-aware
+  pairing argument has to supply in place of "no rekeying".
+ **)
+let supported_profile_application_traffic_material_matches_expected_at_epoch
+  (st:connection_state)
+  : prop =
+  traffic_material_matches_expected_at_epoch
+    (traffic_id TrafficApplication ClientTraffic) st /\
+  traffic_material_matches_expected_at_epoch
+    (traffic_id TrafficApplication ServerTraffic) st
+
+(**
   Event logs grow by *append*, but the count is defined head-first; these are
   the two rules a step lemma needs.  The first says a non-rotating event leaves
   every epoch alone, the second that a KeyUpdate advances exactly the label it
