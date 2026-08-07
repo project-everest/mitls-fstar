@@ -139,6 +139,75 @@ fn query_application_ready
   ready
 }
 
+(* Reads the RFC 8446 4.6.3 response obligation.  Purely a query: the caller
+   combines it with [query_application_ready] before sending, so a [true] here
+   never leads to a fail-close on a readiness check. *)
+fn query_key_update_response_pending
+  (d:DS.top_server_driver)
+  requires
+    DS.top_server_driver_connected
+      d
+      'st
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent
+  returns pending:bool
+  ensures
+    DS.top_server_driver_connected
+      d
+      'st
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent
+{
+  unfold (DS.top_server_driver_connected
+    d 'st 'certificate_chain 'credential_identity 'received 'sent);
+  with channel model committed buffered_len.
+    unfold (DS.top_server_driver_connected_indexed
+      d 'st 'certificate_chain 'credential_identity
+      'received 'sent channel model committed buffered_len);
+  unfold (DS.buffered_driver_indexed
+    (DS.top_server_as_buffered d channel)
+    'st
+    'certificate_chain
+    'credential_identity
+    (BT.pending model)
+    buffered_len
+    model
+    'received
+    committed
+    'sent);
+  rewrite
+    (S.connection_exactly d.top_server_driver_server 'st)
+    as
+    (CR.connection_exactly d.top_server_driver_server 'st);
+  let pending =
+    CQ.server_key_update_response_ready_runtime d.top_server_driver_server;
+  rewrite
+    (CR.connection_exactly d.top_server_driver_server 'st)
+    as
+    (S.connection_exactly d.top_server_driver_server 'st);
+  fold (DS.buffered_driver_indexed
+    (DS.top_server_as_buffered d channel)
+    'st
+    'certificate_chain
+    'credential_identity
+    (BT.pending model)
+    buffered_len
+    model
+    'received
+    committed
+    'sent);
+  fold (DS.top_server_driver_connected_indexed
+    d 'st 'certificate_chain 'credential_identity
+    'received 'sent channel model committed buffered_len);
+  fold (DS.top_server_driver_connected
+    d 'st 'certificate_chain 'credential_identity 'received 'sent);
+  pending
+}
+
 let lemma_send_ready
   (st:CS.connection_state)
   (payload certificate_chain:B.bytes)
@@ -744,5 +813,72 @@ fn run_key_update
         (Ghost.hide sent1);
       BufferedSendFailed
     }
+  }
+}
+
+(* RFC 8446 4.6.3: "If the request_update field is set to update_requested,
+   then the receiver MUST send a KeyUpdate of its own with request_update set
+   to update_not_requested prior to sending its next Application Data record."
+   The obligation is recorded by the receive path as
+   [app_key_update_response_pending]; this discharges it.  It is a no-op unless
+   the flag is set *and* the connection is in the application-data state, so it
+   is safe to call unconditionally after a receive: a peer that never sends
+   KeyUpdate pays two register reads.  Readiness is checked with exactly
+   [query_application_ready], the gate [run_key_update] itself uses, so a
+   response is only attempted when that gate is known to pass. *)
+fn run_key_update_response
+  (d:DS.top_server_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.top_server_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal pending0)
+      (Ghost.reveal app_log0)
+  returns status:send_status
+  ensures
+    (match status with
+     | BufferedSendOk
+     | BufferedSendPayloadTooLarge ->
+       exists* wire_received1 wire_sent1 pending1 app_log1.
+         DS.top_server_channel_inv
+           d wire_received1 wire_sent1 pending1 app_log1
+     | BufferedSendFailed ->
+       exists* wire_received1 wire_sent1 app_log1.
+         DS.top_server_channel_terminal
+           d wire_received1 wire_sent1 app_log1)
+{
+  BC.open_channel_invariant
+    d wire_received0 wire_sent0 pending0 app_log0;
+  with st0 certificate_chain credential_identity.
+    assert (DS.top_server_driver_connected
+      d st0 certificate_chain credential_identity
+      (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  let ready = query_application_ready d;
+  let pending = query_key_update_response_pending d;
+  BC.pack_connected_channel
+    d
+    (Ghost.hide st0)
+    (Ghost.hide certificate_chain)
+    (Ghost.hide credential_identity)
+    wire_received0
+    wire_sent0;
+  with wire_received1 wire_sent1 pending1 app_log1.
+    assert (DS.top_server_channel_inv
+      d wire_received1 wire_sent1 pending1 app_log1);
+  if (ready && pending) {
+    run_key_update
+      d
+      (Ghost.hide wire_received1)
+      (Ghost.hide wire_sent1)
+      (Ghost.hide pending1)
+      (Ghost.hide app_log1)
+      false
+  } else {
+    BufferedSendOk
   }
 }

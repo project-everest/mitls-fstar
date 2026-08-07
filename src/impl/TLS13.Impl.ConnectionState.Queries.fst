@@ -6420,6 +6420,68 @@ fn server_can_send_key_update_runtime
   fold (connection_exactly c st0);
   ok
 }
+fn server_key_update_response_ready_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+  unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  with source_offset pending_response. _;
+
+  let role_ok = config_role_is_server c.config;
+
+  let tag = !c.control.control_tag;
+  let control_ok = tag = 2uy;
+  let server_app_present = !c.handshake.keys.server_application_traffic.present;
+  let pending = !c.application.key_update_response_pending;
+
+  fold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  let ok =
+    role_ok &&
+    control_ok &&
+    pending &&
+    server_app_present;
+
+  assert (pure (ok ==> U8.v tag == 2));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending));
+  assert (pure (ok ==> Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
 fn can_send_key_update_runtime
   (c:connection_state)
   (network_out_len:SZ.t)

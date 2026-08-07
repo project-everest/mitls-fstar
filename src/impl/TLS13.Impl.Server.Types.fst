@@ -277,6 +277,22 @@ let next_local_action_sound
        // (TLS13.Impl.Server.Send.lemma_serialize_handshake_finished_len).
        B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
          Bounds.max_transcript_len)
+    | LocalSendKeyUpdate ->
+      // RFC 8446 4.6.3: on receiving a KeyUpdate with update_requested the
+      // peer MUST send its own KeyUpdate with update_not_requested.  This is
+      // the only *scheduled* KeyUpdate on the server: spontaneous initiation
+      // goes through the public driver API, not through next_local_action, so
+      // this arm is gated on the response obligation being outstanding.
+      // The conjuncts below are exactly those of
+      // server_local_event_input_ready st LocalSendKeyUpdate B.empty (plus the
+      // pending flag), so server_internal_ready_implies_kind_ready still holds
+      // definitionally.
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
     | _ ->
       False
   else

@@ -309,9 +309,15 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
   unsigned client_key_updates = 0u;
   for (size_t i = 0u; i < APPLICATION_RECORD_COUNT; ++i) {
     /* Client-initiated rekey: drives the verified server's KeyUpdate RECEIVE
-       path, which rotates the server's application read key. */
+       path, which rotates the server's application read key.  Half of these
+       use update_requested, which under RFC 8446 4.6.3 obliges the verified
+       server to answer with an update_not_requested KeyUpdate of its own; the
+       key_updates_read assertion below is sized to require those answers. */
     if (client_key_updates < CLIENT_KEY_UPDATE_ROUNDS) {
-      if (SSL_key_update(ssl, SSL_KEY_UPDATE_NOT_REQUESTED) != 1 ||
+      int update_mode = (client_key_updates % 2u == 0u)
+                            ? SSL_KEY_UPDATE_REQUESTED
+                            : SSL_KEY_UPDATE_NOT_REQUESTED;
+      if (SSL_key_update(ssl, update_mode) != 1 ||
           SSL_do_handshake(ssl) != 1) {
         ERR_print_errors_fp(stderr);
         goto done;
@@ -342,15 +348,20 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
   }
   /* Assert the rekeys really happened on the wire.  Without this the echo
      loop would still pass if KeyUpdate were silently dropped. */
+  /* CLIENT_KEY_UPDATE_ROUNDS/2 of the client's updates set update_requested,
+     so the server must send that many mandated responses on top of the
+     SERVER_KEY_UPDATE_ROUNDS it initiates itself. */
+  unsigned const expected_server_key_updates =
+      SERVER_KEY_UPDATE_ROUNDS + (CLIENT_KEY_UPDATE_ROUNDS + 1u) / 2u;
   if (trace.key_updates_written < CLIENT_KEY_UPDATE_ROUNDS ||
-      trace.key_updates_read < SERVER_KEY_UPDATE_ROUNDS) {
+      trace.key_updates_read < expected_server_key_updates) {
     fprintf(
         stderr,
         "openssl client: key update accounting failed: wrote %u (expected >= %u), read %u (expected >= %u)\n",
         trace.key_updates_written,
         (unsigned)CLIENT_KEY_UPDATE_ROUNDS,
         trace.key_updates_read,
-        (unsigned)SERVER_KEY_UPDATE_ROUNDS);
+        expected_server_key_updates);
     goto done;
   }
   fprintf(

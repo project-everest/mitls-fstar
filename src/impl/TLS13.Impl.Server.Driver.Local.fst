@@ -2541,6 +2541,25 @@ fn process_ready_empty_local_action_once
            ServerDriverLocalStepFailed
          }
        }
+       ST.LocalSendKeyUpdate -> {
+         // RFC 8446 4.6.3 response to a peer update_requested.  The scheduler
+         // only proposes this when app_key_update_response_pending holds; the
+         // send itself is the same empty-payload local event as the others,
+         // and the three kind-conditional obligations below are vacuous here.
+         assert (pure (action.ST.next_local_kind == ST.LocalSendKeyUpdate));
+         assert (pure (action.ST.next_local_kind <> ST.LocalSelectServerParameters));
+         assert (pure (action.ST.next_local_kind <> ST.LocalStartServer));
+         assert (pure (action.ST.next_local_kind <> ST.LocalSendServerHello));
+         let resp =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
+       }
        _ -> {
          ServerDriverLocalUnsupported
        }

@@ -366,9 +366,50 @@ fn receive
       out out_len network_fuel;
   match received.BR.receive_status {
     BR.BufferedReceiveOk -> {
-      {
-        server_receive_status = ServerWorkflowOk;
-        server_receive_len = received.BR.receive_len;
+      // RFC 8446 4.6.3: a peer KeyUpdate with update_requested must be answered
+      // with our own update_not_requested *before* the next Application Data
+      // record.  The receive above records the obligation; discharge it here,
+      // while we still own the channel and before returning to the
+      // application.  No-op when nothing is pending.
+      with wire_received1 wire_sent1 pending1 app_log1.
+        assert (DS.top_server_channel_inv
+          d wire_received1 wire_sent1 pending1 app_log1);
+      let ku =
+        BS.run_key_update_response
+          d
+          (Ghost.hide wire_received1)
+          (Ghost.hide wire_sent1)
+          (Ghost.hide pending1)
+          (Ghost.hide app_log1);
+      match ku {
+        BS.BufferedSendFailed -> {
+          with wire_received2 wire_sent2 app_log2.
+            assert (DS.top_server_channel_terminal
+              d wire_received2 wire_sent2 app_log2);
+          BC.abort_terminal
+            d
+            (Ghost.hide wire_received2)
+            (Ghost.hide wire_sent2)
+            (Ghost.hide app_log2);
+          {
+            server_receive_status = ServerWorkflowStepFailed;
+            server_receive_len = received.BR.receive_len;
+          }
+        }
+        BS.BufferedSendOk -> {
+          {
+            server_receive_status = ServerWorkflowOk;
+            server_receive_len = received.BR.receive_len;
+          }
+        }
+        BS.BufferedSendPayloadTooLarge -> {
+          // Unreachable: run_key_update_response sends a fixed 27-byte record
+          // into the driver's own output buffer, which is far larger.
+          {
+            server_receive_status = ServerWorkflowOk;
+            server_receive_len = received.BR.receive_len;
+          }
+        }
       }
     }
     BR.BufferedReceiveExhausted -> {

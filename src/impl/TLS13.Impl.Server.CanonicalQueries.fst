@@ -1149,6 +1149,14 @@ ensures
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
         return_server_payload_free_action srv cfg frame ST.LocalSendCloseNotify local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
       }
+      ST.LocalSendKeyUpdate -> {
+        // Scheduled only as the RFC 8446 4.6.3 mandated response; like the other
+        // empty-payload sends it needs no extra frame data.  (The remaining
+        // kinds, including LocalSendKeyUpdateRequested, stay refutable from
+        // next_local_action_sound, so they need no arm.)
+        server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
+        return_server_payload_free_action srv cfg frame ST.LocalSendKeyUpdate local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
+      }
       ST.LocalFail -> {
         server_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
         return_server_payload_free_action srv cfg frame ST.LocalFail local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
