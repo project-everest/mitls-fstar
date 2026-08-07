@@ -189,7 +189,170 @@ let channel_receive_reusable_runtime
   | DS.DriverWorkflowOutputBufferTooSmall -> true
   | _ -> false
 
-fn channel_send
+(* Flush an outstanding mandated KeyUpdate reply (RFC 8446 4.6.3).
+
+   The peer's [update_requested] sets [app_key_update_response_pending] during a
+   receive, but `BN.drive` -- the connected-receive path -- does not run local
+   actions, so the scheduler's [LocalSendKeyUpdate] arm can never fire while the
+   connection is at [ControlApplicationData].  This is the direct path that
+   discharges the obligation instead; it is run at the *head* of a receive, so
+   that a send failure leaves the application log untouched and the caller can
+   report the failure without violating [CI.receive_transition]'s log equation.
+
+   The application log is preserved on both branches: a KeyUpdate event has
+   empty application sent/received deltas, and so does the [LocalFail] event of
+   a failed step. *)
+fn flush_key_update_response
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1.
+          (if channel_send_reusable status
+           then
+             DS.client_channel_inv
+               d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+           else
+             DS.client_channel_terminal
+               d wire_received1 wire_sent1 (Ghost.reveal app_log0)) **
+          pure (
+            CPI.histories_ahead
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              wire_received1
+              wire_sent1)
+{
+  CChannel.take_channel_snapshot
+    d wire_received0 wire_sent0 pending0 app_log0;
+  CChannel.open_channel_invariant
+    d wire_received0 wire_sent0 pending0 app_log0;
+  with st0.
+    assert (DS.client_driver_connected
+      d st0 (Ghost.reveal wire_received0) (Ghost.reveal wire_sent0));
+  assert (pure (CT.connection_control_not_failed st0));
+  assert (pure ((Ghost.reveal app_log0) == TChannel.application_log st0));
+  let pending = DSend.query_key_update_response_pending d;
+  if pending {
+    let status = DSend.run_key_update d false;
+    with st1 transport_received1 transport_sent1.
+      assert (DS.client_driver_connected
+        d st1 transport_received1 transport_sent1);
+    DS.lemma_client_driver_key_update_preserves_app_log
+      st0
+      st1
+      status
+      CT.LocalSendKeyUpdate
+      (Ghost.reveal wire_sent0)
+      transport_sent1;
+    assert (pure (TChannel.application_log st1 == Ghost.reveal app_log0));
+    CChannel.recall_tcp_history
+      d
+      wire_received0
+      wire_sent0
+      app_log0
+      (Ghost.hide st1)
+      (Ghost.hide transport_received1)
+      (Ghost.hide transport_sent1);
+    drop_ (DS.client_channel_snapshot
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0));
+    let reusable = channel_send_reusable_runtime status;
+    assert (pure (reusable == channel_send_reusable status));
+    if reusable {
+      assert (pure (status == DS.DriverWorkflowOk \/
+                    status == DS.DriverWorkflowPayloadTooLarge));
+      assert (pure (CT.connection_control_not_failed st1));
+      CChannel.pack_connected_channel_invariant
+        d
+        (Ghost.hide st1)
+        (Ghost.hide transport_received1)
+        (Ghost.hide transport_sent1);
+      with pending1.
+        assert (DS.client_channel_inv
+          d transport_received1 transport_sent1 pending1
+          (TChannel.application_log st1));
+      rewrite (DS.client_channel_inv
+        d transport_received1 transport_sent1 pending1
+        (TChannel.application_log st1))
+        as (if channel_send_reusable status
+            then DS.client_channel_inv
+              d transport_received1 transport_sent1 pending1
+              (Ghost.reveal app_log0)
+            else DS.client_channel_terminal
+              d transport_received1 transport_sent1
+              (Ghost.reveal app_log0));
+      status
+    } else {
+      CChannel.pack_connected_channel_terminal
+        d
+        (Ghost.hide st1)
+        (Ghost.hide transport_received1)
+        (Ghost.hide transport_sent1);
+      rewrite (DS.client_channel_terminal
+        d transport_received1 transport_sent1
+        (TChannel.application_log st1))
+        as (if channel_send_reusable status
+            then DS.client_channel_inv
+              d transport_received1 transport_sent1 transport_received1
+              (Ghost.reveal app_log0)
+            else DS.client_channel_terminal
+              d transport_received1 transport_sent1
+              (Ghost.reveal app_log0));
+      status
+    }
+  } else {
+    CChannel.pack_connected_channel_invariant
+      d
+      (Ghost.hide st0)
+      (Ghost.hide (Ghost.reveal wire_received0))
+      (Ghost.hide (Ghost.reveal wire_sent0));
+    drop_ (DS.client_channel_snapshot
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0));
+    CPI.lemma_bytes_extends_refl (Ghost.reveal wire_received0);
+    CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
+    with pending1.
+      assert (DS.client_channel_inv
+        d
+        (Ghost.reveal wire_received0)
+        (Ghost.reveal wire_sent0)
+        pending1
+        (TChannel.application_log st0));
+    rewrite (DS.client_channel_inv
+      d
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      pending1
+      (TChannel.application_log st0))
+      as (if channel_send_reusable DS.DriverWorkflowOk
+          then DS.client_channel_inv
+            d
+            (Ghost.reveal wire_received0)
+            (Ghost.reveal wire_sent0)
+            pending1
+            (Ghost.reveal app_log0)
+          else DS.client_channel_terminal
+            d
+            (Ghost.reveal wire_received0)
+            (Ghost.reveal wire_sent0)
+            (Ghost.reveal app_log0));
+    DS.DriverWorkflowOk
+  }
+}
+
+fn channel_send_core
   (d:client_driver)
   (wire_received0:Ghost.erased B.bytes)
   (wire_sent0:Ghost.erased B.bytes)
@@ -336,7 +499,143 @@ fn channel_send
   }
 }
 
-fn channel_receive
+(* Send with the mandated KeyUpdate reply flushed first.
+
+   RFC 8446 4.6.3 requires an endpoint that received [update_requested] to send
+   its own KeyUpdate *before* its next application-data record, so this -- not
+   the receive path -- is the obligation's real deadline.  Composition with
+   [CI.send_transition] works for the same reason as on the receive side: the
+   inserted record only extends the wire history, and a KeyUpdate leaves the
+   application log alone, so a failed flush can be reported as a failed send
+   with the log unchanged. *)
+fn channel_send
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (payload:array U8.t)
+  (payload_bytes:Ghost.erased B.bytes)
+  (payload_len:SZ.t)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0) **
+           pts_to payload (Ghost.reveal payload_bytes) **
+           pure (B.length (Ghost.reveal payload_bytes) == SZ.v payload_len)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          (if channel_send_reusable status
+           then
+             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1) **
+          pts_to payload (Ghost.reveal payload_bytes) **
+          pure (
+            CI.send_transition
+              channel_message_of_bytes
+              channel_send_succeeded
+              status
+              (Ghost.reveal payload_bytes)
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              (Ghost.reveal app_log0)
+              wire_received1
+              wire_sent1
+              app_log1)
+{
+  let flush_status =
+    flush_key_update_response d wire_received0 wire_sent0 pending0 app_log0;
+  with wire_received1 wire_sent1 pending1.
+    assert (if channel_send_reusable flush_status
+            then
+              DS.client_channel_inv
+                d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+            else
+              DS.client_channel_terminal
+                d wire_received1 wire_sent1 (Ghost.reveal app_log0));
+  let flushed = channel_send_reusable_runtime flush_status;
+  assert (pure (flushed == channel_send_reusable flush_status));
+  if flushed {
+    rewrite (if channel_send_reusable flush_status
+             then
+               DS.client_channel_inv
+                 d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+             else
+               DS.client_channel_terminal
+                 d wire_received1 wire_sent1 (Ghost.reveal app_log0))
+      as (DS.client_channel_inv
+            d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0));
+    let status =
+      channel_send_core
+        d
+        (Ghost.hide wire_received1)
+        (Ghost.hide wire_sent1)
+        (Ghost.hide pending1)
+        app_log0
+        payload
+        payload_bytes
+        payload_len;
+    with wire_received2 wire_sent2 pending2 app_log2.
+      assert ((if channel_send_reusable status
+               then
+                 DS.client_channel_inv
+                   d wire_received2 wire_sent2 pending2 app_log2
+               else
+                 DS.client_channel_terminal
+                   d wire_received2 wire_sent2 app_log2) **
+              pts_to payload (Ghost.reveal payload_bytes));
+    CPI.lemma_bytes_extends_trans
+      (Ghost.reveal wire_received0) wire_received1 wire_received2;
+    CPI.lemma_bytes_extends_trans
+      (Ghost.reveal wire_sent0) wire_sent1 wire_sent2;
+    assert (pure (CI.send_transition
+      channel_message_of_bytes
+      channel_send_succeeded
+      status
+      (Ghost.reveal payload_bytes)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0)
+      wire_received2
+      wire_sent2
+      app_log2));
+    status
+  } else {
+    rewrite (if channel_send_reusable flush_status
+             then
+               DS.client_channel_inv
+                 d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+             else
+               DS.client_channel_terminal
+                 d wire_received1 wire_sent1 (Ghost.reveal app_log0))
+      as (DS.client_channel_terminal
+            d wire_received1 wire_sent1 (Ghost.reveal app_log0));
+    assert (pure (CI.send_transition
+      channel_message_of_bytes
+      channel_send_succeeded
+      flush_status
+      (Ghost.reveal payload_bytes)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0)
+      wire_received1
+      wire_sent1
+      (Ghost.reveal app_log0)));
+    rewrite (DS.client_channel_terminal
+      d wire_received1 wire_sent1 (Ghost.reveal app_log0))
+      as (if channel_send_reusable flush_status
+          then DS.client_channel_inv
+            d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+          else DS.client_channel_terminal
+            d wire_received1 wire_sent1 (Ghost.reveal app_log0));
+    flush_status
+  }
+}
+
+fn channel_receive_core
   (d:client_driver)
   (wire_received0:Ghost.erased B.bytes)
   (wire_sent0:Ghost.erased B.bytes)
@@ -537,6 +836,155 @@ fn channel_receive
             (Ghost.reveal wire_received0)
             (Ghost.reveal wire_sent0)
             (Ghost.reveal app_log0));
+    result
+  }
+}
+
+(* Receive with the mandated KeyUpdate reply flushed first.
+
+   Composition is legal because [CI.receive_transition] constrains only the
+   *application* log and asks for a prefix relation on the wire histories: the
+   extra KeyUpdate record extends [wire_sent] (absorbed by
+   [histories_ahead] transitivity) and leaves the application log alone.  A
+   failed flush short-circuits with a failed receive result and an unchanged
+   application log, which is exactly what the log equation demands of an
+   unsuccessful receive. *)
+fn channel_receive
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (out:array U8.t)
+  (old_output:Ghost.erased B.bytes)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0) **
+           pts_to out (Ghost.reveal old_output) **
+           pure (B.length (Ghost.reveal old_output) == SZ.v out_len)
+  returns result:client_receive_result
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1 output.
+          (if channel_receive_reusable result
+           then
+             DS.client_channel_inv d wire_received1 wire_sent1 pending1 app_log1
+           else
+             DS.client_channel_terminal d wire_received1 wire_sent1 app_log1) **
+          pts_to out output **
+          pure (
+            B.length output == SZ.v out_len /\
+            SZ.v result.DS.client_receive_len <= SZ.v out_len /\
+            CI.receive_transition
+              channel_message_of_bytes
+              channel_receive_succeeded
+              channel_receive_length
+              result
+              output
+              (Ghost.reveal wire_received0)
+              (Ghost.reveal wire_sent0)
+              (Ghost.reveal app_log0)
+              wire_received1
+              wire_sent1
+              app_log1)
+{
+  let flush_status =
+    flush_key_update_response d wire_received0 wire_sent0 pending0 app_log0;
+  with wire_received1 wire_sent1 pending1.
+    assert (if channel_send_reusable flush_status
+            then
+              DS.client_channel_inv
+                d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+            else
+              DS.client_channel_terminal
+                d wire_received1 wire_sent1 (Ghost.reveal app_log0));
+  let flushed = channel_send_reusable_runtime flush_status;
+  assert (pure (flushed == channel_send_reusable flush_status));
+  if flushed {
+    rewrite (if channel_send_reusable flush_status
+             then
+               DS.client_channel_inv
+                 d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+             else
+               DS.client_channel_terminal
+                 d wire_received1 wire_sent1 (Ghost.reveal app_log0))
+      as (DS.client_channel_inv
+            d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0));
+    let result =
+      channel_receive_core
+        d
+        (Ghost.hide wire_received1)
+        (Ghost.hide wire_sent1)
+        (Ghost.hide pending1)
+        app_log0
+        out
+        old_output
+        out_len
+        local_fuel
+        fuel;
+    with wire_received2 wire_sent2 pending2 app_log2 output.
+      assert ((if channel_receive_reusable result
+               then
+                 DS.client_channel_inv
+                   d wire_received2 wire_sent2 pending2 app_log2
+               else
+                 DS.client_channel_terminal
+                   d wire_received2 wire_sent2 app_log2) **
+              pts_to out output);
+    CPI.lemma_bytes_extends_trans
+      (Ghost.reveal wire_received0) wire_received1 wire_received2;
+    CPI.lemma_bytes_extends_trans
+      (Ghost.reveal wire_sent0) wire_sent1 wire_sent2;
+    assert (pure (CI.receive_transition
+      channel_message_of_bytes
+      channel_receive_succeeded
+      channel_receive_length
+      result
+      output
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0)
+      wire_received2
+      wire_sent2
+      app_log2));
+    result
+  } else {
+    rewrite (if channel_send_reusable flush_status
+             then
+               DS.client_channel_inv
+                 d wire_received1 wire_sent1 pending1 (Ghost.reveal app_log0)
+             else
+               DS.client_channel_terminal
+                 d wire_received1 wire_sent1 (Ghost.reveal app_log0))
+      as (DS.client_channel_terminal
+            d wire_received1 wire_sent1 (Ghost.reveal app_log0));
+    let result = {
+      DS.client_receive_status = DS.DriverWorkflowStepFailed;
+      DS.client_receive_len = 0sz;
+    };
+    assert (pure (CI.receive_transition
+      channel_message_of_bytes
+      channel_receive_succeeded
+      channel_receive_length
+      result
+      (Ghost.reveal old_output)
+      (Ghost.reveal wire_received0)
+      (Ghost.reveal wire_sent0)
+      (Ghost.reveal app_log0)
+      wire_received1
+      wire_sent1
+      (Ghost.reveal app_log0)));
+    rewrite (DS.client_channel_terminal
+      d wire_received1 wire_sent1 (Ghost.reveal app_log0))
+      as (if channel_receive_reusable result
+          then DS.client_channel_inv
+            d wire_received1 wire_sent1 wire_received1 (Ghost.reveal app_log0)
+          else DS.client_channel_terminal
+            d wire_received1 wire_sent1 (Ghost.reveal app_log0));
     result
   }
 }

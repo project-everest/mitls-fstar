@@ -7210,6 +7210,86 @@ let lemma_local_send_key_update_stepok_preserves_not_failed
      | LocalSendKeyUpdate -> assert False
      | LocalSendKeyUpdateRequested -> assert False)
 
+(* A KeyUpdate send never touches the application log.  Whichever event the
+   response is legal for -- the KeyUpdate network event on success, a
+   [LocalFail] on either failure branch -- has empty application sent/received
+   deltas, so [model_app_log_delta] degenerates to equality.  This is what lets
+   a receive-path auto-response compose with [CI.receive_transition], whose log
+   equation must be left untouched by the inserted send. *)
+let lemma_local_send_key_update_preserves_app_log
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        (kind == LocalSendKeyUpdate \/ kind == LocalSendKeyUpdateRequested) /\
+        local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out)
+      (ensures
+        st1.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent ==
+          st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent /\
+        st1.CS.cs_model.CS.model_application.CS.app_log.CL.app_received ==
+          st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received)
+=
+  FStar.List.Tot.append_l_nil
+    st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent;
+  FStar.List.Tot.append_l_nil
+    st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received;
+  assert (legal_handled_local_response
+    st0 st1 resp kind payload network_out app_out);
+  if resp.status = StepOk
+  then begin
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    assert (local_event_kind_matches st0 kind payload ev);
+    lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    match ev with
+    | CS.ConnNetworkEvent msg ->
+      (match msg.CL.message_direction, msg.CL.message_value with
+       | CL.Sent, M.TlsKeyUpdate _ -> ()
+       | _, _ ->
+         (match kind with
+          | LocalSendKeyUpdate -> assert False
+          | LocalSendKeyUpdateRequested -> assert False))
+    | CS.ConnProtectedHandshake _ ->
+      (match kind with
+       | LocalSendKeyUpdate -> assert False
+       | LocalSendKeyUpdateRequested -> assert False)
+    | CS.ConnLocalEvent _ ->
+      (match kind with
+       | LocalSendKeyUpdate -> assert False
+       | LocalSendKeyUpdateRequested -> assert False)
+  end
+  else if resp.status = IllegalTransition
+  then
+    lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp
+      (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+      B.empty B.empty network_out app_out
+  else
+    lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp
+      (CS.ConnLocalEvent (CS.LocalFail tls_bad_finished_error))
+      B.empty B.empty network_out app_out
+
 #pop-options
 
 #push-options "--z3rlimit 30 --split_queries always --fuel 2 --ifuel 2"

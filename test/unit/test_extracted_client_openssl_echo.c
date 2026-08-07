@@ -63,7 +63,12 @@ int main(int argc, char **argv) {
   tls13_client_driver *driver = NULL;
   int rc = 1;
   static const uint8_t ping[] = {'p', 'i', 'n', 'g'};
-#define ECHO_ROUNDS 4u
+/* One more round than the echo server's REKEY_ROUNDS cap: the peer requests an
+   update after reading round i's record, so the mandated reply is flushed at
+   round i+1's application-data send.  Without the extra round the last request
+   would still be outstanding at close time and the server's reply assertion
+   would (correctly) fail. */
+#define ECHO_ROUNDS 5u
   uint8_t received[TLS13_CLIENT_DRIVER_RECEIVE_BUFFER_SIZE] = {0};
   size_t received_len = 0;
 
@@ -89,9 +94,11 @@ int main(int argc, char **argv) {
     /* Client-INITIATED rekey, on top of the peer-driven ones above: this
        drives the verified client's KeyUpdate send path spontaneously rather
        than as the mandated reply to the peer, so its own write key rotates
-       an extra time each round. */
+       an extra time each round.  It carries update_requested, both to exercise
+       that send form and so the echo server can tell our initiations apart
+       from our mandated update_not_requested replies. */
     exchange_ok =
-        tls13_client_driver_send_key_update(driver, false) == 0 &&
+        tls13_client_driver_send_key_update(driver, true) == 0 &&
         tls13_client_driver_send_application_data(driver, ping, sizeof ping) == 0 &&
         tls13_client_driver_receive_application_data(
             driver,

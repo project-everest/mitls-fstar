@@ -50,6 +50,18 @@ fn run
                   CT.connection_control_not_failed st1))
 
 (**
+  Is a mandated KeyUpdate reply due?  RFC 8446 4.6.3 obliges an endpoint that
+  received [update_requested] to answer with its own KeyUpdate.  The gate is
+  exactly [run_key_update]'s own success condition with the pending flag added,
+  so a [true] here cannot lead to a spurious step failure.
+**)
+fn query_key_update_response_pending
+  (d:client_driver)
+  requires client_driver_connected d 'st0 'received0 'sent0
+  returns pending:bool
+  ensures client_driver_connected d 'st0 'received0 'sent0
+
+(**
   Client-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
   form: [true] sends [update_requested], asking the peer to rotate its own
   sending key in reply; [false] sends [update_not_requested], rotating only our

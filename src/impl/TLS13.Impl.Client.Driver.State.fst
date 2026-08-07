@@ -201,6 +201,47 @@ let client_driver_key_update_correct
     st1.CS.cs_wire_log.CL.raw_received
     st0.CS.cs_wire_log.CL.raw_received
 
+(* A KeyUpdate send -- successful or not -- leaves the application log alone.
+   Lifted from [CT.lemma_local_send_key_update_preserves_app_log] through the
+   driver-level correctness predicate so that a receive path can insert an
+   auto-response without disturbing [CI.receive_transition]'s log equation. *)
+let lemma_client_driver_key_update_preserves_app_log
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (status:driver_workflow_status)
+  (kind:CT.local_event_kind)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires
+        (kind == CT.LocalSendKeyUpdate \/ kind == CT.LocalSendKeyUpdateRequested) /\
+        client_driver_key_update_correct st0 st1 status kind sent sent')
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  let resp =
+    ID.indefinite_description_ghost
+      CT.client_response
+      (fun resp ->
+        client_driver_local_write_correct
+          st0 st1 resp kind B.empty sent sent' /\
+        client_driver_send_status_correct status resp) in
+  let network_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out -> exists app_out.
+        CT.local_event_end_to_end_correct
+          st0 st1 resp kind B.empty network_out app_out /\
+        Seq.equal sent' (B.append sent (CT.response_network_out resp network_out))) in
+  let app_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out ->
+        CT.local_event_end_to_end_correct
+          st0 st1 resp kind B.empty network_out app_out /\
+        Seq.equal sent' (B.append sent (CT.response_network_out resp network_out))) in
+  CT.lemma_local_send_key_update_preserves_app_log
+    st0 st1 resp kind B.empty network_out app_out
+
 noextract
 let client_driver_close_status_correct
   (wait_for_peer:bool)

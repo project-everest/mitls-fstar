@@ -589,6 +589,80 @@ let lemma_client_driver_key_update_correct_from_local
     client_driver_send_status_correct status response);
   assert (client_driver_key_update_correct st0 st1 status kind sent sent')
 
+(**
+  Is a mandated KeyUpdate reply due?  RFC 8446 4.6.3 obliges an endpoint that
+  received [update_requested] to answer with its own KeyUpdate.  The gate is
+  exactly [run_key_update]'s own success condition -- control state, role,
+  installed write key, room for one more record sequence number, and an output
+  buffer big enough -- with the pending flag added, so a [true] here cannot
+  lead to a spurious step failure.
+**)
+fn query_key_update_response_pending
+  (d:client_driver)
+  requires client_driver_connected d 'st0 'received0 'sent0
+  returns pending:bool
+  ensures client_driver_connected d 'st0 'received0 'sent0
+{
+  unfold (client_driver_connected
+    d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
+  with channel model committed buffered_len.
+    unfold (client_driver_connected_indexed
+      d
+      'st0
+      (Ghost.reveal 'received0)
+      (Ghost.reveal 'sent0)
+      channel
+      model
+      committed
+      buffered_len);
+  unfold (buffered_driver_indexed
+    (client_buffered_driver d channel)
+    'st0
+    (BT.pending model)
+    buffered_len
+    model
+    (Ghost.reveal 'received0)
+    committed
+    (Ghost.reveal 'sent0));
+  rewrite
+    (C.connection_exactly
+      (client_buffered_driver d channel).buffered_driver_client
+      'st0)
+    as
+    (CR.connection_exactly d.client_driver_client 'st0);
+  let pending =
+    CQ.can_send_key_update_runtime
+      d.client_driver_client
+      driver_network_out_capacity;
+  rewrite
+    (CR.connection_exactly d.client_driver_client 'st0)
+    as
+    (C.connection_exactly
+      (client_buffered_driver d channel).buffered_driver_client
+      'st0);
+  fold (buffered_driver_indexed
+    (client_buffered_driver d channel)
+    'st0
+    (BT.pending model)
+    buffered_len
+    model
+    (Ghost.reveal 'received0)
+    committed
+    (Ghost.reveal 'sent0));
+  fold (client_driver_connected_indexed
+    d
+    'st0
+    (Ghost.reveal 'received0)
+    (Ghost.reveal 'sent0)
+    channel
+    model
+    committed
+    buffered_len);
+  fold (client_driver_connected
+    d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
+  pending
+}
+
 inline_for_extraction
 fn top_driver_send_key_update
   (d:top_driver)
