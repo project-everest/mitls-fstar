@@ -68,16 +68,54 @@ facebook.com, instagram.com, fbcdn.net, whatsapp.com, whatsapp.net, wa.me.
 
 TLS 1.3 permits a single handshake message to span several records.  Meta
 serves its server flight in three protected records (1000 / 2161 / ~100 bytes
-of plaintext); `EncryptedExtensions` is 6 bytes and `Certificate` starts at
-offset 6 and runs past the end of the first record.
+of plaintext).  `EncryptedExtensions` is 6 bytes, so `Certificate` starts at
+offset 6 of the first record's plaintext and runs past its end.  The ATLAS
+trace shows this exactly:
+
+```
+2030 PROT_HEAD  (consumed=6, fragment=1000, raw=1022)   head step: EncryptedExtensions
+2033 PROT_ERROR (offset=6,   fragment=1000, 0)          Certificate is truncated
+```
 
 `legal_protected_handshake_step`'s head branch requires
-`protected_handshake_buffer_empty`, so the next record cannot be joined to the
-leftover -- ATLAS reports `PROT_ERROR` and fails the step.  Closing this
-requires the head step to accept `leftover ++ record_plaintext` as its
-fragment, which touches the receive legality relation, the `ProtectedWire*`
-normal-form modules and the sent/received pairing argument.  It is tracked
-separately as a spec-level change, not a bug fix.
+`protected_handshake_buffer_empty`, so the second record cannot be joined to
+the 994-byte leftover, and the drain reports `DecodeError`.
+
+**Why this is a phase, not a bug fix.**  The obvious repair -- weaken the head
+guard so its fragment may be `leftover ++ record_plaintext` -- was prototyped
+and does *not* stay local.  `TLS13.Spec.StateMachine.Canonical`'s
+`received_event_nonempty_decode_projection` requires
+
+```
+Seq.equal plaintext.M.fragment step.protected_handshake_fragment
+```
+
+i.e. the step's fragment **is** the record's plaintext.  That identity is
+consumed by the head-step normal form in `TLS13.Spec.StateMachine.Replay`
+(`lemma_single_message_head_step_model`, `..._decode`,
+`..._replay_normalizes`), which is what lets the receiver-side pairing proofs
+-- written against the `ConnNetworkEvent` shape -- apply to head steps at all.
+Under the weakened guard `lemma_single_message_head_step_model` is simply
+false: `step_protected_handshake` clears the pending buffer while the
+corresponding network event does not, and the two models only coincide when
+the buffer was already empty.
+
+A better-scoped design keeps `step.protected_handshake_fragment` equal to the
+record plaintext (so the decode projection is untouched) and instead parses
+the head message out of `leftover ++ fragment`, storing the concatenation in
+the pending buffer.  The three `Replay` normalization lemmas then need
+`protected_handshake_buffer_empty model` as an added hypothesis, which their
+callers in `TLS13.ConnectionState.ProtectedWireHead` already have.  On top of
+that sits the implementation work: relaxing
+`ConnectionState.Network.store_pending_protected_handshake` (which today
+requires an empty buffer), building the combined fragment in
+`Impl.Client.process_network_bytes`, turning the head gate in
+`try_process_protected_handshake_head` from a runtime buffer-empty check into
+a ghost prefix precondition, and adding a `NeedMoreInput` outcome to
+`pending_protected_handshake_result_correct` so a truncated leftover asks for
+more network input instead of failing the connection.
+
+This is tracked as a separate phase rather than folded into these bug fixes.
 
 ### Beyond ATLAS's offer (15 sites)
 
