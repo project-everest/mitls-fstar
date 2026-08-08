@@ -15,6 +15,16 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
+fn drain_pending_internal
+  (d:DS.top_buffered_driver)
+  requires
+    DS.top_buffered_driver_exactly d 'st0 'buffered 'buffered_len
+  returns _:unit
+  ensures
+    exists* st1.
+      DS.top_buffered_driver_exactly d st1 'buffered 'buffered_len **
+      pure (D.drained (Ghost.reveal 'st0) st1)
+
 fn process_local_event
   (d:DS.top_buffered_driver)
   (kind:CT.local_event_kind)

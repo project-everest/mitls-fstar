@@ -19,7 +19,10 @@ typedef struct tls13_client_engine_s tls13_client_engine;
 #define TLS13_CLIENT_ENGINE_CERTIFICATE_CHAIN_ENTRIES ((size_t)8u)
 #define TLS13_CLIENT_ENGINE_CERTIFICATE_VERIFY_INPUT_CAPACITY ((size_t)256u)
 #define TLS13_CLIENT_ENGINE_SIGNATURE_CAPACITY ((size_t)4096u)
-#define TLS13_CLIENT_ENGINE_PUBLIC_KEY_CAPACITY ((size_t)4096u)
+/* Must match TLS13.Impl.ConnectionState.Bounds.max_public_key_len: this buffer
+   carries a peer leaf certificate DER, and real leaves with large SAN lists
+   exceed 4 KiB. */
+#define TLS13_CLIENT_ENGINE_PUBLIC_KEY_CAPACITY ((size_t)16384u)
 
 typedef enum tls13_client_engine_error_e {
   TLS13_CLIENT_ENGINE_SUCCESS = 0,

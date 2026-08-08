@@ -257,6 +257,70 @@ fn driver_copy_certificate_leaf_der
   copied_len
 }
 
+(** Copy the peer's certificate chain out of the connection so the external
+    validator can use the intermediates for chain building.  The chain layout
+    (entry [i] at [chain_out[offsets[i] .. offsets[i] + lens[i])], entry 0 the
+    leaf) is the one [C.copy_certificate_chain] establishes.
+
+    Nothing downstream depends on the returned snapshot's relation to the
+    connection state -- the chain is only a hint to the validator -- so this
+    wrapper deliberately keeps a weak postcondition. *)
+fn driver_copy_certificate_chain
+  (d:driver)
+  (chain_out:array U8.t)
+  (chain_out_len:SZ.t)
+  (offsets_out:array SZ.t)
+  (offsets_out_len:SZ.t)
+  (lens_out:array SZ.t)
+  (lens_out_len:SZ.t)
+  requires driver_exactly d 'st0 'buffered 'pending_len **
+           pts_to chain_out 'old_chain_out **
+           pts_to offsets_out 'old_offsets_out **
+           pts_to lens_out 'old_lens_out **
+           pure (B.length 'old_chain_out == SZ.v chain_out_len /\
+                 Seq.length 'old_offsets_out == SZ.v offsets_out_len /\
+                 Seq.length 'old_lens_out == SZ.v lens_out_len /\
+                 SZ.v chain_out_len == L.max_certificate_chain_bytes /\
+                 SZ.v offsets_out_len == L.max_certificate_chain_entries /\
+                 SZ.v lens_out_len == L.max_certificate_chain_entries /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate)
+  returns snapshot:CR.certificate_chain_snapshot
+  ensures exists* chain_bytes offsets lens.
+          driver_exactly d 'st0 'buffered 'pending_len **
+          pts_to chain_out chain_bytes **
+          pts_to offsets_out offsets **
+          pts_to lens_out lens **
+          pure (B.length chain_bytes == SZ.v chain_out_len /\
+                Seq.length offsets == SZ.v offsets_out_len /\
+                Seq.length lens == SZ.v lens_out_len /\
+                SZ.v snapshot.CR.certificate_chain_bytes_len <=
+                  B.length chain_bytes /\
+                SZ.v snapshot.CR.certificate_chain_cert_count <=
+                  Seq.length offsets)
+{
+  open_driver_connection d;
+  rewrite (C.connection_exactly d.driver_client 'st0)
+    as (CR.connection_exactly d.driver_client 'st0);
+  let snapshot =
+    C.copy_certificate_chain
+      d.driver_client
+      chain_out
+      chain_out_len
+      offsets_out
+      offsets_out_len
+      lens_out
+      lens_out_len;
+  with chain_bytes offsets lens.
+    assert (CR.connection_exactly d.driver_client 'st0 **
+            pts_to chain_out chain_bytes **
+            pts_to offsets_out offsets **
+            pts_to lens_out lens);
+  rewrite (CR.connection_exactly d.driver_client 'st0)
+    as (C.connection_exactly d.driver_client 'st0);
+  close_driver_connection d;
+  snapshot
+}
+
 fn driver_copy_certificate_verify_input
   (d:driver)
   (out:array U8.t)
@@ -998,6 +1062,43 @@ fn top_driver_process_one_local_action
           'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der));
         assert (pure (Some?
           st1.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der));
+        assert (pure (Some?
+          st1.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+        // Hand the validator the whole chain the peer sent.  Public CAs sign
+        // end-entity certificates with intermediates, so without these the
+        // leaf has no path to any configured anchor and every real server is
+        // rejected.  The buffers are scratch for one call; the validator
+        // copies what it keeps.
+        let chain_scratch = V.alloc 0uy L.max_certificate_chain_bytes_sz;
+        let offsets_scratch = V.alloc 0sz L.max_certificate_chain_entries_sz;
+        let lens_scratch = V.alloc 0sz L.max_certificate_chain_entries_sz;
+        V.to_array_pts_to chain_scratch;
+        V.to_array_pts_to offsets_scratch;
+        V.to_array_pts_to lens_scratch;
+        let chain_snapshot =
+          driver_copy_certificate_chain
+            d.top_driver_core
+            (V.vec_to_array chain_scratch)
+            L.max_certificate_chain_bytes_sz
+            (V.vec_to_array offsets_scratch)
+            L.max_certificate_chain_entries_sz
+            (V.vec_to_array lens_scratch)
+            L.max_certificate_chain_entries_sz;
+        O.set_peer_certificate_chain
+          d.top_driver_auth
+          (V.vec_to_array chain_scratch)
+          L.max_certificate_chain_bytes_sz
+          chain_snapshot.CR.certificate_chain_bytes_len
+          (V.vec_to_array offsets_scratch)
+          (V.vec_to_array lens_scratch)
+          L.max_certificate_chain_entries_sz
+          chain_snapshot.CR.certificate_chain_cert_count;
+        V.to_vec_pts_to chain_scratch;
+        V.to_vec_pts_to offsets_scratch;
+        V.to_vec_pts_to lens_scratch;
+        V.free chain_scratch;
+        V.free offsets_scratch;
+        V.free lens_scratch;
         let leaf_len =
           driver_copy_certificate_leaf_der
             d.top_driver_core
@@ -1529,6 +1630,41 @@ fn rec driver_handshake
           let wrote_all =
             local.ready_local_written = local.ready_local_resp.CT.network_out_len;
           if (ok && wrote_all) {
+            // A local event can unblock handshake messages still sitting in the
+            // pending protected-handshake buffer: `CertificateVerify` only
+            // becomes legal once `LocalValidateCertificate` has run.  Servers
+            // routinely coalesce their whole encrypted flight into one record,
+            // so those messages have already arrived and no further socket read
+            // will ever produce them.  Drain here, between local events, rather
+            // than only when a record arrives.
+            rewrite
+              (top_driver_exactly d st_local (Ghost.reveal 'buffered) buffered_len)
+              as
+              (top_buffered_driver_exactly
+                (top_driver_as_buffered d)
+                st_local
+                (Ghost.reveal 'buffered)
+                buffered_len);
+            BN.drain_pending_internal (top_driver_as_buffered d);
+            with st_drained. assert (
+              top_buffered_driver_exactly
+                (top_driver_as_buffered d)
+                st_drained
+                (Ghost.reveal 'buffered)
+                buffered_len);
+            rewrite
+              (top_buffered_driver_exactly
+                (top_driver_as_buffered d)
+                st_drained
+                (Ghost.reveal 'buffered)
+                buffered_len)
+              as
+              (top_driver_exactly d st_drained (Ghost.reveal 'buffered) buffered_len);
+            D.lemma_drained_facts st_local st_drained;
+            assert (pure (st_drained.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
+            assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant st_drained));
             let next_fuel = SZ.sub fuel 1sz;
             assert (pure (SZ.v next_fuel < SZ.v fuel));
             driver_handshake

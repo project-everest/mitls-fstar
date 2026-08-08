@@ -39,6 +39,11 @@ struct TLS13_OpenSSL_auth_config_s {
 struct TLS13_OpenSSL_auth_context_s {
   TLS13_OpenSSL_auth_config config;
   tls13_peer_identity *peer;
+  uint8_t *chain_der;
+  size_t chain_der_len;
+  size_t *chain_offsets;
+  size_t *chain_lens;
+  size_t chain_count;
 };
 
 struct TLS13_OpenSSL_server_credentials_s {
@@ -106,6 +111,56 @@ TLS13_OpenSSL_auth_context_new(TLS13_OpenSSL_auth_config config) {
   return ctx;
 }
 
+static void auth_context_clear_chain(TLS13_OpenSSL_auth_context ctx) {
+  free(ctx->chain_der);
+  free(ctx->chain_offsets);
+  free(ctx->chain_lens);
+  ctx->chain_der = NULL;
+  ctx->chain_offsets = NULL;
+  ctx->chain_lens = NULL;
+  ctx->chain_der_len = 0u;
+  ctx->chain_count = 0u;
+}
+
+void TLS13_OpenSSL_set_peer_certificate_chain(
+    TLS13_OpenSSL_auth_context ctx,
+    uint8_t *chain,
+    size_t chain_capacity,
+    size_t chain_len,
+    size_t *offsets,
+    size_t *lens,
+    size_t entries_capacity,
+    size_t count) {
+  if (ctx == NULL) {
+    return;
+  }
+  auth_context_clear_chain(ctx);
+  if (chain == NULL || offsets == NULL || lens == NULL || count == 0u ||
+      chain_len == 0u || chain_len > chain_capacity ||
+      count > entries_capacity) {
+    return;
+  }
+
+  uint8_t *chain_copy = malloc(chain_len);
+  size_t *offsets_copy = malloc(count * sizeof *offsets_copy);
+  size_t *lens_copy = malloc(count * sizeof *lens_copy);
+  if (chain_copy == NULL || offsets_copy == NULL || lens_copy == NULL) {
+    free(chain_copy);
+    free(offsets_copy);
+    free(lens_copy);
+    return;
+  }
+  memcpy(chain_copy, chain, chain_len);
+  memcpy(offsets_copy, offsets, count * sizeof *offsets_copy);
+  memcpy(lens_copy, lens, count * sizeof *lens_copy);
+
+  ctx->chain_der = chain_copy;
+  ctx->chain_der_len = chain_len;
+  ctx->chain_offsets = offsets_copy;
+  ctx->chain_lens = lens_copy;
+  ctx->chain_count = count;
+}
+
 bool TLS13_OpenSSL_validate_certificate_for_local_event(
     TLS13_OpenSSL_auth_context ctx,
     uint8_t *leaf_der,
@@ -121,12 +176,17 @@ bool TLS13_OpenSSL_validate_certificate_for_local_event(
   }
 
   tls13_peer_identity *peer = NULL;
-  if (!tls13_openssl_validate_leaf_der_with_store(
+  if (!tls13_openssl_validate_leaf_der_with_store_and_chain(
           ctx->config->server_name,
           ctx->config->trust_store,
           ctx->config->validation_time_seconds,
           leaf_der,
           leaf_der_len,
+          ctx->chain_der,
+          ctx->chain_der_len,
+          ctx->chain_offsets,
+          ctx->chain_lens,
+          ctx->chain_count,
           &peer)) {
     return false;
   }
@@ -272,6 +332,7 @@ void TLS13_OpenSSL_auth_context_free(TLS13_OpenSSL_auth_context ctx) {
     return;
   }
   tls13_openssl_peer_identity_free(ctx->peer);
+  auth_context_clear_chain(ctx);
   TLS13_OpenSSL_auth_config_free(ctx->config);
   free(ctx);
 }

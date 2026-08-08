@@ -1185,6 +1185,34 @@ test/test_extracted_client_openssl_echo: \
 
 test-extracted-client-openssl-echo: test-openssl-echo
 
+# Interop harness: drives the verified client driver against real public HTTPS
+# servers.  Not part of `make test` (it needs outbound network access); run it
+# explicitly via test/interop/sweep.sh.
+test/test_interop_client: \
+  test/unit/test_interop_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_interop_client.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+.PHONY: interop-client
+interop-client: test/test_interop_client
+
 test/test_extracted_client_engine_openssl_echo: \
   test/unit/test_extracted_client_engine_openssl_echo.c \
   $(TLS13_BUNDLE_OBJS_STAMP) \

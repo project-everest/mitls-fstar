@@ -18,6 +18,7 @@ test/test_connection_driver_bindings
 test/test_extracted_client_openssl_echo
 test/test_extracted_client_engine_openssl_echo
 test/test_extracted_server_openssl_client
+test/test_interop_client
 test/test_chromium_client_socket_demo
 test/test_key_schedule_bindings
 test/test_record_bindings
