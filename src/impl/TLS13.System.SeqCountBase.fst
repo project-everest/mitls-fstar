@@ -1110,6 +1110,10 @@ let record_app_epoch_coupling (m:CS.connection_model) : prop =
      Some? (app_traffic_slot keys
              (CS.traffic_label_for_endpoint_direction role CS.TrafficRead)))
 
+(* Verifies immediately under --admit_except: what defeats it in situ is the
+   Z3 state accumulated over this module, enlarged by the agentic merge, not
+   the goal.  Reset the solver instead of raising fuel/rlimit. *)
+#restart-solver
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 30 --split_queries always"
 let lemma_step_record_app_epoch_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)

@@ -30,6 +30,7 @@ module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
 module P   = TLS13.Impl.Driver.Pairing
 module CSL = TLS13.ConnectionState.Lemmas
+module ADBE = TLS13.ConnectionState.AppDataBufferEmpty
 module SM  = Common.StateMachine
 module CW  = TLS13.Spec.Endpoint.Wire
 module CTy = TLS13.Impl.CanonicalTypes
@@ -387,6 +388,156 @@ let byte_pairing (s:tls_system_state) : prop =
   | MP.ToClient p ->
     Seq.equal ss (B.append cr p.pl_raw) /\ Seq.equal cs sr
 
+(** ─────────────────────────────────────────────────────────────────────────
+    Application-data STREAM integrity (STAGE C).
+
+    The application-data BYTE STREAM each endpoint sends is the CONCATENATION of
+    its `app_log.app_sent` chunks; likewise what it has received is the
+    concatenation of its `app_log.app_received` chunks.  These are the honest
+    TLS byte streams (record boundaries need not align, so the statement must be
+    about the concatenations, not the chunk lists — see the note at
+    `CS.LocalDeliverApplicationData` in `TLS13.Spec.StateMachine.fst`).
+    ───────────────────────────────────────────────────────────────────────── **)
+
+let app_stream_sent (st:CS.connection_state) : GTot B.bytes =
+  CL.concat_bytes st.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent
+
+let app_stream_received (st:CS.connection_state) : GTot B.bytes =
+  CL.concat_bytes st.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+
+(** The application-data byte delta a single (received or sent) TLS message
+    carries: the plaintext of an application-data record, and nothing for every
+    other message kind. **)
+let app_bytes_delta (msg:M.tls_message) : GTot B.bytes =
+  match msg with
+  | M.TlsApplicationData b -> b
+  | _ -> B.empty
+
+(** The application-data bytes an in-flight payload carries — the byte delta of
+    the message the sender appended to its event log when it emitted the payload. **)
+let app_bytes_of (p:tls_payload) : GTot B.bytes =
+  app_bytes_delta p.pl_sent
+
+(** Phase 2 — the pending-plaintext field is pinned empty on both endpoints.
+    `app_pending_plaintext` is assigned exactly once (to `B.empty`, in
+    `empty_application_state`) and never written by any step, so this is a trivial
+    per-endpoint inductive property.  It is what forces the (unimplemented)
+    `LocalDeliverApplicationData` hop to deliver only `B.empty`, keeping the
+    received byte STREAM (concatenation) unchanged in the LOCAL case of
+    `app_pairing`. **)
+let app_pending_empty (s:tls_system_state) : prop =
+  Seq.equal s.client.CS.cs_model.CS.model_application.CS.app_pending_plaintext B.empty /\
+  Seq.equal s.server.CS.cs_model.CS.model_application.CS.app_pending_plaintext B.empty
+
+(** ─────────────────────────────────────────────────────────────────────────
+    Application-data STREAM pairing (the analogue of `byte_pairing` at the
+    application byte-stream level) and the end-to-end STREAM-INTEGRITY payoff.
+
+    `app_pairing` says: each endpoint's SENT application byte stream equals the
+    peer's RECEIVED application byte stream plus whatever application bytes are
+    currently in flight (`app_bytes_of p`); at `Quiet` (nothing in flight) it
+    collapses to exact stream equality in both directions.  This mirrors
+    `byte_pairing` exactly, one level up (streams instead of raw records).
+
+    NOTE (status): `app_pairing` is provided as a STANDALONE definition together
+    with the fully-verified PURE reduction `lemma_app_pairing_implies_stream_integrity`
+    below, which shows it entails end-to-end stream integrity.  It is NOT (yet) a
+    conjunct of `tls_system_inv`: its inductive DELIVERY case requires an
+    application-data decode-faithfulness bridge that is currently a genuine gap in
+    this model — see the extended note above `lemma_app_pairing_implies_stream_integrity`
+    for the precise obstruction.
+    ───────────────────────────────────────────────────────────────────────── **)
+let app_pairing (s:tls_system_state) : prop =
+  let cs = app_stream_sent s.client in
+  let cr = app_stream_received s.client in
+  let ss = app_stream_sent s.server in
+  let sr = app_stream_received s.server in
+  match s.channel with
+  | MP.Quiet ->
+    Seq.equal cs sr /\ Seq.equal ss cr
+  | MP.ToServer p ->
+    Seq.equal cs (B.append sr (app_bytes_of p)) /\ Seq.equal ss cr
+  | MP.ToClient p ->
+    Seq.equal ss (B.append cr (app_bytes_of p)) /\ Seq.equal cs sr
+
+(** `pre` is a prefix of the byte string `full`. **)
+let is_byte_prefix (pre full:B.bytes) : prop =
+  exists (rest:B.bytes). Seq.equal full (B.append pre rest)
+
+(** End-to-end application-data STREAM INTEGRITY: each endpoint's received
+    application byte stream is a prefix of the peer's sent application byte
+    stream. **)
+let stream_integrity_holds (s:tls_system_state) : prop =
+  is_byte_prefix (app_stream_received s.client) (app_stream_sent s.server) /\
+  is_byte_prefix (app_stream_received s.server) (app_stream_sent s.client)
+
+(** Appending the empty byte string is the identity (extensional). **)
+let lemma_append_empty_r (x:B.bytes)
+  : Lemma (Seq.equal (B.append x B.empty) x)
+  = ()
+
+(** ─────────────────────────────────────────────────────────────────────────
+    PURE reduction: the stream-pairing invariant entails end-to-end stream
+    integrity.  In every channel state the in-flight application delta (or
+    `B.empty` at `Quiet`) is exactly the `rest` witnessing the prefix.  This
+    lemma is fully proved and reduces the open end-to-end goal to the single
+    invariant `app_pairing`.
+
+    STATUS.  The delivery case is no longer blocked.  The record-seq pairing
+    invariant this note called for now exists as `app_seq_pairing`
+    (`TLS13.System.AppSeqPairing.fst`), together with the decode-determinism
+    lemma (`lemma_decode_functional`) and all six preservation families
+    (2 send, 2 local, 2 delivery).  None of this required an AEAD-authenticity
+    assumption or a global deadlock argument: the delivery families close by
+    carrying the sender's model step and a single-record fact on the in-flight
+    payload, feeding the faithful-decode bridge from the PRE-state seal.
+
+    Two corrections to the reasoning above, both worth keeping.  First, the
+    quiescent key-agreement objection is real but not fatal: the client may
+    indeed send app data while the server is still at `HsClientFinishedReceived`,
+    so agreement is NOT available at such sends — the delivery proof therefore
+    does not rely on it, and instead aligns record sequence numbers directly.
+    Second, the seq-alignment "new invariant" is exactly `app_seq_pairing`, whose
+    correct statement needed three attempts: a flat write/read equality is FALSE
+    (a `Close_notify` sent from the closing region emits a record without
+    advancing the write seq), and the equality must be gated on `not_closing`,
+    which excuses it precisely over the absorbing closing region while keeping it
+    available across the handshake seam where it is established.
+
+    `app_pairing` remains a standalone definition with this proven reduction only
+    because the bundle assembly (`stream2_combined_inv` and the Temporal wiring)
+    is still in progress — NOT because of a soundness gap.  Note that
+    `app_pairing`, like `channel_seal_ok` and `app_material_agreement`, belongs in
+    the stream bundle and NOT in `tls_system_inv`: a conjunct there would force an
+    entry hypothesis onto `lemma_reachable_inv` and change the statement of
+    `lemma_flagship_record_material_agreement`.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_app_pairing_implies_stream_integrity (s:tls_system_state)
+  : Lemma (requires app_pairing s)
+          (ensures stream_integrity_holds s)
+  = let cs = app_stream_sent s.client in
+    let cr = app_stream_received s.client in
+    let ss = app_stream_sent s.server in
+    let sr = app_stream_received s.server in
+    // stream_integrity needs: is_byte_prefix cr ss  and  is_byte_prefix sr cs.
+    lemma_append_empty_r cr;   // Seq.equal (B.append cr B.empty) cr
+    lemma_append_empty_r sr;   // Seq.equal (B.append sr B.empty) sr
+    match s.channel with
+    | MP.Quiet ->
+      // cs == sr and ss == cr: both prefixes witnessed by B.empty.
+      assert (Seq.equal cs (B.append sr B.empty));
+      assert (Seq.equal ss (B.append cr B.empty))
+    | MP.ToServer p ->
+      // cs == sr ++ (app_bytes_of p): server-received prefixes client-sent;
+      // ss == cr: client-received prefixes server-sent (rest B.empty).
+      assert (Seq.equal cs (B.append sr (app_bytes_of p)));
+      assert (Seq.equal ss (B.append cr B.empty))
+    | MP.ToClient p ->
+      assert (Seq.equal ss (B.append cr (app_bytes_of p)));
+      assert (Seq.equal cs (B.append sr B.empty))
+#pop-options
+
 (** STAGE 2A — key-schedule prefix on each endpoint: an application traffic
     secret implies the master secret, and the master secret implies the shared
     secret.  Used to pin the client's late-obligation rank at send-CF. **)
@@ -478,11 +629,110 @@ let tls_system_inv (s:tls_system_state) : prop =
   client_e2e s /\
   server_e2e s /\
   client_clean s /\
+  app_pending_empty s /\
   protected_witnesses_ok s
 
-(** ─────────────────────────────────────────────────────────────────────────
-    The step relation, as an instance of the generic machine product.
-    ───────────────────────────────────────────────────────────────────────── **)
+(** Application record-epoch reachable-shape bridge (sub-goal (a)).  The
+    orphaned-but-inductive shapes from `TLS13.ConnectionState.Lemmas` have been
+    strengthened so that at `ControlApplicationData` they carry
+    `application_record_keys_installed_for_role` for the endpoint's own role, and
+    that shape is established purely from `connection_state_consistent` (already an
+    invariant conjunct) via RTC closure.  So no new `tls_system_inv` conjunct is
+    needed for the KEY-INSTALLATION half of driver readiness:
+    `CSL.lemma_connection_appdata_keys_installed_for_role` bridges the existing
+    `connection_state_consistent` conjunct to `application_record_keys_installed_for_role`.
+
+    CLIENT: the bridge completes `client_ready` outright, because `client_e2e`
+    (an *unconditional* invariant conjunct) supplies `client_end_to_end_invariant`
+    and the bridge supplies the app record keys.
+
+    SERVER: `server_ready` (= `server_driver_application_ready`) additionally
+    requires `server_end_to_end_invariant`, which is only carried by the invariant
+    conditionally (`server_e2e s = server_config_valid_e2e s.server ==>
+    server_end_to_end_invariant s.server`).  `server_config_valid_e2e` demands
+    `B.length server_certificate_chain <= max_server_certificate_chain_len` (16610),
+    but spec-level reachability only bounds a sent certificate chain by the *wire*
+    limit `certificate_chain_max_bytes` (32768); since the server config is
+    immutable and unconstrained by the existing flagship's entry precondition, it
+    is NOT derivable from reachability alone.
+
+    RESOLUTION (Option A): the stream-integrity development carries
+    `server_config_valid_e2e s.server` as its OWN invariant conjunct
+    (`tls_stream_inv`, below), established at the initial state from a
+    valid-server-config entry hypothesis added to the *new* stream-integrity
+    theorem only (mirroring the existing client-side
+    `supported_client_config_wire_profile cfg_c`), and trivially preserved because
+    the config is immutable.  Crucially this conjunct is kept OUT of the shared
+    `tls_system_inv` so the existing flagship (`lemma_flagship_record_material_
+    agreement`, via `lemma_reachable_inv`) keeps its weaker entry precondition. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_appdata_implies_client_ready
+  (s:tls_system_state)
+  : Lemma
+      (requires
+        client_e2e s /\
+        s.client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        SMR.connection_state_consistent s.client /\
+        ctrl s.client == CS.ControlApplicationData)
+      (ensures client_ready s)
+= CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client;
+  (* Since the internal-event work landed, `client_driver_application_ready`
+     also carries `CS.protected_handshake_buffer_empty` (it is what makes
+     readiness imply `TLS13.System.Internal.tls_settled`).  Reachability
+     supplies it: the client can only reach `ControlApplicationData` by sending
+     its own Finished, whose legality guard demands an empty pending buffer,
+     and no legal step at `ControlApplicationData` can refill it. *)
+  ADBE.lemma_connection_appdata_protected_handshake_buffer_empty s.client
+
+(** Server readiness at appdata, given the config-validity hypothesis (supplied
+    by the `tls_stream_inv` conjunct below).  `server_e2e s` + validity discharges
+    `server_end_to_end_invariant`; the bridge supplies the app record keys. **)
+let lemma_appdata_implies_server_ready
+  (s:tls_system_state)
+  : Lemma
+      (requires
+        server_e2e s /\
+        server_config_valid_e2e s.server /\
+        s.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        SMR.connection_state_consistent s.server /\
+        ctrl s.server == CS.ControlApplicationData)
+      (ensures server_ready s)
+= CSL.lemma_connection_appdata_keys_installed_for_role CS.ServerEndpoint s.server
+
+(** ── OPTION-B SEAM ──────────────────────────────────────────────────────────
+    The single readiness predicate the stream-integrity development depends on.
+    Every use of `client_ready`/`server_ready` downstream is routed through this
+    predicate and the one lemma establishing it
+    (`lemma_appdata_implies_app_endpoints_ready`).  Option B (decoupling key
+    agreement from full driver-readiness) later amounts to RE-PROVING that one
+    lemma from "both endpoints at appdata with app record keys installed" — the
+    rest of the development need not change.
+
+    Why the cert-chain bound folded into `server_ready` is only PROOF-technically
+    required: application-traffic key agreement is derived from the shared
+    handshake transcript (through the server Finished) and is *semantically
+    independent of the server certificate's length*.  The bound enters solely
+    because `server_driver_application_ready` bundles in `server_end_to_end_
+    invariant`, whose `server_state_core_correct` component happens to record the
+    impl-side chain-length bound (16610).  That is exactly why B is worth
+    attempting: it removes a proof-technical dependency that has no semantic force
+    on the property being proved. **)
+let app_endpoints_ready (s:tls_system_state) : prop =
+  client_ready s /\ server_ready s
+
+let lemma_appdata_implies_app_endpoints_ready
+  (s:tls_system_state)
+  : Lemma
+      (requires
+        tls_system_inv s /\
+        server_config_valid_e2e s.server /\
+        ctrl s.client == CS.ControlApplicationData /\
+        ctrl s.server == CS.ControlApplicationData)
+      (ensures app_endpoints_ready s)
+= lemma_appdata_implies_client_ready s;
+  lemma_appdata_implies_server_ready s
+#pop-options
+
 
 (** The wire-level EMISSION interface.  Both endpoints are
     `CS.connection_state`s stepping by the same kind of relation, so the client
@@ -1020,7 +1270,9 @@ let lemma_initial_inv (cfg_c cfg_s:CS.connection_config)
     // protected_witnesses_ok is vacuous at the initial state (client not ready).
     reveal_opaque (`%protected_witnesses_ok)
       (protected_witnesses_ok (initial_tls_system cfg_c cfg_s));
-    assert (~(client_ready (initial_tls_system cfg_c cfg_s)))
+    assert (~(client_ready (initial_tls_system cfg_c cfg_s)));
+    // app_pending_empty: fresh endpoints start from empty_application_state.
+    assert (app_pending_empty (initial_tls_system cfg_c cfg_s))
 
 (** ─────────────────────────────────────────────────────────────────────────
     Wire / projection FACT preservation.
@@ -1872,6 +2124,101 @@ let lemma_bp_server_local
     Seq.lemma_eq_elim
       a.server.CS.cs_wire_log.CL.raw_sent
       a.client.CS.cs_wire_log.CL.raw_received
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
+    Phase 2 — `app_pending_empty` preservation.
+
+    `app_pending_plaintext` is written exactly once (`empty_application_state`)
+    and carried unchanged by every model step, so it stays empty on both
+    endpoints.  The two step-level sublemmas below establish the field is
+    preserved by any legal model step; the endpoint wrappers lift that through
+    the (existentially bundled) legal delta of a canonical step.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_step_local_preserves_pending
+  (model0:CS.connection_model) (ev:CS.local_event) (model1:CS.connection_model)
+  : Lemma (requires CS.step_local_event model0 ev == Some model1)
+          (ensures model1.CS.model_application.CS.app_pending_plaintext ==
+                   model0.CS.model_application.CS.app_pending_plaintext)
+  = ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_step_tls_preserves_pending
+  (model0:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (model1:CS.connection_model)
+  : Lemma (requires CS.step_tls_message model0 dir msg == Some model1)
+          (ensures model1.CS.model_application.CS.app_pending_plaintext ==
+                   model0.CS.model_application.CS.app_pending_plaintext)
+  = ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_step_model_preserves_pending
+  (model0:CS.connection_model) (ev:CS.conn_event) (model1:CS.connection_model)
+  : Lemma (requires CS.step_model model0 ev == Some model1)
+          (ensures model1.CS.model_application.CS.app_pending_plaintext ==
+                   model0.CS.model_application.CS.app_pending_plaintext)
+  = match ev with
+    | CS.ConnNetworkEvent msg ->
+      lemma_step_tls_preserves_pending model0 msg.CL.message_direction msg.CL.message_value model1
+    | CS.ConnProtectedHandshake step ->
+      (* `step_protected_handshake` routes through `step_handshake_message
+         model0 CL.Received step.protected_handshake_message` and then rewrites
+         only `model_record` and `model_handshake.hs_buffers`, so the pending
+         plaintext is exactly the stepped model's.  `step_tls_message` on a
+         `M.TlsHandshake` IS `step_handshake_message` (StateMachine.fst), so the
+         existing dispatch lemma applies verbatim. *)
+      (match CS.step_handshake_message model0 CL.Received
+               step.CS.protected_handshake_message with
+       | Some stepped ->
+         lemma_step_tls_preserves_pending model0 CL.Received
+           (M.TlsHandshake step.CS.protected_handshake_message) stepped
+       | None -> ())
+    | CS.ConnLocalEvent local ->
+      lemma_step_local_preserves_pending model0 local model1
+#pop-options
+
+(** A canonical client step preserves the pending-plaintext field: the step
+    supplies a legal connection delta, whose model transition carries the field
+    unchanged. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_client_step_preserves_pending
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires EC.client_step st0 e st1 out)
+      (ensures
+        st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+        st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
+    returns
+      st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+      st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext
+    with _pf.
+      lemma_step_model_preserves_pending st0.CS.cs_model d.CS.delta_event st1.CS.cs_model
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_step_preserves_pending
+  (st0 st1:CS.connection_state)
+  (e:SM.event CW.wire_message CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires ES.server_step st0 e st1 out)
+      (ensures
+        st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+        st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext)
+  = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
+    eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
+    returns
+      st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+      st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext
+    with _pf.
+      lemma_step_model_preserves_pending st0.CS.cs_model d.CS.delta_event st1.CS.cs_model
 #pop-options
 
 (** Bridge: driver readiness entails `ControlApplicationData`.  Needed to relate
@@ -2927,6 +3274,7 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
        lemma_bp_client_send a local c' out w sent;
        lemma_wire_facts_client_send a b;
+       lemma_client_step_preserves_pending a.client c' (SM.LocalEvent local) out;
        lemma_pw_pres_client_send a b local c' out w sent)
 #pop-options
 
@@ -2953,6 +3301,7 @@ let lemma_pres_server_send (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_send a local s' out w sent;
        lemma_wire_facts_server_send a b;
+       lemma_server_step_preserves_pending a.server s' (SM.LocalEvent local) out;
        lemma_pw_pres_server_send a b local s' out w sent)
 #pop-options
 
@@ -3006,6 +3355,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_server a wire s' out raw snap sent;
        lemma_wire_facts_deliver_to_server a b;
+       lemma_server_step_preserves_pending a.server s' (SM.WireEvent wire) out;
        lemma_pw_pres_deliver_to_server a b wire s' out raw snap sent;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3036,6 +3386,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        lemma_client_step_e2e a.client c' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_client a wire c' out raw snap sent;
        lemma_wire_facts_deliver_to_client a b;
+       lemma_client_step_preserves_pending a.client c' (SM.WireEvent wire) out;
        lemma_pw_pres_deliver_to_client a b wire c' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3063,6 +3414,7 @@ let lemma_pres_client_local (a b:tls_system_state)
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
        lemma_bp_client_local a local c' out;
        lemma_wire_facts_client_local a b;
+       lemma_client_step_preserves_pending a.client c' (SM.LocalEvent local) out;
        lemma_pw_pres_client_local a b local c' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3090,6 +3442,7 @@ let lemma_pres_server_local (a b:tls_system_state)
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
        lemma_bp_server_local a local s' out;
        lemma_wire_facts_server_local a b;
+       lemma_server_step_preserves_pending a.server s' (SM.LocalEvent local) out;
        lemma_pw_pres_server_local a b local s' out;
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
@@ -3249,12 +3602,200 @@ let lemma_reachable_inv cfg_c cfg_s s =
   RTC.stable_on_closure tls_sys_step combined_inv ()
 
 (** ─────────────────────────────────────────────────────────────────────────
-    The payoff at a completed, quiescent state.
+    Stream-integrity invariant layer.
+
+    `server_config_valid_e2e s.server` (Some config + impl-side certificate-chain
+    bound) is NOT derivable from spec-level reachability (the wire limit 32768 is
+    looser than the impl bound 16610), so it must be *assumed at entry* and then
+    *carried*.  It is deliberately kept OUT of `tls_system_inv` — adding it there
+    would force the entry hypothesis onto `lemma_reachable_inv` and hence onto the
+    existing `lemma_flagship_record_material_agreement`, changing that theorem's
+    statement.  Instead we layer it here.  Preservation is trivial: the config is
+    immutable, so its validity is a function of a quantity every step preserves.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_cfg_pres_client_send (x y:tls_system_state)
+  : Lemma (requires tls_step_client_send x y)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = lemma_client_send_shape x y;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      EC.client_step x.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == x.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      y == { x with client = c'; channel = tls_to_server (emitted_raw out) x.client.CS.cs_model sent }
+    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
+    with _pf. ()
+
+let lemma_cfg_pres_client_local (x y:tls_system_state)
+  : Lemma (requires tls_step_client_local x y)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      EC.client_step x.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      y == { x with client = c' }
+    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
+    with _pf. ()
+
+let lemma_cfg_pres_deliver_to_client (x y:tls_system_state)
+  : Lemma (requires tls_step_deliver_to_client x y)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = lemma_deliver_to_client_shape x y;
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      x.channel == tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event x.client (SM.WireEvent wire) c' out /\
+      y == { x with client = c'; channel = MP.Quiet }
+    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
+    with _pf. ()
+
+let lemma_cfg_pres_server_send (x y:tls_system_state)
+  : Lemma (requires
+            tls_step_server_send x y /\
+            x.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = lemma_server_send_shape x y;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
+                     (sent:M.tls_message).
+      ES.server_step x.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == x.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      y == { x with server = s'; channel = tls_to_client (emitted_raw out) x.server.CS.cs_model sent }
+    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
+    with _pf. WStep.lemma_server_step_model_facts x.server (SM.LocalEvent local) s' out
+
+let lemma_cfg_pres_server_local (x y:tls_system_state)
+  : Lemma (requires
+            tls_step_server_local x y /\
+            x.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      ES.server_step x.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      y == { x with server = s' }
+    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
+    with _pf. WStep.lemma_server_step_model_facts x.server (SM.LocalEvent local) s' out
+
+let lemma_cfg_pres_deliver_to_server (x y:tls_system_state)
+  : Lemma (requires
+            tls_step_deliver_to_server x y /\
+            x.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = lemma_deliver_to_server_shape x y;
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      x.channel == tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event x.server (SM.WireEvent wire) s' out /\
+      y == { x with server = s'; channel = MP.Quiet }
+    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
+    with _pf. WStep.lemma_server_step_model_facts x.server (SM.WireEvent wire) s' out
+
+(** Config immutability at the system level: any single step preserves the
+    server endpoint's (immutable) config, hence its validity. **)
+let lemma_sys_step_preserves_server_config (x y:tls_system_state)
+  : Lemma (requires
+            tls_sys_step x y /\
+            x.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+          (ensures
+            y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config)
+  = FStar.Classical.move_requires_2 lemma_cfg_pres_client_send x y;
+    FStar.Classical.move_requires_2 lemma_cfg_pres_server_send x y;
+    FStar.Classical.move_requires_2 lemma_cfg_pres_deliver_to_client x y;
+    FStar.Classical.move_requires_2 lemma_cfg_pres_deliver_to_server x y;
+    FStar.Classical.move_requires_2 lemma_cfg_pres_client_local x y;
+    FStar.Classical.move_requires_2 lemma_cfg_pres_server_local x y
+#pop-options
+
+(** The stream-integrity invariant: structural invariant + server config
+    validity. **)
+let tls_stream_inv (s:tls_system_state) : prop =
+  tls_system_inv s /\ server_config_valid_e2e s.server
+
+(** Combined form used for the RTC induction (mirrors `combined_inv`): the
+    no-rekeying-gated structural invariant, the (unconditional) config validity,
+    and the (unconditional, immutable) server role.  The role is carried
+    explicitly because the structural invariant — the usual source of
+    `config_role == ServerEndpoint` — is only available under `tls_no_rekeying`,
+    whereas config preservation must fire on every step. **)
+let stream_combined_inv (s:tls_system_state) : prop =
+  combined_inv s /\
+  server_config_valid_e2e s.server /\
+  s.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_stream_combined_inv_preserved (x y:tls_system_state)
+  : Lemma (requires stream_combined_inv x /\ tls_sys_step x y)
+          (ensures stream_combined_inv y)
+  = lemma_combined_inv_preserved x y;
+    // config_role is carried explicitly in `stream_combined_inv x`, so it is
+    // available even when `x` has rekeyed; config immutability then transports
+    // both the role and the validity forward.
+    assert (x.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+    lemma_sys_step_preserves_server_config x y
+#pop-options
+
+let lemma_initial_stream_combined_inv (cfg_c cfg_s:CS.connection_config)
+  : Lemma
+      (requires
+        cfg_c.CS.config_role == CS.ClientEndpoint /\
+        cfg_s.CS.config_role == CS.ServerEndpoint /\
+        WFL.supported_client_config_wire_profile cfg_c /\
+        server_config_valid_e2e (CS.initial cfg_s))
+      (ensures stream_combined_inv (initial_tls_system cfg_c cfg_s))
+  = lemma_initial_combined_inv cfg_c cfg_s
+
+(** Reachable, non-rekeyed states with a valid server config satisfy the
+    stream-integrity invariant.  Mirror of `lemma_reachable_inv` with the extra
+    entry hypothesis `server_config_valid_e2e (CS.initial cfg_s)`. **)
+val lemma_reachable_stream_inv (cfg_c cfg_s:CS.connection_config) (s:tls_system_state)
+  : Lemma (requires cfg_c.CS.config_role == CS.ClientEndpoint /\
+                    cfg_s.CS.config_role == CS.ServerEndpoint /\
+                    WFL.supported_client_config_wire_profile cfg_c /\
+                    server_config_valid_e2e (CS.initial cfg_s) /\
+                    tls_no_rekeying s /\
+                    RTC.closure tls_sys_step (initial_tls_system cfg_c cfg_s) s)
+          (ensures tls_stream_inv s)
+let lemma_reachable_stream_inv cfg_c cfg_s s =
+  lemma_initial_stream_combined_inv cfg_c cfg_s;
+  FStar.Classical.forall_intro_2
+    (FStar.Classical.move_requires_2 lemma_stream_combined_inv_preserved);
+  RTC.stable_on_closure tls_sys_step stream_combined_inv ()
+
+(** ─────────────────────────────────────────────────────────────────────────
+    The payoff at a completed state.
+
+    NOTE: this lemma does NOT require `tls_quiescent`.  It once did, back when
+    the witnesses were produced on demand from a byte trace (the retired clean16
+    route), which needed a `Quiet` channel in order to use `byte_pairing`.  Since
+    the witnesses became an invariant conjunct (`protected_witnesses_ok`, gated
+    on readiness alone) the quiescence hypothesis has been dead weight.
+
+    Dropping it is not cosmetic: it makes record-material agreement available at
+    NON-quiescent states, i.e. with a message in flight.  That is exactly what is
+    needed to prove decode-faithfulness at an application-data DELIVERY, since
+    both `step_tls_message` arms for `M.TlsApplicationData` pin
+    `model_control == ControlApplicationData` -- so at a delivery step the
+    receiver, not just the sender, is application-ready.
     ───────────────────────────────────────────────────────────────────────── **)
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 val lemma_ready_quiescent_agrees (s:tls_system_state)
-  : Lemma (requires tls_system_inv s /\ tls_quiescent s /\ tls_application_ready s)
+  : Lemma (requires tls_system_inv s /\ tls_application_ready s)
           (ensures SMKM.supported_profile_application_record_material_agrees s.client s.server)
 let lemma_ready_quiescent_agrees s =
   let hc = hsf s.client in

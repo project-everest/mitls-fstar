@@ -137,9 +137,27 @@ IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
+  src/impl/TLS13.System.SlotMono.fst \
+  src/impl/TLS13.System.ServerSfsRecovery.fst \
+  src/impl/TLS13.System.HsMaterialFamilies.fst \
   src/impl/TLS13.System.Temporal.fst \
   src/impl/TLS13.Impl.Client.Engine.fst \
   src/impl/TLS13.System.SeqCountBase.fst \
+  src/impl/TLS13.System.AppSeqPairing.fst \
+  src/impl/TLS13.System.ServerReadRecvCount.fst \
+  src/impl/TLS13.System.ServerNotCFR.fst \
+  src/impl/TLS13.System.AppBothCongruence.fst \
+  src/impl/TLS13.System.AppMaterialFamilies.fst \
+  src/impl/TLS13.System.AppExtrasInv.fst \
+  src/impl/TLS13.System.AppStreamInv.fst \
+  src/impl/TLS13.System.StreamTemporal.fst \
+  src/impl/TLS13.System.StreamTemporal.Realized.fst \
+  src/impl/TLS13.System.HsSeqPairing.fst \
+  src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
+  src/spec/properties/TLS13.ConnectionState.RecordKeyEpoch.fst \
+  src/spec/properties/TLS13.ConnectionState.AppDataBufferEmpty.fst \
+  src/spec/properties/TLS13.ConnectionState.ServerHelloSelectionLink.fst \
+  src/spec/properties/TLS13.ConnectionState.HandshakeSeqZero.fst \
   src/impl/TLS13.System.Ordering.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
   src/impl/TLS13.Impl.Server.Driver.fst \
@@ -307,8 +325,18 @@ include .depend
 endif
 
 # ── Generic Verification Rules ────────────────────────────────────
+# F* validates an existing .checked file by CONTENT HASH and, when it is still
+# valid, re-verifies the module but deliberately does NOT rewrite the file.  Make
+# reasons about TIMESTAMPS.  So if a .checked ever ends up older than one of its
+# prerequisite .checked files — which happens routinely under -jN, or whenever a
+# single .checked is deleted and regenerated — Make asks for the target, F*
+# declines to rewrite it, the mtime does not move, and the module is re-verified
+# on every single `make` forever.  Stamping the target after a successful run
+# breaks that loop.  `-c` so that a genuine failure to produce the file is not
+# papered over with an empty one.
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	$(FSTAR) $<
+	@touch -c $@
 
 $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@

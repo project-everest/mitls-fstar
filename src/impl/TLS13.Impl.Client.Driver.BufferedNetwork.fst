@@ -99,6 +99,17 @@ let lemma_needmore_transition
 =
   ()
 
+(** The receive-storage capacity, as a plain numeral.
+
+    `buffered_driver_indexed` carries `BT.capacity model == SZ.v
+    driver_rx_capacity`, and the `NeedMoreInput` branch of `process` needs the
+    numeral to compare it against the incomplete-record bound.  Discharging the
+    `SZ.v`-of-a-literal step once, here, keeps it out of that branch's (default
+    `rlimit`) verification condition. **)
+let lemma_driver_rx_capacity_value ()
+  : Lemma (SZ.v driver_rx_capacity == 65535)
+= assert_norm (SZ.v driver_rx_capacity == 65535)
+
 let result_valid
   (_:endpoint)
   (before:endpoint_state)
@@ -463,6 +474,7 @@ fn process
         e.endpoint_app_out_buffer
         (Ghost.reveal st).endpoint_app_out);
     W.lemma_record_prefix_incomplete_bound (BT.pending (Ghost.reveal model));
+    lemma_driver_rx_capacity_value ();
     assert (pure (Seq.length (BT.pending (Ghost.reveal model)) < 5 + 16640));
     assert (pure (BT.capacity (Ghost.reveal model) == 65535));
     assert (pure (Seq.length (BT.pending (Ghost.reveal model)) <

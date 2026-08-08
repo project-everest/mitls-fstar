@@ -792,6 +792,23 @@ let first_epoch_application_traffic_material_slots_match_expected
         (traffic_id TrafficApplication ServerTraffic)
         st
         0)
+
+(* Handshake-epoch analogue of the application slots-match predicate above. *)
+(* Used by the non-ready cross-endpoint handshake-agreement route.          *)
+let first_epoch_handshake_traffic_material_slots_match_expected
+  (st:connection_state)
+  : prop =
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_client_handshake_traffic ==>
+      traffic_material_matches_expected_derived_material
+        (traffic_id TrafficHandshake ClientTraffic)
+        st) /\
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_server_handshake_traffic ==>
+      traffic_material_matches_expected_derived_material
+        (traffic_id TrafficHandshake ServerTraffic)
+        st)
+
 let first_epoch_application_traffic_material_no_key_update_invariant
   (st:connection_state)
   : prop =

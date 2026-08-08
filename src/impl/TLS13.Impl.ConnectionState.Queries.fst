@@ -1712,6 +1712,9 @@ fn can_receive_client_finished
   unfold (traffic_key_material_exactly
     c.handshake.keys.client_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
   unfold (optional_secret_exactly
     c.handshake.keys.master_secret
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
@@ -1772,7 +1775,15 @@ fn can_receive_client_finished
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
 
-  let ok = role_ok && tag_ok && stage_ok && no_fin && has_client_handshake_keys && has_master && seq_ok && transcript_room;
+  with server_app_present.
+    assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present);
+  let has_server_app_write = !c.handshake.keys.server_application_traffic.present;
+  assert (pure (has_server_app_write == server_app_present));
+
+  let ok = role_ok && tag_ok && stage_ok && no_fin && has_client_handshake_keys && has_master && has_server_app_write && seq_ok && transcript_room;
+
+  assert (pure (ok ==>
+    Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
 
   assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
   assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
@@ -1812,6 +1823,9 @@ fn can_receive_client_finished
   fold (traffic_key_material_exactly
     c.handshake.keys.client_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
   fold (key_schedule_exactly
     c.handshake.keys
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys);

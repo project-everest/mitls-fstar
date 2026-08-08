@@ -309,6 +309,25 @@ let initial (cfg:connection_config) : connection_state = {
   cs_wire_log = empty_wire_log;
   cs_event_log = [];
 }
+(** A configuration carries a server credential.  This is a PROTOCOL-level
+    well-formedness fact, not an implementation bound: the step relation already
+    demands it at `LocalStartServer` / `ControlNew`, and every server-side
+    transition that reads a credential matches on `config_server`.  Naming it
+    here lets the implementation and the system-level proofs share one
+    definition instead of respelling `Some? ...config_server` inline.
+
+    NOTE the deliberate layering.  This predicate says only that the credential
+    is PRESENT; it says nothing about how large the chain may be.  Any bound on
+    the chain length is a property of a particular implementation's buffers, NOT
+    of the protocol, so it does not belong here -- see
+    `TLS13.Impl.ConnectionState.Repr.server_config_valid`, which conjoins this
+    predicate with the implementation's own bound. **)
+let config_server_present (cfg:connection_config) : prop =
+  Some? cfg.config_server
+
+let server_config_present (st:connection_state) : prop =
+  config_server_present st.cs_model.model_config
+
 let fail_model (model:connection_model) (err:T.tls_error) : connection_model =
   { model with model_control = ControlFailed err; model_failure = Some err }
 let with_handshake_stage
@@ -1016,7 +1035,36 @@ let step_tls_message
      | CL.Sent -> None
      | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsAlert alert, _ ->
-    Some (fail_model model (T.AlertError alert))
+    // Stream-integrity fix (RECORD level).  This catch-all used to be
+    // DIRECTION-BLIND: `Some (fail_model ...)` for BOTH directions, at EVERY
+    // remaining control.  That made a `CL.Sent` alert a legal transition at, e.g.,
+    // `ControlNew` / `HsClientHelloSent`, where `record_write.R.epoch == R.Initial`
+    // and `record_write.R.key == None`.  Since `network_message_is_cleartext`
+    // (below) classifies EVERY alert as NON-cleartext, the protected branch of
+    // `network_message_raw_delta_legal` then permitted a "garbage protected"
+    // `Application_data` record sealed under no key at all.  Consequences:
+    //   * protected-record COUNTS stopped witnessing "the peer sent its Finished"
+    //     (an alert inflates the count identically), which killed every counting
+    //     route to the cross-endpoint handshake facts; and
+    //   * `~cleartext sent` no longer implied `~(R.Initial? (snap_wr p).R.epoch)`,
+    //     so the ToServer handshake-seal bridge could not be fired for a payload
+    //     whose message identity was not already known.
+    // The fix COMPLETES the pattern the `ControlFailed` arm immediately above
+    // already uses (:961-967): make the catch-all direction-explicit and REFUSE
+    // the send.  It is faithful — an endpoint's own failure is modelled by the
+    // `LocalFail` local event, which emits nothing on the wire; the only alert any
+    // endpoint ever SENDS is `Close_notify`, whose `CL.Sent` arm is live exactly at
+    // `ControlApplicationData` (:929) and is `None` at `ControlClosing` (:949).
+    // Because a consistent endpoint at `ControlApplicationData` has both
+    // application record epochs installed
+    // (`lemma_connection_appdata_keys_installed_for_role` then
+    // `lemma_connection_application_ready_record_epochs_installed`), "non-cleartext
+    // SEND ==> write key present ==> ~Initial write epoch" is now DERIVABLE rather
+    // than assumed.  Removing a transition only SHRINKS the reachable set, so no
+    // invariant preservation can be made harder by this change.
+    (match dir with
+     | CL.Sent -> None
+     | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->
     Some model
   | _, _ ->
@@ -1397,6 +1445,13 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        H.verify_finished client_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
      | _, _ -> False)
   | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    (* NOTE (application-data stream integrity): `app_pending_plaintext` is set
+       once to `B.empty` in `empty_application_state` and never written again by
+       any step, so this legality guard forces `bytes == B.empty`.  The
+       TLS-to-host-application delivery hop is thus unimplemented: it can only
+       ever append an empty chunk to `app_received`, leaving the received byte
+       stream (the concatenation) unchanged.  The Pulse drivers statically
+       exclude this event. *)
     exists pending.
       Seq.equal model.model_application.app_pending_plaintext (B.append bytes pending)
   | LocalFail _, _ ->
@@ -1487,7 +1542,17 @@ let legal_handshake_message
   | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
     model.model_config.config_role == ServerEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
-    Some? hs.hs_keys.ks_master_secret
+    Some? hs.hs_keys.ks_master_secret /\
+    // Stream-integrity fix: a server may not accept the client Finished (and
+    // thereby atomically enter ControlApplicationData) until it has installed its
+    // own application WRITE key.  Faithful to TLS 1.3 (both application traffic
+    // secrets are derived together, through the server Finished), and it removes a
+    // Fix-1 atomicity wart whereby a server could reach application data
+    // permanently unable to send.  The Pulse server driver already installs this
+    // key (LocalInstallServerApplicationTrafficKeys at HsServerFinishedSent) before
+    // it can process the client Finished, so this guard is always satisfied by the
+    // implementation.
+    Some? hs.hs_keys.ks_server_application_traffic
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
     // The client may not declare the handshake finished while it still holds
@@ -1499,7 +1564,36 @@ let legal_handshake_message
     protected_handshake_buffer_empty model /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
-    Some? hs.hs_keys.ks_server_application_traffic
+    Some? hs.hs_keys.ks_server_application_traffic /\
+    // Stream-integrity fix (RECORD level, not slot level).  The three conjuncts
+    // above are SLOT-level (key-schedule slots); they say nothing about the
+    // RECORD layer.  The client's handshake-WRITE record install is an OPTIONAL
+    // local (`traffic_install_allowed_at_stage_for_role` only *permits* it at
+    // `HsServerHelloReceived`; nothing compels it), so without this conjunct a
+    // client could legally send its Finished with
+    // `model_record.record_write.epoch == Initial` and no write key.  `Sent,
+    // Finished` is not cleartext, so the protected branch of
+    // `network_message_raw_delta_legal` would then tie the wire bytes to no seal
+    // at all -- a "garbage protected" record -- which makes the ToServer
+    // handshake-seal bridge genuinely FALSE, not merely underivable.  The server
+    // side has no such hole because its handshake-write install is control-forced
+    // (`lemma_server_handshake_write_record_has_keys`).
+    //
+    // This is the same move as the `Received, Finished, HsServerFinishedSent` arm
+    // immediately above, one level down.  It is faithful to TLS 1.3: a client
+    // cannot send an encrypted Finished without its handshake write keys.  The
+    // Pulse client driver selects `LocalInstallClientHandshakeTrafficKeys`
+    // (TrafficHandshake + TrafficWrite) at `HsServerHelloReceived`, well before
+    // the Finished send, so the guard is always satisfied by the implementation.
+    //
+    // WEAKEST SUFFICIENT GUARD: only `Some? key` is demanded, not `Some?
+    // static_iv` and not an epoch pin.  Under `connection_state_consistent`,
+    // `Some? key` already excludes `R.Initial` (the Initial arm forces
+    // `key == None`) and the committed negative-epoch lemmas exclude
+    // `R.Application`, so `lemma_client_finished_verified_write_epoch_handshake`
+    // yields `epoch == R.Handshake`; consistency's Handshake arm then supplies
+    // the full traffic-material match, hence `static_iv` too.
+    Some? model.model_record.record_write.R.key
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
     model.model_config.config_role == ClientEndpoint /\
     True

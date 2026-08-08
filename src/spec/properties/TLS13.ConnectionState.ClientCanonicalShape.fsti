@@ -272,3 +272,18 @@ val lemma_client_canonical_appdata_exact_spine
                   CS.ConnLocalEvent cv_verify ::
                   CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
                   tail))))
+
+(** Shared-secret PRESENCE at [HsServerFinishedVerified], extracted from
+    CANONICAL reachability + no-received-CCS.  Load-bearing brick for the
+    non-ready cross-endpoint HANDSHAKE agreement producer: NOT derivable from
+    [connection_state_consistent] alone (the model-level x25519 shape cannot pin
+    presence at this control), but the canonical [sfv_region_ok] forces it. **)
+val lemma_client_reachable_sfv_shared_secret_present
+  (cfg:CS.connection_config) (s:CS.connection_state)
+  : Lemma
+    (requires
+       WStep.client_reachable (CS.initial cfg) s /\
+       s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+       s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
+       log_has_no_received_ccs s.CS.cs_event_log)
+    (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
