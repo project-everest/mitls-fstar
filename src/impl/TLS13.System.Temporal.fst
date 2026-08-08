@@ -67,7 +67,7 @@ let lemma_inv_implies_agreement s =
          (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s.client s.server /\
        SMKM.peer_record_material_agrees
          (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s.client s.server)
-  with _pf. begin
+  with begin
     lemma_ready_quiescent_agrees s;
     // SMKM.supported_profile_application_record_material_agrees s.client s.server
     // unfolds definitionally to the two peer_record_material_agrees conjuncts.
@@ -99,14 +99,14 @@ let lemma_flagship_record_material_agreement cfg_c cfg_s =
   with begin
     introduce
       T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_ready_scoped s'
-    with _reach. begin
+    with begin
       introduce
         (tls_no_rekeying s' /\ tls_quiescent s' /\ tls_application_ready s') ==>
           (SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s'.client s'.server /\
            SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s'.client s'.server)
-      with _ant. begin
+      with begin
         // tls_no_rekeying s' (from _ant) unlocks the combined-invariant reachability.
         lemma_reachable_inv cfg_c cfg_s s';
         lemma_inv_implies_agreement s'

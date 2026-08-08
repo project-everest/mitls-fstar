@@ -469,17 +469,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
       client_tail_sent
       client_tail_received
       client_final
-  returns
-    exists server_ee server_cert server_cv server_finished client_finished.
-      paired_protected_handshake_event_projection_pairs
-        client_state
-        server_state
-        server_ee
-        server_cert
-        server_cv
-        server_finished
-        client_finished
-  with _.
+  with
   ( lemma_protected_handshake_event_projection_pair_after_client_finished_local_skips_with_tails
       client_finished_sender
       client_finished_receiver
@@ -528,17 +518,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
         cf_server_tail_sent
         cf_server_tail_received
         server_finished_final
-    returns
-      exists server_ee server_cert server_cv server_finished client_finished.
-        paired_protected_handshake_event_projection_pairs
-          client_state
-          server_state
-          server_ee
-          server_cert
-          server_cv
-          server_finished
-          client_finished
-    with _.
+    with
     ( let client_hs = client_state.cs_model.model_handshake in
       let server_hs = server_state.cs_model.model_handshake in
       match
@@ -862,17 +842,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_instal
       client_tail_sent
       client_tail_received
       client_final
-  returns
-    exists server_ee server_cert server_cv server_finished client_finished.
-      paired_protected_handshake_event_projection_pairs
-        client_state
-        server_state
-        server_ee
-        server_cert
-        server_cv
-        server_finished
-        client_finished
-  with _.
+  with
   ( lemma_protected_handshake_event_projection_pair_after_client_finished_local_skips_with_tails
       client_finished_sender
       client_finished_receiver
@@ -921,17 +891,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_instal
         cf_server_tail_sent
         cf_server_tail_received
         server_finished_final
-    returns
-      exists server_ee server_cert server_cv server_finished client_finished.
-        paired_protected_handshake_event_projection_pairs
-          client_state
-          server_state
-          server_ee
-          server_cert
-          server_cv
-          server_finished
-          client_finished
-    with _.
+    with
     ( let client_hs = client_state.cs_model.model_handshake in
       let server_hs = server_state.cs_model.model_handshake in
       match
@@ -1102,17 +1062,7 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contig
       server_tail_sent
       server_tail_received
       server_final
-  returns
-    exists server_ee server_cert server_cv server_finished client_finished.
-      paired_protected_handshake_event_projection_pairs
-        client_state
-        server_state
-        server_ee
-        server_cert
-        server_cv
-        server_finished
-        client_finished
-  with _.
+  with
   ( lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays
       client_state
       server_state

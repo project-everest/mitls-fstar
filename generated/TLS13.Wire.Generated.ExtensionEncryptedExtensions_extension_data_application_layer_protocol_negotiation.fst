@@ -33,6 +33,8 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open TLS13.Wire.Generated.ProtocolNameList
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 noextract let extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation'_parser : LP.parser _ extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation' =

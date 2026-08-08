@@ -424,13 +424,7 @@ let lemma_client_after_two_installs_next_event_encrypted_extensions
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    exists ee.
-      ev == CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-      }
-  with _.
+  with
   (
     CSL.lemma_step_model_preserves_config model ev model1;
     match ev with
@@ -563,8 +557,7 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns client_no_tail_first_protected_receive_shape client
-  with _.
+  with
   (
     eliminate exists start' ch' sh' client_shared' e4' e5' rest'.
       client.CS.cs_event_log ==
@@ -582,8 +575,7 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
         e5' ::
         rest' /\
       PCPS.client_no_tail_two_handshake_install_cover e4' e5'
-    returns client_no_tail_first_protected_receive_shape client
-    with _.
+    with
     (
       assert (start' == start);
       assert (ch' == ch);
@@ -612,8 +604,7 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
           Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
           Seq.equal tail_received (B.append delta_received tail_received2) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 rest tail_sent2 tail_received2 client.CS.cs_model
-        returns client_no_tail_first_protected_receive_shape client
-        with _.
+        with
         (
           assert_norm (
             TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 (e5 :: rest2) tail_sent2 tail_received2 client.CS.cs_model ==
@@ -631,8 +622,7 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
             Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
             Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
             TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model6 rest2 tail_sent3 tail_received3 client.CS.cs_model
-          returns client_no_tail_first_protected_receive_shape client
-          with _.
+          with
           (
             PCPS.lemma_client_no_tail_two_handshake_install_cover_cases e4 e5;
             if
@@ -671,8 +661,7 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
                   CL.message_direction = CL.Received;
                   CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
                 }
-              returns client_no_tail_first_protected_receive_shape client
-              with _.
+              with
               (
                 introduce exists
                   (start0:CS.handshake_start)
@@ -772,33 +761,7 @@ let lemma_client_no_tail_model6_witness
     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns
-    exists start ch sh client_shared e4 e5 rest2 model6 tail_sent tail_received.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-        e4 ::
-        e5 ::
-        rest2 /\
-      FStar.List.Tot.length rest2 == 10 /\
-      PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-      client_after_two_handshake_installs_model model6 /\
-      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-        model6
-        rest2
-        tail_sent
-        tail_received
-        client.CS.cs_model /\
-      PNI.client_application_progress_rank client.CS.cs_model == 0
-  with _.
+  with
   (
     eliminate exists start' ch' sh' client_shared' e4' e5' rest'.
       client.CS.cs_event_log ==
@@ -816,33 +779,7 @@ let lemma_client_no_tail_model6_witness
         e5' ::
         rest' /\
       PCPS.client_no_tail_two_handshake_install_cover e4' e5'
-    returns
-      exists start ch sh client_shared e4 e5 rest2 model6 tail_sent tail_received.
-        client.CS.cs_event_log ==
-          CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Sent;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ServerHello sh);
-          }) ::
-          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-          e4 ::
-          e5 ::
-          rest2 /\
-        FStar.List.Tot.length rest2 == 10 /\
-        PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-        client_after_two_handshake_installs_model model6 /\
-        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-          model6
-          rest2
-          tail_sent
-          tail_received
-          client.CS.cs_model /\
-        PNI.client_application_progress_rank client.CS.cs_model == 0
-    with _.
+    with
     (
       assert (start' == start);
       assert (ch' == ch);
@@ -871,33 +808,7 @@ let lemma_client_no_tail_model6_witness
           Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
           Seq.equal tail_received (B.append delta_received tail_received2) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 rest tail_sent2 tail_received2 client.CS.cs_model
-        returns
-          exists start ch sh client_shared e4 e5 rest2 model6 tail_sent tail_received.
-            client.CS.cs_event_log ==
-              CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Sent;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ServerHello sh);
-              }) ::
-              CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-              e4 ::
-              e5 ::
-              rest2 /\
-            FStar.List.Tot.length rest2 == 10 /\
-            PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-            client_after_two_handshake_installs_model model6 /\
-            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-              model6
-              rest2
-              tail_sent
-              tail_received
-              client.CS.cs_model /\
-            PNI.client_application_progress_rank client.CS.cs_model == 0
-        with _.
+        with
         (
           assert_norm (
             TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 (e5 :: rest2) tail_sent2 tail_received2 client.CS.cs_model ==
@@ -915,33 +826,7 @@ let lemma_client_no_tail_model6_witness
             Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
             Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
             TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model6 rest2 tail_sent3 tail_received3 client.CS.cs_model
-          returns
-            exists start ch sh client_shared e4 e5 rest2 model6 tail_sent tail_received.
-              client.CS.cs_event_log ==
-                CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Sent;
-                  CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                }) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.ServerHello sh);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-                e4 ::
-                e5 ::
-                rest2 /\
-              FStar.List.Tot.length rest2 == 10 /\
-              PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-              client_after_two_handshake_installs_model model6 /\
-              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-                model6
-                rest2
-                tail_sent
-                tail_received
-                client.CS.cs_model /\
-              PNI.client_application_progress_rank client.CS.cs_model == 0
-          with _.
+          with
           (
             PCPS.lemma_client_no_tail_two_handshake_install_cover_cases e4 e5;
             if
@@ -1041,13 +926,7 @@ let lemma_client_after_encrypted_extensions_next_event_certificate
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    exists cert.
-      ev == CS.ConnNetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake (M.Certificate cert);
-      }
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent local ->
@@ -1160,10 +1039,7 @@ let lemma_client_after_certificate_next_event_validate_certificate
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    exists peer.
-      ev == CS.ConnLocalEvent (CS.LocalValidateCertificate peer)
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent local ->
@@ -1270,8 +1146,7 @@ let lemma_client_no_tail_eighth_event_certificate_clean
       tail_received
       client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns client_no_tail_second_protected_receive_shape client
-  with _.
+  with
   (
     match rest2 with
     | e6 :: rest3 ->
@@ -1288,8 +1163,7 @@ let lemma_client_no_tail_eighth_event_certificate_clean
           CL.message_direction = CL.Received;
           CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
         }
-      returns client_no_tail_second_protected_receive_shape client
-      with _.
+      with
       (
         assert_norm (
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model6 (e6 :: rest3) tail_sent tail_received client.CS.cs_model ==
@@ -1307,8 +1181,7 @@ let lemma_client_no_tail_eighth_event_certificate_clean
           Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
           Seq.equal tail_received (B.append delta_received tail_received2) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model7 rest3 tail_sent2 tail_received2 client.CS.cs_model
-        returns client_no_tail_second_protected_receive_shape client
-        with _.
+        with
         (
           lemma_client_encrypted_extensions_step_model_shape model6 model7 ee;
           assert (client_after_encrypted_extensions_model model7);
@@ -1327,8 +1200,7 @@ let lemma_client_no_tail_eighth_event_certificate_clean
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.Certificate cert);
               }
-            returns client_no_tail_second_protected_receive_shape client
-            with _.
+            with
             (
               introduce exists
                 (start0:CS.handshake_start)
@@ -1438,41 +1310,7 @@ let lemma_client_no_tail_model8_witness
       tail_received
       client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns
-    exists start ch sh client_shared e4 e5 ee cert rest4 model8 tail_sent tail_received.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-        e4 ::
-        e5 ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.Certificate cert);
-        }) ::
-        rest4 /\
-      FStar.List.Tot.length rest4 == 8 /\
-      PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-      client_after_certificate_model model8 /\
-      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-        model8
-        rest4
-        tail_sent
-        tail_received
-        client.CS.cs_model /\
-      PNI.client_application_progress_rank client.CS.cs_model == 0
-  with _.
+  with
   (
     match rest2 with
     | e6 :: rest3 ->
@@ -1489,41 +1327,7 @@ let lemma_client_no_tail_model8_witness
           CL.message_direction = CL.Received;
           CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
         }
-      returns
-        exists start ch sh client_shared e4 e5 ee cert rest4 model8 tail_sent tail_received.
-          client.CS.cs_event_log ==
-            CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Sent;
-              CL.message_value = M.TlsHandshake (M.ClientHello ch);
-            }) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.ServerHello sh);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-            e4 ::
-            e5 ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-            }) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.Certificate cert);
-            }) ::
-            rest4 /\
-          FStar.List.Tot.length rest4 == 8 /\
-          PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-          client_after_certificate_model model8 /\
-          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-            model8
-            rest4
-            tail_sent
-            tail_received
-            client.CS.cs_model /\
-          PNI.client_application_progress_rank client.CS.cs_model == 0
-      with _.
+      with
       (
         assert_norm (
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model6 (e6 :: rest3) tail_sent tail_received client.CS.cs_model ==
@@ -1541,41 +1345,7 @@ let lemma_client_no_tail_model8_witness
           Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
           Seq.equal tail_received (B.append delta_received tail_received2) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model7 rest3 tail_sent2 tail_received2 client.CS.cs_model
-        returns
-          exists start ch sh client_shared e4 e5 ee cert rest4 model8 tail_sent tail_received.
-            client.CS.cs_event_log ==
-              CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Sent;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ServerHello sh);
-              }) ::
-              CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-              e4 ::
-              e5 ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-              }) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.Certificate cert);
-              }) ::
-              rest4 /\
-            FStar.List.Tot.length rest4 == 8 /\
-            PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-            client_after_certificate_model model8 /\
-            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-              model8
-              rest4
-              tail_sent
-              tail_received
-              client.CS.cs_model /\
-            PNI.client_application_progress_rank client.CS.cs_model == 0
-        with _.
+        with
         (
           lemma_client_encrypted_extensions_step_model_shape model6 model7 ee;
           assert (client_after_encrypted_extensions_model model7);
@@ -1594,41 +1364,7 @@ let lemma_client_no_tail_model8_witness
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.Certificate cert);
               }
-            returns
-              exists start ch sh client_shared e4 e5 ee cert rest4 model8 tail_sent tail_received.
-                client.CS.cs_event_log ==
-                  CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-                  CS.ConnNetworkEvent ({
-                    CL.message_direction = CL.Sent;
-                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                  }) ::
-                  CS.ConnNetworkEvent ({
-                    CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsHandshake (M.ServerHello sh);
-                  }) ::
-                  CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-                  e4 ::
-                  e5 ::
-                  CS.ConnNetworkEvent ({
-                    CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-                  }) ::
-                  CS.ConnNetworkEvent ({
-                    CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsHandshake (M.Certificate cert);
-                  }) ::
-                  rest4 /\
-                FStar.List.Tot.length rest4 == 8 /\
-                PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-                client_after_certificate_model model8 /\
-                TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-                  model8
-                  rest4
-                  tail_sent
-                  tail_received
-                  client.CS.cs_model /\
-                PNI.client_application_progress_rank client.CS.cs_model == 0
-            with _.
+            with
             (
               assert_norm (
                 TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model7 (e7 :: rest4) tail_sent2 tail_received2 client.CS.cs_model ==
@@ -1646,41 +1382,7 @@ let lemma_client_no_tail_model8_witness
                 Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
                 Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
                 TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model8 rest4 tail_sent3 tail_received3 client.CS.cs_model
-              returns
-                exists start ch sh client_shared e4 e5 ee cert rest4 model8 tail_sent tail_received.
-                  client.CS.cs_event_log ==
-                    CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-                    CS.ConnNetworkEvent ({
-                      CL.message_direction = CL.Sent;
-                      CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                    }) ::
-                    CS.ConnNetworkEvent ({
-                      CL.message_direction = CL.Received;
-                      CL.message_value = M.TlsHandshake (M.ServerHello sh);
-                    }) ::
-                    CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-                    e4 ::
-                    e5 ::
-                    CS.ConnNetworkEvent ({
-                      CL.message_direction = CL.Received;
-                      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-                    }) ::
-                    CS.ConnNetworkEvent ({
-                      CL.message_direction = CL.Received;
-                      CL.message_value = M.TlsHandshake (M.Certificate cert);
-                    }) ::
-                    rest4 /\
-                  FStar.List.Tot.length rest4 == 8 /\
-                  PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-                  client_after_certificate_model model8 /\
-                  TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-                    model8
-                    rest4
-                    tail_sent
-                    tail_received
-                    client.CS.cs_model /\
-                  PNI.client_application_progress_rank client.CS.cs_model == 0
-              with _.
+              with
               (
                 lemma_client_certificate_step_model_shape model7 model8 cert;
                 assert (client_after_certificate_model model8);
@@ -1780,8 +1482,7 @@ let lemma_client_no_tail_ninth_event_validate_certificate_clean
       tail_received
       client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns client_no_tail_certificate_validated_shape client
-  with _.
+  with
   (
     match rest4 with
     | e8 :: rest5 ->
@@ -1795,8 +1496,7 @@ let lemma_client_no_tail_ninth_event_validate_certificate_clean
         client.CS.cs_model;
       eliminate exists peer.
         e8 == CS.ConnLocalEvent (CS.LocalValidateCertificate peer)
-      returns client_no_tail_certificate_validated_shape client
-      with _.
+      with
       (
         introduce exists
           (start0:CS.handshake_start)

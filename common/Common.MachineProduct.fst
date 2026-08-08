@@ -151,6 +151,23 @@ type machine_iface
 
 (** Client OUTPUT: a local event that emits on the wire.  The emitted payload
     goes in flight toward the server. **)
+(** The witnessed part of [mp_client_send], as a named predicate.
+
+    [eliminate exists] desugars to [FStar.Classical.Sugar.indefinite_descriptionN],
+    whose precondition is a beta-redex under the quantifier prefix.  Keeping the
+    matrix folded behind a definition (rather than inlining it at each
+    elimination site) is what makes that obligation discharge. **)
+let mp_client_send_body
+  (#cst #sst #payload #wire #cloc #sloc #lout:Type0)
+  (i:machine_iface cst sst payload wire cloc sloc lout)
+  (a b:sys cst sst payload)
+  (local:cloc) (c':cst) (out:SM.step_output wire lout) (p:payload)
+  : prop =
+  i.cstep a.client (SM.LocalEvent local) c' out /\
+  Cons? out.SM.so_wire_outputs /\
+  i.emit_c a.client c' out p /\
+  b == { a with client = c'; channel = ToServer p }
+
 let mp_client_send
   (#cst #sst #payload #wire #cloc #sloc #lout:Type0)
   (i:machine_iface cst sst payload wire cloc sloc lout)
@@ -158,10 +175,7 @@ let mp_client_send
   : prop =
   i.moves.uses_client_send /\
   (exists (local:cloc) (c':cst) (out:SM.step_output wire lout) (p:payload).
-     i.cstep a.client (SM.LocalEvent local) c' out /\
-     Cons? out.SM.so_wire_outputs /\
-     i.emit_c a.client c' out p /\
-     b == { a with client = c'; channel = ToServer p })
+     mp_client_send_body i a b local c' out p)
 
 (** Server OUTPUT: the mirror of `mp_client_send`. **)
 let mp_server_send
@@ -361,37 +375,32 @@ let lemma_client_component_steps
          i.cstep a.client ev b.client out) in
     eliminate
       (mp_client_send i a b) \/ (mp_deliver_to_client i a b \/ mp_client_local i a b)
-    returns goal
-    with _hsend. begin
+    with begin
       eliminate exists (local:cloc) (c':cst) (out:SM.step_output wire lout) (p:payload).
         i.cstep a.client (SM.LocalEvent local) c' out /\
         Cons? out.SM.so_wire_outputs /\
         i.emit_c a.client c' out p /\
         b == ({ a with client = c'; channel = ToServer p } <: sys cst sst payload)
-      returns goal
-      with _pf.
+      with
         assert (i.cstep a.client (SM.LocalEvent local) b.client out)
     end
-    and _hrest. begin
+    and begin
       eliminate (mp_deliver_to_client i a b) \/ (mp_client_local i a b)
-      returns goal
-      with _hdel. begin
+      with begin
         eliminate exists (p:payload) (w:wire) (c':cst) (out:SM.step_output wire lout).
           a.channel == ToClient p /\
           i.carries p w /\
           i.cstep a.client (SM.WireEvent w) c' out /\
           b == ({ a with client = c'; channel = Quiet } <: sys cst sst payload)
-        returns goal
-        with _pf.
+        with
           assert (i.cstep a.client (SM.WireEvent w) b.client out)
       end
-      and _hloc. begin
+      and begin
         eliminate exists (local:cloc) (c':cst) (out:SM.step_output wire lout).
           i.cstep a.client (SM.LocalEvent local) c' out /\
           out.SM.so_wire_outputs == [] /\
           b == ({ a with client = c' } <: sys cst sst payload)
-        returns goal
-        with _pf.
+        with
           assert (i.cstep a.client (SM.LocalEvent local) b.client out)
       end
     end
@@ -413,45 +422,39 @@ let lemma_server_component_steps
     eliminate
       (mp_server_send i a b) \/
       (mp_deliver_to_server i a b \/ mp_server_local i a b \/ mp_server_serve i a b)
-    returns goal
-    with _hsend. begin
+    with begin
       eliminate exists (local:sloc) (s':sst) (out:SM.step_output wire lout) (p:payload).
         i.sstep a.server (SM.LocalEvent local) s' out /\
         Cons? out.SM.so_wire_outputs /\
         i.emit_s a.server s' out p /\
         b == ({ a with server = s'; channel = ToClient p } <: sys cst sst payload)
-      returns goal
-      with _pf.
+      with
         assert (i.sstep a.server (SM.LocalEvent local) b.server out)
     end
-    and _hrest. begin
+    and begin
       eliminate
         (mp_deliver_to_server i a b) \/
         (mp_server_local i a b \/ mp_server_serve i a b)
-      returns goal
-      with _hdel. begin
+      with begin
         eliminate exists (p:payload) (w:wire) (s':sst) (out:SM.step_output wire lout).
           a.channel == ToServer p /\
           i.carries p w /\
           i.sstep a.server (SM.WireEvent w) s' out /\
           b == ({ a with server = s'; channel = Quiet } <: sys cst sst payload)
-        returns goal
-        with _pf.
+        with
           assert (i.sstep a.server (SM.WireEvent w) b.server out)
       end
-      and _hrest2. begin
+      and begin
         eliminate (mp_server_local i a b) \/ (mp_server_serve i a b)
-        returns goal
-        with _hloc. begin
+        with begin
           eliminate exists (local:sloc) (s':sst) (out:SM.step_output wire lout).
             i.sstep a.server (SM.LocalEvent local) s' out /\
             out.SM.so_wire_outputs == [] /\
             b == ({ a with server = s' } <: sys cst sst payload)
-          returns goal
-          with _pf.
+          with
             assert (i.sstep a.server (SM.LocalEvent local) b.server out)
         end
-        and _hserve. begin
+        and begin
           eliminate exists (p:payload) (w:wire) (s':sst)
                            (out:SM.step_output wire lout) (p':payload).
             a.channel == ToServer p /\
@@ -460,8 +463,7 @@ let lemma_server_component_steps
             Cons? out.SM.so_wire_outputs /\
             i.emit_s a.server s' out p' /\
             b == ({ a with server = s'; channel = ToClient p' } <: sys cst sst payload)
-          returns goal
-          with _pf.
+          with
             assert (i.sstep a.server (SM.WireEvent w) b.server out)
         end
       end
@@ -488,9 +490,8 @@ let lemma_client_moves_or_fixed
       (mp_client_send i a b \/ mp_deliver_to_client i a b \/ mp_client_local i a b) \/
       (mp_server_send i a b \/ mp_deliver_to_server i a b \/
        mp_server_local i a b \/ mp_server_serve i a b)
-    returns goal
-    with _hc. lemma_client_component_steps i a b
-    and  _hs. lemma_server_moves_fix_client i a b
+    with lemma_client_component_steps i a b
+    and lemma_server_moves_fix_client i a b
 
 let lemma_server_moves_or_fixed
   (#cst #sst #payload #wire #cloc #sloc #lout:Type0)
@@ -510,9 +511,8 @@ let lemma_server_moves_or_fixed
       (mp_client_send i a b \/ mp_deliver_to_client i a b \/ mp_client_local i a b) \/
       (mp_server_send i a b \/ mp_deliver_to_server i a b \/
        mp_server_local i a b \/ mp_server_serve i a b)
-    returns goal
-    with _hc. lemma_client_moves_fix_server i a b
-    and  _hs. lemma_server_component_steps i a b
+    with lemma_client_moves_fix_server i a b
+    and lemma_server_component_steps i a b
 
 (** Consequently each endpoint stays a valid state of its own machine along every
     system run: the product can never drive an endpoint off its state machine.
@@ -544,13 +544,11 @@ let lemma_client_valid_preserved
       (b.client == a.client) \/
       (exists (ev:SM.event wire cloc) (out:SM.step_output wire lout).
          i.cstep a.client ev b.client out)
-    returns SM.valid_state m b.client
-    with _hfix. ()
-    and  _hstep.
+    with ()
+    and
       eliminate exists (ev:SM.event wire cloc) (out:SM.step_output wire lout).
         i.cstep a.client ev b.client out
-      returns SM.valid_state m b.client
-      with _pf. SM.lemma_valid_state_after_step m a.client ev b.client out
+      with SM.lemma_valid_state_after_step m a.client ev b.client out
 
 let lemma_server_valid_preserved
   (#cst #sst #payload #wire #cloc #sloc #lout:Type0)
@@ -566,13 +564,11 @@ let lemma_server_valid_preserved
       (b.server == a.server) \/
       (exists (ev:SM.event wire sloc) (out:SM.step_output wire lout).
          i.sstep a.server ev b.server out)
-    returns SM.valid_state m b.server
-    with _hfix. ()
-    and  _hstep.
+    with ()
+    and
       eliminate exists (ev:SM.event wire sloc) (out:SM.step_output wire lout).
         i.sstep a.server ev b.server out
-      returns SM.valid_state m b.server
-      with _pf. SM.lemma_valid_state_after_step m a.server ev b.server out
+      with SM.lemma_valid_state_after_step m a.server ev b.server out
 
 (** ─────────────────────────────────────────────────────────────────────────
     Introduction lemmas
@@ -604,7 +600,10 @@ let lemma_mp_client_send_intro
         i.emit_c a.client c' out p /\
         b == ({ a with client = c'; channel = ToServer p } <: sys cst sst payload))
       (ensures mp_client_send i a b)
-  = ()
+  = introduce exists (local0:cloc) (c'0:cst) (out0:SM.step_output wire lout) (p0:payload).
+      mp_client_send_body i a b local0 c'0 out0 p0
+    with local c' out p
+    and ()
 
 let lemma_mp_server_send_intro
   (#cst #sst #payload #wire #cloc #sloc #lout:Type0)

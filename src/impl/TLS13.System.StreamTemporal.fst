@@ -96,9 +96,9 @@ let lemma_flagship_stream_integrity cfg_c cfg_s =
   with begin
     introduce
       T.reachable SY.tls_sys_step s0 s' ==> stream_integrity_scoped s'
-    with _reach. begin
+    with begin
       introduce SY.tls_no_rekeying s' ==> SY.stream_integrity_holds s'
-      with _nr. begin
+      with begin
         // `tls_no_rekeying s'` (from the antecedent) unlocks the byte-level
         // reachability payoff; the bridge below is definitional.
         ASI.lemma_reachable_app_stream_inv cfg_c cfg_s s';

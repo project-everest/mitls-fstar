@@ -173,13 +173,10 @@ let lemma_client_single_step_evolves st0 st1 =
   eliminate
     (exists (b:client_frame). client_issue_step_ok st0 st1 b) \/
     (exists (rb:bytes). client_recv_step_ok st0 st1 rb)
-  returns SM.state_evolves calc_client_state_machine st0 st1
-  with _hissue.
+  with
     eliminate exists (b:client_frame). client_issue_step_ok st0 st1 b
-    returns SM.state_evolves calc_client_state_machine st0 st1
-    with _pf. lemma_issue_step_evolves st0 st1 b
-  and _hrecv.
+    with lemma_issue_step_evolves st0 st1 b
+  and
     eliminate exists (rb:bytes). client_recv_step_ok st0 st1 rb
-    returns SM.state_evolves calc_client_state_machine st0 st1
-    with _pf. lemma_recv_step_evolves st0 st1 rb
+    with lemma_recv_step_evolves st0 st1 rb
 #pop-options

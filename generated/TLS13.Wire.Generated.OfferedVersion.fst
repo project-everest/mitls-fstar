@@ -33,6 +33,7 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 noextract let offeredVersion_repr_parser = LPI.parse_u16
@@ -47,7 +48,7 @@ inline_for_extraction noextract let offeredVersion_repr_reader = (PPB.leaf_reade
 
 inline_for_extraction noextract let offeredVersion_repr_writer = (LPPI.l2r_leaf_write_u16 ())
 
-inline_for_extraction noextract let synth_offeredVersion (x:LP.maybe_enum_key offeredVersion_enum) : offeredVersion =
+inline_for_extraction noextract let synth_offeredVersion (x:LP.maybe_enum_key offeredVersion_enum) : offeredVersion = 
   match x with
   | LP.Known k -> k
   | LP.Unknown y ->
@@ -55,7 +56,7 @@ inline_for_extraction noextract let synth_offeredVersion (x:LP.maybe_enum_key of
     [@inline_let] let _ = assert_norm (LP.list_mem v (LP.list_map snd offeredVersion_enum) == known_offeredVersion_repr v) in
     Unknown_offeredVersion v
 
-inline_for_extraction noextract let synth_offeredVersion_inv (x:offeredVersion) : LP.maybe_enum_key offeredVersion_enum =
+inline_for_extraction noextract let synth_offeredVersion_inv (x:offeredVersion) : LP.maybe_enum_key offeredVersion_enum = 
   match x with
   | Unknown_offeredVersion y ->
     [@inline_let] let v : U16.t = y in
@@ -75,7 +76,7 @@ let lemma_synth_offeredVersion_inv' () : Lemma
     (_ by (LP.forall_maybe_enum_key_unknown_tac ()))
 
 let lemma_synth_offeredVersion_inj () : Lemma
-  (LP.synth_injective synth_offeredVersion) =
+  (LP.synth_injective synth_offeredVersion) = 
   lemma_synth_offeredVersion_inv' ();
   LP.synth_inverse_synth_injective synth_offeredVersion synth_offeredVersion_inv
 
@@ -130,3 +131,4 @@ let free_offeredVersion = PPB.free_leaf
 let write_offeredVersion = PPB.l2r_safe_writer_leaf offeredVersion_serializer 2sz offeredVersion_writer
 
 let size_offeredVersion = PPB.l2r_safe_size_leaf offeredVersion_serializer 2sz
+

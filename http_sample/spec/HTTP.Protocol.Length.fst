@@ -331,10 +331,7 @@ let http_server_law_step
   | SM.LocalEvent Server_send ->
     eliminate exists (d:body_payload).
       http_server_send st0 st1 d /\ out.SM.so_wire_outputs == [Msg_body d]
-    returns
-      FT.ft_view_step http_block_size None
-        (http_server_project st0) (http_server_project st1)
-    with _.
+    with
     (match st0.hss_pending with
      | [] -> ()
      | h :: rest ->
@@ -394,21 +391,7 @@ let http_server_law_data_wire
   | SM.LocalEvent Server_send ->
     eliminate exists (d:body_payload).
       http_server_send st0 st1 d /\ out.SM.so_wire_outputs == [Msg_body d]
-    returns
-      (match http_classify msg with
-       | FT.FT_Data index payload ->
-         ((match index with
-           | Some i -> i == L.length (http_server_project st0).FT.ftv_blocks + 1
-           | None -> True) /\
-          (http_server_project st1).FT.ftv_blocks ==
-            L.append (http_server_project st0).FT.ftv_blocks [payload])
-         \/
-         ((http_server_project st1).FT.ftv_blocks == (http_server_project st0).FT.ftv_blocks /\
-          (match index with
-           | Some i -> FT.ft_block_at (http_server_project st0).FT.ftv_blocks i == Some payload
-           | None -> L.memP payload (http_server_project st0).FT.ftv_blocks))
-       | _ -> True)
-    with _. ()
+    with ()
   | _ ->
     (* Server_start / Server_complete / Server_abort emit no data wire output. *)
     ()

@@ -31,16 +31,12 @@ let lemma_client_no_tail_start_spine
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
     client.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
-  returns
-    client_no_tail_start_spine client
-  with _.
+  with
   (
     eliminate exists start rest.
       client.CS.cs_event_log ==
         CS.ConnLocalEvent (CS.LocalStartHandshake start) :: rest
-    returns
-      client_no_tail_start_spine client
-    with _.
+    with
     (
       assert (client.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
@@ -294,27 +290,7 @@ let lemma_client_no_tail_fifth_event_client_handshake_write_install_clean
           client_app_read_material
           sent_msg4
           [])
-  returns
-    exists start' ch sh client_shared' client_hs_write_material' rest.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start') ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared') ::
-        CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficHandshake;
-            CS.install_direction = CS.TrafficWrite;
-            CS.install_material = client_hs_write_material';
-          }) ::
-        rest
-  with _.
+  with
   (
     let rest =
       PWL.client_protected_handshake_contiguous_replay_events
@@ -462,40 +438,7 @@ let lemma_client_no_tail_sixth_event_server_handshake_read_install_clean
           client_app_read_material
           sent_msg4
           [])
-  returns
-    exists
-      start'
-      ch
-      sh
-      client_shared'
-      client_hs_write_material'
-      client_material'
-      rest.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start') ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared') ::
-        CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficHandshake;
-            CS.install_direction = CS.TrafficWrite;
-            CS.install_material = client_hs_write_material';
-          }) ::
-        CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficHandshake;
-            CS.install_direction = CS.TrafficRead;
-            CS.install_material = client_material';
-          }) ::
-        rest
-  with _.
+  with
   (
     let rest =
       CS.ConnNetworkEvent {
@@ -646,9 +589,7 @@ let lemma_client_no_tail_normalized_shape_start_spine
           client_app_read_material
           sent_msg4
           [])
-  returns
-    client_no_tail_start_spine client
-  with _.
+  with
   (
     let e1 =
       CS.ConnNetworkEvent {
@@ -799,9 +740,7 @@ let lemma_client_no_tail_normalized_shape_length
           client_app_read_material
           sent_msg4
           [])
-  returns
-    FStar.List.Tot.length client.CS.cs_event_log == 16
-  with _.
+  with
   (
     assert_norm
       (FStar.List.Tot.length

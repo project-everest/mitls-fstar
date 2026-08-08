@@ -115,7 +115,7 @@ let lemma_ag_of_invariant
   introduce forall (p:path a). (is_run step p /\ p 0 == s) ==> holds_G sp p
   with begin
     introduce (is_run step p /\ p 0 == s) ==> holds_G sp p
-    with _hp. begin
+    with begin
       introduce forall (i:nat). sp (p i)
       with begin
         lemma_run_reaches step p i

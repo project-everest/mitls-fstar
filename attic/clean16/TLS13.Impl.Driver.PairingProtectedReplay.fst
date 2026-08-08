@@ -1373,17 +1373,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_prefix
       client_raw_received
       server_final
       client_final
-  returns
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   ( lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_contiguous_replay_views
       client
       server
@@ -1882,17 +1872,7 @@ let lemma_client_server_application_record_material_agrees_from_handshake_comple
       client_raw_received
       server.CS.cs_model
       client.CS.cs_model
-  returns
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   ( lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_contiguous_replay_views
       client
       server

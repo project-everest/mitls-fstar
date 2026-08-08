@@ -112,15 +112,7 @@ let rec lemma_contains_sent_certificate_verify_split
                 CL.message_direction = CL.Sent;
                 CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
               } :: suffix)
-          returns
-            exists prefix' cv' suffix'.
-              events ==
-                prefix' @
-                (ConnNetworkEvent {
-                  CL.message_direction = CL.Sent;
-                  CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
-                } :: suffix')
-          with _.
+          with
           (
             introduce exists (prefix':list conn_event)
               (cv':GCV.certificateVerify)
@@ -143,15 +135,7 @@ let rec lemma_contains_sent_certificate_verify_split
              CL.message_direction = CL.Sent;
              CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
            } :: suffix)
-       returns
-         exists prefix' cv' suffix'.
-           events ==
-             prefix' @
-             (ConnNetworkEvent {
-               CL.message_direction = CL.Sent;
-               CL.message_value = M.TlsHandshake (M.CertificateVerify cv');
-             } :: suffix')
-       with _.
+       with
        (
          introduce exists (prefix':list conn_event)
            (cv':GCV.certificateVerify)
@@ -458,7 +442,7 @@ let lemma_connection_state_single_step_server_certificate_verify_sent_event_log
     connection_state_single_step x y ==>
     server_certificate_verify_sent_event_log_invariant y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_server_certificate_verify_sent_event_log x y
 
 let lemma_connection_state_consistent_server_certificate_verify_sent_event_log st =

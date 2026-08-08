@@ -867,11 +867,9 @@ let lemma_client_send_shape (a b:tls_system_state)
       Cons? out.SM.so_wire_outputs /\
       tls_emit a.client c' out p /\
       b == ({ a with client = c'; channel = MP.ToServer p } <: tls_system_state)
-    returns client_send_shape a b
-    with _pf.
+    with
       (eliminate exists (w:CW.wire_message). out.SM.so_wire_outputs == [w]
-       returns client_send_shape a b
-       with _pw.
+       with
          (assert (p == ({ pl_raw = emitted_raw out;
                           pl_snap = a.client.CS.cs_model;
                           pl_sent = p.pl_sent } <: tls_payload));
@@ -890,11 +888,9 @@ let lemma_server_send_shape (a b:tls_system_state)
       Cons? out.SM.so_wire_outputs /\
       tls_emit a.server s' out p /\
       b == ({ a with server = s'; channel = MP.ToClient p } <: tls_system_state)
-    returns server_send_shape a b
-    with _pf.
+    with
       (eliminate exists (w:CW.wire_message). out.SM.so_wire_outputs == [w]
-       returns server_send_shape a b
-       with _pw.
+       with
          (assert (p == ({ pl_raw = emitted_raw out;
                           pl_snap = a.server.CS.cs_model;
                           pl_sent = p.pl_sent } <: tls_payload));
@@ -935,8 +931,7 @@ let lemma_deliver_to_server_shape (a b:tls_system_state)
       tls_carries p w /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent w) s' out /\
       b == ({ a with server = s'; channel = MP.Quiet } <: tls_system_state)
-    returns deliver_to_server_shape a b
-    with _pf.
+    with
       (assert (p == ({ pl_raw = p.pl_raw; pl_snap = p.pl_snap; pl_sent = p.pl_sent }
                      <: tls_payload));
        assert (a.channel == tls_to_server p.pl_raw p.pl_snap p.pl_sent))
@@ -950,8 +945,7 @@ let lemma_deliver_to_client_shape (a b:tls_system_state)
       tls_carries p w /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent w) c' out /\
       b == ({ a with client = c'; channel = MP.Quiet } <: tls_system_state)
-    returns deliver_to_client_shape a b
-    with _pf.
+    with
       (assert (p == ({ pl_raw = p.pl_raw; pl_snap = p.pl_snap; pl_sent = p.pl_sent }
                      <: tls_payload));
        assert (a.channel == tls_to_client p.pl_raw p.pl_snap p.pl_sent))
@@ -1009,10 +1003,7 @@ let lemma_client_step_pres
         st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns
-      SMR.connection_state_consistent st1 /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _pf.
+    with
       (CSL.lemma_legal_connection_delta_consistent st0 d st1;
        CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model)
 #pop-options
@@ -1030,10 +1021,7 @@ let lemma_server_step_pres
         st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns
-      SMR.connection_state_consistent st1 /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _pf.
+    with
       (CSL.lemma_legal_connection_delta_consistent st0 d st1;
        CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model)
 #pop-options
@@ -1072,12 +1060,7 @@ let lemma_client_step_shape
         start_ok_model st1.CS.cs_model)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns
-      WStep.hellos_shape st1.CS.cs_model /\
-      WStep.hs_hellos_stable st0.CS.cs_model st1.CS.cs_model /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
-      start_ok_model st1.CS.cs_model
-    with _pf.
+    with
       (WStep.lemma_step_model_preserves_hellos st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
        CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
        lemma_step_client_start st0.CS.cs_model d.CS.delta_event st1.CS.cs_model)
@@ -1099,11 +1082,7 @@ let lemma_server_step_shape
         st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns
-      WStep.hellos_shape st1.CS.cs_model /\
-      WStep.hs_hellos_stable st0.CS.cs_model st1.CS.cs_model /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _pf.
+    with
       (WStep.lemma_step_model_preserves_hellos st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
        CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model)
 #pop-options
@@ -1119,8 +1098,7 @@ let lemma_client_step_ksp
       (ensures PC.model_ksp c'.CS.cs_model)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a d c');
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a d c'
-    returns PC.model_ksp c'.CS.cs_model
-    with _pf.
+    with
       PC.lemma_ksp_step a.CS.cs_model d.CS.delta_event c'.CS.cs_model
 #pop-options
 
@@ -1134,8 +1112,7 @@ let lemma_server_step_ksp
       (ensures PC.model_ksp s'.CS.cs_model)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a d s');
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a d s'
-    returns PC.model_ksp s'.CS.cs_model
-    with _pf.
+    with
       PC.lemma_ksp_step a.CS.cs_model d.CS.delta_event s'.CS.cs_model
 #pop-options
 
@@ -1205,10 +1182,7 @@ let lemma_client_local_preserves_server_hello
           CS.delta_raw_received = B.empty } st1 /\
       SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
       SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty
-    returns
-      st1.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
-      st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello
-    with _pf.
+    with
       (assert (forall (dir:CS.direction) (sh:GSH.serverHello).
          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                      CL.message_value = M.TlsHandshake (M.ServerHello sh) }));
@@ -1239,10 +1213,7 @@ let lemma_server_local_preserves_client_hello
           CS.delta_raw_received = B.empty } st1 /\
       SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
       SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty
-    returns
-      st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
-      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello
-    with _pf.
+    with
       (assert (forall (dir:CS.direction) (ch:GCH.clientHello).
          conn_ev =!= CS.ConnNetworkEvent ({ CL.message_direction = dir;
                      CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
@@ -1329,8 +1300,7 @@ let lemma_cc_client_send
           CS.delta_raw_received = B.empty } c' /\
       SMCan.sent_event_nonempty_seal_projection a.client.CS.cs_model conn_ev raw_sent /\
       SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev B.empty
-    returns channel_consistent b
-    with _pf. (
+    with (
       Seq.lemma_eq_elim (emitted_raw out) raw_sent;
       let raw = emitted_raw out in
       introduce
@@ -1342,33 +1312,29 @@ let lemma_cc_client_send
            WFL.supported_client_hello_wire_profile client_ch /\
            CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw
          | None -> False)
-      with _pa. (
+      with (
         match conn_ev with
         | CS.ConnLocalEvent _ ->
           // raw is empty; the antecedent's parse would need consumed 0 > 0 — impossible.
           eliminate exists server_ch.
             CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw
-          returns _
-          with _pw.
+          with
             (eliminate exists fragment.
                W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
                W.parse_tls_message T.Handshake fragment ==
                  Some (M.TlsHandshake (M.ClientHello server_ch))
-             returns _
-             with _pf2.
+             with
                W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
         | CS.ConnProtectedHandshake _ ->
           // Internal event: raw_sent is empty, exactly as for a local event.
           eliminate exists server_ch.
             CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw
-          returns _
-          with _pw.
+          with
             (eliminate exists fragment.
                W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
                W.parse_tls_message T.Handshake fragment ==
                  Some (M.TlsHandshake (M.ClientHello server_ch))
-             returns _
-             with _pf2b.
+             with
                W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
         | CS.ConnNetworkEvent nmsg ->
           (match nmsg.CL.message_value with
@@ -1391,14 +1357,12 @@ let lemma_cc_client_send
              W.lemma_parse_record_implies_parse_record_wire raw_sent;
              eliminate exists server_ch.
                CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw
-             returns _
-             with _pw.
+             with
                (eliminate exists fragment.
                   W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
                   W.parse_tls_message T.Handshake fragment ==
                     Some (M.TlsHandshake (M.ClientHello server_ch))
-                returns _
-                with _pf3. ()))))
+                with ()))))
 #pop-options
 
 (** FACTS 1–5 across a client SEND (client emits one record; needs field
@@ -1418,9 +1382,7 @@ let lemma_wire_facts_client_send a b =
     out.SM.so_wire_outputs == [w] /\
     c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
     b == { a with client = c'; channel = tls_to_server (emitted_raw out) a.client.CS.cs_model sent }
-  returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
-          channel_consistent b /\ hello_coupling b
-  with _pf. (
+  with (
     lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
     lemma_client_local_preserves_server_hello a.client c' local out;
     lemma_cc_client_send a local c' out w sent;
@@ -1465,8 +1427,7 @@ let lemma_cc_server_send
           CS.delta_raw_received = B.empty } s' /\
       SMCan.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev raw_sent /\
       SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev B.empty
-    returns channel_consistent b
-    with _pf. (
+    with (
       Seq.lemma_eq_elim (emitted_raw out) raw_sent;
       let raw = emitted_raw out in
       introduce
@@ -1478,7 +1439,7 @@ let lemma_cc_server_send
          | Some server_sh ->
            CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello server_sh)) raw
          | None -> False)
-      with _pa. (
+      with (
         match conn_ev with
         | CS.ConnNetworkEvent nmsg ->
           (match nmsg.CL.message_value with
@@ -1501,8 +1462,7 @@ let lemma_cc_server_send
              eliminate exists (some_sh:GSH.serverHello).
                B.length (W.serialize_handshake (M.ServerHello some_sh)) <= 16640 /\
                CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello some_sh)) raw
-             returns _
-             with _pw. (
+             with (
                WStep.lemma_cleartext_server_hello_parse_record some_sh raw;
                // parse_record_wire raw == Some (Handshake, ...) contradicts
                // parse_record_wire raw == Some (Application_data, ...).
@@ -1540,9 +1500,7 @@ let lemma_wire_facts_server_send a b =
     out.SM.so_wire_outputs == [w] /\
     s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
     b == { a with server = s'; channel = tls_to_client (emitted_raw out) a.server.CS.cs_model sent }
-  returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
-          channel_consistent b /\ hello_coupling b
-  with _pf. (
+  with (
     lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
     lemma_server_local_preserves_client_hello a.server s' local out;
     lemma_cc_server_send a local s' out w sent;
@@ -1571,8 +1529,7 @@ let lemma_wire_facts_deliver_to_server a b =
     Seq.equal (CW.wire_serialize wire) raw /\
     ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
     b == { a with server = s'; channel = MP.Quiet }
-  returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
-  with _pd. (
+  with (
     lemma_server_step_shape a.server s' (SM.WireEvent wire) out;
     Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
     eliminate exists (msg:M.tls_message).
@@ -1587,8 +1544,7 @@ let lemma_wire_facts_deliver_to_server a b =
        SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
-    with _ps. (
+    with (
       assert (WStep.hs_hellos_stable a.server.CS.cs_model s'.CS.cs_model);
       let conn_ev = CS.ConnNetworkEvent
         { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -1681,7 +1637,7 @@ let lemma_deliver_to_client_sh_bridge a b wire c' out raw snap sent client_sh =
      Some? (hsf b.client).CS.hs_server_hello /\ Some? (hsf b.server).CS.hs_server_hello)
     ==>
     WFL.paired_cleartext_hello_key_shares b.client b.server
-  with _guard. (
+  with (
     let client_ch : GCH.clientHello = Some?.v (hsf b.client).CS.hs_client_hello in
     let server_ch : GCH.clientHello = Some?.v (hsf b.server).CS.hs_client_hello in
     // client_ch is a.client's CH (stability), server_ch is a.server's CH.
@@ -1692,8 +1648,7 @@ let lemma_deliver_to_client_sh_bridge a b wire c' out raw snap sent client_sh =
     eliminate exists (raw':B.bytes).
       CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw' /\
       CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw'
-    returns WFL.paired_cleartext_hello_key_shares b.client b.server
-    with _che. (
+    with (
       // (3b) The server's canonical SH is a sent cleartext on the in-flight raw.
       assert (CS.cleartext_tls_message_raw
                 (M.TlsHandshake (M.ServerHello server_sh)) raw);
@@ -1728,8 +1683,7 @@ let lemma_wire_facts_deliver_to_client a b =
     Seq.equal (CW.wire_serialize wire) raw /\
     EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
     b == { a with client = c'; channel = MP.Quiet }
-  returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
-  with _pd. (
+  with (
     lemma_client_step_shape a.client c' (SM.WireEvent wire) out;
     Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
     eliminate exists (conn_ev:CS.conn_event).
@@ -1743,8 +1697,7 @@ let lemma_wire_facts_deliver_to_client a b =
        SMCan.received_event_nonempty_decode_projection a.client.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
-    with _ps. (
+    with (
       assert (WStep.hs_hellos_stable a.client.CS.cs_model c'.CS.cs_model);
       match conn_ev with
       | CS.ConnLocalEvent _ -> ()
@@ -1816,8 +1769,7 @@ let lemma_wire_facts_client_local a b =
     EC.client_step a.client (SM.LocalEvent local) c' out /\
     out.SM.so_wire_outputs == [] /\
     b == { a with client = c' }
-  returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
-  with _pf. (
+  with (
     lemma_client_step_shape a.client c' (SM.LocalEvent local) out;
     lemma_client_local_preserves_server_hello a.client c' local out;
     assert (WStep.hs_hellos_stable a.client.CS.cs_model c'.CS.cs_model);
@@ -1844,8 +1796,7 @@ let lemma_wire_facts_server_local a b =
     ES.server_step a.server (SM.LocalEvent local) s' out /\
     out.SM.so_wire_outputs == [] /\
     b == { a with server = s' }
-  returns ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\ hello_coupling b
-  with _pf. (
+  with (
     lemma_server_step_shape a.server s' (SM.LocalEvent local) out;
     lemma_server_local_preserves_client_hello a.server s' local out;
     assert (WStep.hs_hellos_stable a.server.CS.cs_model s'.CS.cs_model);
@@ -1932,8 +1883,7 @@ let lemma_client_step_e2e
           st0.CS.cs_model d.CS.delta_event d.CS.delta_raw_sent /\
         SMCan.received_event_nonempty_decode_projection
           st0.CS.cs_model d.CS.delta_event d.CS.delta_raw_received
-    returns CTy2.client_end_to_end_invariant st1
-    with _pf.
+    with
       (CSL.lemma_step_model_preserves_config st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
        CSL.lemma_legal_connection_delta_consistent st0 d st1;
        CSL.lemma_legal_connection_delta_full_log_consistent st0 d st1;
@@ -1965,7 +1915,7 @@ let lemma_server_step_e2e
       (ensures
         (server_config_valid_e2e st1 ==> ST.server_end_to_end_invariant st1))
   = introduce server_config_valid_e2e st1 ==> ST.server_end_to_end_invariant st1
-    with _guard1.
+    with
     (
       assert (exists (d:CS.connection_delta).
           CS.legal_connection_delta st0 d st1 /\
@@ -1979,8 +1929,7 @@ let lemma_server_step_e2e
             st0.CS.cs_model d.CS.delta_event d.CS.delta_raw_sent /\
           SMCan.received_event_nonempty_decode_projection
             st0.CS.cs_model d.CS.delta_event d.CS.delta_raw_received
-      returns ST.server_end_to_end_invariant st1
-      with _pf.
+      with
         (CSL.lemma_step_model_preserves_config
            st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
          // config immutability transports the validity guard backward to st0.
@@ -2195,10 +2144,7 @@ let lemma_client_step_preserves_pending
         st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns
-      st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
-      st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext
-    with _pf.
+    with
       lemma_step_model_preserves_pending st0.CS.cs_model d.CS.delta_event st1.CS.cs_model
 #pop-options
 
@@ -2214,10 +2160,7 @@ let lemma_server_step_preserves_pending
         st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns
-      st1.CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
-      st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext
-    with _pf.
+    with
       lemma_step_model_preserves_pending st0.CS.cs_model d.CS.delta_event st1.CS.cs_model
 #pop-options
 
@@ -2249,10 +2192,9 @@ let lemma_client_appdata_appkeys_reachable (st:CS.connection_state)
         p x /\ SMR.connection_state_single_step x y ==> p y) =
       introduce forall (x y:CS.connection_state).
         p x /\ SMR.connection_state_single_step x y ==> p y
-      with introduce _ ==> _ with _.
+      with introduce _ ==> _ with
         (eliminate exists (d:CS.connection_delta). CS.legal_connection_delta x d y
-         returns p y
-         with _pd. PC.lemma_client_appdata_appkeys_delta x y d) in
+         with PC.lemma_client_appdata_appkeys_delta x y d) in
     RTC.stable_on_closure SMR.connection_state_single_step p stable;
     assert (p (CS.initial st.CS.cs_model.CS.model_config));
     assert (SMR.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
@@ -2307,8 +2249,7 @@ let lemma_delta_no_key_update_backward (st0 st1:CS.connection_state)
                 SMC.connection_state_no_key_update_trace st1)
       (ensures SMC.connection_state_no_key_update_trace st0)
   = eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns SMC.connection_state_no_key_update_trace st0
-    with _pf.
+    with
       (lemma_no_key_update_prefix st0.CS.cs_event_log d.CS.delta_event)
 
 (** Backward no-rekeying across an official client step. **)
@@ -2428,13 +2369,7 @@ let lemma_client_step_appdata_preserves_protected_fields
         (hsf c').CS.hs_client_finished == (hsf a).CS.hs_client_finished)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a d c');
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a d c'
-    returns
-        (hsf c').CS.hs_encrypted_extensions == (hsf a).CS.hs_encrypted_extensions /\
-        (hsf c').CS.hs_certificate == (hsf a).CS.hs_certificate /\
-        (hsf c').CS.hs_certificate_verify == (hsf a).CS.hs_certificate_verify /\
-        (hsf c').CS.hs_server_finished == (hsf a).CS.hs_server_finished /\
-        (hsf c').CS.hs_client_finished == (hsf a).CS.hs_client_finished
-    with _pf.
+    with
       lemma_step_appdata_preserves_protected_fields
         a.CS.cs_model d.CS.delta_event c'.CS.cs_model
 #pop-options
@@ -2456,13 +2391,7 @@ let lemma_server_step_appdata_preserves_protected_fields
         (hsf s').CS.hs_client_finished == (hsf a).CS.hs_client_finished)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a d s');
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a d s'
-    returns
-        (hsf s').CS.hs_encrypted_extensions == (hsf a).CS.hs_encrypted_extensions /\
-        (hsf s').CS.hs_certificate == (hsf a).CS.hs_certificate /\
-        (hsf s').CS.hs_certificate_verify == (hsf a).CS.hs_certificate_verify /\
-        (hsf s').CS.hs_server_finished == (hsf a).CS.hs_server_finished /\
-        (hsf s').CS.hs_client_finished == (hsf a).CS.hs_client_finished
-    with _pf.
+    with
       lemma_step_appdata_preserves_protected_fields
         a.CS.cs_model d.CS.delta_event s'.CS.cs_model
 #pop-options
@@ -2488,8 +2417,7 @@ let lemma_pw_transport (ac ase bc bs:CS.connection_state)
       (ensures P.paired_protected_handshake_event_projection_pair_witnesses bc bs)
   = eliminate exists ee cert cv sf cf.
       PWL.paired_protected_handshake_event_projection_pairs ac ase ee cert cv sf cf
-    returns P.paired_protected_handshake_event_projection_pair_witnesses bc bs
-    with _pf.
+    with
       assert (PWL.paired_protected_handshake_event_projection_pairs bc bs ee cert cv sf cf)
 #pop-options
 
@@ -2591,10 +2519,7 @@ let lemma_server_wire_recv_into_appdata_shape
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-      returns st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
-              st0.CS.cs_model.CS.model_control
-                == CS.ControlHandshaking CS.HsServerFinishedSent
-      with _.
+      with
         lemma_server_recv_into_appdata_shape st0.CS.cs_model msg st1.CS.cs_model
 #pop-options
 
@@ -2624,8 +2549,7 @@ let lemma_server_send_not_into_appdata
              CS.delta_raw_received = B.empty; } st1 /\
          SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-      returns st0.CS.cs_model.CS.model_control == CS.ControlApplicationData
-      with _.
+      with
       (
         lemma_server_into_appdata_is_verify st0.CS.cs_model conn_ev st1.CS.cs_model;
         Seq.lemma_eq_elim raw_sent B.empty;
@@ -2676,11 +2600,7 @@ let lemma_server_local_into_appdata_shape
            CS.delta_raw_received = B.empty; } st1 /\
        SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-    returns
-      (st0.CS.cs_model.CS.model_control
-         == CS.ControlHandshaking CS.HsClientFinishedReceived /\
-       CS.application_record_keys_installed_for_role CS.ServerEndpoint st0.CS.cs_model)
-    with _.
+    with
      (
        lemma_server_local_event_not_received local conn_ev;
        lemma_server_into_appdata_is_verify st0.CS.cs_model conn_ev st1.CS.cs_model
@@ -2714,10 +2634,7 @@ let lemma_client_into_appdata_shape
            CS.delta_raw_received = B.empty; } st1 /\
        SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-    returns
-      st0.CS.cs_model.CS.model_control
-        == CS.ControlHandshaking CS.HsServerFinishedVerified
-    with _.
+    with
       lemma_client_into_appdata_is_send_finished
         st0.CS.cs_model conn_ev st1.CS.cs_model
 #pop-options
@@ -2860,8 +2777,7 @@ let lemma_pw_pres_client_appdata_route_a
         P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c');
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c'
-    returns P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _pd.
+    with
     (
       lemma_no_key_update_last a.client.CS.cs_event_log d.CS.delta_event;
       lemma_client_appdata_installed_backward a.client d c';
@@ -2895,8 +2811,7 @@ let lemma_pw_pres_server_appdata_route_a
         P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s');
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s'
-    returns P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _pd.
+    with
     (
       CSL.lemma_step_model_preserves_config
         a.server.CS.cs_model d.CS.delta_event s'.CS.cs_model;
@@ -2937,7 +2852,7 @@ let lemma_pw_pres_client_local
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _br.
+    with
     (
       if a.client.CS.cs_model.CS.model_control = CS.ControlApplicationData
       then lemma_pw_pres_client_appdata_route_a a b (SM.LocalEvent local) c' out
@@ -2961,7 +2876,7 @@ let lemma_pw_pres_deliver_to_client
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _br.
+    with
     (
       WStep.lemma_client_wire_recv_not_into_appdata a.client wire c' out;
       lemma_pw_pres_client_appdata_route_a a b (SM.WireEvent wire) c' out
@@ -2986,7 +2901,7 @@ let lemma_pw_pres_server_send
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _br.
+    with
     (
       lemma_server_send_not_into_appdata a.server local s' out w;
       lemma_pw_pres_server_appdata_route_a a b (SM.LocalEvent local) s' out
@@ -3038,7 +2953,7 @@ let lemma_pw_pres_deliver_to_server
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _br.
+    with
     (
       lemma_server_wire_recv_into_appdata_shape a.server wire s' out;
       if a.server.CS.cs_model.CS.model_control = CS.ControlApplicationData
@@ -3055,9 +2970,7 @@ let lemma_pw_pres_deliver_to_server
         // ── server reachability / config (via the underlying legal delta). ──
         assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s');
         eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s'
-        returns
-          P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-        with _pd.
+        with
         (
           CSL.lemma_step_model_preserves_config
             a.server.CS.cs_model d.CS.delta_event s'.CS.cs_model;
@@ -3096,7 +3009,7 @@ let lemma_pw_pres_server_local
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _br.
+    with
     (
       if a.server.CS.cs_model.CS.model_control = CS.ControlApplicationData
       then lemma_pw_pres_server_appdata_route_a a b (SM.LocalEvent local) s' out
@@ -3112,9 +3025,7 @@ let lemma_pw_pres_server_local
         // ── server reachability / config (via the underlying legal delta). ──
         assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s');
         eliminate exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s'
-        returns
-          P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-        with _pd.
+        with
         (
           CSL.lemma_step_model_preserves_config
             a.server.CS.cs_model d.CS.delta_event s'.CS.cs_model;
@@ -3154,7 +3065,7 @@ let lemma_pw_pres_client_send
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
-    with _br.
+    with
     (
       if a.client.CS.cs_model.CS.model_control = CS.ControlApplicationData
       then lemma_pw_pres_client_appdata_route_a a b (SM.LocalEvent local) c' out
@@ -3213,8 +3124,7 @@ let lemma_client_step_preserves_stage_ok
       (ensures client_stage_ok st1)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1);
     eliminate exists (d:CS.connection_delta). CS.legal_connection_delta st0 d st1
-    returns client_stage_ok st1
-    with _pf.
+    with
       (match d.CS.delta_event with
        | CS.ConnLocalEvent _ -> ()
        | CS.ConnNetworkEvent dm ->
@@ -3263,8 +3173,7 @@ let lemma_pres_client_send (a b:tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = tls_to_server (emitted_raw out) a.client.CS.cs_model sent }
-    returns tls_system_inv b
-    with _pf.
+    with
       (assert (SMC.connection_state_no_key_update_trace c');
        lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
@@ -3290,8 +3199,7 @@ let lemma_pres_server_send (a b:tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = tls_to_client (emitted_raw out) a.server.CS.cs_model sent }
-    returns tls_system_inv b
-    with _pf.
+    with
       (assert (SMC.connection_state_no_key_update_trace s');
        lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
@@ -3344,8 +3252,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
       b == { a with server = s'; channel = MP.Quiet }
-    returns tls_system_inv b
-    with _pf.
+    with
       (assert (SMC.connection_state_no_key_update_trace s');
        lemma_server_step_preserves_stage_ok a.server s' (SM.WireEvent wire) out;
        lemma_server_step_pres a.server s' (SM.WireEvent wire) out;
@@ -3360,7 +3267,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
        introduce (client_ready b /\ MP.Quiet? b.channel) ==> server_post_cf b
-       with _rc. (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
+       with (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
 #pop-options
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
@@ -3375,8 +3282,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
       b == { a with client = c'; channel = MP.Quiet }
-    returns tls_system_inv b
-    with _pf.
+    with
       (assert (SMC.connection_state_no_key_update_trace c');
        lemma_client_step_preserves_stage_ok a.client c' (SM.WireEvent wire) out;
        lemma_client_step_pres a.client c' (SM.WireEvent wire) out;
@@ -3391,7 +3297,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
        introduce (client_ready b /\ MP.Quiet? b.channel) ==> server_post_cf b
-       with _rc. (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
+       with (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
 #pop-options
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
@@ -3403,8 +3309,7 @@ let lemma_pres_client_local (a b:tls_system_state)
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns tls_system_inv b
-    with _pf.
+    with
       (assert (SMC.connection_state_no_key_update_trace c');
        lemma_client_step_preserves_stage_ok a.client c' (SM.LocalEvent local) out;
        lemma_client_step_pres a.client c' (SM.LocalEvent local) out;
@@ -3419,7 +3324,7 @@ let lemma_pres_client_local (a b:tls_system_state)
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
        introduce (client_ready b /\ MP.Quiet? b.channel) ==> server_post_cf b
-       with _rc. (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
+       with (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
 #pop-options
 
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
@@ -3431,8 +3336,7 @@ let lemma_pres_server_local (a b:tls_system_state)
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns tls_system_inv b
-    with _pf.
+    with
       (assert (SMC.connection_state_no_key_update_trace s');
        lemma_server_step_preserves_stage_ok a.server s' (SM.LocalEvent local) out;
        lemma_server_step_pres a.server s' (SM.LocalEvent local) out;
@@ -3447,7 +3351,7 @@ let lemma_pres_server_local (a b:tls_system_state)
        // client_clean b (ready-couple): a ready client at a quiescent post-state forces
        // the server past client-Finished receipt.
        introduce (client_ready b /\ MP.Quiet? b.channel) ==> server_post_cf b
-       with _rc. (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
+       with (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
@@ -3462,8 +3366,7 @@ let lemma_no_ku_backward_client_send (x y:tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == x.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       y == { x with client = c'; channel = tls_to_server (emitted_raw out) x.client.CS.cs_model sent }
-    returns tls_no_rekeying x
-    with _pf. lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
+    with lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
 
 let lemma_no_ku_backward_server_send (x y:tls_system_state)
   : Lemma (requires tls_step_server_send x y /\ tls_no_rekeying y)
@@ -3476,8 +3379,7 @@ let lemma_no_ku_backward_server_send (x y:tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == x.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       y == { x with server = s'; channel = tls_to_client (emitted_raw out) x.server.CS.cs_model sent }
-    returns tls_no_rekeying x
-    with _pf. lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
+    with lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
 
 let lemma_no_ku_backward_deliver_to_client (x y:tls_system_state)
   : Lemma (requires tls_step_deliver_to_client x y /\ tls_no_rekeying y)
@@ -3490,8 +3392,7 @@ let lemma_no_ku_backward_deliver_to_client (x y:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event x.client (SM.WireEvent wire) c' out /\
       y == { x with client = c'; channel = MP.Quiet }
-    returns tls_no_rekeying x
-    with _pf. lemma_client_step_no_ku_backward x.client c' (SM.WireEvent wire) out
+    with lemma_client_step_no_ku_backward x.client c' (SM.WireEvent wire) out
 
 let lemma_no_ku_backward_deliver_to_server (x y:tls_system_state)
   : Lemma (requires tls_step_deliver_to_server x y /\ tls_no_rekeying y)
@@ -3504,8 +3405,7 @@ let lemma_no_ku_backward_deliver_to_server (x y:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event x.server (SM.WireEvent wire) s' out /\
       y == { x with server = s'; channel = MP.Quiet }
-    returns tls_no_rekeying x
-    with _pf. lemma_server_step_no_ku_backward x.server s' (SM.WireEvent wire) out
+    with lemma_server_step_no_ku_backward x.server s' (SM.WireEvent wire) out
 
 let lemma_no_ku_backward_client_local (x y:tls_system_state)
   : Lemma (requires tls_step_client_local x y /\ tls_no_rekeying y)
@@ -3515,8 +3415,7 @@ let lemma_no_ku_backward_client_local (x y:tls_system_state)
       EC.client_step x.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       y == { x with client = c' }
-    returns tls_no_rekeying x
-    with _pf. lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
+    with lemma_client_step_no_ku_backward x.client c' (SM.LocalEvent local) out
 
 let lemma_no_ku_backward_server_local (x y:tls_system_state)
   : Lemma (requires tls_step_server_local x y /\ tls_no_rekeying y)
@@ -3526,8 +3425,7 @@ let lemma_no_ku_backward_server_local (x y:tls_system_state)
       ES.server_step x.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       y == { x with server = s' }
-    returns tls_no_rekeying x
-    with _pf. lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
+    with lemma_server_step_no_ku_backward x.server s' (SM.LocalEvent local) out
 
 (** System-level backward monotonicity of no-rekeying: any single system step
     appends one event to the acting endpoint's log; if the post-state has no
@@ -3571,7 +3469,7 @@ let lemma_combined_inv_preserved (x y:tls_system_state)
   : Lemma (requires combined_inv x /\ tls_sys_step x y)
           (ensures combined_inv y)
   = introduce tls_no_rekeying y ==> tls_system_inv y
-    with _nr.
+    with
       (lemma_no_key_update_backward x y;
        lemma_inv_preserved x y)
 #pop-options
@@ -3627,8 +3525,7 @@ let lemma_cfg_pres_client_send (x y:tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == x.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       y == { x with client = c'; channel = tls_to_server (emitted_raw out) x.client.CS.cs_model sent }
-    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
-    with _pf. ()
+    with ()
 
 let lemma_cfg_pres_client_local (x y:tls_system_state)
   : Lemma (requires tls_step_client_local x y)
@@ -3639,8 +3536,7 @@ let lemma_cfg_pres_client_local (x y:tls_system_state)
       EC.client_step x.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       y == { x with client = c' }
-    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
-    with _pf. ()
+    with ()
 
 let lemma_cfg_pres_deliver_to_client (x y:tls_system_state)
   : Lemma (requires tls_step_deliver_to_client x y)
@@ -3654,8 +3550,7 @@ let lemma_cfg_pres_deliver_to_client (x y:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event x.client (SM.WireEvent wire) c' out /\
       y == { x with client = c'; channel = MP.Quiet }
-    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
-    with _pf. ()
+    with ()
 
 let lemma_cfg_pres_server_send (x y:tls_system_state)
   : Lemma (requires
@@ -3671,8 +3566,7 @@ let lemma_cfg_pres_server_send (x y:tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == x.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       y == { x with server = s'; channel = tls_to_client (emitted_raw out) x.server.CS.cs_model sent }
-    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
-    with _pf. WStep.lemma_server_step_model_facts x.server (SM.LocalEvent local) s' out
+    with WStep.lemma_server_step_model_facts x.server (SM.LocalEvent local) s' out
 
 let lemma_cfg_pres_server_local (x y:tls_system_state)
   : Lemma (requires
@@ -3685,8 +3579,7 @@ let lemma_cfg_pres_server_local (x y:tls_system_state)
       ES.server_step x.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       y == { x with server = s' }
-    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
-    with _pf. WStep.lemma_server_step_model_facts x.server (SM.LocalEvent local) s' out
+    with WStep.lemma_server_step_model_facts x.server (SM.LocalEvent local) s' out
 
 let lemma_cfg_pres_deliver_to_server (x y:tls_system_state)
   : Lemma (requires
@@ -3702,8 +3595,7 @@ let lemma_cfg_pres_deliver_to_server (x y:tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event x.server (SM.WireEvent wire) s' out /\
       y == { x with server = s'; channel = MP.Quiet }
-    returns y.server.CS.cs_model.CS.model_config == x.server.CS.cs_model.CS.model_config
-    with _pf. WStep.lemma_server_step_model_facts x.server (SM.WireEvent wire) s' out
+    with WStep.lemma_server_step_model_facts x.server (SM.WireEvent wire) s' out
 
 (** Config immutability at the system level: any single step preserves the
     server endpoint's (immutable) config, hence its validity. **)
@@ -3820,13 +3712,11 @@ let lemma_ready_quiescent_agrees s =
     eliminate exists raw1.
       CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw1 /\
       CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw1
-    returns SMKM.supported_profile_application_record_material_agrees s.client s.server
-    with _p1.
+    with
       eliminate exists raw2.
         CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello server_sh)) raw2 /\
         CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello client_sh)) raw2
-      returns SMKM.supported_profile_application_record_material_agrees s.client s.server
-      with _p2.
+      with
         P.lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
           s.client s.server client_ch server_ch client_sh server_sh
           raw1 raw1 raw2 raw2

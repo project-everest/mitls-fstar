@@ -137,8 +137,7 @@ let lemma_flag_pot_step
     eliminate exists (ce:CS.conn_event).
       CS.legal_event st0.CS.cs_model ce /\
       CS.step_model st0.CS.cs_model ce == Some st1.CS.cs_model
-    returns flag_pot_ok st1.CS.cs_model
-    with _.
+    with
     (
       SLM.lemma_client_flag_facts st0.CS.cs_model ce st1.CS.cs_model;
       if st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified then
@@ -184,9 +183,7 @@ let lemma_client_flag_excludes_shr
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace client
-    returns
-      client.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerHelloReceived
-    with _.
+    with
     (
       assert (flag_pot_ok init.CS.cs_model);
       lemma_flag_pot_trace init init client trace
@@ -243,9 +240,7 @@ let lemma_client_reachable_not_sfr
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches sm (CS.initial cfg) trace client
-    returns
-      client.CS.cs_model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedReceived
-    with _.
+    with
       lemma_client_not_sfr_trace (CS.initial cfg) (CS.initial cfg) client trace
 #pop-options
 
@@ -311,10 +306,7 @@ let lemma_client_sendevent_flag_mono
        EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
        SMCan.canonical_wire_step st0 st1 conn_ev raw_sent B.empty)
-    returns
-      (st1.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==>
-       st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified)
-    with _.
+    with
     (
       assert (st1.CS.cs_event_log == st0.CS.cs_event_log @ [conn_ev]);
       L.append_length_inv_tail st0.CS.cs_event_log [conn_ev]
@@ -365,13 +357,11 @@ let lemma_establish (s:SY.tls_system_state)
        eliminate exists raw1.
          CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw1 /\
          CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw1
-       returns SMCorr.same_key_derivation_checkpoint SMKI.DeriveHandshakeTraffic client server
-       with _p1.
+       with
          eliminate exists raw2.
            CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello server_sh)) raw2 /\
            CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello client_sh)) raw2
-         returns SMCorr.same_key_derivation_checkpoint SMKI.DeriveHandshakeTraffic client server
-         with _p2.
+         with
            WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
              client server client_ch server_ch client_sh server_sh
              raw1 raw1 raw2 raw2
@@ -429,13 +419,11 @@ let lemma_establish_cf (s:SY.tls_system_state)
        eliminate exists raw1.
          CS.cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello client_ch)) raw1 /\
          CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw1
-       returns SMCorr.same_key_derivation_checkpoint SMKI.DeriveHandshakeTraffic client server
-       with _p1.
+       with
          eliminate exists raw2.
            CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello server_sh)) raw2 /\
            CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello client_sh)) raw2
-         returns SMCorr.same_key_derivation_checkpoint SMKI.DeriveHandshakeTraffic client server
-         with _p2.
+         with
            WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
              client server client_ch server_ch client_sh server_sh
              raw1 raw1 raw2 raw2
@@ -464,7 +452,7 @@ let lemma_hma_server_transfer (a b:SY.tls_system_state)
         Some? b.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
         Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
       ==> ks_agree b.client b.server
-    with _ante.
+    with
     (
       SLM.lemma_flag_excludes_server_hello_sent a;
       assert (SY.server_stage_ok a.server);
@@ -473,8 +461,7 @@ let lemma_hma_server_transfer (a b:SY.tls_system_state)
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.server.CS.cs_model ce /\
         CS.step_model a.server.CS.cs_model ce == Some b.server.CS.cs_model
-      returns ks_agree b.client b.server
-      with _ce.
+      with
       (
         lemma_slot_frozen_offstage a.server.CS.cs_model b.server.CS.cs_model ce;
         assert (ks_agree a.client a.server)
@@ -502,7 +489,7 @@ let lemma_hma_client_transfer (a b:SY.tls_system_state)
         Some? b.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
         Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
       ==> ks_agree b.client b.server
-    with _ante.
+    with
     (
       lemma_client_flag_excludes_shr a.client.CS.cs_model.CS.model_config a.client;
       assert (SY.client_stage_ok a.client);
@@ -511,8 +498,7 @@ let lemma_hma_client_transfer (a b:SY.tls_system_state)
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.client.CS.cs_model ce /\
         CS.step_model a.client.CS.cs_model ce == Some b.client.CS.cs_model
-      returns ks_agree b.client b.server
-      with _ce.
+      with
       (
         lemma_slot_frozen_offstage a.client.CS.cs_model b.client.CS.cs_model ce;
         assert (ks_agree a.client a.server)
@@ -539,8 +525,7 @@ let lemma_hma_server_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       WStep.lemma_server_step_model_stepped a.server (SM.LocalEvent local) s' out;
       lemma_hma_server_transfer a b
@@ -559,8 +544,7 @@ let lemma_hma_server_local (a b:SY.tls_system_state)
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       WStep.lemma_server_step_model_stepped a.server (SM.LocalEvent local) s' out;
       lemma_hma_server_transfer a b
@@ -582,8 +566,7 @@ let lemma_hma_deliver_to_server (a b:SY.tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
       b == { a with server = s'; channel = MP.Quiet }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       WStep.lemma_server_step_model_stepped a.server (SM.WireEvent wire) s' out;
       lemma_hma_server_transfer a b
@@ -609,8 +592,7 @@ let lemma_hma_client_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
       lemma_client_reachable_not_sfr a.client.CS.cs_model.CS.model_config a.client;
@@ -631,8 +613,7 @@ let lemma_hma_client_local (a b:SY.tls_system_state)
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
       lemma_client_reachable_not_sfr a.client.CS.cs_model.CS.model_config a.client;
@@ -653,7 +634,7 @@ let lemma_hma_client_local (a b:SY.tls_system_state)
             Some? b.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
           ==> ks_agree b.client b.server
-        with _ante.
+        with
           lemma_establish_cf b
     )
 #pop-options
@@ -679,8 +660,7 @@ let lemma_hma_deliver_to_client_nonflip (a b:SY.tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
       b == { a with client = c'; channel = MP.Quiet }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       WStep.lemma_client_step_model_stepped a.client (SM.WireEvent wire) c' out;
       lemma_hma_client_transfer a b
@@ -729,11 +709,7 @@ let lemma_client_wire_flag_flip_sfv
     eliminate exists (ev:CS.conn_event).
       CS.legal_event st0.CS.cs_model ev /\
       CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model
-    returns
-      (st1.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==>
-        st1.CS.cs_model.CS.model_control
-          == CS.ControlHandshaking CS.HsServerFinishedVerified)
-    with _.
+    with
       lemma_client_model_flag_flip_sfv st0.CS.cs_model ev st1.CS.cs_model
 #pop-options
 
@@ -760,8 +736,7 @@ let lemma_hma_deliver_to_client_flip (a b:SY.tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
       b == { a with client = c'; channel = MP.Quiet }
-    returns ASP.hs_material_agreement b
-    with _pf.
+    with
     (
       // hs_material_agreement is an implication; introduce its antecedent.
       introduce
@@ -769,7 +744,7 @@ let lemma_hma_deliver_to_client_flip (a b:SY.tls_system_state)
           Some? b.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
           Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
         ==> SMKM.key_schedule_traffic_record_material_agrees tid b.client b.server
-      with _ante.
+      with
       (
         // FLIP ⇒ the client lands at HsServerFinishedVerified.
         lemma_client_wire_flag_flip_sfv a.client c' wire out;

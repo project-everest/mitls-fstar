@@ -412,8 +412,7 @@ let lemma_server_post_server_hello_sent_seal_replay_slice_from_staged_milestone
           sh)
         (e5 :: e6 :: rest) /\
     PNTSS.server_no_tail_two_handshake_install_cover e5 e6
-  returns server_post_server_hello_sent_seal_replay_slice server
-  with _.
+  with
   (
     let prefix =
       PWSeg.server_cleartext_handshake_prefix_events
@@ -493,8 +492,7 @@ let lemma_server_post_server_hello_sent_seal_replay_slice_from_staged_milestone
         suffix_sent
         suffix_received
         server.CS.cs_model
-    returns server_post_server_hello_sent_seal_replay_slice server
-    with _.
+    with
     (
       introduce exists
         (ch':GCH.clientHello)
@@ -609,8 +607,7 @@ let lemma_server_post_server_hello_ordered_sent_seal_replay_slice
       suffix_sent
       suffix_received
       server.CS.cs_model
-  returns server_post_server_hello_ordered_sent_seal_replay_slice server
-  with _.
+  with
   (
     PNTPH.lemma_server_no_tail_post_two_handshake_installs_tail_order_for_split
       server
@@ -672,8 +669,7 @@ let lemma_server_post_server_hello_ordered_sent_seal_replay_slice
             });
           CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
         ]
-    returns server_post_server_hello_ordered_sent_seal_replay_slice server
-    with _.
+    with
     (
       let ordered_rest =
         [
@@ -1045,10 +1041,7 @@ let lemma_server_post_server_hello_canonical_handshake_installs_sent_seal_replay
       tail0_sent
       tail0_received
       server.CS.cs_model
-  returns
-    server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
-      server
-  with _.
+  with
   (
     PWR.lemma_conn_events_sent_seal_replay_head
       model6
@@ -1075,10 +1068,7 @@ let lemma_server_post_server_hello_canonical_handshake_installs_sent_seal_replay
         tail1_sent
         tail1_received
         server.CS.cs_model
-    returns
-      server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
-        server
-    with _.
+    with
     (
       PNTSS.lemma_server_no_tail_two_handshake_install_cover_cases e5 e6;
       assert (
@@ -1135,10 +1125,7 @@ let lemma_server_post_server_hello_canonical_handshake_installs_sent_seal_replay
          CS.step_model model5 server_write_install == Some server_after_write /\
          CS.legal_event server_after_write server_read_install /\
          CS.step_model server_after_write server_read_install == Some model7)
-      returns
-        server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
-          server
-      with _.
+      with
       (
         let server_write_install =
           CS.ConnLocalEvent
@@ -1456,10 +1443,7 @@ let lemma_server_post_server_hello_canonical_handshake_installs_sent_seal_replay
       suffix_sent
       suffix_received
       server.CS.cs_model
-  returns
-    server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice
-      server
-  with _.
+  with
   (
     lemma_server_post_server_hello_canonical_handshake_installs_sent_seal_replay_slice_from_ordered_witnesses
       server
@@ -1600,8 +1584,7 @@ let lemma_server_after_handshake_installs_sent_seal_replay_slice
        suffix_sent
        suffix_received
        server.CS.cs_model)
-  returns server_after_handshake_installs_sent_seal_replay_slice server
-  with _.
+  with
   (
     let server_write_install =
       CS.ConnLocalEvent
@@ -1691,8 +1674,7 @@ let lemma_server_after_handshake_installs_sent_seal_replay_slice
         tail_write_sent
         tail_write_received
         server.CS.cs_model
-    returns server_after_handshake_installs_sent_seal_replay_slice server
-    with _.
+    with
     (
       assert (model_after_write == server_after_write);
       PWR.lemma_conn_events_sent_seal_replay_head
@@ -1720,8 +1702,7 @@ let lemma_server_after_handshake_installs_sent_seal_replay_slice
           tail_read_sent
           tail_read_received
           server.CS.cs_model
-      returns server_after_handshake_installs_sent_seal_replay_slice server
-      with _.
+      with
       (
         assert (model_after_read == server_after_read);
         introduce exists
@@ -1952,8 +1933,7 @@ let lemma_server_post_server_hello_received_decode_replay_slice_from_staged_mile
           sh)
         (e5 :: e6 :: rest) /\
     PNTSS.server_no_tail_two_handshake_install_cover e5 e6
-  returns server_post_server_hello_received_decode_replay_slice server
-  with _.
+  with
   (
     let prefix =
       PWSeg.server_cleartext_handshake_prefix_events
@@ -2033,8 +2013,7 @@ let lemma_server_post_server_hello_received_decode_replay_slice_from_staged_mile
         suffix_sent
         suffix_received
         server.CS.cs_model
-    returns server_post_server_hello_received_decode_replay_slice server
-    with _.
+    with
     (
       introduce exists
         (ch':GCH.clientHello)
@@ -2149,8 +2128,7 @@ let lemma_server_post_server_hello_ordered_received_decode_replay_slice
       suffix_sent
       suffix_received
       server.CS.cs_model
-  returns server_post_server_hello_ordered_received_decode_replay_slice server
-  with _.
+  with
   (
     PNTPH.lemma_server_no_tail_post_two_handshake_installs_tail_order_for_split
       server
@@ -2212,8 +2190,7 @@ let lemma_server_post_server_hello_ordered_received_decode_replay_slice
             });
           CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
         ]
-    returns server_post_server_hello_ordered_received_decode_replay_slice server
-    with _.
+    with
     (
       let ordered_rest =
         [
@@ -2570,8 +2547,7 @@ let lemma_client_post_derive_received_decode_replay_slice_from_staged_milestone
       }) ::
       [] /\
     PCPS.client_no_tail_two_handshake_install_cover e4 e5
-  returns client_post_derive_received_decode_replay_slice client
-  with _.
+  with
   (
     let prefix =
       PWSeg.client_cleartext_handshake_prefix_events
@@ -2681,8 +2657,7 @@ let lemma_client_post_derive_received_decode_replay_slice_from_staged_milestone
         suffix_sent
         suffix_received
         client.CS.cs_model
-    returns client_post_derive_received_decode_replay_slice client
-    with _.
+    with
     (
       introduce exists
         (start':CS.handshake_start)
@@ -2823,8 +2798,7 @@ let lemma_client_post_derive_ordered_received_decode_replay_slice_from_staged_mi
       [] /\
     PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     PNTCAS.client_no_tail_application_install_cover ce13 ce14
-  returns client_post_derive_ordered_received_decode_replay_slice client
-  with _.
+  with
   (
     let prefix =
       PWSeg.client_cleartext_handshake_prefix_events
@@ -2933,8 +2907,7 @@ let lemma_client_post_derive_ordered_received_decode_replay_slice_from_staged_mi
         suffix_sent
         suffix_received
         client.CS.cs_model
-    returns client_post_derive_ordered_received_decode_replay_slice client
-    with _.
+    with
     (
       introduce exists
         (start':CS.handshake_start)
@@ -3177,8 +3150,7 @@ let lemma_client_after_handshake_installs_received_decode_replay_slice_from_orde
       tail4_sent
       tail4_received
       client.CS.cs_model
-  returns client_after_handshake_installs_received_decode_replay_slice client
-  with _.
+  with
   (
     eliminate exists
       (client_after_installs:CS.connection_model)
@@ -3198,8 +3170,7 @@ let lemma_client_after_handshake_installs_received_decode_replay_slice_from_orde
         tail5_sent
         tail5_received
         client.CS.cs_model
-    returns client_after_handshake_installs_received_decode_replay_slice client
-    with _.
+    with
     (
       introduce exists
         (start':CS.handshake_start)
@@ -3377,8 +3348,7 @@ let lemma_client_after_handshake_installs_received_decode_replay_slice
        suffix_sent
        suffix_received
        client.CS.cs_model)
-  returns client_after_handshake_installs_received_decode_replay_slice client
-  with _.
+  with
   (
     lemma_client_after_handshake_installs_received_decode_replay_slice_from_ordered_witnesses
       client
@@ -3564,10 +3534,7 @@ let lemma_server_encrypted_flight_staged_replay_fragment_from_normalized_replay_
       server_raw_received
       client_raw_sent
       client_raw_received
-  returns
-    exists r.
-      server_encrypted_flight_staged_replay_fragment client server w r
-  with _.
+  with
   (
     let server_rest =
       PWL.server_receive_client_finished_replay_events

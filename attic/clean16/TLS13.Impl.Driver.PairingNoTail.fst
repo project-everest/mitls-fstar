@@ -66,10 +66,7 @@ let lemma_client_step_connection_state_single_step
         }
         st1 /\
       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      TLS13.Spec.StateMachine.Reachability.connection_state_single_step st0 st1 /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _.
+    with
     ( let conn_ev =
         CS.ConnNetworkEvent {
           CL.message_direction = CL.Received;
@@ -102,10 +99,7 @@ let lemma_client_step_connection_state_single_step
           CS.delta_raw_received = B.empty;
         }
         st1
-    returns
-      TLS13.Spec.StateMachine.Reachability.connection_state_single_step st0 st1 /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _.
+    with
     ( let delta = {
         CS.delta_event = conn_ev;
         CS.delta_raw_sent = raw_sent;
@@ -149,10 +143,7 @@ let lemma_server_step_connection_state_single_step
         }
         st1 /\
       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      TLS13.Spec.StateMachine.Reachability.connection_state_single_step st0 st1 /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _.
+    with
     ( let conn_ev =
         CS.ConnNetworkEvent {
           CL.message_direction = CL.Received;
@@ -185,10 +176,7 @@ let lemma_server_step_connection_state_single_step
           CS.delta_raw_received = B.empty;
         }
         st1
-    returns
-      TLS13.Spec.StateMachine.Reachability.connection_state_single_step st0 st1 /\
-      st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config
-    with _.
+    with
     ( let delta = {
         CS.delta_event = conn_ev;
         CS.delta_raw_sent = raw_sent;
@@ -269,10 +257,7 @@ let lemma_client_step_preserves_connection_state_replay_consistent
          raw_received /\
        EC.network_input_message_projection st0 wire msg /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st1 /\
-      TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1
-    with _.
+    with
     ( let conn_ev =
         CS.ConnNetworkEvent {
           CL.message_direction = CL.Received;
@@ -326,10 +311,7 @@ let lemma_client_step_preserves_connection_state_replay_consistent
         st0.CS.cs_model
         conn_ev
         B.empty
-    returns
-      TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st1 /\
-      TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1
-    with _.
+    with
     ( let delta = {
         CS.delta_event = conn_ev;
         CS.delta_raw_sent = raw_sent;
@@ -397,10 +379,7 @@ let lemma_server_step_preserves_connection_state_replay_consistent
          conn_ev
          raw_received /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st1 /\
-      TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1
-    with _.
+    with
     ( let conn_ev =
         CS.ConnNetworkEvent {
           CL.message_direction = CL.Received;
@@ -454,10 +433,7 @@ let lemma_server_step_preserves_connection_state_replay_consistent
         st0.CS.cs_model
         conn_ev
         B.empty
-    returns
-      TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st1 /\
-      TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1
-    with _.
+    with
     ( let delta = {
         CS.delta_event = conn_ev;
         CS.delta_raw_sent = raw_sent;
@@ -732,14 +708,7 @@ let lemma_valid_byte_trace_inverts_to_state_trace
       (Common.WireFormat.serialize_all
         system.WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    exists trace'.
-      SM.trace_reaches
-        system.WFSM.wfsm_state_machine
-        system.WFSM.wfsm_state_machine.SM.sm_initial_state
-        trace'
-        st1
-  with _.
+  with
   ( assert (exists trace'.
       SM.trace_reaches
         system.WFSM.wfsm_state_machine
@@ -794,9 +763,7 @@ let lemma_client_valid_byte_trace_preserves_connection_state_consistent
       (Common.WireFormat.serialize_all
         (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    TLS13.Spec.StateMachine.Reachability.connection_state_consistent client
-  with _.
+  with
   ( assert ((EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
       client_initial);
     lemma_client_trace_reaches_preserves_connection_state_consistent
@@ -852,9 +819,7 @@ let lemma_server_valid_byte_trace_preserves_connection_state_consistent
       (Common.WireFormat.serialize_all
         (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    TLS13.Spec.StateMachine.Reachability.connection_state_consistent server
-  with _.
+  with
   ( assert ((ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
       server_initial);
     lemma_server_trace_reaches_preserves_connection_state_consistent
@@ -913,10 +878,7 @@ let lemma_client_valid_byte_trace_preserves_connection_state_replay_consistent
       (Common.WireFormat.serialize_all
         (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent client /\
-    TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent client
-  with _.
+  with
   ( assert ((EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
       client_initial);
     lemma_client_trace_reaches_preserves_connection_state_replay_consistent
@@ -975,10 +937,7 @@ let lemma_server_valid_byte_trace_preserves_connection_state_replay_consistent
       (Common.WireFormat.serialize_all
         (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent server /\
-    TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent server
-  with _.
+  with
   ( assert ((ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state ==
       server_initial);
     lemma_server_trace_reaches_preserves_connection_state_replay_consistent
@@ -1045,12 +1004,7 @@ let lemma_paired_successful_handshake_complete_event_log_shape_no_tail
       client_app_read_material
       server_app_write_material
       server_app_read_material
-  returns
-    FStar.List.Tot.length client.CS.cs_event_log == 16 /\
-    FStar.List.Tot.length server.CS.cs_event_log == 15 /\
-    TLS13.Spec.StateMachine.Correspondence.connection_state_no_key_update_trace client /\
-    TLS13.Spec.StateMachine.Correspondence.connection_state_no_key_update_trace server
-  with _.
+  with
   ( let server_suffix =
       PWL.server_protected_handshake_contiguous_replay_events
         server_material

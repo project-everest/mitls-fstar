@@ -173,8 +173,7 @@ let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
       client_suffix_sent
       client_suffix_received
       client.CS.cs_model
-  returns clean16_cleartext_final_hello_slot_milestone client server
-  with _.
+  with
   (
     let client_model0 =
       CS.initial_model client.CS.cs_model.CS.model_config in
@@ -577,8 +576,7 @@ let lemma_normalized_replay_boundary_inputs_with_clean16_fragment_completions
       server
       w
       server_fragment
-  returns PSNB.paired_supported_normalized_staged_replay_boundary client server
-  with _.
+  with
   (
     eliminate exists client_fragment.
       PNTCFR.client_finished_staged_replay_fragment
@@ -586,8 +584,7 @@ let lemma_normalized_replay_boundary_inputs_with_clean16_fragment_completions
         server
         w
         client_fragment
-    returns PSNB.paired_supported_normalized_staged_replay_boundary client server
-    with _.
+    with
     (
       lemma_normalized_replay_boundary_inputs_with_staged_fragments
         client
@@ -741,11 +738,7 @@ let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
         Some server_ch /\
       server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
         Some server_sh
-    returns
-      PSNB.paired_supported_normalized_projection_boundary_cleartext_core
-        client
-        server
-    with _.
+    with
     (
       assert (exists
         (client_ch_raw:B.bytes)
@@ -785,11 +778,7 @@ let lemma_clean16_projection_cleartext_boundary_completion_from_key_shares_compl
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw
-      returns
-        PSNB.paired_supported_normalized_projection_boundary_cleartext_core
-          client
-          server
-      with _.
+      with
       (
         let w:PSNB.normalized_projection_boundary_witnesses = {
           PSNB.npb_client_ch = client_ch;
@@ -872,8 +861,7 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
         Some server_ch /\
       server.CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
         Some server_sh
-    returns WFL.paired_cleartext_hello_key_shares client server
-    with _.
+    with
     (
       assert (PNTRB.normalized_cleartext_raw_wire_bridge
         client_ch
@@ -918,8 +906,7 @@ let lemma_clean16_cleartext_key_shares_completion_from_server_hello_key_shares_c
         CS.received_cleartext_tls_message_raw
           (M.TlsHandshake (M.ServerHello client_sh))
           client_sh_raw
-      returns WFL.paired_cleartext_hello_key_shares client server
-      with _.
+      with
       (
         assert (WFL.supported_client_hello_wire_profile client_ch);
         WFL.lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse

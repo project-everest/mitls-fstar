@@ -17,7 +17,7 @@ EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-fstar2}"
 # Pinned EverParse commit this project is verified against.  The branch above is
 # only used as a fetch hint; the build always checks out this exact commit so the
 # toolchain is reproducible regardless of where the branch tip has moved.
-EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-ad56c6dbcf2c743a5f90600d210a1c1c3d29aff4}"
+EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-914c6edcec3e29c589121d2576054b2c3c7623a8}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Default location: tools/everparse inside the agentic-tls checkout (matches the
@@ -50,15 +50,35 @@ if [ ! -d "$EVERPARSE_HOME/.git" ]; then
   git clone --branch "$EVERPARSE_BRANCH" "$EVERPARSE_REPO" "$EVERPARSE_HOME"
 else
   echo "Updating existing EverParse checkout in $EVERPARSE_HOME ..."
+  # An older checkout may point at a different fork; re-point it at
+  # $EVERPARSE_REPO so the pinned commit below is actually fetchable.
+  git -C "$EVERPARSE_HOME" remote set-url origin "$EVERPARSE_REPO"
   git -C "$EVERPARSE_HOME" fetch origin "$EVERPARSE_BRANCH"
 fi
 
 echo "Checking out pinned EverParse commit $EVERPARSE_COMMIT ..."
 git -C "$EVERPARSE_HOME" checkout --quiet "$EVERPARSE_COMMIT"
 
+# EverParse pins the F* and KaRaMeL revisions it vendors in opt/hashes.Makefile.
+# When those hashes move, build artifacts left over from the previous revision
+# (stale .checked files in particular) make the build fail, so wipe the
+# ignored/untracked files of any sub-checkout whose pinned hash has changed.
+for dep in FStar karamel; do
+  dep_dir="$EVERPARSE_HOME/opt/$dep"
+  [ -d "$dep_dir/.git" ] || continue
+  want="$(sed -n "s/^${dep}_hash *:= *\([0-9a-f]*\).*/\1/p" \
+            "$EVERPARSE_HOME/opt/hashes.Makefile")"
+  [ -n "$want" ] || continue
+  if [ "$(git -C "$dep_dir" rev-parse HEAD)" != "$want" ]; then
+    echo "Pinned $dep revision changed; cleaning stale build artifacts in $dep_dir ..."
+    git -C "$dep_dir" clean -xfdq
+    rm -f "$EVERPARSE_HOME/opt/$dep.done"
+  fi
+done
+
 echo "Building EverParse (make quackyducky -j$jobs) — this also builds F* and KaRaMeL ..."
-make -C "$EVERPARSE_HOME" -j"$jobs" deps && ADMIT=1 \
-make -C "$EVERPARSE_HOME" -j"$jobs" quackyducky
+make -C "$EVERPARSE_HOME" -j"$jobs" deps
+ADMIT=1 make -C "$EVERPARSE_HOME" -j"$jobs" quackyducky
 
 for f in "$fstar_exe" "$krml_exe" "$qd_exe"; do
   if [ ! -x "$f" ]; then

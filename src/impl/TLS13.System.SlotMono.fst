@@ -118,11 +118,7 @@ let lemma_client_step_recv_floor
     eliminate exists (conn_ev:CS.conn_event).
       CS.legal_event st0.CS.cs_model conn_ev /\
       CS.step_model st0.CS.cs_model conn_ev == Some st1.CS.cs_model
-    returns
-      (WStep.list_appdata_count (WFSM.event_input_messages ev)
-        + client_recv_floor st0.CS.cs_model
-        >= client_recv_floor st1.CS.cs_model)
-    with _.
+    with
       lemma_client_flag_facts st0.CS.cs_model conn_ev st1.CS.cs_model
 #pop-options
 
@@ -178,8 +174,7 @@ let lemma_client_flag_recv_ge1
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace client
-    returns WStep.raw_appdata_count client.CS.cs_wire_log.CL.raw_received >= 1
-    with _.
+    with
     (
       lemma_client_trace_recv_floor init init client trace;
       PNTWL.lemma_client_trace_wire_logs_match init init trace client;
@@ -212,8 +207,7 @@ let lemma_client_received_count_append_ge
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace client
-    returns WStep.raw_appdata_count (B.append cr extra) >= WStep.raw_appdata_count cr
-    with _.
+    with
     (
       PNTWL.lemma_client_trace_wire_logs_match init init trace client;
       let in_msgs = WFSM.trace_input_messages trace in
@@ -255,7 +249,7 @@ let lemma_flag_excludes_server_hello_sent (a:SY.tls_system_state)
     introduce
       a.MP.server.CS.cs_model.CS.model_control
         == CS.ControlHandshaking CS.HsServerHelloSent ==> False
-    with _.
+    with
     (
       WStep.lemma_server_hsserverhellosent_sent_zero
         a.MP.server.CS.cs_model.CS.model_config a.MP.server;

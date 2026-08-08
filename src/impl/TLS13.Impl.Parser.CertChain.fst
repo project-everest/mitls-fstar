@@ -114,7 +114,7 @@ let rec certificate_chain_matches_frame
         Seq.index (Seq.slice offsets' 1 (Seq.length offsets')) k ==
         Seq.index (Seq.slice offsets 1 (Seq.length offsets)) k
       with introduce _ ==> _
-      with _. (
+      with (
         Seq.lemma_index_slice offsets' 1 (Seq.length offsets') k;
         Seq.lemma_index_slice offsets 1 (Seq.length offsets) k
       );
@@ -122,7 +122,7 @@ let rec certificate_chain_matches_frame
         Seq.index (Seq.slice lens' 1 (Seq.length lens')) k ==
         Seq.index (Seq.slice lens 1 (Seq.length lens)) k
       with introduce _ ==> _
-      with _. (
+      with (
         Seq.lemma_index_slice lens' 1 (Seq.length lens') k;
         Seq.lemma_index_slice lens 1 (Seq.length lens) k
       );

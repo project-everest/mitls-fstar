@@ -84,21 +84,7 @@ let lemma_client_server_application_record_material_agrees_from_normalized_repla
     Pairing.client_server_driver_first_epoch_no_key_update_state_inputs
       client
       server
-  returns
-    WFL.paired_cleartext_hello_wire_equivalent client server /\
-    WFL.paired_cleartext_hello_key_shares client server /\
-    WFL.paired_protected_handshake_wire_equivalent client server /\
-    Pairing.paired_handshake_events client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   ( Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projection_witnesses
       client
       server

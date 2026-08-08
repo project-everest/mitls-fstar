@@ -458,8 +458,7 @@ let lemma_installed_witness_pack_from_extracted_slices
                    e13_ex :: e14_ex ::
                    CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished cf_ex); }) ::
                    []))
-            returns goal_w
-            with _exrec.
+            with
             (
             let ordered_rest_s =
               [
@@ -827,8 +826,7 @@ let lemma_installed_witness_pack_from_extracted_slices
               lemma_received_client_hello_is_wire_h4 ch_r prefix_received_r;
               eliminate exists frag2.
                 W.parse_record_wire prefix_received_r == Some (T.Handshake, frag2, B.length prefix_received_r)
-              returns (Seq.equal suffix_sent_ex client_finished_received_r)
-              with _w2.
+              with
               (
                 // server flight received bytes are empty
                 lemma_server_flight_received_empty model5_r e5_r e6_r ee_r cert_r cv_r sf_r

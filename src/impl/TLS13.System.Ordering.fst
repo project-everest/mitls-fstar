@@ -113,7 +113,7 @@ let lemma_consistent_server_flight_marker_shape (st:CS.connection_state)
           p x /\ SMR.connection_state_single_step x y ==> p y) =
       introduce forall (x:CS.connection_state) (y:CS.connection_state).
         p x /\ SMR.connection_state_single_step x y ==> p y
-      with introduce _ ==> _ with _.
+      with introduce _ ==> _ with
         lemma_delta_server_flight_marker_shape x y in
     RTC.stable_on_closure SMR.connection_state_single_step p stable;
     assert (p (CS.initial st.CS.cs_model.CS.model_config));
@@ -255,7 +255,7 @@ let lemma_consistent_client_finished_marker_shape (st:CS.connection_state)
           p x /\ SMR.connection_state_single_step x y ==> p y) =
       introduce forall (x:CS.connection_state) (y:CS.connection_state).
         p x /\ SMR.connection_state_single_step x y ==> p y
-      with introduce _ ==> _ with _.
+      with introduce _ ==> _ with
         lemma_delta_client_finished_marker_shape x y in
     RTC.stable_on_closure SMR.connection_state_single_step p stable;
     assert (p (CS.initial st.CS.cs_model.CS.model_config));

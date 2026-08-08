@@ -132,10 +132,7 @@ let lemma_client_step_appends_non_ccs
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns (exists (ce:CS.conn_event).
-      st1.CS.cs_event_log == L.append st0.CS.cs_event_log [ce] /\
-      CCShape.is_received_ccs ce == false)
-    with _.
+    with
     (
       // canonical_wire_step (unfold) gives legal_connection_delta, hence the log
       // append and the received raw-delta legality.
@@ -175,10 +172,7 @@ let lemma_client_step_appends_non_ccs
        EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
        SMCan.canonical_wire_step st0 st1 conn_ev raw_sent B.empty)
-    returns (exists (ce:CS.conn_event).
-      st1.CS.cs_event_log == L.append st0.CS.cs_event_log [ce] /\
-      CCShape.is_received_ccs ce == false)
-    with _.
+    with
     (
       // instance: client_representation_matches == CTy.client_local_event_matches
       CTy.lemma_client_local_event_semantic_exact st0 local conn_ev;
@@ -213,7 +207,7 @@ let lemma_log_append_non_ccs
   introduce forall (ev:CS.conn_event).
     L.memP ev (L.append log [ce]) ==> CCShape.is_received_ccs ev == false
   with (introduce _ ==> _
-    with _hyp.
+    with
     L.append_memP log [ce] ev)
 #pop-options
 
@@ -248,7 +242,7 @@ let rec lemma_client_no_ccs_event_from_ccs_free_inputs
        L.memP wm (WFSM.trace_input_messages rest)) ==>
       wm.CW.wm_content_type <> T.Change_cipher_spec
     with (introduce _ ==> _
-      with _hyp.
+      with
       L.append_memP (WFSM.event_input_messages tr.SM.tr_event)
                     (WFSM.trace_input_messages rest) wm);
     lemma_client_step_appends_non_ccs
@@ -256,8 +250,7 @@ let rec lemma_client_no_ccs_event_from_ccs_free_inputs
     eliminate exists (ce:CS.conn_event).
       tr.SM.tr_next_state.CS.cs_event_log == L.append st0.CS.cs_event_log [ce] /\
       CCShape.is_received_ccs ce == false
-    returns CCShape.log_has_no_received_ccs tr.SM.tr_next_state.CS.cs_event_log
-    with _.
+    with
     (
       lemma_log_append_non_ccs st0.CS.cs_event_log ce
     );

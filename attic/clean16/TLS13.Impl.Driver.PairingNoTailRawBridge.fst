@@ -72,11 +72,7 @@ let lemma_parse_record_wire_of_received_client_hello
       Some (T.Handshake, fragment, B.length raw) /\
     W.parse_tls_message T.Handshake fragment ==
       Some (M.TlsHandshake (M.ClientHello ch))
-  returns
-    exists fragment'.
-      W.parse_record_wire raw ==
-        Some (T.Handshake, fragment', B.length raw)
-  with _.
+  with
   ( assert (exists fragment'.
       W.parse_record_wire raw ==
         Some (T.Handshake, fragment', B.length raw)) )
@@ -159,10 +155,7 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
     TLS13.Impl.Messages.content_type_matches content_type ct /\
     W.parse_tls_message ct fragment ==
       Some (M.TlsHandshake (M.ServerHello client_sh))
-  returns
-    CS.server_hello_key_share client_sh ==
-    CS.server_hello_key_share server_sh
-  with _.
+  with
   (
     eliminate exists (outer_ct:T.content_type) (outer_fragment:B.bytes).
       W.parse_record_wire client_sh_raw ==
@@ -172,10 +165,7 @@ let lemma_server_hello_key_share_from_sent_supported_and_received_projection
        else
          TLS13.Impl.Messages.content_type_matches content_type outer_ct /\
          Seq.equal fragment outer_fragment)
-    returns
-      CS.server_hello_key_share client_sh ==
-      CS.server_hello_key_share server_sh
-    with _.
+    with
     (
       let sent_fragment = W.serialize_handshake (M.ServerHello server_sh) in
       lemma_parse_record_wire_of_cleartext_server_hello server_sh server_sh_raw;
@@ -255,8 +245,7 @@ let lemma_sent_supported_client_hello_raw_not_change_cipher_spec
   eliminate exists (fragment:B.bytes).
     W.parse_record_wire client_hello_raw ==
       Some (T.Handshake, fragment, B.length client_hello_raw)
-  returns False
-  with _.
+  with
   (
     Seq.lemma_eq_elim client_hello_raw ccs_raw;
     assert (W.parse_record_wire client_hello_raw ==
@@ -288,8 +277,7 @@ let lemma_received_server_hello_raw_not_change_cipher_spec
   eliminate exists (fragment:B.bytes).
     W.parse_record_wire server_hello_raw ==
       Some (T.Handshake, fragment, B.length server_hello_raw)
-  returns False
-  with _.
+  with
   (
     Seq.lemma_eq_elim server_hello_raw ccs_raw;
     assert (W.parse_record_wire server_hello_raw ==
@@ -319,8 +307,7 @@ let lemma_application_data_raw_not_change_cipher_spec
   eliminate exists (fragment:B.bytes).
     W.parse_record application_raw ==
       Some (T.Application_data, fragment, B.length application_raw)
-  returns False
-  with _.
+  with
   (
     W.lemma_parse_record_implies_parse_record_wire application_raw;
     assert (W.parse_record_wire application_raw ==
@@ -361,8 +348,7 @@ let lemma_equal_stream_head_sent_supported_client_hello_not_change_cipher_spec
   eliminate exists (client_fragment:B.bytes).
     W.parse_record_wire client_hello_raw ==
       Some (T.Handshake, client_fragment, B.length client_hello_raw)
-  returns False
-  with _.
+  with
   (
     PWS.lemma_equal_stream_record_head_lengths
       left_stream
@@ -419,8 +405,7 @@ let lemma_equal_stream_head_application_data_not_change_cipher_spec
   eliminate exists (application_fragment:B.bytes).
     W.parse_record application_raw ==
       Some (T.Application_data, application_fragment, B.length application_raw)
-  returns False
-  with _.
+  with
   (
     W.lemma_parse_record_implies_parse_record_wire application_raw;
     assert (W.parse_record_wire application_raw ==
@@ -489,14 +474,12 @@ let lemma_equal_stream_after_client_hello_application_data_not_change_cipher_spe
   eliminate exists sent_fragment.
     W.parse_record_wire sent_ch_raw ==
       Some (T.Handshake, sent_fragment, B.length sent_ch_raw)
-  returns False
-  with _.
+  with
   (
     eliminate exists received_fragment.
       W.parse_record_wire received_ch_raw ==
         Some (T.Handshake, received_fragment, B.length received_ch_raw)
-    returns False
-    with _.
+    with
     (
       PWS.lemma_equal_stream_record_head_lengths
         left_stream
@@ -681,11 +664,7 @@ let lemma_conn_events_raw_replay_received_change_cipher_spec_head
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    exists ccs_raw received_tail.
-      Seq.equal raw_received (B.append ccs_raw received_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     lemma_event_raw_delta_legal_change_cipher_spec
       model
@@ -740,11 +719,7 @@ let lemma_conn_events_raw_replay_sent_change_cipher_spec_head
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    exists ccs_raw sent_tail.
-      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     lemma_event_raw_delta_legal_change_cipher_spec
       model
@@ -912,8 +887,7 @@ let lemma_client_prefix_sent_client_hello_supported
       tail0_sent
       tail0_received
       final_model
-  returns WFL.supported_client_hello_wire_profile client_ch
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -934,8 +908,7 @@ let lemma_client_prefix_sent_client_hello_supported
         tail1_sent
         tail1_received
         final_model
-    returns WFL.supported_client_hello_wire_profile client_ch
-    with _.
+    with
     (
       assert (CS.legal_event model0 ev0);
       assert (CS.legal_event model1 ev1);
@@ -1032,8 +1005,7 @@ let lemma_client_prefix_received_server_hello_supported
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: ev2 :: ev3 :: client_rest) tail0_sent tail0_received final_model
-  returns WFL.supported_server_hello_wire_profile client_sh
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head model1 ev1 (ev2 :: ev3 :: client_rest) tail0_sent tail0_received final_model;
     eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
@@ -1043,8 +1015,7 @@ let lemma_client_prefix_received_server_hello_supported
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 (ev2 :: ev3 :: client_rest) tail1_sent tail1_received final_model
-    returns WFL.supported_server_hello_wire_profile client_sh
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head model2 ev2 (ev3 :: client_rest) tail1_sent tail1_received final_model;
       eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
@@ -1054,8 +1025,7 @@ let lemma_client_prefix_received_server_hello_supported
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model3 (ev3 :: client_rest) tail2_sent tail2_received final_model
-      returns WFL.supported_server_hello_wire_profile client_sh
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head model3 ev3 client_rest tail2_sent tail2_received final_model;
         eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
@@ -1065,8 +1035,7 @@ let lemma_client_prefix_received_server_hello_supported
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 client_rest tail3_sent tail3_received final_model
-        returns WFL.supported_server_hello_wire_profile client_sh
-        with _.
+        with
         (
           assert (CS.legal_tls_message model2 CL.Received (M.TlsHandshake (M.ServerHello client_sh)));
           assert (CS.legal_local_event model3 (CS.LocalDeriveSharedSecret client_shared));
@@ -1127,8 +1096,7 @@ let lemma_server_prefix_sent_server_hello_supported
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: ev2 :: ev3 :: ev4 :: server_rest) tail0_sent tail0_received final_model
-  returns WFL.supported_server_hello_wire_profile server_sh
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head model1 ev1 (ev2 :: ev3 :: ev4 :: server_rest) tail0_sent tail0_received final_model;
     eliminate exists model2 delta1_sent delta1_received tail1_sent tail1_received.
@@ -1137,8 +1105,7 @@ let lemma_server_prefix_sent_server_hello_supported
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 (ev2 :: ev3 :: ev4 :: server_rest) tail1_sent tail1_received final_model
-    returns WFL.supported_server_hello_wire_profile server_sh
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head model2 ev2 (ev3 :: ev4 :: server_rest) tail1_sent tail1_received final_model;
       eliminate exists model3 delta2_sent delta2_received tail2_sent tail2_received.
@@ -1147,8 +1114,7 @@ let lemma_server_prefix_sent_server_hello_supported
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model3 (ev3 :: ev4 :: server_rest) tail2_sent tail2_received final_model
-      returns WFL.supported_server_hello_wire_profile server_sh
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head model3 ev3 (ev4 :: server_rest) tail2_sent tail2_received final_model;
         eliminate exists model4 delta3_sent delta3_received tail3_sent tail3_received.
@@ -1157,8 +1123,7 @@ let lemma_server_prefix_sent_server_hello_supported
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (ev4 :: server_rest) tail3_sent tail3_received final_model
-        returns WFL.supported_server_hello_wire_profile server_sh
-        with _.
+        with
         (
           PWR.lemma_conn_events_raw_replay_head model4 ev4 server_rest tail3_sent tail3_received final_model;
           eliminate exists model5 delta4_sent delta4_received tail4_sent tail4_received.
@@ -1167,8 +1132,7 @@ let lemma_server_prefix_sent_server_hello_supported
             Seq.equal tail3_sent (B.append delta4_sent tail4_sent) /\
             Seq.equal tail3_received (B.append delta4_received tail4_received) /\
             TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 server_rest tail4_sent tail4_received final_model
-          returns WFL.supported_server_hello_wire_profile server_sh
-          with _.
+          with
           (
             assert (CS.legal_tls_message model4 CL.Sent (M.TlsHandshake (M.ServerHello server_sh)));
             assert (WFL.supported_server_hello_wire_profile server_sh)
@@ -1222,11 +1186,7 @@ let lemma_server_start_then_received_change_cipher_spec_raw_slice
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: rest) tail0_sent tail0_received final_model
-  returns
-    exists ccs_raw received_tail.
-      Seq.equal raw_received (B.append ccs_raw received_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -1242,11 +1202,7 @@ let lemma_server_start_then_received_change_cipher_spec_raw_slice
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 rest tail1_sent tail1_received final_model
-    returns
-      exists ccs_raw received_tail.
-        Seq.equal raw_received (B.append ccs_raw received_tail) /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       lemma_event_raw_delta_legal_local
         model0
@@ -1317,11 +1273,7 @@ let lemma_server_start_then_sent_change_cipher_spec_raw_slice
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: rest) tail0_sent tail0_received final_model
-  returns
-    exists ccs_raw sent_tail.
-      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -1337,11 +1289,7 @@ let lemma_server_start_then_sent_change_cipher_spec_raw_slice
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 rest tail1_sent tail1_received final_model
-    returns
-      exists ccs_raw sent_tail.
-        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       lemma_event_raw_delta_legal_local
         model0
@@ -1426,16 +1374,7 @@ let lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: ev2 :: rest) tail0_sent tail0_received final_model
-  returns
-    exists server_ch_raw ccs_raw received_tail.
-      Seq.equal
-        raw_received
-        (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-      CS.received_cleartext_tls_message_raw
-        (M.TlsHandshake (M.ClientHello server_ch))
-        server_ch_raw /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -1451,16 +1390,7 @@ let lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 (ev2 :: rest) tail1_sent tail1_received final_model
-    returns
-      exists server_ch_raw ccs_raw received_tail.
-        Seq.equal
-          raw_received
-          (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello server_ch))
-          server_ch_raw /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -1476,16 +1406,7 @@ let lemma_server_start_client_hello_then_received_change_cipher_spec_raw_slices
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model3 rest tail2_sent tail2_received final_model
-      returns
-        exists server_ch_raw ccs_raw received_tail.
-          Seq.equal
-            raw_received
-            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-          CS.received_cleartext_tls_message_raw
-            (M.TlsHandshake (M.ClientHello server_ch))
-            server_ch_raw /\
-          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-      with _.
+      with
       (
         lemma_event_raw_delta_legal_local
           model0
@@ -1583,11 +1504,7 @@ let lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
     Seq.equal raw_sent (B.append delta0_sent tail0_sent) /\
     Seq.equal raw_received (B.append delta0_received tail0_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: ev2 :: rest) tail0_sent tail0_received final_model
-  returns
-    exists ccs_raw sent_tail.
-      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -1603,11 +1520,7 @@ let lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
       Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
       Seq.equal tail0_received (B.append delta1_received tail1_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 (ev2 :: rest) tail1_sent tail1_received final_model
-    returns
-      exists ccs_raw sent_tail.
-        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -1623,11 +1536,7 @@ let lemma_server_start_client_hello_then_sent_change_cipher_spec_raw_slice
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model3 rest tail2_sent tail2_received final_model
-      returns
-        exists ccs_raw sent_tail.
-          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-      with _.
+      with
       (
         lemma_event_raw_delta_legal_local
           model0
@@ -1730,16 +1639,7 @@ let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists server_ch_raw ccs_raw received_tail.
-      Seq.equal
-        raw_received
-        (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-      CS.received_cleartext_tls_message_raw
-        (M.TlsHandshake (M.ClientHello server_ch))
-        server_ch_raw /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -1760,16 +1660,7 @@ let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists server_ch_raw ccs_raw received_tail.
-        Seq.equal
-          raw_received
-          (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello server_ch))
-          server_ch_raw /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -1785,16 +1676,7 @@ let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model3 (ev3 :: rest) tail2_sent tail2_received final_model
-      returns
-        exists server_ch_raw ccs_raw received_tail.
-          Seq.equal
-            raw_received
-            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-          CS.received_cleartext_tls_message_raw
-            (M.TlsHandshake (M.ClientHello server_ch))
-            server_ch_raw /\
-          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -1810,16 +1692,7 @@ let lemma_server_start_client_hello_select_then_received_change_cipher_spec_raw_
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 rest tail3_sent tail3_received final_model
-        returns
-          exists server_ch_raw ccs_raw received_tail.
-            Seq.equal
-              raw_received
-              (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-            CS.received_cleartext_tls_message_raw
-              (M.TlsHandshake (M.ClientHello server_ch))
-              server_ch_raw /\
-            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-        with _.
+        with
         (
           lemma_event_raw_delta_legal_local
             model0
@@ -1937,11 +1810,7 @@ let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slic
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists ccs_raw sent_tail.
-      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -1962,11 +1831,7 @@ let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slic
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists ccs_raw sent_tail.
-        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -1982,11 +1847,7 @@ let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slic
         Seq.equal tail1_sent (B.append delta2_sent tail2_sent) /\
         Seq.equal tail1_received (B.append delta2_received tail2_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model3 (ev3 :: rest) tail2_sent tail2_received final_model
-      returns
-        exists ccs_raw sent_tail.
-          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -2002,11 +1863,7 @@ let lemma_server_start_client_hello_select_then_sent_change_cipher_spec_raw_slic
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 rest tail3_sent tail3_received final_model
-        returns
-          exists ccs_raw sent_tail.
-            Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-        with _.
+        with
         (
           lemma_event_raw_delta_legal_local
             model0
@@ -2123,16 +1980,7 @@ let lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists server_ch_raw ccs_raw received_tail.
-      Seq.equal
-        raw_received
-        (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-      CS.received_cleartext_tls_message_raw
-        (M.TlsHandshake (M.ClientHello server_ch))
-        server_ch_raw /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -2153,16 +2001,7 @@ let lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists server_ch_raw ccs_raw received_tail.
-        Seq.equal
-          raw_received
-          (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello server_ch))
-          server_ch_raw /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -2183,16 +2022,7 @@ let lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
           tail2_sent
           tail2_received
           final_model
-      returns
-        exists server_ch_raw ccs_raw received_tail.
-          Seq.equal
-            raw_received
-            (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-          CS.received_cleartext_tls_message_raw
-            (M.TlsHandshake (M.ClientHello server_ch))
-            server_ch_raw /\
-          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -2208,16 +2038,7 @@ let lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (ev4 :: rest) tail3_sent tail3_received final_model
-        returns
-          exists server_ch_raw ccs_raw received_tail.
-            Seq.equal
-              raw_received
-              (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-            CS.received_cleartext_tls_message_raw
-              (M.TlsHandshake (M.ClientHello server_ch))
-              server_ch_raw /\
-            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-        with _.
+        with
         (
           lemma_conn_events_raw_replay_received_change_cipher_spec_head
             model4
@@ -2228,16 +2049,7 @@ let lemma_server_start_client_hello_select_shared_then_received_change_cipher_sp
           eliminate exists ccs_raw tail4_received.
             Seq.equal tail3_received (B.append ccs_raw tail4_received) /\
             CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-          returns
-            exists server_ch_raw ccs_raw received_tail.
-              Seq.equal
-                raw_received
-                (B.append server_ch_raw (B.append ccs_raw received_tail)) /\
-              CS.received_cleartext_tls_message_raw
-                (M.TlsHandshake (M.ClientHello server_ch))
-                server_ch_raw /\
-              CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-          with _.
+          with
           (
             lemma_event_raw_delta_legal_local
               model0
@@ -2362,11 +2174,7 @@ let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists ccs_raw sent_tail.
-      Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-      CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -2387,11 +2195,7 @@ let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists ccs_raw sent_tail.
-        Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-        CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -2412,11 +2216,7 @@ let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
           tail2_sent
           tail2_received
           final_model
-      returns
-        exists ccs_raw sent_tail.
-          Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-          CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -2432,11 +2232,7 @@ let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
           Seq.equal tail2_sent (B.append delta3_sent tail3_sent) /\
           Seq.equal tail2_received (B.append delta3_received tail3_received) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (ev4 :: rest) tail3_sent tail3_received final_model
-        returns
-          exists ccs_raw sent_tail.
-            Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-            CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-        with _.
+        with
         (
           lemma_conn_events_raw_replay_sent_change_cipher_spec_head
             model4
@@ -2447,11 +2243,7 @@ let lemma_server_start_client_hello_select_shared_then_sent_change_cipher_spec_r
           eliminate exists ccs_raw tail4_sent.
             Seq.equal tail3_sent (B.append ccs_raw tail4_sent) /\
             CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-          returns
-            exists ccs_raw sent_tail.
-              Seq.equal raw_sent (B.append ccs_raw sent_tail) /\
-              CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-          with _.
+          with
           (
             lemma_event_raw_delta_legal_local
               model0
@@ -2571,17 +2363,7 @@ let lemma_client_prefix_raw_slices
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists client_ch_raw client_sh_raw sent_tail received_tail.
-      Seq.equal raw_sent (B.append client_ch_raw sent_tail) /\
-      Seq.equal raw_received (B.append client_sh_raw received_tail) /\
-      CS.cleartext_tls_message_raw
-        (M.TlsHandshake (M.ClientHello client_ch))
-        client_ch_raw /\
-      CS.received_cleartext_tls_message_raw
-        (M.TlsHandshake (M.ServerHello client_sh))
-        client_sh_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -2602,17 +2384,7 @@ let lemma_client_prefix_raw_slices
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists client_ch_raw client_sh_raw sent_tail received_tail.
-        Seq.equal raw_sent (B.append client_ch_raw sent_tail) /\
-        Seq.equal raw_received (B.append client_sh_raw received_tail) /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello client_ch))
-          client_ch_raw /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello client_sh))
-          client_sh_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -2633,17 +2405,7 @@ let lemma_client_prefix_raw_slices
           tail2_sent
           tail2_received
           final_model
-      returns
-        exists client_ch_raw client_sh_raw sent_tail received_tail.
-          Seq.equal raw_sent (B.append client_ch_raw sent_tail) /\
-          Seq.equal raw_received (B.append client_sh_raw received_tail) /\
-          CS.cleartext_tls_message_raw
-            (M.TlsHandshake (M.ClientHello client_ch))
-            client_ch_raw /\
-          CS.received_cleartext_tls_message_raw
-            (M.TlsHandshake (M.ServerHello client_sh))
-            client_sh_raw
-      with _.
+      with
       (
         lemma_event_raw_delta_legal_local
           model0
@@ -2751,13 +2513,7 @@ let lemma_sent_server_hello_head_raw_slice
       tail_sent
       tail_received
       final_model
-  returns
-    exists server_sh_raw sent_tail.
-      Seq.equal raw_sent (B.append server_sh_raw sent_tail) /\
-      CS.cleartext_tls_message_raw
-        (M.TlsHandshake (M.ServerHello server_sh))
-        server_sh_raw
-  with _.
+  with
   (
     lemma_event_raw_delta_legal_sent_server_hello
       model
@@ -2835,16 +2591,7 @@ let lemma_sent_server_hello_head_step_model_from_raw_replay
       tail_sent
       tail_received
       final_model
-  returns
-    exists model1 tail_sent tail_received.
-      CS.step_model model ev == Some model1 /\
-      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-        model1
-        rest
-        tail_sent
-        tail_received
-        final_model
-  with _.
+  with
   (
     assert (exists model1 tail_sent tail_received.
       CS.step_model model ev == Some model1 /\
@@ -2942,19 +2689,7 @@ let lemma_client_cleartext_prefix_step_models_from_raw_replay
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists model1 model2 model3 model4 tail_sent tail_received.
-      CS.step_model model0 ev0 == Some model1 /\
-      CS.step_model model1 ev1 == Some model2 /\
-      CS.step_model model2 ev2 == Some model3 /\
-      CS.step_model model3 ev3 == Some model4 /\
-      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-        model4
-        client_rest
-        tail_sent
-        tail_received
-        final_model
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -2975,19 +2710,7 @@ let lemma_client_cleartext_prefix_step_models_from_raw_replay
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists model1 model2 model3 model4 tail_sent tail_received.
-        CS.step_model model0 ev0 == Some model1 /\
-        CS.step_model model1 ev1 == Some model2 /\
-        CS.step_model model2 ev2 == Some model3 /\
-        CS.step_model model3 ev3 == Some model4 /\
-        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-          model4
-          client_rest
-          tail_sent
-          tail_received
-          final_model
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -3008,19 +2731,7 @@ let lemma_client_cleartext_prefix_step_models_from_raw_replay
           tail2_sent
           tail2_received
           final_model
-      returns
-        exists model1 model2 model3 model4 tail_sent tail_received.
-          CS.step_model model0 ev0 == Some model1 /\
-          CS.step_model model1 ev1 == Some model2 /\
-          CS.step_model model2 ev2 == Some model3 /\
-          CS.step_model model3 ev3 == Some model4 /\
-          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-            model4
-            client_rest
-            tail_sent
-            tail_received
-            final_model
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -3041,19 +2752,7 @@ let lemma_client_cleartext_prefix_step_models_from_raw_replay
             tail3_sent
             tail3_received
             final_model
-        returns
-          exists model1 model2 model3 model4 tail_sent tail_received.
-            CS.step_model model0 ev0 == Some model1 /\
-            CS.step_model model1 ev1 == Some model2 /\
-            CS.step_model model2 ev2 == Some model3 /\
-            CS.step_model model3 ev3 == Some model4 /\
-            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-              model4
-              client_rest
-              tail_sent
-              tail_received
-              final_model
-        with _.
+        with
         (
           assert (exists model1 model2 model3 model4 tail_sent tail_received.
             CS.step_model model0 ev0 == Some model1 /\
@@ -3183,10 +2882,7 @@ let rec lemma_conn_events_raw_replay_preserves_frozen_hello_slots
         tail_sent
         tail_received
         final_model
-    returns
-      final_model.CS.model_handshake.CS.hs_client_hello == Some ch /\
-      final_model.CS.model_handshake.CS.hs_server_hello == Some sh
-    with _.
+    with
     (
       lemma_step_model_preserves_frozen_hello_slots model ev model1 ch sh;
       lemma_conn_events_raw_replay_preserves_frozen_hello_slots
@@ -3270,12 +2966,7 @@ let lemma_client_cleartext_prefix_final_hello_slots_from_raw_replay
       tail_sent
       tail_received
       final_model
-  returns
-    final_model.CS.model_handshake.CS.hs_client_hello ==
-      Some client_ch /\
-    final_model.CS.model_handshake.CS.hs_server_hello ==
-      Some client_sh
-  with _.
+  with
   (
     assert (hello_slots_frozen_control model4.CS.model_control);
     assert (model4.CS.model_handshake.CS.hs_client_hello == Some client_ch);
@@ -3362,17 +3053,7 @@ let lemma_server_prefix_raw_slices
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists server_ch_raw server_sh_raw sent_tail received_tail.
-      Seq.equal raw_received (B.append server_ch_raw received_tail) /\
-      Seq.equal raw_sent (B.append server_sh_raw sent_tail) /\
-      CS.received_cleartext_tls_message_raw
-        (M.TlsHandshake (M.ClientHello server_ch))
-        server_ch_raw /\
-      CS.cleartext_tls_message_raw
-        (M.TlsHandshake (M.ServerHello server_sh))
-        server_sh_raw
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -3393,17 +3074,7 @@ let lemma_server_prefix_raw_slices
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists server_ch_raw server_sh_raw sent_tail received_tail.
-        Seq.equal raw_received (B.append server_ch_raw received_tail) /\
-        Seq.equal raw_sent (B.append server_sh_raw sent_tail) /\
-        CS.received_cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello server_ch))
-          server_ch_raw /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ServerHello server_sh))
-          server_sh_raw
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -3424,17 +3095,7 @@ let lemma_server_prefix_raw_slices
           tail2_sent
           tail2_received
           final_model
-      returns
-        exists server_ch_raw server_sh_raw sent_tail received_tail.
-          Seq.equal raw_received (B.append server_ch_raw received_tail) /\
-          Seq.equal raw_sent (B.append server_sh_raw sent_tail) /\
-          CS.received_cleartext_tls_message_raw
-            (M.TlsHandshake (M.ClientHello server_ch))
-            server_ch_raw /\
-          CS.cleartext_tls_message_raw
-            (M.TlsHandshake (M.ServerHello server_sh))
-            server_sh_raw
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -3455,17 +3116,7 @@ let lemma_server_prefix_raw_slices
             tail3_sent
             tail3_received
             final_model
-        returns
-          exists server_ch_raw server_sh_raw sent_tail received_tail.
-            Seq.equal raw_received (B.append server_ch_raw received_tail) /\
-            Seq.equal raw_sent (B.append server_sh_raw sent_tail) /\
-            CS.received_cleartext_tls_message_raw
-              (M.TlsHandshake (M.ClientHello server_ch))
-              server_ch_raw /\
-            CS.cleartext_tls_message_raw
-              (M.TlsHandshake (M.ServerHello server_sh))
-              server_sh_raw
-        with _.
+        with
         (
           lemma_sent_server_hello_head_raw_slice
             model4
@@ -3537,17 +3188,7 @@ let lemma_server_prefix_raw_slices
             CS.cleartext_tls_message_raw
               (M.TlsHandshake (M.ServerHello server_sh))
               server_sh_raw
-          returns
-            exists server_ch_raw server_sh_raw' sent_tail received_tail.
-              Seq.equal raw_received (B.append server_ch_raw received_tail) /\
-              Seq.equal raw_sent (B.append server_sh_raw' sent_tail) /\
-              CS.received_cleartext_tls_message_raw
-                (M.TlsHandshake (M.ClientHello server_ch))
-                server_ch_raw /\
-              CS.cleartext_tls_message_raw
-                (M.TlsHandshake (M.ServerHello server_sh))
-                server_sh_raw'
-          with _.
+          with
           (
             assert (Seq.equal raw_sent
               (B.append server_sh_raw server_sent_tail));
@@ -3657,20 +3298,7 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
       tail0_sent
       tail0_received
       final_model
-  returns
-    exists model1 model2 model3 model4 model5 tail_sent tail_received.
-      CS.step_model model0 ev0 == Some model1 /\
-      CS.step_model model1 ev1 == Some model2 /\
-      CS.step_model model2 ev2 == Some model3 /\
-      CS.step_model model3 ev3 == Some model4 /\
-      CS.step_model model4 ev4 == Some model5 /\
-      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-        model5
-        server_rest
-        tail_sent
-        tail_received
-        final_model
-  with _.
+  with
   (
     PWR.lemma_conn_events_raw_replay_head
       model1
@@ -3691,20 +3319,7 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
         tail1_sent
         tail1_received
         final_model
-    returns
-      exists model1 model2 model3 model4 model5 tail_sent tail_received.
-        CS.step_model model0 ev0 == Some model1 /\
-        CS.step_model model1 ev1 == Some model2 /\
-        CS.step_model model2 ev2 == Some model3 /\
-        CS.step_model model3 ev3 == Some model4 /\
-        CS.step_model model4 ev4 == Some model5 /\
-        TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-          model5
-          server_rest
-          tail_sent
-          tail_received
-          final_model
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model2
@@ -3725,20 +3340,7 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
           tail2_sent
           tail2_received
           final_model
-      returns
-        exists model1 model2 model3 model4 model5 tail_sent tail_received.
-          CS.step_model model0 ev0 == Some model1 /\
-          CS.step_model model1 ev1 == Some model2 /\
-          CS.step_model model2 ev2 == Some model3 /\
-          CS.step_model model3 ev3 == Some model4 /\
-          CS.step_model model4 ev4 == Some model5 /\
-          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-            model5
-            server_rest
-            tail_sent
-            tail_received
-            final_model
-      with _.
+      with
       (
         PWR.lemma_conn_events_raw_replay_head
           model3
@@ -3759,20 +3361,7 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
             tail3_sent
             tail3_received
             final_model
-        returns
-          exists model1 model2 model3 model4 model5 tail_sent tail_received.
-            CS.step_model model0 ev0 == Some model1 /\
-            CS.step_model model1 ev1 == Some model2 /\
-            CS.step_model model2 ev2 == Some model3 /\
-            CS.step_model model3 ev3 == Some model4 /\
-            CS.step_model model4 ev4 == Some model5 /\
-            TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-              model5
-              server_rest
-              tail_sent
-              tail_received
-              final_model
-        with _.
+        with
         (
           lemma_sent_server_hello_head_step_model_from_raw_replay
             model4
@@ -3789,20 +3378,7 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
               tail4_sent
               tail4_received
               final_model
-          returns
-            exists model1 model2 model3 model4 model5 tail_sent tail_received.
-              CS.step_model model0 ev0 == Some model1 /\
-              CS.step_model model1 ev1 == Some model2 /\
-              CS.step_model model2 ev2 == Some model3 /\
-              CS.step_model model3 ev3 == Some model4 /\
-              CS.step_model model4 ev4 == Some model5 /\
-              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-                model5
-                server_rest
-                tail_sent
-                tail_received
-                final_model
-          with _.
+          with
           (
             assert (exists model1 model2 model3 model4 model5 tail_sent tail_received.
               CS.step_model model0 ev0 == Some model1 /\
@@ -3899,12 +3475,7 @@ let lemma_server_cleartext_prefix_final_hello_slots_from_raw_replay
       tail_sent
       tail_received
       final_model
-  returns
-    final_model.CS.model_handshake.CS.hs_client_hello ==
-      Some server_ch /\
-    final_model.CS.model_handshake.CS.hs_server_hello ==
-      Some server_sh
-  with _.
+  with
   (
     assert (hello_slots_frozen_control model5.CS.model_control);
     assert (model5.CS.model_handshake.CS.hs_client_hello == Some server_ch);
@@ -4040,13 +3611,7 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       client_sh_raw
-  returns
-    normalized_cleartext_raw_wire_bridge
-      client_ch
-      server_ch
-      client_sh
-      server_sh
-  with _.
+  with
   (
     lemma_server_prefix_raw_slices
       server_model0
@@ -4071,13 +3636,7 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
       CS.cleartext_tls_message_raw
         (M.TlsHandshake (M.ServerHello server_sh))
         server_sh_raw
-    returns
-      normalized_cleartext_raw_wire_bridge
-        client_ch
-        server_ch
-        client_sh
-        server_sh
-    with _.
+    with
     (
       lemma_parse_record_wire_of_sent_supported_client_hello
         client_ch
@@ -4088,24 +3647,12 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
       eliminate exists (client_ch_fragment:B.bytes).
         W.parse_record_wire client_ch_raw ==
           Some (T.Handshake, client_ch_fragment, B.length client_ch_raw)
-      returns
-        normalized_cleartext_raw_wire_bridge
-          client_ch
-          server_ch
-          client_sh
-          server_sh
-      with _.
+      with
       (
         eliminate exists (server_ch_fragment:B.bytes).
           W.parse_record_wire server_ch_raw ==
             Some (T.Handshake, server_ch_fragment, B.length server_ch_raw)
-        returns
-          normalized_cleartext_raw_wire_bridge
-            client_ch
-            server_ch
-            client_sh
-            server_sh
-        with _.
+        with
         (
           PWS.lemma_equal_stream_record_head_lengths
             client.CS.cs_wire_log.CL.raw_sent
@@ -4133,24 +3680,12 @@ let lemma_normalized_cleartext_raw_wire_bridge_from_role_local_prefixes
           eliminate exists (server_sh_fragment:B.bytes).
             W.parse_record_wire server_sh_raw ==
               Some (T.Handshake, server_sh_fragment, B.length server_sh_raw)
-          returns
-            normalized_cleartext_raw_wire_bridge
-              client_ch
-              server_ch
-              client_sh
-              server_sh
-          with _.
+          with
           (
             eliminate exists (client_sh_fragment:B.bytes).
               W.parse_record_wire client_sh_raw ==
                 Some (T.Handshake, client_sh_fragment, B.length client_sh_raw)
-            returns
-              normalized_cleartext_raw_wire_bridge
-                client_ch
-                server_ch
-                client_sh
-                server_sh
-            with _.
+            with
             (
               PWS.lemma_equal_stream_record_head_lengths
                 server.CS.cs_wire_log.CL.raw_sent

@@ -233,10 +233,7 @@ let recv_data_exists (i o':Seq.seq U8.t) (blk:U16.t)
   lemma_tftp_parse_serialize_exact (Msg_data blk pl);
   eliminate exists (parsed:tftp_message).
      tftp_parse (tftp_serialize (Msg_data blk pl)) == Some (parsed, Seq.empty) /\ parsed == Msg_data blk pl
-  returns
-     (exists (pl2:data_payload) (rest:Seq.seq U8.t).
-        tftp_parse i == Some (Msg_data blk pl2, rest) /\ (pl2 <: Seq.seq U8.t) == o')
-  with _.
+  with
   ( introduce exists (pl2:data_payload) (rest:Seq.seq U8.t).
        tftp_parse i == Some (Msg_data blk pl2, rest) /\ (pl2 <: Seq.seq U8.t) == o'
     with pl Seq.empty
@@ -259,8 +256,7 @@ let recv_ack_exists (i:Seq.seq U8.t) (blk:U16.t)
   lemma_tftp_parse_serialize_exact (Msg_ack blk);
   eliminate exists (parsed:tftp_message).
      tftp_parse (tftp_serialize (Msg_ack blk)) == Some (parsed, Seq.empty) /\ parsed == Msg_ack blk
-  returns (exists (rest:Seq.seq U8.t). tftp_parse i == Some (Msg_ack blk, rest))
-  with _.
+  with
   ( introduce exists (rest:Seq.seq U8.t). tftp_parse i == Some (Msg_ack blk, rest)
     with Seq.empty
     and () )
@@ -450,14 +446,14 @@ fn tftp_emit_rrq
     pts_to out 'o **
     pure (Seq.length 'fnb == SZ.v fn_len /\ Seq.length 'mdb == SZ.v mode_len /\
           zero_free 'fnb /\ zero_free 'mdb /\
-          2 + SZ.v fn_len + 1 + SZ.v mode_len + 1 < pow2 16 /\
-          Seq.length 'o == 2 + SZ.v fn_len + 1 + SZ.v mode_len + 1)
+          (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1 < (pow2 16 <: nat) /\
+          Seq.length 'o == (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1)
   ensures
     pts_to filename 'fnb **
     pts_to mode 'mdb **
     (exists* (o':Seq.seq U8.t).
        pts_to out o' **
-       pure (Seq.length o' == 2 + SZ.v fn_len + 1 + SZ.v mode_len + 1 /\
+       pure (Seq.length o' == (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1 /\
              (exists (fname:cstring) (mname:cstring).
                 (fname <: Seq.seq U8.t) == 'fnb /\ (mname <: Seq.seq U8.t) == 'mdb /\
                 o' == tftp_serialize (Msg_rrq fname mname))))
@@ -473,8 +469,8 @@ fn tftp_emit_rrq
     pure (
       SZ.v vi <= SZ.v fn_len /\
       Seq.length 'fnb == SZ.v fn_len /\
-      2 + SZ.v fn_len + 1 + SZ.v mode_len + 1 < pow2 16 /\
-      Seq.length sv == 2 + SZ.v fn_len + 1 + SZ.v mode_len + 1 /\
+      (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1 < (pow2 16 <: nat) /\
+      Seq.length sv == (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1 /\
       Seq.index sv 0 == u16_hi op_rrq /\
       Seq.index sv 1 == u16_lo op_rrq /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (2 + j) == Seq.index 'fnb j))
@@ -495,14 +491,14 @@ fn tftp_emit_rrq
     pure (
       SZ.v vk <= SZ.v mode_len /\
       Seq.length 'mdb == SZ.v mode_len /\
-      2 + SZ.v fn_len + 1 + SZ.v mode_len + 1 < pow2 16 /\
-      Seq.length sv == 2 + SZ.v fn_len + 1 + SZ.v mode_len + 1 /\
+      (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1 < (pow2 16 <: nat) /\
+      Seq.length sv == (2 <: nat) + SZ.v fn_len + 1 + SZ.v mode_len + 1 /\
       Seq.index sv 0 == u16_hi op_rrq /\
       Seq.index sv 1 == u16_lo op_rrq /\
       (forall (j:nat). j < SZ.v fn_len ==> Seq.index sv (2 + j) == Seq.index 'fnb j) /\
-      Seq.index sv (2 + SZ.v fn_len) == 0uy /\
+      Seq.index sv ((2 <: nat) + SZ.v fn_len) == 0uy /\
       (forall (j:nat). j < SZ.v vk ==>
-         Seq.index sv (2 + SZ.v fn_len + 1 + j) == Seq.index 'mdb j))
+         Seq.index sv ((2 <: nat) + SZ.v fn_len + 1 + j) == Seq.index 'mdb j))
   decreases (Prims.op_Subtraction (SZ.v mode_len) (SZ.v (!k)))
   {
     let vk = !k;
@@ -529,7 +525,7 @@ fn tftp_emit_error
     pts_to msg 'em **
     pts_to out 'o **
     pure (Seq.length 'em == SZ.v msg_len /\ zero_free 'em /\
-          4 + SZ.v msg_len + 1 < pow2 16 /\
+          4 + SZ.v msg_len + 1 < (pow2 16 <: nat) /\
           Seq.length 'o == 4 + SZ.v msg_len + 1)
   ensures
     pts_to msg 'em **
@@ -553,7 +549,7 @@ fn tftp_emit_error
     pure (
       SZ.v vi <= SZ.v msg_len /\
       Seq.length 'em == SZ.v msg_len /\
-      4 + SZ.v msg_len + 1 < pow2 16 /\
+      4 + SZ.v msg_len + 1 < (pow2 16 <: nat) /\
       Seq.length sv == 4 + SZ.v msg_len + 1 /\
       Seq.index sv 0 == u16_hi op_error /\
       Seq.index sv 1 == u16_lo op_error /\

@@ -261,7 +261,7 @@ let lemma_copy_expr_preserves_prefix_slice
     Seq.index (CL.raw_slice copied lo hi) i ==
     Seq.index (CL.raw_slice old lo hi) i
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_raw_slice_index copied lo hi i;
     lemma_raw_slice_index old lo hi i;
     lemma_copy_expr_preserves_prefix_index old src_part dst_off copy_len old_len (lo + i)
@@ -308,7 +308,7 @@ let lemma_copy_expr_preserves_suffix_slice
     Seq.index (CL.raw_slice copied lo hi) i ==
     Seq.index (CL.raw_slice old lo hi) i
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_raw_slice_index copied lo hi i;
     lemma_raw_slice_index old lo hi i;
     lemma_copy_expr_preserves_suffix_index old src_part dst_off copy_len old_len (lo + i)
@@ -352,7 +352,7 @@ let lemma_copy_expr_copied_slice
     Seq.index (CL.raw_slice copied dst_off (dst_off + copy_len)) i ==
     Seq.index src_part i
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_raw_slice_index copied dst_off (dst_off + copy_len) i;
     Seq.lemma_index_app2 (CL.raw_slice old 0 dst_off) tail (dst_off + i);
     assert ((dst_off + i) - B.length (CL.raw_slice old 0 dst_off) == i);
@@ -382,7 +382,7 @@ let lemma_equal_prefix_raw_slice
     Seq.index (CL.raw_slice a lo hi) i ==
     Seq.index (CL.raw_slice b lo hi) i
   with introduce _ ==> _
-  with _. (
+  with (
     let k = lo + i in
     lemma_raw_slice_index a lo hi i;
     lemma_raw_slice_index b lo hi i;
@@ -413,7 +413,7 @@ let lemma_eq_supported_groups_bytes (s:B.bytes)
     i < B.length s ==>
     Seq.index s i == Seq.index bs i
   with introduce _ ==> _
-  with _. (
+  with (
     if i = 0 then ()
     else if i = 1 then ()
     else if i = 2 then ()
@@ -448,7 +448,7 @@ let lemma_eq_signature_algorithms_bytes (s:B.bytes)
     i < B.length s ==>
     Seq.index s i == Seq.index bs i
   with introduce _ ==> _
-  with _. (
+  with (
     if i = 0 then ()
     else if i = 1 then ()
     else if i = 2 then ()
@@ -495,7 +495,7 @@ let lemma_eq_key_share_header_bytes (s:B.bytes)
     i < B.length s ==>
     Seq.index s i == Seq.index header i
   with introduce _ ==> _
-  with _. (
+  with (
     if i = 0 then ()
     else if i = 1 then ()
     else if i = 2 then ()
@@ -538,7 +538,7 @@ let lemma_eq_supported_versions_bytes (s:B.bytes)
     i < B.length s ==>
     Seq.index s i == Seq.index versions i
   with introduce _ ==> _
-  with _. (
+  with (
     if i = 0 then ()
     else if i = 1 then ()
     else if i = 2 then ()
@@ -813,7 +813,7 @@ let lemma_inner_plaintext_post
     L.content_type_matches wire ct ==>
     inner_plaintext_post_prop wire fragment out_bytes ct
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_inner_plaintext_for_ct wire ct fragment out_bytes
   )
 

@@ -102,6 +102,15 @@ FSTAR_EXTRACT_DEBUG_FLAGS =
 KRML_DEBUG_FLAGS =
 endif
 
+# --ext fly_deps=false: F* enables `fly_deps` by default, which makes it treat
+# every .checked file of a module it is asked to check as invalid and recompute
+# dependencies on the fly.  That is fine for verification, but extraction runs
+# with cross-module inlining (--cmi, on by default whenever --codegen is set),
+# and cmi *requires* every dependency to have a loadable .checked file --
+# otherwise F* aborts with "Cross-module inlining expects all modules to be
+# checked first" (Error 317).  fly_deps also changes the dependency graph that
+# is hashed into .checked files, so it must be disabled for verification too,
+# or extraction rejects the cache with a dependence hash mismatch.
 FSTAR_FLAGS = \
   $(OTHERFLAGS) \
   --z3version $(Z3_VERSION) \
@@ -112,7 +121,7 @@ FSTAR_FLAGS = \
   --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
-  --ext fly_deps \
+  --ext fly_deps=false \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
@@ -126,6 +135,8 @@ FSTAR_EXTRACT_FLAGS = \
   --warn_error -321 \
   --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+  --ext optimize_let_vc \
+  --ext fly_deps=false \
   $(INCLUDES)
 
 FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
@@ -730,7 +741,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	start=$$(date +%s); \
 	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
 	  "$@" "$$module" "$$src" "$$(date -Is)"; \
-	$(FSTAR) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
 	  --codegen krml --extract_module "$$module" "$$src" --krmloutput "$@"; \
 	status=$$?; end=$$(date +%s); \
 	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
@@ -753,6 +764,13 @@ $(TLS13_BUNDLE_DIR):
 
 extract-tls13-bundle: $(TLS13_BUNDLE_STAMP)
 
+# KaRaMeL bundling notes:
+#  * -bundle 'Common.BufferedStream': the module is specification-only; without
+#    a bundle of its own KaRaMeL emits a .c file for it with no matching .h.
+#  * -drop of TLS13.ConnectionLog / TLS13.Spec.StateMachine* / TLS13.Spec.Endpoint*
+#    / TLS13.Transcript: these are pure specification modules.  KaRaMeL emits
+#    their (ghost) datatypes into a public header that references types it keeps
+#    private, which does not compile.  Nothing in the extracted C uses them.
 $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	@echo "Extracting TLS13 client/server driver bundle..."
 	@rm -f $(TLS13_BUNDLE_DIR)/*.c $(TLS13_BUNDLE_DIR)/*.h $(TLS13_BUNDLE_DIR)/internal/*.h
@@ -773,9 +791,12 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
 	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
 	  -library TLS13.OpenSSL -library TLS13.Trace \
+	  -bundle 'Common.BufferedStream' \
+	  -bundle 'TLS13.Trace' \
 	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*,TLS13.Wire.Semantics' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
-	  -bundle 'TLS13.Trace' \
+	  -drop TLS13.ConnectionLog -drop TLS13.Spec.StateMachine -drop 'TLS13.Spec.StateMachine.*' \
+	  -drop 'TLS13.Spec.Endpoint.*' -drop TLS13.Transcript \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \

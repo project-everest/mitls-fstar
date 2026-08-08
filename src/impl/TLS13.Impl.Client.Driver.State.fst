@@ -2257,7 +2257,7 @@ let lemma_coalesced_logged_received_exact_when_nonfailed_undrained
       Seq.equal
         st1.CS.cs_wire_log.CL.raw_received
         (B.append old_consumed prefix)
-    with _. (
+    with (
       CT.lemma_legal_response_for_event_nonfailed_previous
         st0 st1 buffer_resp.CT.response
         (CS.ConnProtectedHandshake step)
@@ -2308,7 +2308,7 @@ let lemma_coalesced_logged_received_exact_when_nonfailed
       st1.CS.cs_wire_log.CL.raw_received
       (B.append old_consumed
         (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len))
-  with _. (
+  with (
     D.lemma_drained_nonfailed_previous st_mid st1;
     lemma_coalesced_logged_received_exact_when_nonfailed_undrained
       st0 st_mid buffer_resp network_input

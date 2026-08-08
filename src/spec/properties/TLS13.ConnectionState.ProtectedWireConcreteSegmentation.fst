@@ -418,42 +418,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
       server_suffix_sent
       server_suffix_received
       server_final
-  returns
-    exists server_raw_sent server_raw_received
-      client_raw_sent client_raw_received.
-      Seq.equal server_raw_sent client_raw_received /\
-      Seq.equal client_raw_sent server_raw_received /\
-      PWL.paired_protected_handshake_contiguous_replay_views
-        server_model5
-        client_model4
-        server_material
-        client_material
-        sent_msg0
-        received_msg0
-        sent_msg1
-        received_msg1
-        server_auth_skip
-        client_auth_skip
-        sent_msg2
-        received_msg2
-        client_verify_skip
-        sent_msg3
-        received_msg3
-        verified_server_finished
-        client_app_write_material
-        client_app_read_material
-        server_app_write_material
-        sent_msg4
-        received_msg4
-        client_finished_rest
-        server_finished_rest
-        server_raw_sent
-        server_raw_received
-        client_raw_sent
-        client_raw_received
-        server_final
-        client_final
-  with _.
+  with
   ( PWSeg.lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_model
       server_model0
       ch
@@ -523,42 +488,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
         client_suffix_sent
         client_suffix_received
         client_final
-    returns
-      exists server_raw_sent server_raw_received
-        client_raw_sent client_raw_received.
-        Seq.equal server_raw_sent client_raw_received /\
-        Seq.equal client_raw_sent server_raw_received /\
-        PWL.paired_protected_handshake_contiguous_replay_views
-          server_model5
-          client_model4
-          server_material
-          client_material
-          sent_msg0
-          received_msg0
-          sent_msg1
-          received_msg1
-          server_auth_skip
-          client_auth_skip
-          sent_msg2
-          received_msg2
-          client_verify_skip
-          sent_msg3
-          received_msg3
-          verified_server_finished
-          client_app_write_material
-          client_app_read_material
-          server_app_write_material
-          sent_msg4
-          received_msg4
-          client_finished_rest
-          server_finished_rest
-          server_raw_sent
-          server_raw_received
-          client_raw_sent
-          client_raw_received
-          server_final
-          client_final
-    with _.
+    with
     ( PWSeg.lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_model
         client_model0
         start

@@ -119,78 +119,55 @@ let lemma_receive_observation_network_ok
           }
           app_out)
 =
-  lemma_receive_observation_network_witness
-    st0 st1 buffer_resp input
-    old_network_out network_out old_app_out app_out;
-  eliminate exists st_network st_before observed_input
-                   observed_old_network_out observed_network_out
-                   observed_old_app_out observed_app_out.
-    D.drained_network_bytes_end_to_end_correct
-      st_before
-      st_network
-      buffer_resp
-      observed_input
-      observed_old_network_out
-      observed_network_out
-      observed_old_app_out
-      observed_app_out /\
-    st_network == st1 /\
-    Seq.equal observed_app_out app_out
-  returns
-    client_receive_observation_network_correct
-      st0
-      st1
-      {
-        client_receive_observed_status = DriverWorkflowOk;
-        client_receive_observed_response = buffer_resp;
-      }
-      app_out
-  with _.
-  (
-    introduce
-      (DriverWorkflowOk <> DriverWorkflowExhausted) ==>
-      exists st_observed st_before' observed_input'
-             observed_old_network_out' observed_network_out'
-             observed_old_app_out' observed_app_out'.
-        D.drained_network_bytes_end_to_end_correct
-          st_before'
-          st_observed
-          buffer_resp
-          observed_input'
-          observed_old_network_out'
-          observed_network_out'
-          observed_old_app_out'
-          observed_app_out' /\
-        (DriverWorkflowOk == DriverWorkflowOk ==>
-          st_observed == st1 /\ Seq.equal observed_app_out' app_out) /\
-        (DriverWorkflowOk == DriverWorkflowClosed ==>
-          st_observed == st1 /\
-          st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
-          buffer_resp.CT.response.CT.app_out_len == 0sz)
-    with _not_exhausted. begin
-      introduce exists st_observed st_before' observed_input'
-                       observed_old_network_out' observed_network_out'
-                       observed_old_app_out' observed_app_out'.
-        D.drained_network_bytes_end_to_end_correct
-          st_before'
-          st_observed
-          buffer_resp
-          observed_input'
-          observed_old_network_out'
-          observed_network_out'
-          observed_old_app_out'
-          observed_app_out' /\
-        (DriverWorkflowOk == DriverWorkflowOk ==>
-          st_observed == st1 /\ Seq.equal observed_app_out' app_out) /\
-        (DriverWorkflowOk == DriverWorkflowClosed ==>
-          st_observed == st1 /\
-          st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
-          buffer_resp.CT.response.CT.app_out_len == 0sz)
-      with st_network st_before observed_input
-           observed_old_network_out observed_network_out
-           observed_old_app_out observed_app_out and ()
-    end
-  )
+  (* The observation is the step that was just taken, so the witnesses are the
+     lemma's own arguments.  The obligation is stated through [obs] rather than
+     through the record literal so that it keeps the shape of the definition. *)
+  let obs = {
+    client_receive_observed_status = DriverWorkflowOk;
+    client_receive_observed_response = buffer_resp;
+  } in
+  introduce
+    obs.client_receive_observed_status <> DriverWorkflowExhausted ==>
+    (exists st_observed st_before' observed_input'
+            observed_old_network_out' observed_network_out'
+            observed_old_app_out' observed_app_out'.
+      D.drained_network_bytes_end_to_end_correct
+        st_before'
+        st_observed
+        obs.client_receive_observed_response
+        observed_input'
+        observed_old_network_out'
+        observed_network_out'
+        observed_old_app_out'
+        observed_app_out' /\
+      (obs.client_receive_observed_status == DriverWorkflowOk ==>
+        st_observed == st1 /\ Seq.equal observed_app_out' app_out) /\
+      (obs.client_receive_observed_status == DriverWorkflowClosed ==>
+        st_observed == st1 /\
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
+        obs.client_receive_observed_response.CT.response.CT.app_out_len == 0sz))
+  with begin
+    introduce exists st_observed st_before' observed_input'
+                     observed_old_network_out' observed_network_out'
+                     observed_old_app_out' observed_app_out'.
+      D.drained_network_bytes_end_to_end_correct
+        st_before'
+        st_observed
+        obs.client_receive_observed_response
+        observed_input'
+        observed_old_network_out'
+        observed_network_out'
+        observed_old_app_out'
+        observed_app_out' /\
+      (obs.client_receive_observed_status == DriverWorkflowOk ==>
+        st_observed == st1 /\ Seq.equal observed_app_out' app_out) /\
+      (obs.client_receive_observed_status == DriverWorkflowClosed ==>
+        st_observed == st1 /\
+        st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
+        obs.client_receive_observed_response.CT.response.CT.app_out_len == 0sz)
+    with st1 st0 input old_network_out network_out old_app_out app_out
+    and ()
+  end
 
 noextract
 let lemma_receive_observation_reclassify_failed

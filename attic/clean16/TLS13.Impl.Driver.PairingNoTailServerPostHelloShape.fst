@@ -93,8 +93,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shap
         client_rest /\
     TLS13.Impl.Driver.PairingNoTailInversion.client_no_tail_handshake_traffic_install_event e4 /\
     TLS13.Impl.Driver.PairingNoTailInversion.client_no_tail_handshake_traffic_install_event e5
-  returns server_no_tail_post_server_hello_suffix_shape server
-  with _.
+  with
   (
     eliminate exists server_ch selection server_shared server_sh server_rest.
       server.CS.cs_event_log ==
@@ -110,8 +109,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_server_hello_suffix_shap
             CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
           }) ::
           server_rest
-    returns server_no_tail_post_server_hello_suffix_shape server
-    with _.
+    with
     (
       let server_ev0 = CS.ConnLocalEvent CS.LocalStartServer in
       let server_ev1 =
@@ -195,8 +193,7 @@ let lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
     server.CS.cs_event_log ==
       [ CS.ConnLocalEvent CS.LocalStartServer;
         e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15 ]
-  returns server_no_tail_post_server_hello_suffix_shape server
-  with _.
+  with
   (
     assert (FStar.List.Tot.mem e1 server.CS.cs_event_log);
     assert (~ (conn_event_is_ccs e1));
@@ -210,8 +207,7 @@ let lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
           CL.message_value = M.TlsHandshake (M.ClientHello ch);
         }) ::
         rest1
-    returns server_no_tail_post_server_hello_suffix_shape server
-    with _.
+    with
     (
       match rest1 with
       | e2' :: rest2 ->
@@ -244,8 +240,7 @@ let lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
             }) ::
             CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
             rest2'
-        returns server_no_tail_post_server_hello_suffix_shape server
-        with _.
+        with
         (
           match rest2' with
           | e3' :: rest3 ->
@@ -281,8 +276,7 @@ let lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
                 CS.ConnLocalEvent (CS.LocalSelectServerParameters selection1) ::
                 CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
                 rest3'
-            returns server_no_tail_post_server_hello_suffix_shape server
-            with _.
+            with
             (
               match rest3' with
               | e4' :: rest4 ->
@@ -324,8 +318,7 @@ let lemma_server_no_tail_no_ccs_post_server_hello_suffix_shape
                       CL.message_value = M.TlsHandshake (M.ServerHello sh);
                     }) ::
                     rest5
-                returns server_no_tail_post_server_hello_suffix_shape server
-                with _.
+                with
                 (
                   let server_prefix =
                     PWSeg.server_cleartext_handshake_prefix_events
@@ -784,10 +777,7 @@ let lemma_server_no_tail_post_two_handshake_installs_tail_order_for_split
         (e5' :: e6' :: rest') /\
     PNTSS.server_no_tail_two_handshake_install_cover e5' e6' /\
     PNTSFShape.server_post_two_handshake_installs_tail_order rest'
-  returns
-    PNTSS.server_no_tail_two_handshake_install_cover e5 e6 /\
-    PNTSFShape.server_post_two_handshake_installs_tail_order rest
-  with _.
+  with
   (
     let suffix = e5 :: e6 :: rest in
     let suffix' = e5' :: e6' :: rest' in
@@ -1090,8 +1080,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
           server_sh)
         (e5 :: e6 :: rest) /\
     FStar.List.Tot.length rest == 9
-  returns PNTSS.server_no_tail_next_two_events_handshake_installs server
-  with _.
+  with
   (
     let server_ev0 = CS.ConnLocalEvent CS.LocalStartServer in
     let server_ev1 =
@@ -1204,8 +1193,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
         tail_sent
         tail_received
         server.CS.cs_model
-    returns PNTSS.server_no_tail_next_two_events_handshake_installs server
-    with _.
+    with
     (
       PNTWHR.lemma_server_hello_window_after_server_cleartext_prefix_fresh
         initial
@@ -1301,8 +1289,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
           server_sh)
         (e5 :: e6 :: rest) /\
     FStar.List.Tot.length rest == 9
-  returns PNTSS.server_no_tail_next_two_events_handshake_install_cover server
-  with _.
+  with
   (
     let server_ev0 = CS.ConnLocalEvent CS.LocalStartServer in
     let server_ev1 =
@@ -1415,8 +1402,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
         tail_sent
         tail_received
         server.CS.cs_model
-    returns PNTSS.server_no_tail_next_two_events_handshake_install_cover server
-    with _.
+    with
     (
       PNTWHR.lemma_server_hello_window_after_server_cleartext_prefix_fresh
         initial
@@ -1472,8 +1458,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
           tail_sent2
           tail_received2
           server.CS.cs_model
-      returns PNTSS.server_no_tail_next_two_events_handshake_install_cover server
-      with _.
+      with
       (
         lemma_server_post_first_install_direction_shape model5 model6 e5;
         assert_norm (
@@ -1503,8 +1488,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_next_two_events_handshake_ins
             tail_sent3
             tail_received3
             server.CS.cs_model
-        returns PNTSS.server_no_tail_next_two_events_handshake_install_cover server
-        with _.
+        with
         (
           let e5_write = PNTSS.server_no_tail_handshake_write_install_event e5 in
           let e5_read = PNTSS.server_no_tail_handshake_read_install_event e5 in
@@ -1593,8 +1577,7 @@ let lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
           server_sh)
         (e5 :: e6 :: rest) /\
     FStar.List.Tot.length rest == 9
-  returns server_no_tail_post_two_handshake_installs_tail_order server
-  with _.
+  with
   (
     let server_suffix = e5 :: e6 :: rest in
     let initial = CS.initial_model server.CS.cs_model.CS.model_config in
@@ -1676,8 +1659,7 @@ let lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
         tail_sent
         tail_received
         server.CS.cs_model
-    returns server_no_tail_post_two_handshake_installs_tail_order server
-    with _.
+    with
     (
       PNTWHR.lemma_server_hello_window_after_server_cleartext_prefix_fresh
         initial
@@ -1733,8 +1715,7 @@ let lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
           tail_sent2
           tail_received2
           server.CS.cs_model
-      returns server_no_tail_post_two_handshake_installs_tail_order server
-      with _.
+      with
       (
         assert_norm (
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model6 (e6 :: rest)
@@ -1763,8 +1744,7 @@ let lemma_server_no_tail_no_ccs_post_two_handshake_installs_tail_order
             tail_sent3
             tail_received3
             server.CS.cs_model
-        returns server_no_tail_post_two_handshake_installs_tail_order server
-        with _.
+        with
         (
           lemma_server_tail_order_from_two_step_replay
             server
@@ -1854,8 +1834,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_t
           server_sh)
         (e5 :: e6 :: rest) /\
     FStar.List.Tot.length rest == 9
-  returns server_no_tail_post_two_handshake_installs_tail_order server
-  with _.
+  with
   (
     let server_ev0 = CS.ConnLocalEvent CS.LocalStartServer in
     let server_ev1 =
@@ -1968,8 +1947,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_t
         tail_sent
         tail_received
         server.CS.cs_model
-    returns server_no_tail_post_two_handshake_installs_tail_order server
-    with _.
+    with
     (
       PNTWHR.lemma_server_hello_window_after_server_cleartext_prefix_fresh
         initial
@@ -2025,8 +2003,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_t
           tail_sent2
           tail_received2
           server.CS.cs_model
-      returns server_no_tail_post_two_handshake_installs_tail_order server
-      with _.
+      with
       (
         lemma_server_post_first_install_direction_shape model5 model6 e5;
         assert_norm (
@@ -2056,8 +2033,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_post_two_handshake_installs_t
             tail_sent3
             tail_received3
             server.CS.cs_model
-        returns server_no_tail_post_two_handshake_installs_tail_order server
-        with _.
+        with
         (
           lemma_server_tail_order_from_two_step_replay
             server

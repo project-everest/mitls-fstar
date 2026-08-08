@@ -197,7 +197,7 @@ let lemma_single_step_shape (_:unit)
 =
   introduce forall (x y:CS.connection_state).
     conn_shape x /\ SMR.connection_state_single_step x y ==> conn_shape y
-  with introduce _ ==> _ with _. lemma_delta_shape x y
+  with introduce _ ==> _ with lemma_delta_shape x y
 
 let lemma_initial_shape (cfg:CS.connection_config)
   : Lemma (ensures conn_shape (CS.initial cfg))

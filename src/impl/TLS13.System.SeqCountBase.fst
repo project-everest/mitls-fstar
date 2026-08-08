@@ -277,11 +277,7 @@ let lemma_server_reachable_raw_sent_parses
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace server
-    returns
-      (exists (msgs:list CW.wire_message).
-        WF.parses_as CW.tls_record_wire_format
-          server.CS.cs_wire_log.CL.raw_sent msgs Seq.empty)
-    with _.
+    with
     (
       PNTWL.lemma_server_trace_wire_logs_match init init trace server;
       let out_msgs = SM.trace_wire_outputs trace in
@@ -313,11 +309,7 @@ let lemma_server_reachable_raw_received_parses
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace server
-    returns
-      (exists (msgs:list CW.wire_message).
-        WF.parses_as CW.tls_record_wire_format
-          server.CS.cs_wire_log.CL.raw_received msgs Seq.empty)
-    with _.
+    with
     (
       PNTWL.lemma_server_trace_wire_logs_match init init trace server;
       let in_msgs = WFSM.trace_input_messages trace in
@@ -397,7 +389,7 @@ let lemma_single_step_record_key_epoch_coupling ()
       SMR.connection_state_single_step x y ==>
       record_key_epoch_coupling y.CS.cs_model
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       lemma_delta_record_key_epoch_coupling x y
 
 let lemma_consistent_record_key_epoch_coupling
@@ -497,7 +489,7 @@ let lemma_single_step_record_schedule_coupling ()
       SMR.connection_state_single_step x y ==>
       record_schedule_coupling y.CS.cs_model
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       lemma_delta_record_schedule_coupling x y
 
 let lemma_consistent_record_schedule_coupling
@@ -783,7 +775,7 @@ let lemma_client_local_install_seq_stable_write
                m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_write.R.seq
                     == m.CS.model_record.CS.record_write.R.seq
-    with _pf.
+    with
       (match install.CS.install_epoch, install.CS.install_direction with
        | CS.TrafficHandshake, CS.TrafficWrite -> ()
        | _, _ -> ())
@@ -814,7 +806,7 @@ let lemma_client_local_install_seq_stable_read
                m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_read.R.seq
                     == m.CS.model_record.CS.record_read.R.seq
-    with _pf.
+    with
       (match install.CS.install_epoch, install.CS.install_direction with
        | CS.TrafficHandshake, CS.TrafficRead -> ()
        | _, _ -> ())
@@ -971,7 +963,7 @@ let lemma_server_local_install_for_role_seq_stable_write
                m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_write.R.seq
                     == m.CS.model_record.CS.record_write.R.seq
-    with _pf.
+    with
       (match role_install.CS.install_payload.CS.install_epoch,
              role_install.CS.install_payload.CS.install_direction with
        | CS.TrafficHandshake, CS.TrafficWrite -> ()
@@ -1010,7 +1002,7 @@ let lemma_server_local_install_for_role_seq_stable_read
                m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_read.R.seq
                     == m.CS.model_record.CS.record_read.R.seq
-    with _pf.
+    with
       (match role_install.CS.install_payload.CS.install_epoch,
              role_install.CS.install_payload.CS.install_direction with
        | CS.TrafficHandshake, CS.TrafficRead -> ()
@@ -1159,7 +1151,7 @@ let lemma_single_step_record_app_epoch_coupling ()
       SMR.connection_state_single_step x y ==>
       record_app_epoch_coupling y.CS.cs_model
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       lemma_delta_record_app_epoch_coupling x y
 
 let lemma_consistent_record_app_epoch_coupling
@@ -1271,7 +1263,7 @@ let lemma_single_step_app_slots_none_shape ()
       SMR.connection_state_single_step x y ==>
       app_slots_none_shape y.CS.cs_model
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       lemma_delta_app_slots_none_shape x y
 
 let lemma_consistent_app_slots_none_shape
@@ -1506,7 +1498,7 @@ let lemma_discharge_client_read
                  install.CS.install_direction == CS.TrafficRead /\
                  m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
                 ==> m.CS.model_record.CS.record_read.R.seq == 0
-      with _pf.
+      with
         ( assert (CS.ControlHandshaking? m.CS.model_control);
           assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
           WStep.lemma_client_hsserverhelloreceived_recv_zero m.CS.model_config a )
@@ -1515,7 +1507,7 @@ let lemma_discharge_client_read
                  ri.CS.install_payload.CS.install_direction == CS.TrafficRead /\
                  m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
                 ==> m.CS.model_record.CS.record_read.R.seq == 0
-      with _pf.
+      with
         ( assert (CS.ControlHandshaking? m.CS.model_control);
           assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
           WStep.lemma_client_hsserverhelloreceived_recv_zero m.CS.model_config a )
@@ -1540,7 +1532,7 @@ let lemma_discharge_server_write
                  ri.CS.install_payload.CS.install_direction == CS.TrafficWrite /\
                  m.CS.model_record.CS.record_write.R.epoch == R.Handshake)
                 ==> m.CS.model_record.CS.record_write.R.seq == 0
-      with _pf.
+      with
         ( assert (CS.ControlHandshaking? m.CS.model_control);
           assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
           WStep.lemma_server_hsserverhellosent_sent_zero m.CS.model_config a )
@@ -1569,7 +1561,7 @@ let lemma_discharge_server_read
                  ri.CS.install_payload.CS.install_direction == CS.TrafficRead /\
                  m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
                 ==> m.CS.model_record.CS.record_read.R.seq == 0
-      with _pf.
+      with
         ( assert (CS.ControlHandshaking? m.CS.model_control);
           assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent);
           WStep.lemma_server_hsserverhellosent_recv_zero m.CS.model_config a )
@@ -1614,8 +1606,7 @@ let lemma_client_local_pwrite
       eliminate exists (msgs:list CW.wire_message).
         WF.parses_as CW.tls_record_wire_format
           a.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
-      returns pwrite_ok c'
-      with _pf.
+      with
       (
         // count(c'.raw_sent) == count(a.raw_sent)  (empty sent delta)
         WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_sent B.empty;
@@ -1666,8 +1657,7 @@ let lemma_client_local_pread
       eliminate exists (msgs:list CW.wire_message).
         WF.parses_as CW.tls_record_wire_format
           a.CS.cs_wire_log.CL.raw_received msgs Seq.empty
-      returns pread_ok c'
-      with _pf.
+      with
       (
         WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_received B.empty;
         WStep.lemma_raw_appdata_count_empty ();
@@ -1727,8 +1717,7 @@ let lemma_server_local_pwrite
       eliminate exists (msgs:list CW.wire_message).
         WF.parses_as CW.tls_record_wire_format
           a.CS.cs_wire_log.CL.raw_sent msgs Seq.empty
-      returns pwrite_ok c'
-      with _pf.
+      with
       (
         WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_sent B.empty;
         WStep.lemma_raw_appdata_count_empty ();
@@ -1775,8 +1764,7 @@ let lemma_server_local_pread
       eliminate exists (msgs:list CW.wire_message).
         WF.parses_as CW.tls_record_wire_format
           a.CS.cs_wire_log.CL.raw_received msgs Seq.empty
-      returns pread_ok c'
-      with _pf.
+      with
       (
         WStep.lemma_raw_appdata_count_seq_equal d.CS.delta_raw_received B.empty;
         WStep.lemma_raw_appdata_count_empty ();

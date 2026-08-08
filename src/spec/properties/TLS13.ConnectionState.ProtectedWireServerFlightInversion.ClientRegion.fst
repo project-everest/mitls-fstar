@@ -141,8 +141,7 @@ let rec lemma_client_region_preserves_read_installed
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-    returns client_read_installed final material
-    with _.
+    with
     (
       lemma_client_install_step_preserves m install model1 material;
       lemma_client_region_preserves_read_installed model1 rest tail_sent tail_received final material
@@ -178,8 +177,7 @@ let rec lemma_client_region_read_installed
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-    returns (exists (material:CS.traffic_key_material). client_read_installed final material)
-    with _.
+    with
     (
       if install.CS.install_direction = CS.TrafficRead
       then
@@ -191,8 +189,7 @@ let rec lemma_client_region_read_installed
          (* ev is a WRITE install, so the read install lies in [rest]. *)
          eliminate exists (er:CS.conn_event).
            L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er
-         returns (exists (er2:CS.conn_event). L.memP er2 rest /\ CCShape.is_client_hs_install_dir CS.TrafficRead er2)
-         with _. ();
+         with ();
          lemma_client_region_read_installed model1 rest tail_sent tail_received final)
     )
 #pop-options

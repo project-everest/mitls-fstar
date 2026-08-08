@@ -28,6 +28,7 @@ module V = Pulse.Lib.Vec
 module DS = TLS13.Impl.Client.Driver.State
 open TLS13.Impl.Client.Driver.State
 
+noextract
 noeq type endpoint_state = {
   endpoint_connection: CS.connection_state;
   endpoint_network_out: B.bytes;
