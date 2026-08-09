@@ -701,8 +701,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_sent_cleartext_and_server_fli
     CS.raw_records_exactly cert_raw T.Application_data 1 /\
     CS.raw_records_exactly cv_raw T.Application_data 1 /\
     CS.raw_records_exactly sf_raw T.Application_data 1
-  returns server_sent_cleartext_and_server_flight_raw_slices server
-  with _.
+  with
   (
     let flight_raw =
       B.append
@@ -792,8 +791,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_received_cleartext_and_client
       (M.TlsHandshake (M.ClientHello ch))
       client_ch_raw /\
     CS.raw_records_exactly client_finished_raw T.Application_data 1
-  returns server_received_cleartext_and_client_finished_raw_slices server
-  with _.
+  with
   (
     assert (Seq.equal
       client.CS.cs_wire_log.CL.raw_sent
@@ -1409,33 +1407,7 @@ let lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
       (WF.serialize_all
         TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (SM.trace_wire_outputs client_trace))
-  returns
-    exists client_trace server_trace.
-      SM.trace_reaches
-        (EC.client_state_machine #CTypes.client_local_event client_initial)
-        client_initial
-        client_trace
-        client /\
-      SM.trace_reaches
-        (ES.server_state_machine #CTypes.server_local_event server_initial)
-        server_initial
-        server_trace
-        server /\
-      Seq.equal
-        (WF.serialize_all
-          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-          (SM.trace_wire_outputs client_trace))
-        (WF.serialize_all
-          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-          (WFSM.trace_input_messages server_trace)) /\
-      Seq.equal
-        (WF.serialize_all
-          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-          (SM.trace_wire_outputs server_trace))
-        (WF.serialize_all
-          TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-          (WFSM.trace_input_messages client_trace))
-  with _.
+  with
   (
     eliminate exists server_trace.
       SM.trace_reaches
@@ -1453,33 +1425,7 @@ let lemma_valid_byte_traces_invert_to_paired_serialized_traces_common
         (WF.serialize_all
           TLS13.Spec.Endpoint.Wire.tls_record_wire_format
           (SM.trace_wire_outputs server_trace))
-    returns
-      exists client_trace' server_trace'.
-        SM.trace_reaches
-          (EC.client_state_machine #CTypes.client_local_event client_initial)
-          client_initial
-          client_trace'
-          client /\
-        SM.trace_reaches
-          (ES.server_state_machine #CTypes.server_local_event server_initial)
-          server_initial
-          server_trace'
-          server /\
-        Seq.equal
-          (WF.serialize_all
-            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-            (SM.trace_wire_outputs client_trace'))
-          (WF.serialize_all
-            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-            (WFSM.trace_input_messages server_trace')) /\
-        Seq.equal
-          (WF.serialize_all
-            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-            (SM.trace_wire_outputs server_trace'))
-          (WF.serialize_all
-            TLS13.Spec.Endpoint.Wire.tls_record_wire_format
-            (WFSM.trace_input_messages client_trace'))
-    with _.
+    with
     (
       Seq.lemma_eq_elim
         client_sent
@@ -1728,23 +1674,7 @@ let lemma_clean16_no_tail_valid_byte_traces_invert_to_paired_wire_message_traces
       (WF.serialize_all
         TLS13.Spec.Endpoint.Wire.tls_record_wire_format
         (WFSM.trace_input_messages client_trace))
-  returns
-    exists client_trace' server_trace'.
-      SM.trace_reaches
-        (EC.client_state_machine #CTypes.client_local_event client_initial)
-        client_initial
-        client_trace'
-        client /\
-      SM.trace_reaches
-        (ES.server_state_machine #CTypes.server_local_event server_initial)
-        server_initial
-        server_trace'
-        server /\
-      SM.trace_wire_outputs client_trace' ==
-        WFSM.trace_input_messages server_trace' /\
-      SM.trace_wire_outputs server_trace' ==
-        WFSM.trace_input_messages client_trace'
-  with _.
+  with
   (
     PNTWL.lemma_wire_serialize_all_injective
       (SM.trace_wire_outputs client_trace)
@@ -1952,8 +1882,7 @@ let lemma_paired_client_sent_client_hello_not_server_received_ccs
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       client_sh_raw
-  returns False
-  with _.
+  with
   (
     assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
@@ -1983,8 +1912,7 @@ let lemma_paired_client_sent_client_hello_not_server_received_ccs
         server.CS.cs_wire_log.CL.raw_received
         (B.append ccs_raw server_received_tail) /\
       CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    returns False
-    with _.
+    with
     (
       assert (Seq.equal
         client.CS.cs_wire_log.CL.raw_sent
@@ -2096,8 +2024,7 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       client_sh_raw
-  returns False
-  with _.
+  with
   (
     assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
@@ -2127,8 +2054,7 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs
         server.CS.cs_wire_log.CL.raw_sent
         (B.append ccs_raw server_sent_tail) /\
       CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    returns False
-    with _.
+    with
     (
       assert (Seq.equal
         server.CS.cs_wire_log.CL.raw_sent
@@ -2196,15 +2122,13 @@ let lemma_clean16_no_tail_valid_byte_traces_server_second_event_not_change_ciphe
       }) ::
       CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
       client_rest
-  returns server_second_event_not_change_cipher_spec16 server
-  with _.
+  with
   (
     eliminate exists e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
       server.CS.cs_event_log ==
         [ CS.ConnLocalEvent CS.LocalStartServer;
           e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15 ]
-    returns server_second_event_not_change_cipher_spec16 server
-    with _.
+    with
     (
       let server_rest = [e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15] in
       assert (server.CS.cs_event_log ==
@@ -2438,8 +2362,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
       (M.TlsHandshake (M.ClientHello client_ch))
       client_ch_raw /\
     CS.raw_records_exactly client_finished_raw T.Application_data 1
-  returns False
-  with _.
+  with
   (
     assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
@@ -2477,8 +2400,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello
         (M.TlsHandshake (M.ClientHello server_ch))
         server_ch_raw /\
       CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    returns False
-    with _.
+    with
     (
       assert (Seq.equal
         client.CS.cs_wire_log.CL.raw_sent
@@ -2597,8 +2519,7 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       client_sh_raw
-  returns False
-  with _.
+  with
   (
     assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
@@ -2633,8 +2554,7 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
         server.CS.cs_wire_log.CL.raw_sent
         (B.append ccs_raw server_sent_tail) /\
       CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    returns False
-    with _.
+    with
     (
       assert (Seq.equal
         server.CS.cs_wire_log.CL.raw_sent
@@ -2802,8 +2722,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
       (M.TlsHandshake (M.ClientHello client_ch))
       client_ch_raw /\
     CS.raw_records_exactly client_finished_raw T.Application_data 1
-  returns False
-  with _.
+  with
   (
     assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
@@ -2843,8 +2762,7 @@ let lemma_paired_client_finished_not_server_received_ccs_after_client_hello_sele
         (M.TlsHandshake (M.ClientHello server_ch))
         server_ch_raw /\
       CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    returns False
-    with _.
+    with
     (
       assert (Seq.equal
         client.CS.cs_wire_log.CL.raw_sent
@@ -2965,8 +2883,7 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
     CS.received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello client_sh))
       client_sh_raw
-  returns False
-  with _.
+  with
   (
     assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
       server_model0
@@ -3003,8 +2920,7 @@ let lemma_paired_client_received_server_hello_not_server_sent_ccs_after_client_h
         server.CS.cs_wire_log.CL.raw_sent
         (B.append ccs_raw server_sent_tail) /\
       CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-    returns False
-    with _.
+    with
     (
       assert (Seq.equal
         server.CS.cs_wire_log.CL.raw_sent
@@ -3117,8 +3033,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher
       [] /\
     PNTCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     PNTCAS.client_no_tail_application_install_cover e13 e14
-  returns server_third_event_not_change_cipher_spec16 server
-  with _.
+  with
   (
     eliminate exists server_ch server_tail.
       server.CS.cs_event_log ==
@@ -3128,8 +3043,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_third_event_not_change_cipher
           CL.message_value = M.TlsHandshake (M.ClientHello server_ch);
         }) ::
         server_tail
-    returns server_third_event_not_change_cipher_spec16 server
-    with _.
+    with
     (
       match server_tail with
       | [] ->
@@ -3316,8 +3230,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_ciphe
       [] /\
     PNTCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     PNTCAS.client_no_tail_application_install_cover e13 e14
-  returns server_fourth_event_not_change_cipher_spec16 server
-  with _.
+  with
   (
     eliminate exists server_ch selection server_tail.
       server.CS.cs_event_log ==
@@ -3328,8 +3241,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fourth_event_not_change_ciphe
         }) ::
         CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
         server_tail
-    returns server_fourth_event_not_change_cipher_spec16 server
-    with _.
+    with
     (
       match server_tail with
       | [] ->
@@ -3528,8 +3440,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
       [] /\
     PNTCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
     PNTCAS.client_no_tail_application_install_cover e13 e14
-  returns server_fifth_event_not_change_cipher_spec16 server
-  with _.
+  with
   (
     eliminate exists server_ch selection server_shared server_tail.
       server.CS.cs_event_log ==
@@ -3541,8 +3452,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
         CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
         CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
         server_tail
-    returns server_fifth_event_not_change_cipher_spec16 server
-    with _.
+    with
     (
       match server_tail with
       | [] ->
@@ -3629,8 +3539,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                   (M.TlsHandshake (M.ClientHello client_ch))
                   client_ch_raw /\
                 CS.raw_records_exactly client_finished_raw T.Application_data 1
-              returns False
-              with _.
+              with
               (
                 assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   server_model0
@@ -3672,8 +3581,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                     (M.TlsHandshake (M.ClientHello server_ch))
                     server_ch_raw /\
                   CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-                returns False
-                with _.
+                with
                 (
                   assert (Seq.equal
                     client.CS.cs_wire_log.CL.raw_sent
@@ -3779,8 +3687,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                 CS.received_cleartext_tls_message_raw
                   (M.TlsHandshake (M.ServerHello client_sh))
                   client_sh_raw
-              returns False
-              with _.
+              with
               (
                 assert (TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
                   server_model0
@@ -3819,8 +3726,7 @@ let lemma_clean16_no_tail_valid_byte_traces_server_fifth_event_not_change_cipher
                     server.CS.cs_wire_log.CL.raw_sent
                     (B.append ccs_raw server_sent_tail) /\
                   CS.cleartext_tls_message_raw M.TlsChangeCipherSpec ccs_raw
-                returns False
-                with _.
+                with
                 (
                   assert (Seq.equal
                     server.CS.cs_wire_log.CL.raw_sent
@@ -4273,8 +4179,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
       client_tail /\
     PNI.client_no_tail_handshake_traffic_install_event e4 /\
     PNI.client_no_tail_handshake_traffic_install_event e5
-  returns paired_no_tail_normalized_cleartext_raw_wire_bridge_clean16 client server
-  with _.
+  with
   (
     eliminate exists server_ch selection server_shared server_sh server_tail.
       server.CS.cs_event_log ==
@@ -4290,8 +4195,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_raw_wire_bridge
           CL.message_value = M.TlsHandshake (M.ServerHello server_sh);
         }) ::
         server_tail
-    returns paired_no_tail_normalized_cleartext_raw_wire_bridge_clean16 client server
-    with _.
+    with
     (
       let client_rest = e4 :: e5 :: client_tail in
       let client_model0 =
@@ -4490,8 +4394,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
       server_ch
       client_sh
       server_sh
-  returns paired_no_tail_normalized_cleartext_replay_suffixes_clean16 client server
-  with _.
+  with
   (
     let client_model0 =
       CS.initial_model client.CS.cs_model.CS.model_config in
@@ -4703,8 +4606,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
         server_tail_sent
         server_tail_received
         server.CS.cs_model
-    returns paired_no_tail_normalized_cleartext_replay_suffixes_clean16 client server
-    with _.
+    with
     (
       PNTRB.lemma_client_cleartext_prefix_step_models_from_raw_replay
         client_model0
@@ -4749,8 +4651,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
           client_tail_sent
           client_tail_received
           client.CS.cs_model
-      returns paired_no_tail_normalized_cleartext_replay_suffixes_clean16 client server
-      with _.
+      with
       (
         eliminate exists
           client_ch_raw
@@ -4771,8 +4672,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
           CS.received_cleartext_tls_message_raw
             (M.TlsHandshake (M.ServerHello client_sh))
             client_sh_raw
-        returns paired_no_tail_normalized_cleartext_replay_suffixes_clean16 client server
-        with _.
+        with
         (
           PWSeg.lemma_same_endpoint_replay_split_prefixes_equal_uniform_server_cleartext_handshake_prefix
             server_model0
@@ -4956,8 +4856,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
               server_suffix_sent
               server_suffix_received
               server.CS.cs_model
-          returns paired_no_tail_normalized_cleartext_replay_suffixes_clean16 client server
-          with _.
+          with
           (
             PWSeg.lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_model
               server_model0
@@ -5030,8 +4929,7 @@ let lemma_clean16_no_tail_valid_byte_traces_normalized_cleartext_replay_suffixes
                 client_suffix_sent
                 client_suffix_received
                 client.CS.cs_model
-            returns paired_no_tail_normalized_cleartext_replay_suffixes_clean16 client server
-            with _.
+            with
             (
               PWSeg.lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_model
                 client_model0

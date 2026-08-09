@@ -141,8 +141,7 @@ let lemma_server_post_server_hello_sent_certificate_verify_split
         server_sh)
       (e5 :: e6 :: rest) /\
     FStar.List.Tot.length rest == 9
-  returns server_post_server_hello_sent_certificate_verify_split server
-  with _.
+  with
   (
     eliminate exists prefix cv suffix.
       server.CS.cs_event_log ==
@@ -152,8 +151,7 @@ let lemma_server_post_server_hello_sent_certificate_verify_split
             CL.message_direction = CL.Sent;
             CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
           } :: suffix)
-    returns server_post_server_hello_sent_certificate_verify_split server
-    with _.
+    with
     (
       let server_prefix =
         PWSeg.server_cleartext_handshake_prefix_events
@@ -184,8 +182,7 @@ let lemma_server_post_server_hello_sent_certificate_verify_split
           FStar.List.Tot.append
             before'
             (sent_certificate_verify_event cv :: after')
-      returns server_post_server_hello_sent_certificate_verify_split server
-      with _.
+      with
       (
         assert (
           e5 :: e6 :: rest ==

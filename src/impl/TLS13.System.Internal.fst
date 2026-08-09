@@ -209,10 +209,8 @@ let rec lemma_drain_chain_reachable
     eliminate
       (c' == a.client) \/
       (exists st'. D.drain_step a.client st' /\ D.drain_chain m st' c')
-    returns
-      T.reachable tls_sys_step a ({ a with client = c' } <: tls_system_state)
-    with _. assert (({ a with client = c' } <: tls_system_state) == a)
-    and _.
+    with assert (({ a with client = c' } <: tls_system_state) == a)
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state
@@ -341,14 +339,14 @@ let lemma_flagship_settled_record_material_agreement cfg_c cfg_s =
   with begin
     introduce
       T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_settled s'
-    with _reach. begin
+    with begin
       introduce
         (tls_no_rekeying s' /\ tls_settled s' /\ tls_application_ready s') ==>
           (SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s'.client s'.server /\
            SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s'.client s'.server)
-      with _ant. begin
+      with begin
         lemma_reachable_inv cfg_c cfg_s s';
         TT.lemma_inv_implies_agreement s'
       end

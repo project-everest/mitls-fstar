@@ -33,6 +33,8 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open TLS13.Wire.Generated.KeyShareClientHello
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 noextract let extensionClientHello_extension_data_key_share'_parser : LP.parser _ extensionClientHello_extension_data_key_share' =

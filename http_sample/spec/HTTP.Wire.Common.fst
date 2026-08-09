@@ -382,7 +382,7 @@ let rec lemma_bseq_eq (a b:TCP.bytes)
     SP.cons_head_tail b;
     (* a == cons (head a) a', b == cons (head b) b', with head = index _ 0 *)
     introduce Seq.equal a b ==> (Seq.index a 0 == Seq.index b 0 /\ Seq.equal a' b')
-    with _. SP.lemma_cons_inj (Seq.head a) (Seq.head b) (Seq.tail a) (Seq.tail b)
+    with SP.lemma_cons_inj (Seq.head a) (Seq.head b) (Seq.tail a) (Seq.tail b)
   end
 #pop-options
 

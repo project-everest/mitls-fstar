@@ -63,7 +63,7 @@ let lemma_flagship_quiescent_agreement () =
   with begin
     introduce
       T.reachable sys_step initial_system s' ==> stacks_agree_when_quiescent s'
-    with _pf. begin
+    with begin
       lemma_reachable_inv s';
       lemma_inv_implies_agreement s'
     end
@@ -98,12 +98,8 @@ let lemma_x_next_is_request p =
                    (c':client_state_abs)
                    (out:SM.step_output CalcP.calc_frame unit)
                    (q:calc_payload).
-    calc_client_state_machine.SM.sm_step (p 0).client (SM.LocalEvent local) c' out /\
-    Cons? out.SM.so_wire_outputs /\
-    calc_machine_iface.MP.emit_c (p 0).client c' out q /\
-    (p 1) == ({ (p 0) with client = c'; channel = MP.ToServer q } <: system_state)
-  returns request_in_flight (p 1)
-  with _pf. ()
+    MP.mp_client_send_body calc_machine_iface (p 0) (p 1) local c' out q
+  with ()
 
 (** ─────────────────────────────────────────────────────────────────────────
     3. Liveness under fairness: AG (in flight ==> F quiescent)
@@ -145,8 +141,7 @@ let rec lemma_eventually_quiescent p i =
     // fairness at i gives a strictly-lower-rank position j > i
     eliminate
       exists (j:nat). j > i /\ chan_rank (p j).channel < chan_rank (p i).channel
-    returns (exists (k:nat). k >= i /\ MP.Quiet? (p k).channel)
-    with _pf. begin
+    with begin
       lemma_eventually_quiescent p j;  // decreases: chan_rank (p j) < chan_rank (p i)
       // IH: exists k >= j. Quiet (p k); since j > i, also k >= i.
       ()
@@ -169,12 +164,11 @@ let lemma_liveness_response_delivered p =
     forall (i:nat). in_flight (p i) ==> T.holds_F quiescent (T.shift p i)
   with begin
     introduce in_flight (p i) ==> T.holds_F quiescent (T.shift p i)
-    with _pf. begin
+    with begin
       lemma_eventually_quiescent p i;
       // exists k >= i. Quiet (p k); set m = k - i so (shift p i) m = p k.
       eliminate exists (k:nat). k >= i /\ MP.Quiet? (p k).channel
-      returns T.holds_F quiescent (T.shift p i)
-      with _pf2. begin
+      with begin
         let m : nat = k - i in
         assert (T.shift p i m == p k);
         assert (quiescent (T.shift p i m))

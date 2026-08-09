@@ -87,10 +87,7 @@ let peel_sent
         (exists ts tr. SMReplay.conn_events_sent_seal_replay (step_next model ev) rest ts tr final))
 =
   eliminate exists rs rr. SMReplay.conn_events_sent_seal_replay model (ev :: rest) rs rr final
-  returns
-    (CS.legal_event model ev /\ CS.step_model model ev == Some (step_next model ev) /\
-     (exists ts tr. SMReplay.conn_events_sent_seal_replay (step_next model ev) rest ts tr final))
-  with _. (
+  with (
   PWReplay.lemma_conn_events_sent_seal_replay_head model ev rest rs rr final;
   eliminate exists (model1:CS.connection_model) (delta_sent delta_received tail_sent tail_received:B.bytes).
     CS.legal_event model ev /\ CS.step_model model ev == Some model1 /\
@@ -99,10 +96,7 @@ let peel_sent
     Seq.equal rs (B.append delta_sent tail_sent) /\
     Seq.equal rr (B.append delta_received tail_received) /\
     SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-  returns
-    (CS.legal_event model ev /\ CS.step_model model ev == Some (step_next model ev) /\
-     (exists ts tr. SMReplay.conn_events_sent_seal_replay (step_next model ev) rest ts tr final))
-  with _.
+  with
   ( introduce exists ts tr. SMReplay.conn_events_sent_seal_replay (step_next model ev) rest ts tr final
     with tail_sent tail_received and () ) )
 
@@ -118,10 +112,7 @@ let peel_received
         (exists ts tr. SMReplay.conn_events_received_decode_replay (step_next model ev) rest ts tr final))
 =
   eliminate exists rs rr. SMReplay.conn_events_received_decode_replay model (ev :: rest) rs rr final
-  returns
-    (CS.legal_event model ev /\ CS.step_model model ev == Some (step_next model ev) /\
-     (exists ts tr. SMReplay.conn_events_received_decode_replay (step_next model ev) rest ts tr final))
-  with _. (
+  with (
   PWReplay.lemma_conn_events_received_decode_replay_head model ev rest rs rr final;
   eliminate exists (model1:CS.connection_model) (delta_sent delta_received tail_sent tail_received:B.bytes).
     CS.legal_event model ev /\ CS.step_model model ev == Some model1 /\
@@ -130,10 +121,7 @@ let peel_received
     Seq.equal rs (B.append delta_sent tail_sent) /\
     Seq.equal rr (B.append delta_received tail_received) /\
     SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-  returns
-    (CS.legal_event model ev /\ CS.step_model model ev == Some (step_next model ev) /\
-     (exists ts tr. SMReplay.conn_events_received_decode_replay (step_next model ev) rest ts tr final))
-  with _.
+  with
   ( introduce exists ts tr. SMReplay.conn_events_received_decode_replay (step_next model ev) rest ts tr final
     with tail_sent tail_received and () ) )
 
@@ -144,8 +132,7 @@ let peel_nil_sent (model final:CS.connection_model)
       (ensures model == final)
 =
   eliminate exists rs rr. SMReplay.conn_events_sent_seal_replay model [] rs rr final
-  returns (model == final)
-  with _. ( assert (SMReplay.conn_events_sent_seal_replay model [] rs rr final) )
+  with ( assert (SMReplay.conn_events_sent_seal_replay model [] rs rr final) )
 
 noextract
 let peel_nil_received (model final:CS.connection_model)
@@ -154,8 +141,7 @@ let peel_nil_received (model final:CS.connection_model)
       (ensures model == final)
 =
   eliminate exists rs rr. SMReplay.conn_events_received_decode_replay model [] rs rr final
-  returns (model == final)
-  with _. ( assert (SMReplay.conn_events_received_decode_replay model [] rs rr final) )
+  with ( assert (SMReplay.conn_events_received_decode_replay model [] rs rr final) )
 #pop-options
 
 noextract
@@ -571,11 +557,10 @@ let lemma_cover_both_install (e13 e14:CS.conn_event)
      PNTCAS.client_no_tail_application_read_install_event e14) \/
     (PNTCAS.client_no_tail_application_read_install_event e13 /\
      PNTCAS.client_no_tail_application_write_install_event e14)
-  returns goal
-  with _. (
+  with (
     PNTCAS.lemma_client_no_tail_application_write_install_event_cases e13;
     PNTCAS.lemma_client_no_tail_application_read_install_event_cases e14)
-  and _. (
+  and (
     PNTCAS.lemma_client_no_tail_application_read_install_event_cases e13;
     PNTCAS.lemma_client_no_tail_application_write_install_event_cases e14)
 #pop-options
@@ -831,26 +816,7 @@ let lemma_server_flight_walk
     assert (s6.CS.model_control == CS.ControlHandshaking CS.HsClientFinishedReceived);
     eliminate exists rs rr.
       SMReplay.conn_events_sent_seal_replay s6 [ev_vcf] rs rr final
-    returns
-      (CS.step_model m0 ev_ee == Some s0 /\
-       CS.step_model s0 ev_cert == Some s1 /\
-       CS.step_model s1 ev_sign_cv == Some sauth /\
-       CS.step_model sauth ev_cv == Some s2 /\
-       CS.step_model s2 ev_sf == Some s3 /\
-       s0.CS.model_record.CS.record_write ==
-         R.next_seq m0.CS.model_record.CS.record_write /\
-       s1.CS.model_record.CS.record_write ==
-         R.next_seq s0.CS.model_record.CS.record_write /\
-       s2.CS.model_record.CS.record_write ==
-         R.next_seq sauth.CS.model_record.CS.record_write /\
-       s3.CS.model_record.CS.record_write ==
-         R.next_seq s2.CS.model_record.CS.record_write /\
-       final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-       final.CS.model_handshake.CS.hs_certificate == Some cert /\
-       final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-       final.CS.model_handshake.CS.hs_server_finished == Some sf /\
-       final.CS.model_handshake.CS.hs_client_finished == Some cf)
-    with _.
+    with
     (
       peel_last_sent s6 ev_vcf final;
       lemma_verify_client_finished_preserves_handshake s6 final cf;
@@ -1724,10 +1690,7 @@ let lemma_checkpoint_th_sh_from_milestone
     client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
     server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
     server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh
-  returns
-    (SMCorr.same_transcript_checkpoint SMIds.TH_CH client server /\
-     SMCorr.same_transcript_checkpoint SMIds.TH_SH client server)
-  with _. (
+  with (
     eliminate exists (client_ch_raw server_ch_raw client_sh_raw server_sh_raw:B.bytes).
       Seq.equal client_ch_raw server_ch_raw /\
       Seq.equal server_sh_raw client_sh_raw /\
@@ -1735,10 +1698,7 @@ let lemma_checkpoint_th_sh_from_milestone
       CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) server_ch_raw /\
       CS.cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello server_sh)) server_sh_raw /\
       CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ServerHello client_sh)) client_sh_raw
-    returns
-      (SMCorr.same_transcript_checkpoint SMIds.TH_CH client server /\
-       SMCorr.same_transcript_checkpoint SMIds.TH_SH client server)
-    with _. (
+    with (
       WFL.lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
         client server client_ch server_ch client_sh server_sh
         client_ch_raw server_ch_raw client_sh_raw server_sh_raw
@@ -1969,11 +1929,10 @@ let lemma_hs_install_events_not_hello (e4 e5:CS.conn_event)
      PCPS.client_no_tail_handshake_read_install_event e5) \/
     (PCPS.client_no_tail_handshake_read_install_event e4 /\
      PCPS.client_no_tail_handshake_write_install_event e5)
-  returns event_not_hello e4 /\ event_not_hello e5
-  with _.
+  with
     (PCPS.lemma_client_no_tail_handshake_write_install_event_cases e4;
      PCPS.lemma_client_no_tail_handshake_read_install_event_cases e5)
-  and _.
+  and
     (PCPS.lemma_client_no_tail_handshake_read_install_event_cases e4;
      PCPS.lemma_client_no_tail_handshake_write_install_event_cases e5)
 
@@ -1989,11 +1948,10 @@ let lemma_app_install_events_not_hello (e13 e14:CS.conn_event)
      PNTCAS.client_no_tail_application_read_install_event e14) \/
     (PNTCAS.client_no_tail_application_read_install_event e13 /\
      PNTCAS.client_no_tail_application_write_install_event e14)
-  returns event_not_hello e13 /\ event_not_hello e14
-  with _.
+  with
     (PNTCAS.lemma_client_no_tail_application_write_install_event_cases e13;
      PNTCAS.lemma_client_no_tail_application_read_install_event_cases e14)
-  and _.
+  and
     (PNTCAS.lemma_client_no_tail_application_read_install_event_cases e13;
      PNTCAS.lemma_client_no_tail_application_write_install_event_cases e14)
 #pop-options

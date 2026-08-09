@@ -56,7 +56,7 @@ let string_of_offeredVersion = function
   [@inline_let] let _ =
     assert_norm (L.noRepeats (LP.list_map fst e))
   in
-  [@inline_let] let _ =
+  [@inline_let] let _ = 
     assert_norm (L.noRepeats (LP.list_map snd e))
   in e
 
@@ -95,3 +95,4 @@ val free_offeredVersion : PPB.free_t offeredVersion_vmatch
 val write_offeredVersion : PPB.l2r_safe_writer offeredVersion_vmatch offeredVersion_serializer offeredVersion_conv
 
 val size_offeredVersion : PPB.l2r_safe_size offeredVersion_vmatch offeredVersion_serializer offeredVersion_conv
+

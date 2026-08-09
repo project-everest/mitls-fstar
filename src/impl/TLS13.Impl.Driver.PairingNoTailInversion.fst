@@ -67,9 +67,7 @@ let rec lemma_conn_events_raw_replay_from_failed_results_failed
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      CS.ControlFailed? final_model.CS.model_control
-    with _.
+    with
     (
       CSL.lemma_step_model_from_failed_results_failed model ev model1;
       lemma_conn_events_raw_replay_from_failed_results_failed
@@ -1251,9 +1249,7 @@ let rec lemma_client_application_progress_rank_replay_lower_bound
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      client_application_progress_rank model <= FStar.List.Tot.length (ev :: rest)
-    with _.
+    with
     (
       lemma_client_application_progress_rank_step model ev model1;
       match model1.CS.model_control with

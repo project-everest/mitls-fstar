@@ -1890,33 +1890,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
       server_cv
       server_finished
       client_finished
-  returns
-    WFL.paired_cleartext_hello_wire_equivalent client server /\
-    WFL.paired_cleartext_hello_key_shares client server /\
-    WFL.paired_protected_handshake_wire_equivalent client server /\
-    paired_handshake_events client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
-    client_server_driver_supported_profile_derived_key_share_projection_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_derived_state_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_state_inputs client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   ( lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections
       client
       server
@@ -2018,33 +1992,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
       server_cv
       server_finished
       client_finished
-  returns
-    WFL.paired_cleartext_hello_wire_equivalent client server /\
-    WFL.paired_cleartext_hello_key_shares client server /\
-    WFL.paired_protected_handshake_wire_equivalent client server /\
-    paired_handshake_events client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
-    client_server_driver_supported_profile_derived_key_share_projection_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_derived_state_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_state_inputs client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   (
     PWP.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
       client

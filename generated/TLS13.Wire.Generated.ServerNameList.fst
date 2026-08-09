@@ -33,6 +33,8 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open TLS13.Wire.Generated.ServerName
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 let serverNameList_list_bytesize_nil = LP.serialize_list_nil serverName_parser serverName_serializer

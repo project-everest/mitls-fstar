@@ -142,6 +142,53 @@ let server_flight_pairs_conclusion (client server : CS.connection_state) : prop 
     each instantiation dragging in the nested membership quantifier and the
     fuel-instrumented [memP] axioms.  Unfold it only where it is genuinely
     needed, via [reveal_client_normalized_appdata_exact_spine]. **)
+(** The body of [client_normalized_appdata_exact_spine], with the sixteen
+    witnesses taken as explicit arguments.
+
+    Keeping it as a named predicate matters: [eliminate exists] desugars to
+    [FStar.Classical.Sugar.indefinite_descriptionN], whose precondition is
+    [exists x1 ... xn. p x1 ... xn] for a *lambda* [p].  With the body inlined,
+    that obligation is far beyond the solver at this arity; with the body
+    folded behind this definition it is discharged immediately. **)
+let client_normalized_appdata_spine_body
+  (client:CS.connection_state)
+  (start:CS.handshake_start)
+  (ch:GCH.clientHello) (sh:GSH.serverHello)
+  (client_shared:C.x25519_shared_secret)
+  (region:list CS.conn_event)
+  (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+  (cv_validate:CS.local_event)
+  (cv:GCV.certificateVerify)
+  (cv_verify:CS.local_event)
+  (sf:GFin.finished)
+  (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
+  (tail:list CS.conn_event)
+  : prop =
+  PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee) raw_ee /\
+  PWHead.received_handshake_head_normal_form (M.Certificate cert) raw_cert /\
+  PWHead.received_handshake_head_normal_form (M.CertificateVerify cv) raw_cv /\
+  PWHead.received_handshake_head_normal_form (M.Finished sf) raw_sf /\
+  (forall (e:CS.conn_event).
+    L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+  (exists (er:CS.conn_event).
+    L.memP er region /\
+    CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+  (exists (ew:CS.conn_event).
+    L.memP ew region /\
+    CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+  client.CS.cs_event_log ==
+    L.append
+      (PWSeg.client_cleartext_handshake_prefix_events
+        start ch sh client_shared)
+      (L.append region
+        (raw_ee ::
+         raw_cert ::
+         CS.ConnLocalEvent cv_validate ::
+         raw_cv ::
+         CS.ConnLocalEvent cv_verify ::
+         raw_sf ::
+         tail))
+
 [@@"opaque_to_smt"]
 let client_normalized_appdata_exact_spine (client:CS.connection_state) : prop =
   exists (start:CS.handshake_start)
@@ -155,30 +202,9 @@ let client_normalized_appdata_exact_spine (client:CS.connection_state) : prop =
          (sf:GFin.finished)
          (raw_ee raw_cert raw_cv raw_sf:CS.conn_event)
          (tail:list CS.conn_event).
-    PWHead.received_handshake_head_normal_form (M.EncryptedExtensions ee) raw_ee /\
-    PWHead.received_handshake_head_normal_form (M.Certificate cert) raw_cert /\
-    PWHead.received_handshake_head_normal_form (M.CertificateVerify cv) raw_cv /\
-    PWHead.received_handshake_head_normal_form (M.Finished sf) raw_sf /\
-    (forall (e:CS.conn_event).
-      L.memP e region ==> CCShape.is_client_hs_install e == true) /\
-    (exists (er:CS.conn_event).
-      L.memP er region /\
-      CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
-    (exists (ew:CS.conn_event).
-      L.memP ew region /\
-      CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
-    client.CS.cs_event_log ==
-      L.append
-        (PWSeg.client_cleartext_handshake_prefix_events
-          start ch sh client_shared)
-        (L.append region
-          (raw_ee ::
-           raw_cert ::
-           CS.ConnLocalEvent cv_validate ::
-           raw_cv ::
-           CS.ConnLocalEvent cv_verify ::
-           raw_sf ::
-           tail))
+    client_normalized_appdata_spine_body
+      client start ch sh client_shared region ee cert cv_validate cv cv_verify sf
+      raw_ee raw_cert raw_cv raw_sf tail
 
 val lemma_server_flight_pairs_from_replays_and_pairing
   (client server : CS.connection_state)

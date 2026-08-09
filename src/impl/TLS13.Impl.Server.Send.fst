@@ -609,7 +609,7 @@ let lemma_server_process_local_obligations
          Bounds.max_transcript_len /\
        CM.can_verify_client_finished st
          (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
-    with _h.
+    with
     ( let fin = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished in
       lemma_serialize_handshake_finished_len fin;
       assert (CM.can_verify_client_finished st fin) )
@@ -627,7 +627,7 @@ let lemma_server_process_local_obligations
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake (M.ServerHello sh)))))
-    with _h.
+    with
     ( let server_random = CL.raw_slice payload 0 32 in
       let server_private_key = CL.raw_slice payload 32 64 in
       assert (B.length payload == 64);
@@ -648,7 +648,7 @@ let lemma_server_process_local_obligations
          B.length (W.serialize_handshake (M.CertificateVerify
            (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify))) <=
          Bounds.max_transcript_len)
-    with _h.
+    with
     ( let cv = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
       lemma_serialize_handshake_certificate_verify_len cv )
   | ST.LocalSendCertificate ->
@@ -722,11 +722,11 @@ let lemma_pointwise_iff_raw_slice_cst (mb: B.bytes)
     assert (s == Seq.slice mb 0 32);
     let cst = GSHbody.serverHello_body_cst in
     introduce (forall (k:nat). k < 32 ==> Seq.index mb k == Seq.index cst k) ==> (s == cst)
-    with _. (
+    with (
       Seq.lemma_eq_intro s cst
     );
     introduce (s == cst) ==> (forall (k:nat). k < 32 ==> Seq.index mb k == Seq.index cst k)
-    with _. ()
+    with ()
 
 let lemma_range_ext_cst (mb: B.bytes) (n:nat) (ae:bool) (mv cv: U8.t)
   : Lemma (requires B.length mb >= 32 /\ n < 32 /\

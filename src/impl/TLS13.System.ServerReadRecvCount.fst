@@ -120,11 +120,7 @@ let lemma_server_step_recv_pot_lower
          SMCan.received_event_nonempty_decode_projection
            st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-      returns
-        (server_recv_pot st1.CS.cs_model
-          <= WStep.list_appdata_count (WFSM.event_input_messages ev)
-             + server_recv_pot st0.CS.cs_model)
-      with _.
+      with
       (
         let conn_ev =
           CS.ConnNetworkEvent {
@@ -152,11 +148,7 @@ let lemma_server_step_recv_pot_lower
            st1 /\
          SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-      returns
-        (server_recv_pot st1.CS.cs_model
-          <= WStep.list_appdata_count (WFSM.event_input_messages ev)
-             + server_recv_pot st0.CS.cs_model)
-      with _.
+      with
         lemma_server_recv_pot_step
           st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
 #pop-options
@@ -208,8 +200,7 @@ let lemma_server_app_read_received_ge1
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace server
-    returns WStep.raw_appdata_count server.CS.cs_wire_log.CL.raw_received >= 1
-    with _.
+    with
     (
       lemma_server_trace_recv_pot_lower init init server trace;
       PNTWL.lemma_server_trace_wire_logs_match init init trace server;

@@ -508,9 +508,7 @@ let rec lemma_closing_or_closed_never_returns_to_application_data
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      ~ (final_model.CS.model_control == CS.ControlApplicationData)
-    with _.
+    with
     (
       match model1.CS.model_control with
       | CS.ControlFailed _ ->
@@ -619,9 +617,7 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      server_hello_window_rank model <= FStar.List.Tot.length (ev :: rest)
-    with _.
+    with
     (
       (match ev with
        | CS.ConnProtectedHandshake step ->
@@ -741,9 +737,7 @@ let rec lemma_server_hello_window_stuck_without_client_handshake_traffic
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      ~ (final_model.CS.model_control == CS.ControlApplicationData)
-    with _.
+    with
     (
       CSL.lemma_step_model_preserves_config model ev model1;
       match model1.CS.model_control with
@@ -938,8 +932,7 @@ let lemma_server_hello_window_tight_next_event_handshake_traffic_install
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns PNI.server_no_tail_handshake_traffic_install_event ev
-  with _.
+  with
   (
     match model1.CS.model_control with
     | CS.ControlFailed _ ->
@@ -1218,10 +1211,7 @@ let lemma_server_hello_window_tight_next_two_events_handshake_traffic_installs
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: rest) tail_sent tail_received final_model
-  returns
-    PNI.server_no_tail_handshake_traffic_install_event ev0 /\
-    PNI.server_no_tail_handshake_traffic_install_event ev1
-  with _.
+  with
   (
     lemma_server_hello_window_after_fresh_handshake_install
       model

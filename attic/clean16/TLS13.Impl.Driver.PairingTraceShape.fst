@@ -82,9 +82,7 @@ let lemma_paired_successful_handshake_complete_event_log_shape_paired_handshake_
       client_app_read_material
       server_app_write_material
       server_app_read_material
-  returns
-    Pairing.paired_handshake_event_trace client server
-  with _.
+  with
   ( let server_suffix =
       PWL.server_protected_handshake_contiguous_replay_events
         server_material

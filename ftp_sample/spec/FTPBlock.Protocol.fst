@@ -331,10 +331,7 @@ let ftp_server_law_step
     with filename (FT.ft_concat plan) and ()
   | SM.LocalEvent FtpSendBlock ->
     eliminate exists blk. ftp_server_send st0 st1 blk /\ out.SM.so_wire_outputs == [blk]
-    returns
-      FT.ft_view_step ftp_block_size None
-        (ftp_server_project st0) (ftp_server_project st1)
-    with _.
+    with
     (match st0.fss_pending with
      | [] -> ()
      | h :: rest ->
@@ -399,21 +396,7 @@ let ftp_server_law_data_wire
   match ev with
   | SM.LocalEvent FtpSendBlock ->
     eliminate exists blk. ftp_server_send st0 st1 blk /\ out.SM.so_wire_outputs == [blk]
-    returns
-      (match ftp_classify msg with
-       | FT.FT_Data index payload ->
-         ((match index with
-           | Some i -> i == L.length (ftp_server_project st0).FT.ftv_blocks + 1
-           | None -> True) /\
-          (ftp_server_project st1).FT.ftv_blocks ==
-            L.append (ftp_server_project st0).FT.ftv_blocks [payload])
-         \/
-         ((ftp_server_project st1).FT.ftv_blocks == (ftp_server_project st0).FT.ftv_blocks /\
-          (match index with
-           | Some i -> FT.ft_block_at (ftp_server_project st0).FT.ftv_blocks i == Some payload
-           | None -> L.memP payload (ftp_server_project st0).FT.ftv_blocks))
-       | _ -> True)
-    with _. ()
+    with ()
   | _ -> ()
 
 let ftp_server_law_ack_wire

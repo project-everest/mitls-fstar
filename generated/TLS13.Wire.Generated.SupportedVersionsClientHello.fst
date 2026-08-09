@@ -33,6 +33,8 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open TLS13.Wire.Generated.OfferedVersion
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 private let pre : squash (LP.vldata_vlarray_precond 2 254 offeredVersion_parser 1 127 == true) = _ by (FStar.Tactics.trefl ())

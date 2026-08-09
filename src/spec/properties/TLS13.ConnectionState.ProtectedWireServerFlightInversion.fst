@@ -195,10 +195,7 @@ let lemma_ch_serialize_agree
   eliminate exists (frag:M.sealed_record).
     W.parse_record_wire d_ch == Some (T.Handshake, frag, B.length d_ch) /\
     W.parse_tls_message T.Handshake frag == Some (M.TlsHandshake (M.ClientHello ch_s))
-  returns
-    (Seq.equal (W.serialize_handshake (M.ClientHello ch_c))
-               (W.serialize_handshake (M.ClientHello ch_s)))
-  with _.
+  with
   (
     let ld = B.length d_ch in
     (* d_ch is the length-ld prefix of cs (via cs == sr == d_ch ++ server_suffix_recv) *)
@@ -272,12 +269,7 @@ let rec lemma_sent_replay_preserves_secrets
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-    returns
-      (final.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
-         m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
-       final.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
-         m.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
-    with _.
+    with
     (
       lemma_step_preserves_secrets m ev model1;
       lemma_sent_replay_preserves_secrets model1 rest tail_sent tail_received final
@@ -311,12 +303,7 @@ let rec lemma_received_replay_preserves_secrets
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-    returns
-      (final.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret ==
-         m.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
-       final.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
-         m.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
-    with _.
+    with
     (
       lemma_step_preserves_secrets m ev model1;
       lemma_received_replay_preserves_secrets model1 rest tail_sent tail_received final
@@ -475,8 +462,7 @@ let rec lemma_server_region_preserves_write_installed
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-    returns server_write_installed final material
-    with _.
+    with
     (
       lemma_server_install_step_preserves m install model1 material;
       lemma_server_region_preserves_write_installed model1 rest tail_sent tail_received final material
@@ -510,8 +496,7 @@ let rec lemma_server_region_write_installed
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-    returns (exists (material:CS.traffic_key_material). server_write_installed final material)
-    with _.
+    with
     (
       if install.CS.install_payload.CS.install_direction = CS.TrafficWrite
       then
@@ -522,8 +507,7 @@ let rec lemma_server_region_write_installed
         (lemma_server_install_step_preserves_control m install model1;
          eliminate exists (ew:CS.conn_event).
            L.memP ew region /\ SCShape.is_server_hs_install_dir CS.TrafficWrite ew
-         returns (exists (ew2:CS.conn_event). L.memP ew2 rest /\ SCShape.is_server_hs_install_dir CS.TrafficWrite ew2)
-         with _. ();
+         with ();
          lemma_server_region_write_installed model1 rest tail_sent tail_received final)
     )
 #pop-options
@@ -574,12 +558,7 @@ let lemma_server_prefix_model
     TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m0 e0 ds1 /\
     Seq.equal ps (B.append ds1 ts1) /\ Seq.equal pr (B.append dr1 tr1) /\
     SMReplay.conn_events_sent_seal_replay m1 r1 ts1 tr1 p
-  returns
-    (p.CS.model_config == cfg /\
-     p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
-     p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
-     p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_sent_seal_replay_head m1 e1 r2 ts1 tr1 p;
     eliminate exists (m2:CS.connection_model) (ds2 dr2 ts2 tr2:B.bytes).
@@ -588,12 +567,7 @@ let lemma_server_prefix_model
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m1 e1 ds2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_sent_seal_replay m2 r2 ts2 tr2 p
-    returns
-      (p.CS.model_config == cfg /\
-       p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
-       p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
-       p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_sent_seal_replay_head m2 e2 r3 ts2 tr2 p;
       eliminate exists (m3:CS.connection_model) (ds3 dr3 ts3 tr3:B.bytes).
@@ -602,12 +576,7 @@ let lemma_server_prefix_model
         TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m2 e2 ds3 /\
         Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
         SMReplay.conn_events_sent_seal_replay m3 r3 ts3 tr3 p
-      returns
-        (p.CS.model_config == cfg /\
-         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
-         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
-         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
-      with _.
+      with
       (
         PWReplay.lemma_conn_events_sent_seal_replay_head m3 e3 r4 ts3 tr3 p;
         eliminate exists (m4:CS.connection_model) (ds4 dr4 ts4 tr4:B.bytes).
@@ -616,12 +585,7 @@ let lemma_server_prefix_model
           TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m3 e3 ds4 /\
           Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
           SMReplay.conn_events_sent_seal_replay m4 r4 ts4 tr4 p
-        returns
-          (p.CS.model_config == cfg /\
-           p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
-           p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
-           p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
-        with _.
+        with
         (
           PWReplay.lemma_conn_events_sent_seal_replay_head m4 e4 [] ts4 tr4 p;
           eliminate exists (m5:CS.connection_model) (ds5 dr5 ts5 tr5:B.bytes).
@@ -630,12 +594,7 @@ let lemma_server_prefix_model
             TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m4 e4 ds5 /\
             Seq.equal ts4 (B.append ds5 ts5) /\ Seq.equal tr4 (B.append dr5 tr5) /\
             SMReplay.conn_events_sent_seal_replay m5 [] ts5 tr5 p
-          returns
-            (p.CS.model_config == cfg /\
-             p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
-             p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
-             p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
-          with _. ()
+          with ()
         )
       )
     )
@@ -691,8 +650,7 @@ let rec lemma_region_preserves_transcript_sent
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m ev ds /\
       Seq.equal rs (B.append ds ts) /\ Seq.equal rr (B.append dr tr) /\
       SMReplay.conn_events_sent_seal_replay model1 rest ts tr final
-    returns (final.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript)
-    with _.
+    with
     (
       lemma_install_step_preserves_transcript m ev model1;
       lemma_region_preserves_transcript_sent model1 rest ts tr final
@@ -720,8 +678,7 @@ let rec lemma_region_preserves_transcript_received
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m ev dr /\
       Seq.equal rs (B.append ds ts) /\ Seq.equal rr (B.append dr tr) /\
       SMReplay.conn_events_received_decode_replay model1 rest ts tr final
-    returns (final.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript)
-    with _.
+    with
     (
       lemma_install_step_preserves_transcript m ev model1;
       lemma_region_preserves_transcript_received model1 rest ts tr final
@@ -750,8 +707,7 @@ let rec lemma_region_preserves_protected_buffer_empty_received
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m ev dr /\
       Seq.equal rs (B.append ds ts) /\ Seq.equal rr (B.append dr tr) /\
       SMReplay.conn_events_received_decode_replay model1 rest ts tr final
-    returns CS.protected_handshake_buffer_empty final
-    with _.
+    with
     (
       lemma_install_step_preserves_protected_buffer_empty m ev model1;
       lemma_region_preserves_protected_buffer_empty_received model1 rest ts tr final
@@ -795,13 +751,7 @@ let lemma_client_prefix_model
     TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m0 e0 dr1 /\
     Seq.equal ps (B.append ds1 ts1) /\ Seq.equal pr (B.append dr1 tr1) /\
     SMReplay.conn_events_received_decode_replay m1 r1 ts1 tr1 p
-  returns
-    (p.CS.model_config == cfg /\
-     p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
-     p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-     p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
-     CS.protected_handshake_buffer_empty p)
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_received_decode_replay_head m1 e1 r2 ts1 tr1 p;
     eliminate exists (m2:CS.connection_model) (ds2 dr2 ts2 tr2:B.bytes).
@@ -810,13 +760,7 @@ let lemma_client_prefix_model
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m1 e1 dr2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_received_decode_replay m2 r2 ts2 tr2 p
-    returns
-      (p.CS.model_config == cfg /\
-       p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
-       p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-       p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
-       CS.protected_handshake_buffer_empty p)
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_received_decode_replay_head m2 e2 r3 ts2 tr2 p;
       eliminate exists (m3:CS.connection_model) (ds3 dr3 ts3 tr3:B.bytes).
@@ -825,13 +769,7 @@ let lemma_client_prefix_model
         TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m2 e2 dr3 /\
         Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
         SMReplay.conn_events_received_decode_replay m3 r3 ts3 tr3 p
-      returns
-        (p.CS.model_config == cfg /\
-         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
-         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
-         CS.protected_handshake_buffer_empty p)
-      with _.
+      with
       (
         PWReplay.lemma_conn_events_received_decode_replay_head m3 e3 [] ts3 tr3 p;
         eliminate exists (m4:CS.connection_model) (ds4 dr4 ts4 tr4:B.bytes).
@@ -840,13 +778,7 @@ let lemma_client_prefix_model
           TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m3 e3 dr4 /\
           Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
           SMReplay.conn_events_received_decode_replay m4 [] ts4 tr4 p
-        returns
-          (p.CS.model_config == cfg /\
-           p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
-           p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
-           p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
-           CS.protected_handshake_buffer_empty p)
-        with _. ()
+        with ()
       )
     )
   )
@@ -950,8 +882,7 @@ let lemma_server_prefix_sent_bytes
     TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m0 e0 ds1 /\
     Seq.equal ps (B.append ds1 ts1) /\ Seq.equal pr (B.append dr1 tr1) /\
     SMReplay.conn_events_sent_seal_replay m1 r1 ts1 tr1 p
-  returns goal
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_sent_seal_replay_head m1 e1 r2 ts1 tr1 p;
     eliminate exists (m2:CS.connection_model) (ds2 dr2 ts2 tr2:B.bytes).
@@ -960,8 +891,7 @@ let lemma_server_prefix_sent_bytes
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m1 e1 ds2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_sent_seal_replay m2 r2 ts2 tr2 p
-    returns goal
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_sent_seal_replay_head m2 e2 r3 ts2 tr2 p;
       eliminate exists (m3:CS.connection_model) (ds3 dr3 ts3 tr3:B.bytes).
@@ -970,8 +900,7 @@ let lemma_server_prefix_sent_bytes
         TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m2 e2 ds3 /\
         Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
         SMReplay.conn_events_sent_seal_replay m3 r3 ts3 tr3 p
-      returns goal
-      with _.
+      with
       (
         PWReplay.lemma_conn_events_sent_seal_replay_head m3 e3 r4 ts3 tr3 p;
         eliminate exists (m4:CS.connection_model) (ds4 dr4 ts4 tr4:B.bytes).
@@ -980,8 +909,7 @@ let lemma_server_prefix_sent_bytes
           TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m3 e3 ds4 /\
           Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
           SMReplay.conn_events_sent_seal_replay m4 r4 ts4 tr4 p
-        returns goal
-        with _.
+        with
         (
           PWReplay.lemma_conn_events_sent_seal_replay_head m4 e4 [] ts4 tr4 p;
           eliminate exists (m5:CS.connection_model) (ds5 dr5 ts5 tr5:B.bytes).
@@ -990,8 +918,7 @@ let lemma_server_prefix_sent_bytes
             TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m4 e4 ds5 /\
             Seq.equal ts4 (B.append ds5 ts5) /\ Seq.equal tr4 (B.append dr5 tr5) /\
             SMReplay.conn_events_sent_seal_replay m5 [] ts5 tr5 p
-          returns goal
-          with _.
+          with
           (
             W.lemma_serialize_tls_message_handshake (M.ServerHello sh);
             lemma_sent_sh_bound m4 sh;
@@ -1055,8 +982,7 @@ let lemma_server_prefix_received_bytes
     TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m0 e0 dr1 /\
     Seq.equal ps (B.append ds1 ts1) /\ Seq.equal pr (B.append dr1 tr1) /\
     SMReplay.conn_events_received_decode_replay m1 r1 ts1 tr1 p
-  returns goal
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_received_decode_replay_head m1 e1 r2 ts1 tr1 p;
     eliminate exists (m2:CS.connection_model) (ds2 dr2 ts2 tr2:B.bytes).
@@ -1065,8 +991,7 @@ let lemma_server_prefix_received_bytes
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m1 e1 dr2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_received_decode_replay m2 r2 ts2 tr2 p
-    returns goal
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_received_decode_replay_head m2 e2 r3 ts2 tr2 p;
       eliminate exists (m3:CS.connection_model) (ds3 dr3 ts3 tr3:B.bytes).
@@ -1075,8 +1000,7 @@ let lemma_server_prefix_received_bytes
         TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m2 e2 dr3 /\
         Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
         SMReplay.conn_events_received_decode_replay m3 r3 ts3 tr3 p
-      returns goal
-      with _.
+      with
       (
         PWReplay.lemma_conn_events_received_decode_replay_head m3 e3 r4 ts3 tr3 p;
         eliminate exists (m4:CS.connection_model) (ds4 dr4 ts4 tr4:B.bytes).
@@ -1085,8 +1009,7 @@ let lemma_server_prefix_received_bytes
           TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m3 e3 dr4 /\
           Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
           SMReplay.conn_events_received_decode_replay m4 r4 ts4 tr4 p
-        returns goal
-        with _.
+        with
         (
           PWReplay.lemma_conn_events_received_decode_replay_head m4 e4 [] ts4 tr4 p;
           eliminate exists (m5:CS.connection_model) (ds5 dr5 ts5 tr5:B.bytes).
@@ -1095,8 +1018,7 @@ let lemma_server_prefix_received_bytes
             TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m4 e4 dr5 /\
             Seq.equal ts4 (B.append ds5 ts5) /\ Seq.equal tr4 (B.append dr5 tr5) /\
             SMReplay.conn_events_received_decode_replay m5 [] ts5 tr5 p
-          returns goal
-          with _.
+          with
           (
             app_empty_l dr5 tr5;    (* tr4 == tr5 == empty *)
             app_empty_l dr4 tr4;    (* tr3 == tr4 == empty *)
@@ -1153,8 +1075,7 @@ let lemma_client_prefix_sent_bytes
     TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m0 e0 ds1 /\
     Seq.equal ps (B.append ds1 ts1) /\ Seq.equal pr (B.append dr1 tr1) /\
     SMReplay.conn_events_sent_seal_replay m1 r1 ts1 tr1 p
-  returns goal
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_sent_seal_replay_head m1 e1 r2 ts1 tr1 p;
     eliminate exists (m2:CS.connection_model) (ds2 dr2 ts2 tr2:B.bytes).
@@ -1163,8 +1084,7 @@ let lemma_client_prefix_sent_bytes
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m1 e1 ds2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_sent_seal_replay m2 r2 ts2 tr2 p
-    returns goal
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_sent_seal_replay_head m2 e2 r3 ts2 tr2 p;
       eliminate exists (m3:CS.connection_model) (ds3 dr3 ts3 tr3:B.bytes).
@@ -1173,8 +1093,7 @@ let lemma_client_prefix_sent_bytes
         TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m2 e2 ds3 /\
         Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
         SMReplay.conn_events_sent_seal_replay m3 r3 ts3 tr3 p
-      returns goal
-      with _.
+      with
       (
         PWReplay.lemma_conn_events_sent_seal_replay_head m3 e3 [] ts3 tr3 p;
         eliminate exists (m4:CS.connection_model) (ds4 dr4 ts4 tr4:B.bytes).
@@ -1183,8 +1102,7 @@ let lemma_client_prefix_sent_bytes
           TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m3 e3 ds4 /\
           Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
           SMReplay.conn_events_sent_seal_replay m4 [] ts4 tr4 p
-        returns goal
-        with _.
+        with
         (
           W.lemma_serialize_tls_message_handshake (M.ClientHello ch);
           lemma_sent_ch_bound m1 ch;
@@ -1246,8 +1164,7 @@ let lemma_client_prefix_received_bytes
     TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m0 e0 dr1 /\
     Seq.equal ps (B.append ds1 ts1) /\ Seq.equal pr (B.append dr1 tr1) /\
     SMReplay.conn_events_received_decode_replay m1 r1 ts1 tr1 p
-  returns goal
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_received_decode_replay_head m1 e1 r2 ts1 tr1 p;
     eliminate exists (m2:CS.connection_model) (ds2 dr2 ts2 tr2:B.bytes).
@@ -1256,8 +1173,7 @@ let lemma_client_prefix_received_bytes
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m1 e1 dr2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_received_decode_replay m2 r2 ts2 tr2 p
-    returns goal
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_received_decode_replay_head m2 e2 r3 ts2 tr2 p;
       eliminate exists (m3:CS.connection_model) (ds3 dr3 ts3 tr3:B.bytes).
@@ -1266,8 +1182,7 @@ let lemma_client_prefix_received_bytes
         TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m2 e2 dr3 /\
         Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
         SMReplay.conn_events_received_decode_replay m3 r3 ts3 tr3 p
-      returns goal
-      with _.
+      with
       (
         PWReplay.lemma_conn_events_received_decode_replay_head m3 e3 [] ts3 tr3 p;
         eliminate exists (m4:CS.connection_model) (ds4 dr4 ts4 tr4:B.bytes).
@@ -1276,8 +1191,7 @@ let lemma_client_prefix_received_bytes
           TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m3 e3 dr4 /\
           Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
           SMReplay.conn_events_received_decode_replay m4 [] ts4 tr4 p
-        returns goal
-        with _.
+        with
         (
           W.lemma_serialize_tls_message_handshake (M.ServerHello sh);
           lemma_recv_sh_bound m2 sh;
@@ -1326,7 +1240,7 @@ let lemma_forall_install_empty_sent (region:list CS.conn_event)
       (ensures L.for_all Region.is_empty_sent_ev region)
   = introduce forall (x:CS.conn_event). L.memP x region ==> Region.is_empty_sent_ev x == true
     with (introduce L.memP x region ==> Region.is_empty_sent_ev x == true
-          with _. lemma_install_empty_sent x);
+          with lemma_install_empty_sent x);
     L.for_all_mem Region.is_empty_sent_ev region
 
 let lemma_forall_install_key (region:list CS.conn_event)
@@ -1335,7 +1249,7 @@ let lemma_forall_install_key (region:list CS.conn_event)
       (ensures L.for_all is_key_install_ev region)
   = introduce forall (x:CS.conn_event). L.memP x region ==> is_key_install_ev x == true
     with (introduce L.memP x region ==> is_key_install_ev x == true
-          with _. lemma_install_key x);
+          with lemma_install_key x);
     L.for_all_mem is_key_install_ev region
 #pop-options
 
@@ -1425,8 +1339,7 @@ let lemma_server_flight
     Seq.equal sr (B.append ps_recv suf_recv) /\
     SMReplay.conn_events_sent_seal_replay m0 prefix ps_sent ps_recv ps /\
     SMReplay.conn_events_sent_seal_replay ps (L.append region sflight) suf_sent suf_recv final
-  returns goal
-  with _.
+  with
   (
     lemma_server_prefix_model cfg ch selection server_shared sh ps_sent ps_recv ps;
     lemma_server_prefix_sent_bytes cfg ch selection server_shared sh ps_sent ps_recv ps;
@@ -1441,16 +1354,14 @@ let lemma_server_flight
       Seq.equal suf_recv (B.append rg_recv fl_recv) /\
       SMReplay.conn_events_sent_seal_replay ps region rg_sent rg_recv ms /\
       SMReplay.conn_events_sent_seal_replay ms sflight fl_sent fl_recv final
-    returns goal
-    with _.
+    with
     (
       lemma_forall_install_empty_sent region;
       Region.lemma_empty_sent_tail_collapses ps region rg_sent rg_recv ms;
       // rg_sent == empty
       lemma_server_region_write_installed ps region rg_sent rg_recv ms;
       eliminate exists (material:CS.traffic_key_material). server_write_installed ms material
-      returns goal
-      with _.
+      with
       (
         // secrets
         lemma_sent_replay_preserves_secrets ps region rg_sent rg_recv ms;
@@ -1516,8 +1427,7 @@ let lemma_server_received_ch
     Seq.equal rr (B.append ps_recv suf_recv) /\
     SMReplay.conn_events_received_decode_replay m0 prefix ps_sent ps_recv ps /\
     SMReplay.conn_events_received_decode_replay ps suffix suf_sent suf_recv final
-  returns goal
-  with _.
+  with
   (
     lemma_server_prefix_received_bytes cfg ch selection server_shared sh ps_sent ps_recv ps;
     introduce exists (d_ch rest:B.bytes).
@@ -1556,7 +1466,7 @@ let lemma_forall_install_empty_recv (region:list CS.conn_event)
       (ensures L.for_all Region.is_empty_recv_ev region)
   = introduce forall (x:CS.conn_event). L.memP x region ==> Region.is_empty_recv_ev x == true
     with (introduce L.memP x region ==> Region.is_empty_recv_ev x == true
-          with _. lemma_install_empty_recv x);
+          with lemma_install_empty_recv x);
     L.for_all_mem Region.is_empty_recv_ev region
 
 let lemma_forall_install_key_c (region:list CS.conn_event)
@@ -1565,7 +1475,7 @@ let lemma_forall_install_key_c (region:list CS.conn_event)
       (ensures L.for_all is_key_install_ev region)
   = introduce forall (x:CS.conn_event). L.memP x region ==> is_key_install_ev x == true
     with (introduce L.memP x region ==> is_key_install_ev x == true
-          with _. lemma_install_key_c x);
+          with lemma_install_key_c x);
     L.for_all_mem is_key_install_ev region
 #pop-options
 
@@ -1653,8 +1563,7 @@ let lemma_client_flight
     Seq.equal cr (B.append ps_recv suf_recv) /\
     SMReplay.conn_events_received_decode_replay m0 prefix ps_sent ps_recv ps /\
     SMReplay.conn_events_received_decode_replay ps (L.append region cflight) suf_sent suf_recv final
-  returns goal
-  with _.
+  with
   (
     lemma_client_prefix_model cfg start ch sh client_shared ps_sent ps_recv ps;
     lemma_client_prefix_received_bytes cfg start ch sh client_shared ps_sent ps_recv ps;
@@ -1668,16 +1577,14 @@ let lemma_client_flight
       Seq.equal suf_recv (B.append rg_recv fl_recv) /\
       SMReplay.conn_events_received_decode_replay ps region rg_sent rg_recv ms /\
       SMReplay.conn_events_received_decode_replay ms cflight fl_sent fl_recv final
-    returns goal
-    with _.
+    with
     (
       lemma_forall_install_empty_recv region;
       Region.lemma_empty_recv_tail_collapses ps region rg_sent rg_recv ms;
       // rg_recv == empty
       CReg.lemma_client_region_read_installed ps region rg_sent rg_recv ms;
       eliminate exists (material:CS.traffic_key_material). CReg.client_read_installed ms material
-      returns goal
-      with _.
+      with
       (
         lemma_received_replay_preserves_secrets ps region rg_sent rg_recv ms;
         lemma_received_replay_preserves_secrets ms cflight fl_sent fl_recv final;
@@ -1744,8 +1651,7 @@ let lemma_client_sent_ch
     Seq.equal cr (B.append ps_recv suf_recv) /\
     SMReplay.conn_events_sent_seal_replay m0 prefix ps_sent ps_recv ps /\
     SMReplay.conn_events_sent_seal_replay ps suffix suf_sent suf_recv final
-  returns goal
-  with _.
+  with
   (
     lemma_client_prefix_sent_bytes cfg start ch sh client_shared ps_sent ps_recv ps;
     // ps_sent == record(CH)
@@ -1881,8 +1787,7 @@ let lemma_server_side (s:sysp)
             CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
             CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
             tail))
-  returns server_side_exists s
-  with _.
+  with
   (
     let prefix = PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh in
     let sflight = server_flight_events ee cert cv_local cv sf tail in
@@ -1894,15 +1799,13 @@ let lemma_server_side (s:sysp)
                      (fl_sent fl_recv:B.bytes).
       server_flight_result cfg_s ch sh ee cert cv_local cv sf tail ss final
         ms material fl_sent fl_recv
-    returns server_side_exists s
-    with _.
+    with
     (
       lemma_server_received_ch cfg_s ch selection server_shared sh suffix ss sr final;
       eliminate exists (d_ch rest:B.bytes).
         CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello ch)) d_ch /\
         Seq.equal sr (B.append d_ch rest)
-      returns server_side_exists s
-      with _.
+      with
       (
         introduce exists (ms0:CS.connection_model) (material_s:CS.traffic_key_material)
           (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
@@ -2043,16 +1946,14 @@ let lemma_client_side (s:sysp)
             CS.ConnLocalEvent cv_verify ::
             CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
             tail))
-  returns client_side_exists s
-  with _.
+  with
   (
     eliminate exists (raw_suffix:list CS.conn_event).
       s.client.CS.cs_event_log ==
         L.append
           (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
           (L.append region raw_suffix)
-    returns client_side_exists s
-    with _.
+    with
     (
       CCShape.lemma_client_raw_suffix_flight_spine
         start ch sh client_shared region raw_suffix s.client.CS.cs_event_log
@@ -2065,16 +1966,14 @@ let lemma_client_side (s:sysp)
                        (fl_sent fl_recv:B.bytes).
         client_flight_result cfg_c ch sh raw_suffix cr final
           mc material fl_sent fl_recv
-      returns client_side_exists s
-      with _.
+      with
       (
         lemma_client_sent_ch cfg_c start ch sh client_shared suffix cs cr final;
         eliminate exists (rest:B.bytes).
           Seq.equal cs
             (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch))) rest) /\
           B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640
-        returns client_side_exists s
-        with _.
+        with
         (
           introduce exists (mc0:CS.connection_model) (material_c:CS.traffic_key_material)
             (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
@@ -2201,8 +2100,7 @@ let rec lemma_sent_replay_preserves_server_fields
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-    returns (after_fin_server final /\ server_fields_eq final m)
-    with _.
+    with
     (
       lemma_server_field_step m ev model1;
       lemma_sent_replay_preserves_server_fields model1 rest tail_sent tail_received final
@@ -2258,8 +2156,7 @@ let rec lemma_received_replay_preserves_client_fields
       Seq.equal rs (B.append delta_sent tail_sent) /\
       Seq.equal rr (B.append delta_received tail_received) /\
       SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-    returns (after_fin_client final /\ server_fields_eq final m)
-    with _.
+    with
     (
       lemma_client_field_step m ev model1;
       lemma_received_replay_preserves_client_fields model1 rest tail_sent tail_received final
@@ -2295,8 +2192,7 @@ let rec lemma_sent_replay_preserves_config
         Seq.equal rs (B.append delta_sent tail_sent) /\
         Seq.equal rr (B.append delta_received tail_received) /\
         SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-      returns (final.CS.model_config == m.CS.model_config)
-      with _.
+      with
       ( lemma_step_preserves_config m ev model1;
         lemma_sent_replay_preserves_config model1 rest tail_sent tail_received final )
 
@@ -2317,8 +2213,7 @@ let rec lemma_received_replay_preserves_config
         Seq.equal rs (B.append delta_sent tail_sent) /\
         Seq.equal rr (B.append delta_received tail_received) /\
         SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-      returns (final.CS.model_config == m.CS.model_config)
-      with _.
+      with
       ( lemma_step_preserves_config m ev model1;
         lemma_received_replay_preserves_config model1 rest tail_sent tail_received final )
 #pop-options
@@ -2486,11 +2381,7 @@ let lemma_server_fields_pinned
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection ms install ds0 /\
       Seq.equal rs (B.append ds0 ts0) /\ Seq.equal rr (B.append dr0 tr0) /\
       SMReplay.conn_events_sent_seal_replay m0 (e1::e2::e3::e4::e5::tail) ts0 tr0 final
-  returns (final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-           final.CS.model_handshake.CS.hs_certificate == Some cert /\
-           final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-           final.CS.model_handshake.CS.hs_server_finished == Some sf)
-  with _.
+  with
   (
   PWReplay.lemma_conn_events_sent_seal_replay_head m0 e1 (e2::e3::e4::e5::tail) ts0 tr0 final;
   eliminate exists (m1:CS.connection_model) (ds1 dr1 ts1 tr1:B.bytes).
@@ -2499,11 +2390,7 @@ let lemma_server_fields_pinned
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m0 e1 ds1 /\
       Seq.equal ts0 (B.append ds1 ts1) /\ Seq.equal tr0 (B.append dr1 tr1) /\
       SMReplay.conn_events_sent_seal_replay m1 (e2::e3::e4::e5::tail) ts1 tr1 final
-  returns (final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-           final.CS.model_handshake.CS.hs_certificate == Some cert /\
-           final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-           final.CS.model_handshake.CS.hs_server_finished == Some sf)
-  with _.
+  with
   (
   lemma_read_ee m0 m1 ee;
   PWReplay.lemma_conn_events_sent_seal_replay_head m1 e2 (e3::e4::e5::tail) ts1 tr1 final;
@@ -2513,11 +2400,7 @@ let lemma_server_fields_pinned
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m1 e2 ds2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_sent_seal_replay m2 (e3::e4::e5::tail) ts2 tr2 final
-  returns (final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-           final.CS.model_handshake.CS.hs_certificate == Some cert /\
-           final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-           final.CS.model_handshake.CS.hs_server_finished == Some sf)
-  with _.
+  with
   (
   lemma_read_cert m1 m2 cert;
   PWReplay.lemma_conn_events_sent_seal_replay_head m2 e3 (e4::e5::tail) ts2 tr2 final;
@@ -2527,11 +2410,7 @@ let lemma_server_fields_pinned
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m2 e3 ds3 /\
       Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
       SMReplay.conn_events_sent_seal_replay m3 (e4::e5::tail) ts3 tr3 final
-  returns (final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-           final.CS.model_handshake.CS.hs_certificate == Some cert /\
-           final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-           final.CS.model_handshake.CS.hs_server_finished == Some sf)
-  with _.
+  with
   (
   lemma_local_pres_server m2 m3 cv_local;
   PWReplay.lemma_conn_events_sent_seal_replay_head m3 e4 (e5::tail) ts3 tr3 final;
@@ -2541,11 +2420,7 @@ let lemma_server_fields_pinned
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m3 e4 ds4 /\
       Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
       SMReplay.conn_events_sent_seal_replay m4 (e5::tail) ts4 tr4 final
-  returns (final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-           final.CS.model_handshake.CS.hs_certificate == Some cert /\
-           final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-           final.CS.model_handshake.CS.hs_server_finished == Some sf)
-  with _.
+  with
   (
   lemma_read_cv m3 m4 cv;
   PWReplay.lemma_conn_events_sent_seal_replay_head m4 e5 tail ts4 tr4 final;
@@ -2555,11 +2430,7 @@ let lemma_server_fields_pinned
       TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection m4 e5 ds5 /\
       Seq.equal ts4 (B.append ds5 ts5) /\ Seq.equal tr4 (B.append dr5 tr5) /\
       SMReplay.conn_events_sent_seal_replay m5 tail ts5 tr5 final
-  returns (final.CS.model_handshake.CS.hs_encrypted_extensions == Some ee /\
-           final.CS.model_handshake.CS.hs_certificate == Some cert /\
-           final.CS.model_handshake.CS.hs_certificate_verify == Some cv /\
-           final.CS.model_handshake.CS.hs_server_finished == Some sf)
-  with _.
+  with
   (
   (* role at m4 (before Sent Finished) via config preservation on tail replay from m5 plus step *)
   lemma_sent_replay_preserves_config m5 tail ts5 tr5 final;
@@ -2608,8 +2479,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection mc install dr0 /\
       Seq.equal rs (B.append ds0 ts0) /\ Seq.equal rr (B.append dr0 tr0) /\
       SMReplay.conn_events_received_decode_replay m0 (c1::c2::c3::c4::c5::c6::tail) ts0 tr0 final
-  returns goal
-  with _.
+  with
   (
   lemma_received_replay_preserves_config m0 (c1::c2::c3::c4::c5::c6::tail) ts0 tr0 final;
   PWReplay.lemma_conn_events_received_decode_replay_head m0 c1 (c2::c3::c4::c5::c6::tail) ts0 tr0 final;
@@ -2619,8 +2489,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m0 c1 dr1 /\
       Seq.equal ts0 (B.append ds1 ts1) /\ Seq.equal tr0 (B.append dr1 tr1) /\
       SMReplay.conn_events_received_decode_replay m1 (c2::c3::c4::c5::c6::tail) ts1 tr1 final
-  returns goal
-  with _.
+  with
   (
   lemma_read_recv_ee m0 m1 ee;
   lemma_step_preserves_config m0 c1 m1;
@@ -2631,8 +2500,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m1 c2 dr2 /\
       Seq.equal ts1 (B.append ds2 ts2) /\ Seq.equal tr1 (B.append dr2 tr2) /\
       SMReplay.conn_events_received_decode_replay m2 (c3::c4::c5::c6::tail) ts2 tr2 final
-  returns goal
-  with _.
+  with
   (
   lemma_read_recv_cert m1 m2 cert;
   lemma_step_preserves_config m1 c2 m2;
@@ -2643,8 +2511,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m2 c3 dr3 /\
       Seq.equal ts2 (B.append ds3 ts3) /\ Seq.equal tr2 (B.append dr3 tr3) /\
       SMReplay.conn_events_received_decode_replay m3 (c4::c5::c6::tail) ts3 tr3 final
-  returns goal
-  with _.
+  with
   (
   lemma_local_pres_client m2 m3 cv_validate;
   lemma_step_preserves_config m2 c3 m3;
@@ -2655,8 +2522,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m3 c4 dr4 /\
       Seq.equal ts3 (B.append ds4 ts4) /\ Seq.equal tr3 (B.append dr4 tr4) /\
       SMReplay.conn_events_received_decode_replay m4 (c5::c6::tail) ts4 tr4 final
-  returns goal
-  with _.
+  with
   (
   lemma_read_recv_cv m3 m4 cv;
   lemma_step_preserves_config m3 c4 m4;
@@ -2667,8 +2533,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m4 c5 dr5 /\
       Seq.equal ts4 (B.append ds5 ts5) /\ Seq.equal tr4 (B.append dr5 tr5) /\
       SMReplay.conn_events_received_decode_replay m5 (c6::tail) ts5 tr5 final
-  returns goal
-  with _.
+  with
   (
   lemma_local_pres_client m4 m5 cv_verify;
   lemma_step_preserves_config m4 c5 m5;
@@ -2679,8 +2544,7 @@ let lemma_client_fields_pinned
       TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection m5 c6 dr6 /\
       Seq.equal ts5 (B.append ds6 ts6) /\ Seq.equal tr5 (B.append dr6 tr6) /\
       SMReplay.conn_events_received_decode_replay m6 tail ts6 tr6 final
-  returns goal
-  with _.
+  with
   (
   lemma_read_recv_sf m5 m6 sf;
   lemma_step_preserves_config m5 c6 m6;
@@ -2861,10 +2725,7 @@ let lemma_stageA
       Seq.equal sts1 ctr1 /\
       SMReplay.conn_events_sent_seal_replay sm1 server_rest0 sts1 str1 final_s /\
       SMReplay.conn_events_received_decode_replay cm1 client_rest0 cts1 ctr1 final_c
-  returns
-    (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
-      cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
-  with _.
+  with
   (
     lemma_step_preserves_config ms (install_ev_server material_s) sm0;
     lemma_step_preserves_config mc (install_ev_client material_c) cm0;
@@ -2910,10 +2771,7 @@ let lemma_stageA
         SMReplay.conn_events_received_decode_replay cm2
           (lcvval :: raw_cv :: lcvv :: raw_sf :: raw_tail)
           cts2 ctr2 final_c
-    returns
-      (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
-        cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
-    with _.
+    with
     (
       lemma_step_preserves_config sm1 sCert sm2;
       lemma_step_preserves_config cm1 cCert cm2;
@@ -2939,10 +2797,7 @@ let lemma_stageA
             (sCV :: sFin :: tail_s) sts3 str3 final_s /\
           SMReplay.conn_events_received_decode_replay cm3
             (raw_cv :: lcvv :: raw_sf :: raw_tail) cts3 ctr3 final_c
-      returns
-        (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
-          cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
-      with _.
+      with
       (
         lemma_skip_not_install_server sm2 sm3 cv_local;
         lemma_skip_not_install_client cm2 cm3 cv_validate;
@@ -2977,10 +2832,7 @@ let lemma_stageA
               (sFin :: tail_s) sts4 str4 final_s /\
             SMReplay.conn_events_received_decode_replay cm4
               (lcvv :: raw_sf :: raw_tail) cts4 ctr4 final_c
-        returns
-          (stageA_result ee_s cert_s cv_s sf_s tail_s ee_c cert_c cv_c
-            cv_verify sf_c raw_ee raw_cert raw_cv raw_sf raw_tail final_s final_c)
-        with _.
+        with
         (
           lemma_step_preserves_config sm3 sCV sm4;
           lemma_read_cv sm3 sm4 cv_s;
@@ -3139,10 +2991,7 @@ let lemma_stageB
         (sFin :: tail_s) sts str final_s /\
       SMReplay.conn_events_received_decode_replay client_after2
         (lcvv :: raw_sf :: raw_tail) cts ctr final_c
-  returns
-    (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
-      raw_ee raw_cert raw_cv raw_sf)
-  with _. (
+  with (
     PWHead.lemma_received_replay_skip_empty_head_preserves_peer_stream
       sts client_after2 lcvv (raw_sf :: raw_tail)
       cts ctr final_c;
@@ -3152,10 +3001,7 @@ let lemma_stageB
         Seq.equal sts ttr /\
         SMReplay.conn_events_received_decode_replay
           cvs (raw_sf :: raw_tail) tts ttr final_c
-    returns
-      (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
-        raw_ee raw_cert raw_cv raw_sf)
-    with _. (
+    with (
       lemma_skip_not_install_client_cv client_after2 cv_verify;
       lemma_noninstall_local_preserves_record client_after2 cvs cv_verify;
       lemma_aligned_transfer server_after2 client_after2 cvs;
@@ -3176,10 +3022,7 @@ let lemma_stageB
           Seq.equal ftls rtlr /\
           SMReplay.conn_events_sent_seal_replay fah tail_s ftls ftlr final_s /\
           SMReplay.conn_events_received_decode_replay rah raw_tail rtls rtlr final_c
-      returns
-        (stageB_result ee_s cert_s cv_s sf_s ee_c cert_c cv_c sf_c
-          raw_ee raw_cert raw_cv raw_sf)
-      with _. (
+      with (
         introduce exists (pair_ee pair_cert pair_cv pair_sf:PB.protected_message_replay).
           PB.protected_handshake_event_projection_pair pair_ee
             (M.EncryptedExtensions ee_s) (M.EncryptedExtensions ee_c) /\
@@ -3272,6 +3115,8 @@ let lemma_normalized_client_spine_from_raw
           (M.Finished sf) raw_sf)
       (ensures client_normalized_appdata_exact_spine s.client)
   =
+  reveal_opaque (`%client_normalized_appdata_exact_spine)
+    client_normalized_appdata_exact_spine;
   eliminate exists
     (start:CS.handshake_start)
     (client_shared:C.x25519_shared_secret)
@@ -3289,8 +3134,7 @@ let lemma_normalized_client_spine_from_raw
           (PWSeg.client_cleartext_handshake_prefix_events
             start ch sh client_shared)
           (L.append region raw_flight)
-  returns client_normalized_appdata_exact_spine s.client
-  with _.
+  with
   (
     introduce exists
       (start0:CS.handshake_start)
@@ -3304,29 +3148,10 @@ let lemma_normalized_client_spine_from_raw
       (sf0:GFin.finished)
       (raw_ee0 raw_cert0 raw_cv0 raw_sf0:CS.conn_event)
       (tail0:list CS.conn_event).
-        PWHead.received_handshake_head_normal_form
-          (M.EncryptedExtensions ee0) raw_ee0 /\
-        PWHead.received_handshake_head_normal_form
-          (M.Certificate cert0) raw_cert0 /\
-        PWHead.received_handshake_head_normal_form
-          (M.CertificateVerify cv0) raw_cv0 /\
-        PWHead.received_handshake_head_normal_form
-          (M.Finished sf0) raw_sf0 /\
-        (forall (e:CS.conn_event).
-          L.memP e region0 ==> CCShape.is_client_hs_install e == true) /\
-        (exists (er:CS.conn_event).
-          L.memP er region0 /\
-          CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
-        (exists (ew:CS.conn_event).
-          L.memP ew region0 /\
-          CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
-        s.client.CS.cs_event_log ==
-          L.append
-            (PWSeg.client_cleartext_handshake_prefix_events
-              start0 ch0 sh0 client_shared0)
-            (L.append region0
-              (raw_ee0 :: raw_cert0 :: CS.ConnLocalEvent cv_validate0 ::
-               raw_cv0 :: CS.ConnLocalEvent cv_verify0 :: raw_sf0 :: tail0))
+        client_normalized_appdata_spine_body
+          s.client start0 ch0 sh0 client_shared0 region0 ee0 cert0
+          cv_validate0 cv0 cv_verify0 sf0
+          raw_ee0 raw_cert0 raw_cv0 raw_sf0 tail0
     with start ch sh client_shared region
          ee cert cv_validate cv cv_verify sf
          raw_ee raw_cert raw_cv raw_sf raw_tail
@@ -3404,10 +3229,7 @@ let lemma_finish_strong (s:sysp)
       CCShape.delivers_handshake g_cv (M.CertificateVerify cv_c) /\
       CCShape.delivers_handshake g_sf (M.Finished sf_c) /\
       CCShape.canonical_log raw_tail == tail_c
-  returns
-    (server_flight_pairs_conclusion s.client s.server /\
-     client_normalized_appdata_exact_spine s.client)
-  with _.
+  with
   (
     (* Peel each delivery group down to the event that carries its message. *)
     CCShape.lemma_delivers_handshake_singleton g_ee (M.EncryptedExtensions ee_c);
@@ -3496,10 +3318,7 @@ let lemma_finish_strong (s:sysp)
         PWHead.received_handshake_head_normal_form (M.Certificate cert_c) raw_cert /\
         PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
         PWHead.received_handshake_head_normal_form (M.Finished sf_c) raw_sf
-    returns
-      (server_flight_pairs_conclusion s.client s.server /\
-       client_normalized_appdata_exact_spine s.client)
-    with _.
+    with
     (
       lemma_normalized_client_spine_from_raw s ch_c sh_c raw_flight_c
         ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
@@ -3561,10 +3380,7 @@ let lemma_combine_strong (s:sysp)
     (d_ch_s rest_sr:B.bytes).
     server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-  returns
-    (server_flight_pairs_conclusion s.client s.server /\
-     client_normalized_appdata_exact_spine s.client)
-  with _.
+  with
   (
     eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
       (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
@@ -3574,10 +3390,7 @@ let lemma_combine_strong (s:sysp)
       (rest_cs:B.bytes).
       client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
         tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    returns
-      (server_flight_pairs_conclusion s.client s.server /\
-       client_normalized_appdata_exact_spine s.client)
-    with _.
+    with
     (
       lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
         fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr

@@ -28,17 +28,7 @@ let lemma_client_server_application_record_material_agrees_from_normalized_proje
   eliminate exists
     (w:normalized_projection_boundary_witnesses).
     paired_supported_normalized_projection_boundary_core_inputs client server w
-  returns
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   (
     Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
       client
@@ -72,17 +62,7 @@ let lemma_client_server_application_record_material_agrees_from_normalized_proje
   eliminate exists
     (w:PCB.handshake_complete_boundary_witnesses).
     paired_supported_normalized_projection_boundary_inputs client server w
-  returns
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   (
     Pairing.lemma_client_server_application_record_material_agrees_from_cleartext_raw_key_shares_and_protected_event_projection_witnesses
       client
@@ -117,17 +97,7 @@ let lemma_client_server_application_record_material_agrees_from_normalized_stage
     (w:PCB.handshake_complete_boundary_witnesses)
     (s:staged_replay_witnesses).
     paired_supported_normalized_staged_replay_boundary_inputs client server w s
-  returns
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   (
     PR.lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_staged_replays_v2
       client

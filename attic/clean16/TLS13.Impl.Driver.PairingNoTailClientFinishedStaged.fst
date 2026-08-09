@@ -52,9 +52,7 @@ let lemma_client_finished_model12_exact_suffix_raw_record_slice
       tail_sent
       tail_received
       client.CS.cs_model
-  returns
-    client_finished_model12_exact_suffix_raw_record_slice client
-  with _.
+  with
   (
     PNTCSR.lemma_client_finished_exact_suffix_raw_slice
       model12
@@ -68,9 +66,7 @@ let lemma_client_finished_model12_exact_suffix_raw_record_slice
     eliminate exists finished_raw.
       Seq.equal tail_sent finished_raw /\
       CS.raw_records_exactly finished_raw T.Application_data 1
-    returns
-      client_finished_model12_exact_suffix_raw_record_slice client
-    with _.
+    with
     (
       introduce exists
         sf
@@ -239,11 +235,7 @@ let lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_milestone
       client.CS.cs_model /\
     TLS13.Impl.Driver.PairingNoTailInversion.client_application_progress_rank
       client.CS.cs_model == 0
-  returns
-    paired_no_tail_client_finished_staged_milestone
-      client
-      server
-  with _.
+  with
   (
     PNTCFS.lemma_client_after_server_finished_model_facts model12;
     assert (client_finished_model12_replay_slice client);
@@ -304,8 +296,7 @@ let lemma_clean16_no_tail_valid_byte_traces_client_finished_staged_milestone
         [] /\
       PCPS.client_no_tail_two_handshake_install_cover e42 e52 /\
       PNTCAS.client_no_tail_application_install_cover e132 e142
-    returns client_finished_model12_exact_suffix_replay_slice client
-    with _.
+    with
     (
       assert (sf2 == sf);
       assert (

@@ -228,7 +228,7 @@ let lemma_connection_state_single_step_server_hello_none_pre_send
     connection_state_single_step x y ==>
     server_hello_none_pre_send_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_server_hello_none_pre_send x y
 
 let lemma_consistent_server_hello_none_pre_send (st:connection_state)
@@ -268,7 +268,7 @@ let lemma_connection_state_single_step_server_hello_selection_link
     connection_state_single_step x y ==>
     server_hello_selection_link_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_server_hello_selection_link x y
 
 let lemma_consistent_server_hello_selection_link (st:connection_state)
@@ -321,8 +321,7 @@ let lemma_server_x25519_key_share_projection_of_hello_present (server:connection
     eliminate
       server_x25519_pre_server_hello_projection server \/
       server_x25519_key_share_projection server
-    returns server_x25519_key_share_projection server
-    with _hpre. begin
+    with begin
       (match
          hs.hs_server_selection, hs.hs_client_hello,
          hs.hs_server_hello, hs.hs_keys.ks_shared_secret
@@ -345,7 +344,7 @@ let lemma_server_x25519_key_share_projection_of_hello_present (server:connection
        | _, _, _, _ -> assert False);
       assert (server_x25519_key_share_projection server)
       end
-    and _hfull. ()
+    and ()
   | _ ->
     assert (stable_server_x25519_key_share_projection server);
     assert (server_x25519_key_share_projection server)

@@ -43,9 +43,8 @@ let rec lemma_drain_chain_progress (n:nat) (st0 st1:CS.connection_state)
     eliminate
       (st1 == st0) \/
       (exists st'. D.drain_step st0 st' /\ D.drain_chain m st' st1)
-    returns (client_progress_preorder #CTypes.client_local_event st0 st1)
-    with _. ()
-    and _.
+    with ()
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state

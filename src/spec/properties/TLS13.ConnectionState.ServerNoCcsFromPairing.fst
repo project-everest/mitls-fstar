@@ -72,8 +72,7 @@ let lemma_no_received_ccs_from_pairing
     Seq.equal client.CS.cs_wire_log.CL.raw_sent
       (WF.serialize_all CW.tls_record_wire_format
         (SM.trace_wire_outputs client_trace))
-  returns SCShape.log_has_no_received_ccs server.CS.cs_event_log
-  with _cl.
+  with
   (
     eliminate exists (server_trace:server_trace_t).
       SM.trace_reaches
@@ -85,8 +84,7 @@ let lemma_no_received_ccs_from_pairing
       Seq.equal server.CS.cs_wire_log.CL.raw_sent
         (WF.serialize_all CW.tls_record_wire_format
           (SM.trace_wire_outputs server_trace))
-    returns SCShape.log_has_no_received_ccs server.CS.cs_event_log
-    with _sv.
+    with
     (
       // STEP 3: byte_pairing at TlsQuiet gives client-sent == server-received.
       assert (Seq.equal

@@ -490,6 +490,19 @@ let lemma_sh_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
     (* (e) extensions list vldata conv *)
     assert (GSHBody.serverHelloBody_extensions_conv ([ks_ext; sv_ext] <: GSHBody.serverHelloBody_extensions_mid)
               == Some ([ks_ext; sv_ext] <: GSHBody.serverHelloBody_extensions));
+    (* (f) serverHelloBody struct conv *)
+    let shbody_mid : GSHBody.serverHelloBody_mid = (((sid <: Seq.seq U8.t), cs), (0uy, [ks_ext; sv_ext])) in
+    let body : GSHBody.serverHelloBody = {
+      GSHBody.legacy_session_id_echo = (sid <: GSHBody.serverHelloBody_legacy_session_id_echo);
+      GSHBody.cipher_suite = cs;
+      GSHBody.legacy_compression_method = 0uy;
+      GSHBody.extensions = ([ks_ext; sv_ext] <: GSHBody.serverHelloBody_extensions);
+    } in
+    assert (GSHBody.serverHelloBody_conv shbody_mid == Some body);
+    (* (g) serverHello_body if-then-else conv (non-HRR branch) *)
+    let body_mid : GSHB.serverHello_body_mid = ((rnd <: Seq.seq U8.t), (| false, shbody_mid |)) in
+    assert (GSHB.serverHello_body_conv body_mid ==
+              Some (GSHB.ServerHello_body_false ({ GSHB.tag = (rnd <: Seq.lseq U8.t 32); GSHB.value = body })));
     ()
 #pop-options
 
@@ -1708,7 +1721,7 @@ let rec lemma_cipher_suites_match_coerce
                   u16_to_cipher_suite (Seq.index wire k) == LL.index cs k
       with begin
         introduce _ ==> _
-        with _. begin
+        with begin
           if k = 0 then ()
           else begin
             assert (Seq.index wire k == Seq.index wire' (k - 1));
@@ -1735,7 +1748,7 @@ let rec lemma_sig_schemes_match_coerce
                   u16_to_sig_scheme (Seq.index wire k) == LL.index ss k
       with begin
         introduce _ ==> _
-        with _. begin
+        with begin
           if k = 0 then ()
           else begin
             assert (Seq.index wire k == Seq.index wire' (k - 1));

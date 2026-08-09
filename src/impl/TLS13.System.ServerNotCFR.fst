@@ -131,7 +131,7 @@ let lemma_single_step_ctrl_not_cfr (_:unit)
           ctrl_not_cfr y)
   = introduce forall x y.
       ctrl_not_cfr x /\ SMR.connection_state_single_step x y ==> ctrl_not_cfr y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_ctrl_not_cfr x y
 
 (** THE EXCLUSION: a consistent connection is never at `HsClientFinishedReceived`. **)
@@ -275,7 +275,7 @@ let lemma_single_step_not_shsfv (_:unit)
           srv_not_hsfv y)
   = introduce forall x y.
       srv_not_hsfv x /\ SMR.connection_state_single_step x y ==> srv_not_hsfv y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_not_shsfv x y
 
 (** THE EXCLUSION: a consistent SERVER is never at `HsServerFinishedVerified`. **)
@@ -404,7 +404,7 @@ let lemma_single_step_not_cfv (_:unit)
           ctrl_not_cfv y)
   = introduce forall x y.
       ctrl_not_cfv x /\ SMR.connection_state_single_step x y ==> ctrl_not_cfv y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_not_cfv x y
 
 (** THE EXCLUSION: a consistent connection is never at `HsClientFinishedVerified`. **)

@@ -226,7 +226,7 @@ let lemma_connection_state_single_step_client_certificate_verify_reachability
     connection_state_single_step x y ==>
     client_certificate_verify_reachability_invariant y.cs_model
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_client_certificate_verify_reachability x y
 
 let lemma_connection_state_consistent_client_certificate_verify_reachability st =

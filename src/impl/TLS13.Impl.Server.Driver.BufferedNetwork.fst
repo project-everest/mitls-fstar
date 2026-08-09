@@ -27,6 +27,7 @@ module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
 
+noextract
 noeq type endpoint_state = {
   endpoint_connection: CS.connection_state;
   endpoint_network_out: B.bytes;

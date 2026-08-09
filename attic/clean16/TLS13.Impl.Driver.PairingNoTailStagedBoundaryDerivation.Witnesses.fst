@@ -202,9 +202,7 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
         suffix_sent_s
         suffix_received_s
         server.CS.cs_model)
-    returns
-      (PNTPPD.installed_protected_projection_replay_witnesses client server)
-    with _sc.
+    with
     (
       assert (PNTSFR.client_post_derive_ordered_received_decode_replay_slice client);
       eliminate exists
@@ -287,9 +285,7 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
           suffix_sent_c
           suffix_received_c
           client.CS.cs_model)
-      returns
-        (PNTPPD.installed_protected_projection_replay_witnesses client server)
-      with _cc.
+      with
       (
         assert (PNTCFRR.server_client_finished_received_decode_suffix_replay_slice server);
         eliminate exists
@@ -407,9 +403,7 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
             client_finished_sent_r
             client_finished_received_r
             server.CS.cs_model)
-        returns
-          (PNTPPD.installed_protected_projection_replay_witnesses client server)
-        with _cr.
+        with
         (
           assert (PNTCFR.client_finished_canonical_sent_seal_replay_slice client);
           eliminate exists
@@ -472,9 +466,7 @@ let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_he
                 CL.message_value = M.TlsHandshake (M.Finished cf_f);
               })) == Some client.CS.cs_model /\
             CS.raw_records_exactly suffix_sent_f T.Application_data 1)
-          returns
-            (PNTPPD.installed_protected_projection_replay_witnesses client server)
-          with _cf.
+          with
           (
             WitnessPack.lemma_installed_witness_pack_from_extracted_slices
               client server

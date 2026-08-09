@@ -459,6 +459,23 @@ fn server_application_traffic_secret
   hkdf_expand_label master lbl 12sz transcript_hash 32sz out 32sz;
 }
 
+fn application_traffic_secret_update
+  (old_secret: array U8.t)
+  (out: array U8.t)
+  requires pts_to old_secret 'old_secret_bytes **
+           pts_to out 'old **
+           pure (B.length 'old_secret_bytes == 32 /\
+                 B.length 'old == 32)
+  ensures pts_to old_secret 'old_secret_bytes **
+          pts_to out (K.application_traffic_secret_update
+                        (Ghost.reveal 'old_secret_bytes))
+{
+  let mut lbl = [| 0uy; 11sz |];
+  write_label_traffic_update lbl;
+  let mut empty_context = [| 0uy; 0sz |];
+  hkdf_expand_label old_secret lbl 11sz empty_context 0sz out 32sz;
+}
+
 fn finished_verify_data
   (base_key: array U8.t)
   (transcript_hash: array U8.t)
@@ -481,23 +498,6 @@ fn finished_verify_data
   let mut empty_context = [| 0uy; 0sz |];
   hkdf_expand_label base_key lbl 8sz empty_context 0sz finished_key 32sz;
   Crypto.hmac_sha256 finished_key 32sz transcript_hash 32sz out;
-}
-
-fn application_traffic_secret_update
-  (old_secret: array U8.t)
-  (out: array U8.t)
-  requires pts_to old_secret 'old_secret_bytes **
-           pts_to out 'old **
-           pure (B.length 'old_secret_bytes == 32 /\
-                 B.length 'old == 32)
-  ensures pts_to old_secret 'old_secret_bytes **
-          pts_to out (K.application_traffic_secret_update
-                        (Ghost.reveal 'old_secret_bytes))
-{
-  let mut lbl = [| 0uy; 11sz |];
-  write_label_traffic_update lbl;
-  let mut empty_context = [| 0uy; 0sz |];
-  hkdf_expand_label old_secret lbl 11sz empty_context 0sz out 32sz;
 }
 
 fn derive_traffic_key

@@ -98,12 +98,7 @@ let lemma_sent_client_hello_raw_from_sent_replay_single
       tail_sent
       tail_received
       final_model
-  returns
-    Seq.equal raw_sent
-      (serialized_cleartext_tls_message
-        (M.TlsHandshake (M.ClientHello ch))) /\
-    Seq.equal raw_received B.empty
-  with _.
+  with
   ( assert (cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello ch))
       delta_sent);
@@ -173,12 +168,7 @@ let lemma_sent_server_hello_raw_from_sent_replay_single
       tail_sent
       tail_received
       final_model
-  returns
-    Seq.equal raw_sent
-      (serialized_cleartext_tls_message
-        (M.TlsHandshake (M.ServerHello sh))) /\
-    Seq.equal raw_received B.empty
-  with _.
+  with
   ( assert (cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello sh))
       delta_sent);
@@ -248,12 +238,7 @@ let lemma_received_server_hello_raw_from_received_replay_single
       tail_sent
       tail_received
       final_model
-  returns
-    Seq.equal raw_sent B.empty /\
-    Seq.equal raw_received
-      (serialized_cleartext_tls_message
-        (M.TlsHandshake (M.ServerHello sh)))
-  with _.
+  with
   ( assert (Seq.equal delta_sent B.empty);
     assert (received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ServerHello sh))
@@ -326,12 +311,7 @@ let lemma_received_client_hello_raw_from_sent_replay_single
       tail_sent
       tail_received
       final_model
-  returns
-    Seq.equal raw_sent B.empty /\
-    received_cleartext_tls_message_raw
-      (M.TlsHandshake (M.ClientHello ch))
-      raw_received
-  with _.
+  with
   ( assert (Seq.equal delta_sent B.empty);
     assert (received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello ch))
@@ -398,12 +378,7 @@ let lemma_received_client_hello_raw_from_received_replay_single
       tail_sent
       tail_received
       final_model
-  returns
-    Seq.equal raw_sent B.empty /\
-    received_cleartext_tls_message_raw
-      (M.TlsHandshake (M.ClientHello ch))
-      raw_received
-  with _.
+  with
   ( assert (Seq.equal delta_sent B.empty);
     assert (received_cleartext_tls_message_raw
       (M.TlsHandshake (M.ClientHello ch))
@@ -538,7 +513,7 @@ let lemma_paired_replay_split_prefixes_equal_from_full_streams
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal server_prefix_sent client_prefix_received);
       assert (Seq.equal client_prefix_sent server_prefix_received) )
 
@@ -657,7 +632,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_from_plain
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal server_prefix_sent client_prefix_received);
       assert (Seq.equal client_prefix_sent server_prefix_received) )
 
@@ -698,7 +673,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_empty
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     introduce forall
       (server_mid:connection_model)
       (client_mid:connection_model)
@@ -771,7 +746,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_empty
       Seq.equal server_prefix_sent client_prefix_received /\
       Seq.equal client_prefix_sent server_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( assert (Seq.equal server_prefix_sent B.empty);
         assert (Seq.equal server_prefix_received B.empty);
         assert (Seq.equal client_prefix_sent B.empty);
@@ -837,7 +812,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_empty
     Seq.equal sent_prefix_sent received_prefix_sent /\
     Seq.equal sent_prefix_received received_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal sent_prefix_sent B.empty);
       assert (Seq.equal sent_prefix_received B.empty);
       assert (Seq.equal received_prefix_sent B.empty);
@@ -933,7 +908,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_local
     Seq.equal sent_prefix_sent received_prefix_sent /\
     Seq.equal sent_prefix_received received_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal sent_prefix_sent B.empty);
       assert (Seq.equal sent_prefix_received B.empty);
       assert (Seq.equal received_prefix_sent B.empty);
@@ -1012,7 +987,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_cons_local
     Seq.equal sent_prefix_sent received_prefix_sent /\
     Seq.equal sent_prefix_received received_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( PWR.lemma_conn_events_sent_seal_replay_head
         model
         (ConnLocalEvent ev)
@@ -1039,10 +1014,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_cons_local
           sent_tail_sent
           sent_tail_received
           sent_mid
-      returns
-        Seq.equal sent_prefix_sent received_prefix_sent /\
-        Seq.equal sent_prefix_received received_prefix_received
-      with _.
+      with
       ( PWR.lemma_conn_events_received_decode_replay_head
           model
           (ConnLocalEvent ev)
@@ -1073,10 +1045,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_cons_local
             received_tail_sent
             received_tail_received
             received_mid
-        returns
-          Seq.equal sent_prefix_sent received_prefix_sent /\
-          Seq.equal sent_prefix_received received_prefix_received
-        with _.
+        with
         ( assert (sent_head_model == post_model);
           assert (received_head_model == post_model);
           assert (Seq.equal sent_delta_sent B.empty);
@@ -1232,7 +1201,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_sent_cleartext
     Seq.equal sent_prefix_sent received_prefix_sent /\
     Seq.equal sent_prefix_received received_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (
         Seq.equal
           sent_prefix_sent
@@ -1333,7 +1302,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_sent_cleartext
       Seq.equal sent_prefix_sent received_prefix_sent /\
       Seq.equal sent_prefix_received received_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_conn_events_sent_seal_replay_head
           model
           ev
@@ -1356,10 +1325,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_sent_cleartext
             sent_tail_sent
             sent_tail_received
             sent_mid
-        returns
-          Seq.equal sent_prefix_sent received_prefix_sent /\
-          Seq.equal sent_prefix_received received_prefix_received
-        with _.
+        with
         ( PWR.lemma_conn_events_received_decode_replay_head
             model
             ev
@@ -1383,10 +1349,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_sent_cleartext
               received_tail_sent
               received_tail_received
               received_mid
-          returns
-            Seq.equal sent_prefix_sent received_prefix_sent /\
-            Seq.equal sent_prefix_received received_prefix_received
-          with _.
+          with
           ( assert (sent_head_model == post_model);
             assert (received_head_model == post_model);
             assert (cleartext_tls_message_raw msg sent_delta_sent);
@@ -1552,7 +1515,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
     Seq.equal sent_prefix_sent received_prefix_sent /\
     Seq.equal sent_prefix_received received_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal sent_prefix_sent B.empty);
       assert (Seq.equal received_prefix_sent B.empty);
       assert (
@@ -1655,7 +1618,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
       Seq.equal sent_prefix_sent received_prefix_sent /\
       Seq.equal sent_prefix_received received_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_conn_events_sent_seal_replay_head
           model
           ev
@@ -1678,10 +1641,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
             sent_tail_sent
             sent_tail_received
             sent_mid
-        returns
-          Seq.equal sent_prefix_sent received_prefix_sent /\
-          Seq.equal sent_prefix_received received_prefix_received
-        with _.
+        with
         ( PWR.lemma_conn_events_received_decode_replay_head
             model
             ev
@@ -1705,10 +1665,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
               received_tail_sent
               received_tail_received
               received_mid
-          returns
-            Seq.equal sent_prefix_sent received_prefix_sent /\
-            Seq.equal sent_prefix_received received_prefix_received
-          with _.
+          with
           ( assert (sent_head_model == post_model);
             assert (received_head_model == post_model);
             assert (Seq.equal sent_delta_sent B.empty);
@@ -1881,7 +1838,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_received_client_hello
     Seq.equal sent_prefix_sent received_prefix_sent /\
     Seq.equal sent_prefix_received received_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( lemma_received_client_hello_raw_from_sent_replay_single
         model
         ch
@@ -2004,7 +1961,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_client
       Seq.equal sent_prefix_sent received_prefix_sent /\
       Seq.equal sent_prefix_received received_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_conn_events_sent_seal_replay_head
           model
           ev
@@ -2027,10 +1984,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_client
             sent_tail_sent
             sent_tail_received
             sent_mid
-        returns
-          Seq.equal sent_prefix_sent received_prefix_sent /\
-          Seq.equal sent_prefix_received received_prefix_received
-        with _.
+        with
         ( PWR.lemma_conn_events_received_decode_replay_head
             model
             ev
@@ -2054,10 +2008,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_client
               received_tail_sent
               received_tail_received
               received_mid
-          returns
-            Seq.equal sent_prefix_sent received_prefix_sent /\
-            Seq.equal sent_prefix_received received_prefix_received
-          with _.
+          with
           ( assert (sent_head_model == post_model);
             assert (received_head_model == post_model);
             assert (Seq.equal sent_delta_sent B.empty);
@@ -2260,7 +2211,7 @@ let lemma_paired_replay_split_prefixes_equal_empty
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal server_prefix_sent B.empty);
       assert (Seq.equal server_prefix_received B.empty);
       assert (Seq.equal client_prefix_sent B.empty);
@@ -2364,7 +2315,7 @@ let lemma_paired_replay_split_prefixes_equal_single_local
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (Seq.equal server_prefix_sent B.empty);
       assert (Seq.equal server_prefix_received B.empty);
       assert (Seq.equal client_prefix_sent B.empty);
@@ -2488,7 +2439,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_server_local
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( PWR.lemma_conn_events_sent_seal_replay_head
         server_model
         (ConnLocalEvent server_ev)
@@ -2518,10 +2469,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_server_local
           sent_tail_sent
           sent_tail_received
           server_mid
-      returns
-        Seq.equal server_prefix_sent client_prefix_received /\
-        Seq.equal client_prefix_sent server_prefix_received
-      with _.
+      with
       ( PWR.lemma_conn_events_received_decode_replay_head
           server_model
           (ConnLocalEvent server_ev)
@@ -2553,10 +2501,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_server_local
             received_tail_sent
             received_tail_received
             server_mid
-        returns
-          Seq.equal server_prefix_sent client_prefix_received /\
-          Seq.equal client_prefix_sent server_prefix_received
-        with _.
+        with
         ( assert (sent_head_model == server_post);
           assert (received_head_model == server_post);
           assert (Seq.equal sent_delta_sent B.empty);
@@ -2669,7 +2614,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     introduce forall
       (server_mid:connection_model)
       (client_mid:connection_model)
@@ -2742,7 +2687,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
       Seq.equal server_prefix_sent client_prefix_received /\
       Seq.equal client_prefix_sent server_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
           server_model
           [server_head]
@@ -2804,10 +2749,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
             server_tail_sent
             server_tail_received
             server_mid
-        returns
-          Seq.equal server_prefix_sent client_prefix_received /\
-          Seq.equal client_prefix_sent server_prefix_received
-        with _.
+        with
         ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
             client_model
             [client_head]
@@ -2869,10 +2811,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello
               client_tail_sent
               client_tail_received
               client_mid
-          returns
-            Seq.equal server_prefix_sent client_prefix_received /\
-            Seq.equal client_prefix_sent server_prefix_received
-          with _.
+          with
           ( assert (server_head_mid == server_post);
             assert (client_head_mid == client_post);
             lemma_received_client_hello_raw_from_sent_replay_single
@@ -3106,7 +3045,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_client_local
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( PWR.lemma_conn_events_sent_seal_replay_head
         client_model
         (ConnLocalEvent client_ev)
@@ -3136,10 +3075,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_client_local
           sent_tail_sent
           sent_tail_received
           client_mid
-      returns
-        Seq.equal server_prefix_sent client_prefix_received /\
-        Seq.equal client_prefix_sent server_prefix_received
-      with _.
+      with
       ( PWR.lemma_conn_events_received_decode_replay_head
           client_model
           (ConnLocalEvent client_ev)
@@ -3171,10 +3107,7 @@ let lemma_paired_replay_split_prefixes_equal_with_full_streams_cons_client_local
             received_tail_sent
             received_tail_received
             client_mid
-        returns
-          Seq.equal server_prefix_sent client_prefix_received /\
-          Seq.equal client_prefix_sent server_prefix_received
-        with _.
+        with
         ( assert (sent_head_model == client_post);
           assert (received_head_model == client_post);
           assert (Seq.equal sent_delta_sent B.empty);
@@ -3261,7 +3194,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_local
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (paired_replay_split_prefixes_equal_with_full_streams
         server_post
         client_model
@@ -3342,7 +3275,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_local
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (paired_replay_split_prefixes_equal_with_full_streams
         server_model
         client_post
@@ -3449,7 +3382,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     introduce forall
       (server_mid:connection_model)
       (client_mid:connection_model)
@@ -3522,7 +3455,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
       Seq.equal server_prefix_sent client_prefix_received /\
       Seq.equal client_prefix_sent server_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
           server_model
           [server_head]
@@ -3584,10 +3517,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
             server_tail_sent
             server_tail_received
             server_mid
-        returns
-          Seq.equal server_prefix_sent client_prefix_received /\
-          Seq.equal client_prefix_sent server_prefix_received
-        with _.
+        with
         ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
             client_model
             [client_head]
@@ -3649,10 +3579,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
               client_tail_sent
               client_tail_received
               client_mid
-          returns
-            Seq.equal server_prefix_sent client_prefix_received /\
-            Seq.equal client_prefix_sent server_prefix_received
-          with _.
+          with
           ( assert (server_head_mid == server_post);
             assert (client_head_mid == client_post);
             lemma_sent_server_hello_raw_from_sent_replay_single
@@ -4038,7 +3965,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalize
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     introduce forall
       (server_mid:connection_model)
       (client_mid:connection_model)
@@ -4111,7 +4038,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalize
       Seq.equal server_prefix_sent client_prefix_received /\
       Seq.equal client_prefix_sent server_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
           server_model
           [server_head]
@@ -4173,10 +4100,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalize
             server_tail_sent
             server_tail_received
             server_mid
-        returns
-          Seq.equal server_prefix_sent client_prefix_received /\
-          Seq.equal client_prefix_sent server_prefix_received
-        with _.
+        with
         ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
             client_model
             [client_head]
@@ -4238,10 +4162,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalize
               client_tail_sent
               client_tail_received
               client_mid
-          returns
-            Seq.equal server_prefix_sent client_prefix_received /\
-            Seq.equal client_prefix_sent server_prefix_received
-          with _.
+          with
           ( assert (server_head_mid == server_post);
             assert (client_head_mid == client_post);
             lemma_sent_server_hello_raw_from_sent_replay_single
@@ -4444,7 +4365,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalize
       server_final
       client_final
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     introduce forall
       (server_mid:connection_model)
       (client_mid:connection_model)
@@ -4517,7 +4438,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalize
       Seq.equal server_prefix_sent client_prefix_received /\
       Seq.equal client_prefix_sent server_prefix_received
     with
-      introduce _ ==> _ with _.
+      introduce _ ==> _ with
       ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
           server_model
           [server_head]
@@ -4579,10 +4500,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalize
             server_tail_sent
             server_tail_received
             server_mid
-        returns
-          Seq.equal server_prefix_sent client_prefix_received /\
-          Seq.equal client_prefix_sent server_prefix_received
-        with _.
+        with
         ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
             client_model
             [client_head]
@@ -4644,10 +4562,7 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_client_hello_normalize
               client_tail_sent
               client_tail_received
               client_mid
-          returns
-            Seq.equal server_prefix_sent client_prefix_received /\
-            Seq.equal client_prefix_sent server_prefix_received
-          with _.
+          with
           ( assert (server_head_mid == server_post);
             assert (client_head_mid == client_post);
             lemma_received_client_hello_raw_from_sent_replay_single
@@ -5246,8 +5161,7 @@ let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
       tail_sent1
       tail_received1
       mid
-  returns mid == server_model5
-  with _.
+  with
   ( assert (model1 == server_model1);
     PWR.lemma_conn_events_sent_seal_replay_head
       server_model1
@@ -5269,8 +5183,7 @@ let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
         tail_sent2
         tail_received2
         mid
-    returns mid == server_model5
-    with _.
+    with
     ( assert (model2 == server_model2);
       PWR.lemma_conn_events_sent_seal_replay_head
         server_model2
@@ -5292,8 +5205,7 @@ let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
           tail_sent3
           tail_received3
           mid
-      returns mid == server_model5
-      with _.
+      with
       ( assert (model3 == server_model3);
         PWR.lemma_conn_events_sent_seal_replay_head
           server_model3
@@ -5315,8 +5227,7 @@ let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
             tail_sent4
             tail_received4
             mid
-        returns mid == server_model5
-        with _.
+        with
         ( assert (model4 == server_model4);
           PWR.lemma_conn_events_sent_seal_replay_head
             server_model4
@@ -5338,8 +5249,7 @@ let lemma_conn_events_sent_seal_replay_server_cleartext_handshake_prefix_final_m
               tail_sent5
               tail_received5
               mid
-          returns mid == server_model5
-          with _.
+          with
           ( assert (model5 == server_model5);
             assert (mid == server_model5) ) ) ) ) )
 
@@ -5426,8 +5336,7 @@ let lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_m
       tail_sent1
       tail_received1
       mid
-  returns mid == client_model4
-  with _.
+  with
   ( assert (model1 == client_model1);
     PWR.lemma_conn_events_sent_seal_replay_head
       client_model1
@@ -5449,8 +5358,7 @@ let lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_m
         tail_sent2
         tail_received2
         mid
-    returns mid == client_model4
-    with _.
+    with
     ( assert (model2 == client_model2);
       PWR.lemma_conn_events_sent_seal_replay_head
         client_model2
@@ -5472,8 +5380,7 @@ let lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_m
           tail_sent3
           tail_received3
           mid
-      returns mid == client_model4
-      with _.
+      with
       ( assert (model3 == client_model3);
         PWR.lemma_conn_events_sent_seal_replay_head
           client_model3
@@ -5495,8 +5402,7 @@ let lemma_conn_events_sent_seal_replay_client_cleartext_handshake_prefix_final_m
             tail_sent4
             tail_received4
             mid
-        returns mid == client_model4
-        with _.
+        with
         ( assert (model4 == client_model4);
           assert (mid == client_model4) ) ) ) )
 
@@ -5615,7 +5521,7 @@ let lemma_paired_replay_split_prefixes_equal_single_server_hello
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( assert (
         Seq.equal
           server_prefix_sent
@@ -5747,7 +5653,7 @@ let lemma_paired_replay_split_prefixes_equal_single_client_hello_with_full_strea
     Seq.equal server_prefix_sent client_prefix_received /\
     Seq.equal client_prefix_sent server_prefix_received
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     ( lemma_received_client_hello_raw_from_sent_replay_single
         server_model
         ch
@@ -6002,37 +5908,7 @@ let lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
       server_suffix_sent
       server_suffix_received
       server_final
-  returns
-    exists server_mid' client_mid'
-      server_suffix_sent' server_suffix_received'
-      client_suffix_sent' client_suffix_received'.
-      Seq.equal server_suffix_sent' client_suffix_received' /\
-      Seq.equal client_suffix_sent' server_suffix_received' /\
-      conn_events_sent_seal_replay
-        server_mid'
-        server_suffix
-        server_suffix_sent'
-        server_suffix_received'
-        server_final /\
-      conn_events_received_decode_replay
-        server_mid'
-        server_suffix
-        server_suffix_sent'
-        server_suffix_received'
-        server_final /\
-      conn_events_sent_seal_replay
-        client_mid'
-        client_suffix
-        client_suffix_sent'
-        client_suffix_received'
-        client_final /\
-      conn_events_received_decode_replay
-        client_mid'
-        client_suffix
-        client_suffix_sent'
-        client_suffix_received'
-        client_final
-  with _.
+  with
   ( PWR.lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
       client_model
       client_prefix
@@ -6087,37 +5963,7 @@ let lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
         client_suffix_sent
         client_suffix_received
         client_final
-    returns
-      exists server_mid' client_mid'
-        server_suffix_sent' server_suffix_received'
-        client_suffix_sent' client_suffix_received'.
-        Seq.equal server_suffix_sent' client_suffix_received' /\
-        Seq.equal client_suffix_sent' server_suffix_received' /\
-        conn_events_sent_seal_replay
-          server_mid'
-          server_suffix
-          server_suffix_sent'
-          server_suffix_received'
-          server_final /\
-        conn_events_received_decode_replay
-          server_mid'
-          server_suffix
-          server_suffix_sent'
-          server_suffix_received'
-          server_final /\
-        conn_events_sent_seal_replay
-          client_mid'
-          client_suffix
-          client_suffix_sent'
-          client_suffix_received'
-          client_final /\
-        conn_events_received_decode_replay
-          client_mid'
-          client_suffix
-          client_suffix_sent'
-          client_suffix_received'
-          client_final
-    with _.
+    with
     ( assert (
         Seq.equal server_prefix_sent client_prefix_received /\
         Seq.equal client_prefix_sent server_prefix_received);
@@ -6398,43 +6244,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_w
       client_raw_sent
       client_raw_received
       client_final
-  returns
-    exists server_mid' client_mid'
-      server_raw_sent' server_raw_received'
-      client_raw_sent' client_raw_received'.
-      Seq.equal server_raw_sent' client_raw_received' /\
-      Seq.equal client_raw_sent' server_raw_received' /\
-      PWL.paired_protected_handshake_contiguous_replay_views
-        server_mid'
-        client_mid'
-        server_material
-        client_material
-        sent_msg0
-        received_msg0
-        sent_msg1
-        received_msg1
-        server_auth_skip
-        client_auth_skip
-        sent_msg2
-        received_msg2
-        client_verify_skip
-        sent_msg3
-        received_msg3
-        verified_server_finished
-        client_app_write_material
-        client_app_read_material
-        server_app_write_material
-        sent_msg4
-        received_msg4
-        client_finished_rest
-        server_finished_rest
-        server_raw_sent'
-        server_raw_received'
-        client_raw_sent'
-        client_raw_received'
-        server_final
-        client_final
-  with _.
+  with
   ( assert (
       PWL.paired_protected_handshake_contiguous_replay_views
         server_mid
