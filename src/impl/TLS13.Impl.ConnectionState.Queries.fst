@@ -3165,6 +3165,58 @@ fn can_receive_encrypted_extensions
   }
 }
 
+fn can_buffer_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            (match st0.CS.cs_model.CS.model_control with
+             | CS.ControlHandshaking stage ->
+               CS.protected_handshake_buffering_stage stage
+             | _ -> False))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let role_ok = config_role_is_client c.config;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok =
+    (stage = 3uy) || (stage = 4uy) || (stage = 6uy) || (stage = 8uy);
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+
+  let ok = role_ok && tag_ok && stage_ok && seq_ok;
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==>
+    (U8.v stage == 3 \/ U8.v stage == 4 \/ U8.v stage == 6 \/ U8.v stage == 8)));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (ok ==>
+    (match st0.CS.cs_model.CS.model_control with
+     | CS.ControlHandshaking stage ->
+       CS.protected_handshake_buffering_stage stage
+     | _ -> False)));
+
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_send_encrypted_extensions_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)

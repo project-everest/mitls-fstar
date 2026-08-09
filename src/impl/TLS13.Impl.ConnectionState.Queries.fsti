@@ -610,6 +610,27 @@ fn can_receive_encrypted_extensions
                 CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
               }))
 
+(* The runtime gate for setting a protected record's plaintext aside instead
+   of interpreting it.  It is exactly the buffering guard of
+   [CS.legal_protected_handshake_step] that a caller cannot already discharge
+   from the message it has parsed: the role, the read-sequence room, and the
+   current handshake stage being one of the four at which a client can
+   receive a protected handshake message
+   ([CS.protected_handshake_buffering_stage]). *)
+fn can_buffer_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            (match st0.CS.cs_model.CS.model_control with
+             | CS.ControlHandshaking stage ->
+               CS.protected_handshake_buffering_stage stage
+             | _ -> False))
+
 fn can_send_encrypted_extensions_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)

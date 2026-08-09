@@ -28,10 +28,17 @@ real-world signature schemes are RSA-PSS and ECDSA P-256.
 | | Sites |
 |---|---|
 | ATLAS OK, before this round of fixes | 54 / 101 |
-| ATLAS OK, after | **77 / 101** |
+| ATLAS OK, after the four bug fixes | 77 / 101 |
+| ATLAS OK, after cross-record handshake reassembly | **83 / 101** |
 | Oracle ceiling (ATLAS's offer, best case) | 83 / 101 |
-| Remaining ATLAS gap (oracle OK, ATLAS fails) | 6 |
+| Remaining ATLAS gap (oracle OK, ATLAS fails) | **0** |
 | Beyond ATLAS's offer, or genuinely unservable | 18 |
+
+**ATLAS now reaches its crypto ceiling.**  Every one of the 101 sites that a
+client with ATLAS's offer can reach at all, ATLAS reaches.  The remaining 18
+are refused by the OpenSSL oracle under the same offer, so they are not ATLAS
+defects; lifting them is a matter of widening the offer (see "Beyond ATLAS's
+offer" below), not of fixing the implementation.
 
 ## Bugs found and fixed
 
@@ -62,60 +69,65 @@ anchored at a different root than the one ATLAS actually receives.
 
 ## Remaining failures
 
-### Real ATLAS gap: cross-record handshake fragmentation (6 sites)
+### FIXED: cross-record handshake fragmentation (was 6 sites)
 
-facebook.com, instagram.com, fbcdn.net, whatsapp.com, whatsapp.net, wa.me.
+facebook.com, instagram.com, fbcdn.net, whatsapp.com, whatsapp.net, wa.me --
+**all six now complete a full 1-RTT handshake and return HTTP.**
 
 TLS 1.3 permits a single handshake message to span several records.  Meta
 serves its server flight in three protected records (1000 / 2161 / ~100 bytes
 of plaintext).  `EncryptedExtensions` is 6 bytes, so `Certificate` starts at
 offset 6 of the first record's plaintext and runs past its end.  The ATLAS
-trace shows this exactly:
+trace showed this exactly:
 
 ```
 2030 PROT_HEAD  (consumed=6, fragment=1000, raw=1022)   head step: EncryptedExtensions
 2033 PROT_ERROR (offset=6,   fragment=1000, 0)          Certificate is truncated
 ```
 
-`legal_protected_handshake_step`'s head branch requires
-`protected_handshake_buffer_empty`, so the second record cannot be joined to
-the 994-byte leftover, and the drain reports `DecodeError`.
+`legal_protected_handshake_step`'s head branch required
+`protected_handshake_buffer_empty`, so the second record could not be joined
+to the 994-byte leftover, and the drain reported `DecodeError`.
 
-**Why this is a phase, not a bug fix.**  The obvious repair -- weaken the head
-guard so its fragment may be `leftover ++ record_plaintext` -- was prototyped
-and does *not* stay local.  `TLS13.Spec.StateMachine.Canonical`'s
-`received_event_nonempty_decode_projection` requires
+**The design that landed.**  The obvious repair -- weaken the head guard so its
+fragment may be `leftover ++ record_plaintext` -- was prototyped and does *not*
+stay local (it falsifies `Replay.lemma_single_message_head_step_model`, on
+which every receiver-side pairing proof rests).  What landed instead leaves the
+head step and the decode projection **completely untouched** and adds a third
+kind of protected-handshake step:
 
-```
-Seq.equal plaintext.M.fragment step.protected_handshake_fragment
-```
+* A **buffering step** (`protected_handshake_buffering == true`) takes delivery
+  of one record without interpreting it: it appends the record's plaintext to
+  the pending reassembly buffer and advances the record read sequence.  It
+  delivers no message.  It is taken when the record's plaintext cannot supply a
+  whole handshake message, or when the pending buffer is already non-empty.
+* The **existing tail-drain machinery** then drains complete messages out of
+  the reassembled buffer one at a time, exactly as it already did for a record
+  carrying several messages.  A truncated leftover reports `NeedMoreInput`, so
+  the driver reads more network input instead of failing the connection.
 
-i.e. the step's fragment **is** the record's plaintext.  That identity is
-consumed by the head-step normal form in `TLS13.Spec.StateMachine.Replay`
-(`lemma_single_message_head_step_model`, `..._decode`,
-`..._replay_normalizes`), which is what lets the receiver-side pairing proofs
--- written against the `ConnNetworkEvent` shape -- apply to head steps at all.
-Under the weakened guard `lemma_single_message_head_step_model` is simply
-false: `step_protected_handshake` clears the pending buffer while the
-corresponding network event does not, and the two models only coincide when
-the buffer was already empty.
+The governing principle is that **a buffering step is invisible to every
+message-level and audit-level projection**: no received message, no transcript
+bytes, no state event, no connection-log entry.  It is visible only in the
+record layer (the read-sequence advance) and in the pending buffer.  That
+principle is what keeps the change tractable, and it is enforced by the type:
+any lemma that treats a `ConnProtectedHandshake` as message-bearing now
+carries `protected_handshake_buffering == false`, because the step's
+`protected_handshake_message` field is inert for a buffering step.
 
-A better-scoped design keeps `step.protected_handshake_fragment` equal to the
-record plaintext (so the decode projection is untouched) and instead parses
-the head message out of `leftover ++ fragment`, storing the concatenation in
-the pending buffer.  The three `Replay` normalization lemmas then need
-`protected_handshake_buffer_empty model` as an added hypothesis, which their
-callers in `TLS13.ConnectionState.ProtectedWireHead` already have.  On top of
-that sits the implementation work: relaxing
-`ConnectionState.Network.store_pending_protected_handshake` (which today
-requires an empty buffer), building the combined fragment in
-`Impl.Client.process_network_bytes`, turning the head gate in
-`try_process_protected_handshake_head` from a runtime buffer-empty check into
-a ghost prefix precondition, and adding a `NeedMoreInput` outcome to
-`pending_protected_handshake_result_correct` so a truncated leftover asks for
-more network input instead of failing the connection.
-
-This is tracked as a separate phase rather than folded into these bug fixes.
+**Cost to the proofs.**  Cross-record buffering only ever arises against a
+*foreign* server: the ATLAS server emits exactly one record per handshake
+message, so against it the buffering guard is always false.  The paired-system
+theorems therefore needed the fact "the client never buffers", which is *true*
+but is not derivable from `TLS13.System.tls_system_inv` -- it needs the
+cross-endpoint protected-record seal, which lives one layer up.  It is carried
+as a hypothesis through `TLS13.System` / `Temporal` and **discharged** in
+`TLS13.System.AppExtrasInv`, where `hs_seq_pairing` / `hs_channel_seal_ok` are
+in scope, as part of a three-way mutual induction
+(`client_hs_buffer_empty` / `no_buffering_steps` / `client_hs_seq_exact`).
+`TLS13.System.StreamTemporal.lemma_flagship_record_material_agreement_ungated`
+restates the record-material flagship with that gate discharged, so no
+top-level theorem is weakened.
 
 ### Beyond ATLAS's offer (15 sites)
 
@@ -150,14 +162,14 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 1 | google.com | OK | — | OK |
 | 2 | cloudflare.com | OK | — | OK |
 | 3 | gstatic.com | OK | — | OK |
-| 4 | facebook.com | HANDSHAKE | connect: verified protocol step failed | OK |
+| 4 | facebook.com | OK | — | OK |
 | 5 | microsoft.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
 | 6 | googleapis.com | OK | — | OK |
 | 7 | youtube.com | OK | — | OK |
 | 8 | amazonaws.com | OK | — | OK |
 | 9 | apple.com | OK | — | OK |
-| 10 | instagram.com | HANDSHAKE | connect: verified protocol step failed | OK |
-| 11 | fbcdn.net | HANDSHAKE | connect: verified protocol step failed | OK |
+| 10 | instagram.com | OK | — | OK |
+| 11 | fbcdn.net | OK | — | OK |
 | 12 | twitter.com | OK | — | OK |
 | 13 | dzen.ru | OK | — | OK |
 | 14 | linkedin.com | OK | — | OK |
@@ -167,11 +179,11 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 18 | live.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
 | 19 | amazon.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
 | 20 | azure.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 21 | domaincontrol.com | NOANCHOR | could not extract a system root for this host | FAIL |
+| 21 | domaincontrol.com | NOANCHOR | no system root anchors this host under the ATLAS offer | FAIL |
 | 22 | bing.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
 | 23 | github.com | OK | — | OK |
 | 24 | wikipedia.org | OK | — | OK |
-| 25 | whatsapp.net | HANDSHAKE | connect: verified protocol step failed | OK |
+| 25 | whatsapp.net | OK | — | OK |
 | 26 | appsflyersdk.com | OK | — | OK |
 | 27 | googleusercontent.com | OK | — | OK |
 | 28 | doubleclick.net | OK | — | OK |
@@ -190,7 +202,7 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 41 | tiktok.com | OK | — | OK |
 | 42 | roblox.com | OK | — | OK |
 | 43 | icloud.com | OK | — | OK |
-| 44 | whatsapp.com | HANDSHAKE | connect: verified protocol step failed | OK |
+| 44 | whatsapp.com | OK | — | OK |
 | 45 | yahoo.com | OK | — | OK |
 | 46 | googledomains.com | OK | — | OK |
 | 47 | msn.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
@@ -200,7 +212,7 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 51 | windows.net | HANDSHAKE | connect: verified protocol step failed | FAIL |
 | 52 | adobe.com | OK | — | OK |
 | 53 | chatgpt.com | OK | — | OK |
-| 54 | wa.me | HANDSHAKE | connect: verified protocol step failed | OK |
+| 54 | wa.me | OK | — | OK |
 | 55 | myfritz.net | OK | — | OK |
 | 56 | vimeo.com | OK | — | OK |
 | 57 | zoom.us | OK | — | OK |

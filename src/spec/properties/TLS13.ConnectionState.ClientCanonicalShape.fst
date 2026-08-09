@@ -147,6 +147,40 @@ let has_read_install (region:list CS.conn_event) : prop =
 let has_write_install (region:list CS.conn_event) : prop =
   exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew
 
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let lemma_client_local_step_event_log_append
+  (st0 c':CS.connection_state) (local:CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires
+        EC.client_step st0 (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [])
+      (ensures
+        exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
+          CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty /\
+          c'.CS.cs_event_log == L.append st0.CS.cs_event_log [ce])
+  = eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+      (EC.client_representation_matches st0 local conn_ev /\
+       EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
+       SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty)
+    returns
+      (exists (ce:CS.conn_event).
+        CS.legal_event st0.CS.cs_model ce /\
+        CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty /\
+        c'.CS.cs_event_log == L.append st0.CS.cs_event_log [ce])
+    with _.
+    (
+      (* [out.so_wire_outputs == []] forces [raw_sent == B.empty] via
+         [client_wire_outputs_match]: serializing the empty output list
+         yields the empty byte sequence. *)
+      assert (Seq.equal raw_sent B.empty)
+    )
+#pop-options
+
 #push-options "--fuel 8 --ifuel 2 --z3rlimit 20"
 let rec append_left_cancel
   (left right0 right1:list CS.conn_event)
@@ -656,7 +690,13 @@ let step_pre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
   CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
   CS.legal_event st0.CS.cs_model conn_ev /\
   is_client_canonical_event conn_ev /\
-  is_received_ccs conn_ev == false
+  is_received_ccs conn_ev == false /\
+  (* Mirrors the [is_received_ccs conn_ev == false] conjunct immediately
+     above: [conn_ev] itself is never a BUFFERING protected-handshake step.
+     Threaded per-step from [no_buffering_steps] exactly as CCS-exclusion is
+     (see [lemma_trace_shape]), so the region-shape invariant below never has
+     to accommodate one. *)
+  is_protected_buffering_step conn_ev == false
 
 unfold
 let hpre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
@@ -666,7 +706,8 @@ let hpre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
   CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
   CS.legal_event st0.CS.cs_model conn_ev /\
   is_client_canonical_event conn_ev /\
-  is_received_ccs conn_ev == false
+  is_received_ccs conn_ev == false /\
+  is_protected_buffering_step conn_ev == false
 
 (* ------------------------------------------------------------------ *)
 (* Append / region snoc lemmas                                         *)
@@ -1539,7 +1580,7 @@ let rec lemma_trace_config
         lemma_trace_config init s' st1 rest
 #pop-options
 
-(* Lemma B: shape is preserved along a CCS-free trace. *)
+(* Lemma B: shape is preserved along a CCS-free, buffering-free trace. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 let rec lemma_trace_shape
   (init st0 st1:CS.connection_state)
@@ -1550,7 +1591,8 @@ let rec lemma_trace_shape
         SM.trace_reaches (WStep.client_sm init) st0 trace st1 /\
         client_canonical_shape st0 /\
         st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        log_has_no_received_ccs st1.CS.cs_event_log)
+        log_has_no_received_ccs st1.CS.cs_event_log /\
+        no_buffering_steps st1.CS.cs_event_log)
       (ensures client_canonical_shape st1)
       (decreases trace)
   = match trace with
@@ -1575,6 +1617,11 @@ let rec lemma_trace_shape
             L.append_memP st0.CS.cs_event_log [conn_ev] conn_ev;
             L.append_memP s'.CS.cs_event_log ext' conn_ev;
             assert (is_received_ccs conn_ev == false);
+            (* Mirrors the CCS-exclusion assertion immediately above: [conn_ev]
+               is a member of [st1.cs_event_log] (via the two [append_memP]
+               facts just established), so [no_buffering_steps
+               st1.cs_event_log] rules it out as a buffering step too. *)
+            assert (is_protected_buffering_step conn_ev == false);
             lemma_step_preserves_shape st0 s' conn_ev;
             lemma_trace_shape init s' st1 rest
           )
@@ -1588,7 +1635,8 @@ let lemma_client_canonical_appdata_exact_spine
        WStep.client_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_buffering_steps s.CS.cs_event_log)
     (ensures
        (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
           (client_shared:C.x25519_shared_secret)
@@ -1760,7 +1808,8 @@ let lemma_client_reachable_sfv_shared_secret_present
        WStep.client_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_buffering_steps s.CS.cs_event_log)
     (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
   = let init = CS.initial cfg in
     lemma_shape_initial cfg;

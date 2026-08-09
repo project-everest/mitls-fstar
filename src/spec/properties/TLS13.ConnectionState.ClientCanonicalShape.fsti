@@ -59,6 +59,11 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module SM = Common.StateMachine
+module CW = TLS13.Spec.Endpoint.Wire
+module CTy = TLS13.Impl.CanonicalTypes
+module EAPI = TLS13.Spec.Endpoint.API
+module B = TLS13.Bytes
 module L = FStar.List.Tot
 
 (* ------------------------------------------------------------------ *)
@@ -77,6 +82,39 @@ let is_received_ccs (ev:CS.conn_event) : bool =
 (** No received ChangeCipherSpec anywhere in the log. *)
 let log_has_no_received_ccs (log:list CS.conn_event) : prop =
   forall (ev:CS.conn_event). L.memP ev log ==> is_received_ccs ev == false
+
+(** A BUFFERING protected-handshake step: takes delivery of one record,
+    appends its plaintext to the pending reassembly buffer, and delivers NO
+    message (see the module-level comment on [protected_handshake_buffering]
+    in [TLS13.Spec.StateMachine]). *)
+let is_protected_buffering_step (ev:CS.conn_event) : bool =
+  match ev with
+  | CS.ConnProtectedHandshake step -> step.CS.protected_handshake_buffering
+  | _ -> false
+
+(** No BUFFERING protected-handshake step anywhere in the log.  Mirrors
+    [log_has_no_received_ccs] exactly, and is threaded through the forward
+    induction ([lemma_trace_shape]) via the SAME per-step membership argument
+    already used to exclude received CCS: a buffering step is legal only for
+    a [ClientEndpoint] at the four stages in
+    [CS.protected_handshake_buffering_stage], and the exact-log-SHAPE
+    invariant this file maintains ([log_shape]/[*_region_ok]) pins the
+    "region" of key installs to be EXACTLY the [is_client_hs_install] events
+    seen so far -- a genuinely reachable buffering step at one of those
+    stages would put a non-install event where the invariant has no room for
+    one.  In the PAIRED SYSTEM (a verified ATLAS client talking to the
+    verified ATLAS server) this hypothesis is always true and dischargeable
+    from [SY.tls_system_inv]: the server emits exactly one record per
+    handshake message, so every record the client receives during the
+    honest run opens to a COMPLETE handshake message, and
+    [legal_protected_handshake_step]'s STEP-1 guard makes buffering illegal
+    whenever the pending buffer is empty and the fragment parses in full --
+    which is inductively always the case against this server.  Cross-record
+    buffering only arises against a THIRD-PARTY server that really does
+    split messages across records, which the paired-system theorems below do
+    not model. *)
+let no_buffering_steps (log:list CS.conn_event) : prop =
+  forall (ev:CS.conn_event). L.memP ev log ==> is_protected_buffering_step ev == false
 
 (** A ClientEndpoint TrafficHandshake key install event (either direction).
     The client uses the PLAIN [LocalInstallTrafficKeys] constructor. *)
@@ -99,14 +137,35 @@ let is_client_hs_install_dir (d:CS.traffic_direction) (ev:CS.conn_event) : bool 
   | _ -> false
 
 (** Project an authenticated protected-handshake step to the received
-    handshake message it contributes to the top-level audit trace. *)
+    handshake message it contributes to the top-level audit trace -- UNLESS
+    it is a BUFFERING step (see [CS.protected_handshake_buffering]): a
+    buffering step takes delivery of one record, appends its plaintext to the
+    pending reassembly buffer, and advances [record_read.seq], but delivers
+    NO message.  Its [protected_handshake_message] field is INERT (legality
+    pins only [offset]/[consumed] to 0 and says nothing about the message;
+    the implementation sets it to an arbitrary placeholder), so routing it
+    through the [ConnNetworkEvent] case below would fabricate a received
+    handshake message that never arrived -- the same soundness bug we already
+    fixed in [TLS13.Spec.StateMachine.Log].
+
+    For a buffering step we leave [ev] UNCHANGED (still a
+    [ConnProtectedHandshake]).  This is enough on its own, with NO other
+    change anywhere in this file: [CS.ConnProtectedHandshake _] can never
+    equal [CS.ConnNetworkEvent _] (different constructors of [conn_event]),
+    so any hypothesis of the shape [canonical_log log == ... @ [ee_ev; ...] @
+    ...] -- which pins six POSITIONS of [canonical_log log] to
+    [ConnNetworkEvent]/[ConnLocalEvent] values -- already, syntactically,
+    forces the raw event at each of those positions to be non-buffering. *)
 let canonical_event (ev:CS.conn_event) : CS.conn_event =
   match ev with
   | CS.ConnProtectedHandshake step ->
-    CS.ConnNetworkEvent ({
-      CL.message_direction = CL.Received;
-      CL.message_value = M.TlsHandshake step.CS.protected_handshake_message;
-    })
+    if step.CS.protected_handshake_buffering
+    then ev
+    else
+      CS.ConnNetworkEvent ({
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake step.CS.protected_handshake_message;
+      })
   | _ -> ev
 
 let rec canonical_log (events:list CS.conn_event) : Tot (list CS.conn_event)
@@ -142,6 +201,28 @@ let delivers_handshake (grp:list CS.conn_event) (msg:M.handshake_msg) : prop =
   match grp with
   | [ev] -> canonical_event ev == recv_handshake_ev msg
   | _ -> False
+
+(** A CLIENT LOCAL step (no wire output) as ONE existential witness exposing
+    BOTH the underlying `conn_event`'s legality/step facts AND its exact
+    event-log append -- unlike [TLS13.System.AppSeqPairing.lemma_client_local_extract],
+    which exposes the former but not the latter (it has no use for the event
+    log).  Callers that need to reason about `cs_event_log` across a client-local
+    step (e.g. to propagate [no_buffering_steps]) need the SAME witness to carry
+    both facts, since two separately-obtained existentials need not agree on
+    which `conn_event` they describe. *)
+val lemma_client_local_step_event_log_append
+  (st0 c':CS.connection_state) (local:CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires
+        EC.client_step st0 (SM.LocalEvent local) c' out /\
+        out.SM.so_wire_outputs == [])
+      (ensures
+        exists (ce:CS.conn_event).
+          CS.legal_event st0.CS.cs_model ce /\
+          CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
+          CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty /\
+          c'.CS.cs_event_log == L.append st0.CS.cs_event_log [ce])
 
 (** While every delivery group is a singleton, the group IS its message
     event.  Consumers use this to descend from the group-shaped spine to the
@@ -241,7 +322,15 @@ val lemma_client_canonical_appdata_exact_spine
        WStep.client_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       (* Needed so the forward induction underlying this lemma can rule a
+          BUFFERING step out at each of the four stages where it is legal
+          ([CS.protected_handshake_buffering_stage]): such a step would put a
+          non-install event where the region invariant maintained below has
+          no room for one (see [no_buffering_steps]'s docstring).  In the
+          PAIRED SYSTEM this is always true, dischargeable from
+          [SY.tls_system_inv]. *)
+       no_buffering_steps s.CS.cs_event_log)
     (ensures
        (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
           (client_shared:C.x25519_shared_secret)
@@ -285,5 +374,6 @@ val lemma_client_reachable_sfv_shared_secret_present
        WStep.client_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_buffering_steps s.CS.cs_event_log)
     (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)

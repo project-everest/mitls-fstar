@@ -1107,6 +1107,25 @@ let lemma_client_application_progress_rank_step
      | CS.ConnProtectedHandshake step ->
        assert (CS.legal_protected_handshake_step model step);
        assert (CS.step_protected_handshake model step == Some model');
+       if step.CS.protected_handshake_buffering
+       then
+         (* A BUFFERING step sets a record's plaintext aside so a handshake
+            message spanning several records can be reassembled.  It delivers
+            no message (its [protected_handshake_message] is inert, so the
+            control/message dispatch below does not apply to it) and it moves
+            only the pending buffer and the record read state.  The control
+            and the key schedule -- the only things the rank reads -- are
+            untouched, so the rank is unchanged and the bound holds with
+            room to spare. *)
+         begin
+           assert (CS.step_protected_handshake_buffer model step == model');
+           assert (model'.CS.model_control == model.CS.model_control);
+           assert (model'.CS.model_handshake.CS.hs_keys ==
+                     model.CS.model_handshake.CS.hs_keys);
+           assert (client_application_progress_rank model ==
+             client_application_progress_rank model')
+         end
+       else
        (match model.CS.model_control, step.CS.protected_handshake_message with
         | CS.ControlHandshaking CS.HsServerHelloReceived,
           M.EncryptedExtensions _ ->

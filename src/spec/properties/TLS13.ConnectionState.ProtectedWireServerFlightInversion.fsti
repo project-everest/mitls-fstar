@@ -85,7 +85,19 @@ let server_flight_bridge_inputs (client server : CS.connection_state) : prop =
   SD.server_driver_application_ready server /\
   hks_ok client server /\
   four_hellos_present client server /\
-  roles_ok client server
+  roles_ok client server /\
+  (* CROSS-RECORD REASSEMBLY.  A BUFFERING protected-handshake step takes
+     delivery of a record without delivering any message, so it has no slot in
+     the exact client spine that [CCShape.lemma_client_canonical_appdata_exact_spine]
+     reconstructs, and that lemma now requires its absence.  In the PAIRED system
+     the peer is the verified ATLAS server, which emits exactly ONE record per
+     handshake message, so every record the client receives carries a COMPLETE
+     message and the STEP-1 guard of [CS.legal_protected_handshake_step] makes a
+     buffering step ILLEGAL -- buffering is exercised only against a FOREIGN
+     server, which this bridge does not describe.  Proving that here would need
+     the cross-endpoint record-material agreement, which lives ABOVE
+     [TLS13.System]; so it is taken as an input and discharged by the caller. *)
+  CCShape.no_buffering_steps client.CS.cs_event_log
 
 (* ------------------------------------------------------------------ *)
 (* The bridge's conclusion, in FLAGSHIP-COMPOSABLE shape.              *)

@@ -6378,8 +6378,14 @@ let lemma_internal_failed_correct
   : Lemma
       (requires
         CT.pending_protected_handshake_result_correct st0 st1 (Some resp) /\
+        (* [NeedMoreInput] joins the failure cases here only in the sense that
+           it makes no progress and leaves the state untouched.  It arises when
+           the pending buffer holds the start of a handshake message whose
+           remaining bytes are still in flight; the driver recovers by reading
+           more network input. *)
         (resp.CT.status == CT.DecodeError \/
-         resp.CT.status == CT.IllegalTransition) /\
+         resp.CT.status == CT.IllegalTransition \/
+         resp.CT.status == CT.NeedMoreInput) /\
         SZ.v out_len == Seq.length old_out /\
         Seq.equal received0 st0.CS.cs_wire_log.CL.raw_received /\
         Seq.equal sent0 st0.CS.cs_wire_log.CL.raw_sent)

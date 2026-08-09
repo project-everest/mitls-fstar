@@ -62,12 +62,29 @@ let pwrite_ok (st:CS.connection_state) : prop =
        WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_sent == 0) )
 
 (** READ-side handshake-region counting invariant (two clauses).  Gated exactly
-    like `pwrite_ok`. **)
+    like `pwrite_ok`, EXCEPT for the Handshake-epoch clause on a CLIENT: cross-
+    record reassembly lets the client's pending buffer hold a genuinely truncated
+    fragment while still at a `protected_handshake_buffering_stage` control, and
+    `traffic_install_allowed_at_stage`/`traffic_install_matches_key_schedule` admit
+    firing `LocalInstallTrafficKeys(TrafficHandshake, TrafficRead)` again at that
+    SAME control (nothing marks the key schedule as "already installed").
+    `R.install_keys` resets `record_read.seq` to 0 UNCONDITIONALLY on every such
+    install, so a redundant install taken after some buffering has already
+    advanced the received-record count can leave `seq == 0` while the count stays
+    positive — the exact equality is therefore false at a state that is
+    `client_reachable`.  The inequality is the tight fact that survives: seq only
+    ever increases by one per record opened or resets to 0 on a re-install, so it
+    never overtakes the record count.  A server never buffers (`client_reachable`
+    aside, `legal_protected_handshake_step` fixes `config_role == ClientEndpoint`),
+    so its received-record count is unaffected and the equality is kept there. **)
 let pread_ok (st:CS.connection_state) : prop =
   PC.pre_appdata_control st.CS.cs_model.CS.model_control ==>
   ( (st.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
-       st.CS.cs_model.CS.model_record.CS.record_read.R.seq ==
-         WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_received) /\
+       (if st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint
+        then st.CS.cs_model.CS.model_record.CS.record_read.R.seq <=
+               WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_received
+        else st.CS.cs_model.CS.model_record.CS.record_read.R.seq ==
+               WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_received)) /\
     (st.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
        WStep.raw_appdata_count st.CS.cs_wire_log.CL.raw_received == 0) )
 
@@ -229,14 +246,26 @@ let lemma_pread_algebra
         pread_ok st0 /\
         WF.parses_as CW.tls_record_wire_format
           st0.CS.cs_wire_log.CL.raw_received msgs Seq.empty /\
-        // P_seqdelta (gated):
+        // P_seqdelta (gated): on the CLIENT this is the inequality version —
+        // see `pread_ok` for why a redundant handshake-read key install
+        // (legal again at the SAME `HsServerHelloReceived` control once
+        // buffering has made the pre-install seq positive) rules out the
+        // exact delta equality in general.  A SERVER never buffers, so its
+        // received-record count and seq stay in lockstep and the equality
+        // is kept.
         (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
          st0.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
-         st1.CS.cs_model.CS.model_record.CS.record_read.R.seq ==
-           st0.CS.cs_model.CS.model_record.CS.record_read.R.seq +
-           WStep.raw_appdata_count d.CS.delta_raw_received) /\
-        // P_installHS (gated):
+         (if st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint
+          then st1.CS.cs_model.CS.model_record.CS.record_read.R.seq <=
+                 st0.CS.cs_model.CS.model_record.CS.record_read.R.seq +
+                 WStep.raw_appdata_count d.CS.delta_raw_received
+          else st1.CS.cs_model.CS.model_record.CS.record_read.R.seq ==
+                 st0.CS.cs_model.CS.model_record.CS.record_read.R.seq +
+                 WStep.raw_appdata_count d.CS.delta_raw_received)) /\
+        // P_installHS (gated): the epoch-changing Initial -> Handshake install
+        // always starts a genuinely fresh count on either role, so this stays
+        // an equality regardless of buffering.
         (PC.pre_appdata_control st1.CS.cs_model.CS.model_control /\
          st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          ~(st0.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Handshake) ==>
@@ -247,7 +276,9 @@ let lemma_pread_algebra
          st1.CS.cs_model.CS.model_record.CS.record_read.R.epoch == R.Initial ==>
          WStep.raw_appdata_count st1.CS.cs_wire_log.CL.raw_received == 0))
       (ensures pread_ok st1)
-  = WStep.lemma_raw_appdata_count_append
+  = WStep.lemma_step_model_preserves_config
+      st0.CS.cs_model d.CS.delta_event st1.CS.cs_model;
+    WStep.lemma_raw_appdata_count_append
       st0.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received msgs;
     WStep.lemma_raw_appdata_count_seq_equal
       st1.CS.cs_wire_log.CL.raw_received
@@ -719,10 +750,19 @@ let lemma_recv_server_hello_stored
     predicates below capture that per-direction premise; they are TRUE at every
     reachable install stage — where the direction's appdata count (hence, via
     `pwrite_ok`/`pread_ok`, its seq) is 0 — and are discharged there by
-    `lemma_discharge_local_redundant_{client,server}`.  The genuine
-    (epoch-changing) `Initial -> Handshake` install has the "both epochs Handshake"
-    antecedent false, so it is vacuous; every non-install local leaves the record
-    fixed, so the gate is vacuously `True`.
+    `lemma_discharge_client_write`/`lemma_discharge_server_{write,read}`.  The
+    genuine (epoch-changing) `Initial -> Handshake` install has the "both
+    epochs Handshake" antecedent false, so it is vacuous; every non-install
+    local leaves the record fixed, so the gate is vacuously `True`.
+
+    The CLIENT read direction is the one exception: cross-record reassembly
+    means the pre-install appdata count is no longer provably 0 at
+    `HsServerHelloReceived` in general (a genuinely truncated fragment can be
+    pending there), so `install_read_seq_zero` cannot always be discharged for
+    a client.  `lemma_client_local_install_seq_stable_read` below proves the
+    weaker, GATE-FREE inequality that a re-install cannot make seq increase
+    instead — sufficient for `pread_ok`'s client-side clause, which is itself
+    an inequality for the same reason.
     ───────────────────────────────────────────────────────────────────────── **)
 
 (** WRITE-direction gate: a redundant handshake WRITE re-install preserves the
@@ -790,6 +830,17 @@ let lemma_client_local_install_seq_stable_write
 #pop-options
 
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+(** The GATE `install_read_seq_zero` is exactly what let this hold as an
+    EQUALITY: a re-install at a state where the pre-install seq is provably 0.
+    Cross-record reassembly breaks the gate's discharge for a CLIENT (see
+    `pread_ok`) — a `LocalInstallTrafficKeys(TrafficHandshake, TrafficRead)` is
+    legal again at the same `HsServerHelloReceived` control after buffering has
+    made the pre-install seq positive, and `R.install_keys` still resets it to 0
+    regardless.  The seq therefore does not stay FIXED across such a re-install,
+    it can only ever go DOWN (to 0) — which is why the conclusion below is the
+    inequality that a reset never violates, proved with NO gate at all: it holds
+    whether or not this event is the redundant case, since `m.seq : nat` is
+    always `>= 0`. **)
 let lemma_client_local_install_seq_stable_read
   (m:CS.connection_model) (install:CS.traffic_key_install) (m':CS.connection_model)
   : Lemma
@@ -797,7 +848,6 @@ let lemma_client_local_install_seq_stable_read
         m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         record_schedule_coupling m /\
         CS.ControlHandshaking? m.CS.model_control /\
-        install_read_seq_zero m install /\
         m' == { m with
                   CS.model_record = CS.install_record_keys m.CS.model_record install;
                   CS.model_handshake =
@@ -809,11 +859,11 @@ let lemma_client_local_install_seq_stable_read
         (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_read.R.seq
-           == m.CS.model_record.CS.record_read.R.seq))
+           <= m.CS.model_record.CS.record_read.R.seq))
   = introduce (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
                m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
               ==> m'.CS.model_record.CS.record_read.R.seq
-                    == m.CS.model_record.CS.record_read.R.seq
+                    <= m.CS.model_record.CS.record_read.R.seq
     with _pf.
       (match install.CS.install_epoch, install.CS.install_direction with
        | CS.TrafficHandshake, CS.TrafficRead -> ()
@@ -852,6 +902,9 @@ let lemma_client_local_install_for_role_seq_stable_write
 #pop-options
 
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+(** Mirror of the plain client install, dropping the same gate for the same
+    reason (`_ForRole` install carries an identical `TrafficHandshake`/
+    `TrafficRead` case, subject to the identical redundant-install hazard). **)
 let lemma_client_local_install_for_role_seq_stable_read
   (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
   (m':CS.connection_model)
@@ -861,7 +914,6 @@ let lemma_client_local_install_for_role_seq_stable_read
         role_install.CS.install_role == CS.ClientEndpoint /\
         record_schedule_coupling m /\
         CS.ControlHandshaking? m.CS.model_control /\
-        install_read_seq_zero m role_install.CS.install_payload /\
         m' == { m with
                   CS.model_record =
                     CS.install_record_keys_for_role
@@ -878,7 +930,7 @@ let lemma_client_local_install_for_role_seq_stable_read
         (m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_read.R.seq
-           == m.CS.model_record.CS.record_read.R.seq))
+           <= m.CS.model_record.CS.record_read.R.seq))
   = lemma_client_local_install_seq_stable_read m role_install.CS.install_payload m'
 #pop-options
 
@@ -916,14 +968,13 @@ let lemma_client_local_record_seq_stable_read
         CS.legal_local_event m local /\
         CS.step_local_event m local == Some m' /\
         m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        record_schedule_coupling m /\
-        local_read_seq_zero m local)
+        record_schedule_coupling m)
       (ensures
         (PC.pre_appdata_control m'.CS.model_control /\
          m'.CS.model_record.CS.record_read.R.epoch == R.Handshake /\
          m.CS.model_record.CS.record_read.R.epoch == R.Handshake ==>
          m'.CS.model_record.CS.record_read.R.seq
-           == m.CS.model_record.CS.record_read.R.seq))
+           <= m.CS.model_record.CS.record_read.R.seq))
   = match local with
     | CS.LocalInstallTrafficKeys install ->
       lemma_client_local_install_seq_stable_read m install m'
@@ -1492,39 +1543,17 @@ let lemma_discharge_client_write
      | _ -> ())
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
-let lemma_discharge_client_read
-  (a:CS.connection_state) (local':CS.local_event)
-  : Lemma
-      (requires
-        a.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-        pread_ok a /\
-        PC.pre_appdata_control a.CS.cs_model.CS.model_control /\
-        WStep.client_reachable (CS.initial a.CS.cs_model.CS.model_config) a /\
-        CS.legal_local_event a.CS.cs_model local')
-      (ensures local_read_seq_zero a.CS.cs_model local')
-  = let m = a.CS.cs_model in
-    match local' with
-    | CS.LocalInstallTrafficKeys install ->
-      introduce (install.CS.install_epoch == CS.TrafficHandshake /\
-                 install.CS.install_direction == CS.TrafficRead /\
-                 m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
-                ==> m.CS.model_record.CS.record_read.R.seq == 0
-      with _pf.
-        ( assert (CS.ControlHandshaking? m.CS.model_control);
-          assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
-          WStep.lemma_client_hsserverhelloreceived_recv_zero m.CS.model_config a )
-    | CS.LocalInstallTrafficKeysForRole ri ->
-      introduce (ri.CS.install_payload.CS.install_epoch == CS.TrafficHandshake /\
-                 ri.CS.install_payload.CS.install_direction == CS.TrafficRead /\
-                 m.CS.model_record.CS.record_read.R.epoch == R.Handshake)
-                ==> m.CS.model_record.CS.record_read.R.seq == 0
-      with _pf.
-        ( assert (CS.ControlHandshaking? m.CS.model_control);
-          assert (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived);
-          WStep.lemma_client_hsserverhelloreceived_recv_zero m.CS.model_config a )
-    | _ -> ()
-#pop-options
+(** There is no `lemma_discharge_client_read`: the CLIENT read-side stability
+    lemma (`lemma_client_local_record_seq_stable_read`) no longer needs a
+    pre-install-seq-is-0 gate discharged at the call site.  Cross-record
+    reassembly means the client's received count can be positive while still at
+    `HsServerHelloReceived` (a genuinely truncated fragment, or a non-empty
+    residual, can be pending there), so this discharge — "the install stage's
+    appdata count is 0, hence, via `pread_ok`, so is the pre-install seq" — is
+    no longer available in general.  The stability lemma instead proves the
+    weaker, gate-free fact that the seq cannot INCREASE across a key install
+    (`R.install_keys` only ever resets it to 0), which is all `pread_ok`'s
+    inequality clause on the client needs. **)
 
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
 let lemma_discharge_server_write
@@ -1684,7 +1713,6 @@ let lemma_client_local_pread
          | CS.ConnLocalEvent local' ->
            assert (CS.legal_local_event a.CS.cs_model local');
            assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
-           lemma_discharge_client_read a local';
            lemma_client_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnProtectedHandshake step ->
@@ -1813,11 +1841,20 @@ let lemma_server_local_pread
     and `pread_ok` on the receiver, both still in the pre-application-data region
     and both at the Handshake RECORD epoch, and the `byte_pairing` byte-equality
     (sender's sent log == receiver's received log), the two record `seq` counters
-    are equal — i.e. `H_seq`, the seq-alignment HYPOTHESIS consumed by the
+    are related — i.e. `H_seq`, the seq-alignment HYPOTHESIS consumed by the
     protected-message decode lemmas and baked into
     `protected_handshake_event_projection_pair`.  H_seq is thus a COROLLARY of
     `byte_pairing` + the counting invariants, with no dependence on the event-log
     length or the strict-progress guards.
+
+    When the RECEIVER is a client, cross-record reassembly only gives the
+    inequality half of H_seq (`pread_ok`'s redundant-install hazard — see its
+    comment): the receiver's seq can lag the sender's exact byte count, never
+    lead it.  That is all the decode lemmas actually need — H_seq is consumed to
+    upper-bound how much of the paired bytes the receiver has already parsed,
+    and a receiver that has parsed no MORE than the sender has sent is exactly
+    the fact required there.  When the receiver is a server (which never
+    buffers), the tight equality is unaffected and is kept.
     ───────────────────────────────────────────────────────────────────────── **)
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 let lemma_hseq_from_counts (sender receiver:CS.connection_state)
@@ -1833,9 +1870,13 @@ let lemma_hseq_from_counts (sender receiver:CS.connection_state)
           sender.CS.cs_wire_log.CL.raw_sent
           receiver.CS.cs_wire_log.CL.raw_received)
       (ensures
-        sender.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
-          receiver.CS.cs_model.CS.model_record.CS.record_read.R.seq)
+        (if receiver.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint
+         then receiver.CS.cs_model.CS.model_record.CS.record_read.R.seq <=
+                sender.CS.cs_model.CS.model_record.CS.record_write.R.seq
+         else sender.CS.cs_model.CS.model_record.CS.record_write.R.seq ==
+                receiver.CS.cs_model.CS.model_record.CS.record_read.R.seq))
   = WStep.lemma_raw_appdata_count_seq_equal
       sender.CS.cs_wire_log.CL.raw_sent
       receiver.CS.cs_wire_log.CL.raw_received
 #pop-options
+

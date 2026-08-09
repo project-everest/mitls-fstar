@@ -36,6 +36,7 @@ module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SMReplay = TLS13.Spec.StateMachine.Replay
+module CCShape = TLS13.ConnectionState.ClientCanonicalShape
 module CD = TLS13.Impl.Client.Driver
 module SD = TLS13.Impl.Server.Driver
 module WStep = TLS13.System.WireStep
@@ -79,7 +80,19 @@ let client_finished_bridge_inputs (client server : CS.connection_state) : prop =
   SD.server_driver_application_ready server /\
   hks_ok client server /\
   four_hellos_present client server /\
-  roles_ok client server
+  roles_ok client server /\
+  (* CROSS-RECORD REASSEMBLY.  This bridge routes through
+     [ProtectedWireServerFlightInversion.lemma_client_normalized_appdata_exact_spine_from_replays_and_pairing],
+     whose input bundle carries the same conjunct: the client's exact spine has
+     no slot for a BUFFERING protected-handshake step.  In the paired system the
+     client never buffers -- the ATLAS server emits exactly one record per
+     handshake message, so the STEP-1 guard of
+     [CS.legal_protected_handshake_step] makes a buffering step ILLEGAL --
+     buffering is exercised only against a FOREIGN server, which this bridge
+     does not describe.  Proving that here would need the cross-endpoint
+     record-material agreement, which lives ABOVE [TLS13.System]; so it is taken
+     as an input and discharged by the caller. *)
+  CCShape.no_buffering_steps client.CS.cs_event_log
 
 (* ------------------------------------------------------------------ *)
 (* The CLIENT-FINISHED projection pair, PINNED to the ACTUAL model     *)

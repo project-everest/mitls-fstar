@@ -655,6 +655,11 @@ let lemma_step_model_handshake_fields
       CS.step_model model (CS.ConnProtectedHandshake step) ==
         CS.step_protected_handshake model step);
     assert (CS.legal_protected_handshake_step model step);
+    (* A buffering step carries no message; its legality already pins the
+       control state to one of the four client protected-receive stages. *)
+    if step.CS.protected_handshake_buffering
+    then ()
+    else
     (match
        step.CS.protected_handshake_message,
        model.CS.model_control

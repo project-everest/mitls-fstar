@@ -23,6 +23,7 @@ module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Sem = TLS13.Wire.Semantics
 module P = TLS13.Impl.Parser
+module SC = TLS13.Impl.Serializer.Common
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -65,6 +66,7 @@ let lemma_legal_protected_handshake_head
   : Lemma
      (requires
        model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+       step.CS.protected_handshake_buffering == false /\
        step.CS.protected_handshake_offset == 0 /\
        step.CS.protected_handshake_head /\
        0 < step.CS.protected_handshake_consumed /\
@@ -96,6 +98,7 @@ let lemma_legal_protected_handshake_drain
   : Lemma
      (requires
        model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+       step.CS.protected_handshake_buffering == false /\
        step.CS.protected_handshake_head == false /\
        Seq.equal
          step.CS.protected_handshake_fragment
@@ -125,6 +128,52 @@ let lemma_legal_protected_handshake_drain
 =
   assert (step.CS.protected_handshake_offset <
     B.length step.CS.protected_handshake_fragment)
+
+let lemma_legal_protected_handshake_buffer
+  (model:CS.connection_model)
+  (step:CS.protected_handshake_step)
+  : Lemma
+     (requires
+       model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+       step.CS.protected_handshake_buffering == true /\
+       step.CS.protected_handshake_head == true /\
+       step.CS.protected_handshake_offset == 0 /\
+       step.CS.protected_handshake_consumed == 0 /\
+       0 < B.length step.CS.protected_handshake_fragment /\
+       B.length (CS.protected_handshake_stream model step) <=
+         CS.max_pending_protected_handshake /\
+       (match model.CS.model_control with
+        | CS.ControlHandshaking stage -> CS.protected_handshake_buffering_stage stage
+        | _ -> False) /\
+       (~ (CS.protected_handshake_buffer_empty model) \/
+        WS.parse_handshake step.CS.protected_handshake_fragment == None))
+     (ensures
+       CS.legal_event model (CS.ConnProtectedHandshake step))
+= ()
+
+(* [copy_pending_protected_handshake] reports [None] precisely when the
+   pending buffer's plaintext has all been parsed already (parsed >= length);
+   in that case the leftover carried forward by a subsequent buffering step
+   is empty, whether the buffer's length and parsed offset happen to coincide
+   or the offset has run past it. *)
+let lemma_pending_protected_handshake_leftover_empty
+  (model:CS.connection_model)
+  : Lemma
+      (requires
+        model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+          B.length
+            model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes)
+      (ensures
+        Seq.equal
+          (CS.pending_protected_handshake_leftover model)
+          B.empty)
+=
+  let bufs = model.CS.model_handshake.CS.hs_buffers in
+  let bytes = bufs.CS.hb_encrypted_server_handshake_bytes in
+  let parsed = bufs.CS.hb_encrypted_server_handshake_parsed in
+  if parsed <= B.length bytes
+  then Seq.lemma_len_slice bytes parsed (B.length bytes)
+  else ()
 
 fn try_process_protected_handshake_head
   (c:client)
@@ -255,6 +304,7 @@ fn try_process_protected_handshake_head
              CS.protected_handshake_offset = 0;
              CS.protected_handshake_consumed = SZ.v consumed;
              CS.protected_handshake_head = true;
+             CS.protected_handshake_buffering = false;
            };
            CT.lemma_protected_head_decoder_projection
              'st0
@@ -388,6 +438,7 @@ fn try_process_protected_handshake_head
              CS.protected_handshake_offset = 0;
              CS.protected_handshake_consumed = SZ.v consumed;
              CS.protected_handshake_head = true;
+             CS.protected_handshake_buffering = false;
            };
            CT.lemma_protected_head_decoder_projection
              'st0
@@ -524,6 +575,7 @@ fn try_process_protected_handshake_head
              CS.protected_handshake_offset = 0;
              CS.protected_handshake_consumed = SZ.v consumed;
              CS.protected_handshake_head = true;
+             CS.protected_handshake_buffering = false;
            };
            CT.lemma_protected_head_decoder_projection
              'st0
@@ -660,6 +712,287 @@ fn try_process_protected_handshake_head
   }
 }
 
+(* A record whose plaintext cannot supply a whole message is not an error --
+   this is exactly what happens when a server splits a handshake message
+   across records.  Instead of rejecting it, append it to the connection's
+   pending protected-handshake buffer so a later record can complete the
+   message.  There is no message to deliver and hence nothing written to
+   [network_out]/[app_out]; both stay untouched on every path, mirroring
+   [try_process_protected_handshake_head]'s output shape so callers thread
+   the same arguments through unchanged. *)
+fn try_buffer_protected_handshake_record
+  (c:client)
+  (content_type:U8.t)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (protected_fragment:array U8.t)
+  (protected_fragment_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires CR.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to protected_fragment 'protected_fragment_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (
+             B.length 'raw_bytes == SZ.v raw_len /\
+             B.length 'protected_fragment_bytes == SZ.v protected_fragment_len /\
+             B.length 'old_network_out == SZ.v network_out_len /\
+             B.length 'old_app_out == SZ.v app_out_len /\
+             SZ.v protected_fragment_len <= Bounds.max_handshake_flight_len /\
+             CT.protected_decoder_fragment_relation
+               'st0
+               content_type
+               (Ghost.reveal 'protected_fragment_bytes)
+               (Ghost.reveal 'raw_bytes) /\
+             (exists outer_fragment.
+               WS.parse_record (Ghost.reveal 'raw_bytes) ==
+                 Some
+                   (T.Application_data,
+                    outer_fragment,
+                    B.length (Ghost.reveal 'raw_bytes))) /\
+             L.content_type_matches content_type T.Handshake)
+  returns handled:option CT.client_response
+  ensures
+    (match handled with
+    | None ->
+      CR.connection_exactly c 'st0 **
+      pts_to raw 'raw_bytes **
+      pts_to protected_fragment 'protected_fragment_bytes **
+      pts_to network_out 'old_network_out **
+      pts_to app_out 'old_app_out
+    | Some resp ->
+      exists* st1.
+        CR.connection_exactly c st1 **
+        pts_to raw 'raw_bytes **
+        pts_to protected_fragment 'protected_fragment_bytes **
+        pts_to network_out 'old_network_out **
+        pts_to app_out 'old_app_out **
+        pure (
+          (exists step.
+            CT.protected_handshake_step_correct
+              'st0
+              st1
+              resp
+              step
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out) /\
+          (CT.client_end_to_end_invariant 'st0 ==>
+           CT.client_end_to_end_invariant st1)))
+{
+  let ok = CQ.can_buffer_protected_handshake c;
+  if (not ok) {
+    None #CT.client_response
+  } else if (SZ.eq protected_fragment_len 0sz) {
+    None #CT.client_response
+  } else {
+    let pending = CQ.copy_pending_protected_handshake c;
+    match pending {
+      None -> {
+        lemma_pending_protected_handshake_leftover_empty 'st0.CS.cs_model;
+        (* Buffering with an already-empty pending buffer is a last resort:
+           legal only when this record's own plaintext does not already
+           parse as a complete handshake message, since otherwise the head
+           path would be the one to deliver it. *)
+        let absent = P.handshake_prefix_absent protected_fragment protected_fragment_len;
+        if (not absent) {
+          None #CT.client_response
+        } else {
+        let stream_len = protected_fragment_len;
+        let stream = V.alloc 0uy stream_len;
+        V.to_array_pts_to stream;
+        SC.copy_array_slice_to_array
+          protected_fragment protected_fragment_len 0sz protected_fragment_len
+          (V.vec_to_array stream) stream_len 0sz;
+        with stream_bytes. assert (pts_to (V.vec_to_array stream) stream_bytes);
+        assert (pure (Seq.equal
+          stream_bytes
+          (Ghost.reveal 'protected_fragment_bytes)));
+
+        let step = Ghost.hide {
+          CS.protected_handshake_message = M.HelloRetryRequest;
+          CS.protected_handshake_fragment = Ghost.reveal 'protected_fragment_bytes;
+          CS.protected_handshake_offset = 0;
+          CS.protected_handshake_consumed = 0;
+          CS.protected_handshake_head = true;
+          CS.protected_handshake_buffering = true;
+        };
+        assert (pure (Seq.equal
+          stream_bytes
+          (CS.protected_handshake_stream 'st0.CS.cs_model (Ghost.reveal step))));
+        assert (pure (
+          WS.parse_handshake (Ghost.reveal step).CS.protected_handshake_fragment ==
+            None));
+
+        lemma_legal_protected_handshake_buffer
+          'st0.CS.cs_model
+          (Ghost.reveal step);
+        CT.lemma_protected_buffer_decoder_projection
+          'st0
+          content_type
+          (Ghost.reveal 'protected_fragment_bytes)
+          (Ghost.reveal 'raw_bytes)
+          (Ghost.reveal step);
+        CT.lemma_legal_protected_handshake_step_some
+          'st0.CS.cs_model
+          (Ghost.reveal step);
+
+        Trace.emit Trace.client_protected_buffer
+          (SZ.sizet_to_uint64 stream_len)
+          (SZ.sizet_to_uint64 protected_fragment_len)
+          (SZ.sizet_to_uint64 raw_len);
+        CN.buffer_protected_handshake_record
+          c raw (V.vec_to_array stream) stream_len #step;
+
+        V.to_vec_pts_to stream;
+        V.free stream;
+
+        let resp = {
+          CT.network_out_len = 0sz;
+          CT.app_out_len = 0sz;
+          CT.status = CT.StepOk;
+        };
+        CT.lemma_protected_handshake_step_correct_intro
+          'st0
+          resp
+          (Ghost.reveal step)
+          (Ghost.reveal 'raw_bytes)
+          'old_network_out
+          'old_app_out;
+        CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
+          'st0
+          (CM.protected_handshake_state
+            'st0
+            (Ghost.reveal step)
+            (Ghost.reveal 'raw_bytes))
+          resp
+          (Ghost.reveal step)
+          (Ghost.reveal 'raw_bytes)
+          'old_network_out
+          'old_app_out;
+        Some resp
+        }
+      }
+      Some pending -> {
+        with pending_fragment_bytes. assert (
+          V.pts_to pending.pending_protected_fragment pending_fragment_bytes);
+        let leftover_len =
+          SZ.sub
+            pending.pending_protected_fragment_len
+            pending.pending_protected_parsed;
+        let room = SZ.sub Bounds.max_handshake_flight_len_sz leftover_len;
+        let fits_check = SZ.lte protected_fragment_len room;
+        if (not fits_check) {
+          V.free pending.pending_protected_fragment;
+          None #CT.client_response
+        } else {
+          let stream_len = SZ.add leftover_len protected_fragment_len;
+          let stream = V.alloc 0uy stream_len;
+          V.to_array_pts_to stream;
+          V.to_array_pts_to pending.pending_protected_fragment;
+          SC.copy_array_slice_to_array
+            (V.vec_to_array pending.pending_protected_fragment)
+            pending.pending_protected_fragment_len
+            pending.pending_protected_parsed
+            leftover_len
+            (V.vec_to_array stream)
+            stream_len
+            0sz;
+          SC.copy_array_slice_to_array
+            protected_fragment
+            protected_fragment_len
+            0sz
+            protected_fragment_len
+            (V.vec_to_array stream)
+            stream_len
+            leftover_len;
+          V.to_vec_pts_to pending.pending_protected_fragment;
+          V.free pending.pending_protected_fragment;
+
+          with stream_bytes. assert (pts_to (V.vec_to_array stream) stream_bytes);
+          assert (pure (Seq.equal
+            stream_bytes
+            (Seq.append
+              (Seq.slice
+                pending_fragment_bytes
+                (SZ.v pending.pending_protected_parsed)
+                (SZ.v pending.pending_protected_fragment_len))
+              (Ghost.reveal 'protected_fragment_bytes))));
+
+          let step = Ghost.hide {
+            CS.protected_handshake_message = M.HelloRetryRequest;
+            CS.protected_handshake_fragment = Ghost.reveal 'protected_fragment_bytes;
+            CS.protected_handshake_offset = 0;
+            CS.protected_handshake_consumed = 0;
+            CS.protected_handshake_head = true;
+            CS.protected_handshake_buffering = true;
+          };
+          assert (pure (Seq.equal
+            stream_bytes
+            (CS.protected_handshake_stream 'st0.CS.cs_model (Ghost.reveal step))));
+          (* [pending_protected_parsed < pending_protected_fragment_len] means
+             the pending buffer's plaintext is nonempty, which is the other
+             half of the "buffering is a last resort" disjunct: a non-empty
+             pending buffer already rules out the head rule regardless of
+             what this record's own fragment parses as. *)
+          assert (pure (~ (CS.protected_handshake_buffer_empty 'st0.CS.cs_model)));
+
+          lemma_legal_protected_handshake_buffer
+            'st0.CS.cs_model
+            (Ghost.reveal step);
+          CT.lemma_protected_buffer_decoder_projection
+            'st0
+            content_type
+            (Ghost.reveal 'protected_fragment_bytes)
+            (Ghost.reveal 'raw_bytes)
+            (Ghost.reveal step);
+          CT.lemma_legal_protected_handshake_step_some
+            'st0.CS.cs_model
+            (Ghost.reveal step);
+
+          Trace.emit Trace.client_protected_buffer
+            (SZ.sizet_to_uint64 stream_len)
+            (SZ.sizet_to_uint64 protected_fragment_len)
+            (SZ.sizet_to_uint64 raw_len);
+          CN.buffer_protected_handshake_record
+            c raw (V.vec_to_array stream) stream_len #step;
+
+          V.to_vec_pts_to stream;
+          V.free stream;
+
+          let resp = {
+            CT.network_out_len = 0sz;
+            CT.app_out_len = 0sz;
+            CT.status = CT.StepOk;
+          };
+          CT.lemma_protected_handshake_step_correct_intro
+            'st0
+            resp
+            (Ghost.reveal step)
+            (Ghost.reveal 'raw_bytes)
+            'old_network_out
+            'old_app_out;
+          CT.lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
+            'st0
+            (CM.protected_handshake_state
+              'st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes))
+            resp
+            (Ghost.reveal step)
+            (Ghost.reveal 'raw_bytes)
+            'old_network_out
+            'old_app_out;
+          Some resp
+        }
+      }
+    }
+  }
+}
+
 fn try_process_protected_handshake_drain
   (c:client)
   (parsed:L.tls_message)
@@ -767,6 +1100,7 @@ fn try_process_protected_handshake_drain
               CS.protected_handshake_offset = SZ.v offset;
               CS.protected_handshake_consumed = SZ.v consumed;
               CS.protected_handshake_head = false;
+              CS.protected_handshake_buffering = false;
             };
             assert (pure (CS.legal_handshake_message
               'st0.CS.cs_model
@@ -867,6 +1201,7 @@ fn try_process_protected_handshake_drain
               CS.protected_handshake_offset = SZ.v offset;
               CS.protected_handshake_consumed = SZ.v consumed;
               CS.protected_handshake_head = false;
+              CS.protected_handshake_buffering = false;
             };
             assert (pure (CS.legal_handshake_message
               'st0.CS.cs_model
@@ -966,6 +1301,7 @@ fn try_process_protected_handshake_drain
               CS.protected_handshake_offset = SZ.v offset;
               CS.protected_handshake_consumed = SZ.v consumed;
               CS.protected_handshake_head = false;
+              CS.protected_handshake_buffering = false;
             };
             assert (pure (CS.legal_handshake_message
               'st0.CS.cs_model
@@ -2253,18 +2589,85 @@ fn process_coalesced_network_bytes
                 decoded_buffer.L.decoded_buffer_fragment_len;
             match prefix {
               None -> {
-                Trace.emit Trace.client_protected_error
-                  0UL
-                  (SZ.sizet_to_uint64
-                    decoded_buffer.L.decoded_buffer_fragment_len)
-                  0UL;
-                V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
-                V.free decoded_buffer.L.decoded_buffer_fragment;
-                V.free decoded_buffer.L.decoded_buffer_raw_record;
-                process_direct_record
-                  c raw raw_len
-                  network_out network_out_len
-                  app_out app_out_len
+                V.to_array_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+                let buffered =
+                  try_buffer_protected_handshake_record
+                    c
+                    decoded_buffer.L.decoded_buffer_content_type
+                    (V.vec_to_array decoded_buffer.L.decoded_buffer_raw_record)
+                    decoded_buffer.L.decoded_buffer_raw_record_len
+                    (V.vec_to_array decoded_buffer.L.decoded_buffer_fragment)
+                    decoded_buffer.L.decoded_buffer_fragment_len
+                    network_out network_out_len
+                    app_out app_out_len;
+                match buffered {
+                  None -> {
+                    Trace.emit Trace.client_protected_error
+                      0UL
+                      (SZ.sizet_to_uint64
+                        decoded_buffer.L.decoded_buffer_fragment_len)
+                      0UL;
+                    V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+                    V.free decoded_buffer.L.decoded_buffer_fragment;
+                    V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+                    V.free decoded_buffer.L.decoded_buffer_raw_record;
+                    process_direct_record
+                      c raw raw_len
+                      network_out network_out_len
+                      app_out app_out_len
+                  }
+                  Some resp -> {
+                    with st1. assert (
+                      CR.connection_exactly c st1 **
+                      pure (
+                        (exists step.
+                          CT.protected_handshake_step_correct
+                            'st0
+                            st1
+                            resp
+                            step
+                            raw_record_bytes
+                            'old_network_out
+                            'old_app_out) /\
+                        CT.client_end_to_end_invariant st1));
+                    V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+                    V.free decoded_buffer.L.decoded_buffer_fragment;
+                    V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+                    V.free decoded_buffer.L.decoded_buffer_raw_record;
+                    let buffer_resp = {
+                      CT.response = resp;
+                      CT.consumed_len =
+                        decoded_buffer.L.decoded_buffer_consumed_len;
+                    };
+                    assert (pure (Seq.equal
+                      raw_record_bytes
+                      (CT.network_consumed_prefix
+                        (Ghost.reveal 'raw_bytes)
+                        decoded_buffer.L.decoded_buffer_consumed_len)));
+                    Seq.lemma_eq_elim
+                      raw_record_bytes
+                      (CT.network_consumed_prefix
+                        (Ghost.reveal 'raw_bytes)
+                        decoded_buffer.L.decoded_buffer_consumed_len);
+                    Seq.lemma_eq_intro 'old_network_out 'old_network_out;
+                    Seq.lemma_eq_intro 'old_app_out 'old_app_out;
+                    assert (pure (
+                      CT.coalesced_network_bytes_end_to_end_correct
+                        'st0
+                        st1
+                        buffer_resp
+                        (Ghost.reveal 'raw_bytes)
+                        'old_network_out
+                        'old_network_out
+                        'old_app_out
+                        'old_app_out));
+                    assert (pure (
+                      buffer_resp.CT.response.CT.status == CT.StepOk));
+                    assert (pure (
+                      0 < SZ.v buffer_resp.CT.consumed_len));
+                    buffer_resp
+                  }
+                }
               }
               Some parsed_prefix -> {
                 with msg message_fragment_bytes.
@@ -2316,18 +2719,91 @@ fn process_coalesced_network_bytes
                       parsed_prefix.L.parsed_handshake_fragment;
                     V.free
                       parsed_prefix.L.parsed_handshake_fragment;
-                    V.to_vec_pts_to
-                      decoded_buffer.L.decoded_buffer_fragment;
-                    V.free
-                      decoded_buffer.L.decoded_buffer_fragment;
-                    V.to_vec_pts_to
-                      decoded_buffer.L.decoded_buffer_raw_record;
-                    V.free
-                      decoded_buffer.L.decoded_buffer_raw_record;
-                    process_direct_record
-                      c raw raw_len
-                      network_out network_out_len
-                      app_out app_out_len
+                    let buffered =
+                      try_buffer_protected_handshake_record
+                        c
+                        decoded_buffer.L.decoded_buffer_content_type
+                        (V.vec_to_array
+                          decoded_buffer.L.decoded_buffer_raw_record)
+                        decoded_buffer.L.decoded_buffer_raw_record_len
+                        (V.vec_to_array
+                          decoded_buffer.L.decoded_buffer_fragment)
+                        decoded_buffer.L.decoded_buffer_fragment_len
+                        network_out
+                        network_out_len
+                        app_out
+                        app_out_len;
+                    match buffered {
+                      None -> {
+                        V.to_vec_pts_to
+                          decoded_buffer.L.decoded_buffer_fragment;
+                        V.free
+                          decoded_buffer.L.decoded_buffer_fragment;
+                        V.to_vec_pts_to
+                          decoded_buffer.L.decoded_buffer_raw_record;
+                        V.free
+                          decoded_buffer.L.decoded_buffer_raw_record;
+                        process_direct_record
+                          c raw raw_len
+                          network_out network_out_len
+                          app_out app_out_len
+                      }
+                      Some resp -> {
+                        with st1. assert (
+                          CR.connection_exactly c st1 **
+                          pure (
+                            (exists step.
+                              CT.protected_handshake_step_correct
+                                'st0
+                                st1
+                                resp
+                                step
+                                raw_record_bytes
+                                'old_network_out
+                                'old_app_out) /\
+                            CT.client_end_to_end_invariant st1));
+                        V.to_vec_pts_to
+                          decoded_buffer.L.decoded_buffer_fragment;
+                        V.free
+                          decoded_buffer.L.decoded_buffer_fragment;
+                        V.to_vec_pts_to
+                          decoded_buffer.L.decoded_buffer_raw_record;
+                        V.free
+                          decoded_buffer.L.decoded_buffer_raw_record;
+                        let buffer_resp = {
+                          CT.response = resp;
+                          CT.consumed_len =
+                            decoded_buffer.L.decoded_buffer_consumed_len;
+                        };
+                        assert (pure (Seq.equal
+                          raw_record_bytes
+                          (CT.network_consumed_prefix
+                            (Ghost.reveal 'raw_bytes)
+                            decoded_buffer.L.decoded_buffer_consumed_len)));
+                        Seq.lemma_eq_elim
+                          raw_record_bytes
+                          (CT.network_consumed_prefix
+                            (Ghost.reveal 'raw_bytes)
+                            decoded_buffer.L.decoded_buffer_consumed_len);
+                        Seq.lemma_eq_intro 'old_network_out 'old_network_out;
+                        Seq.lemma_eq_intro 'old_app_out 'old_app_out;
+                        assert (pure (
+                          CT.coalesced_network_bytes_end_to_end_correct
+                            'st0
+                            st1
+                            buffer_resp
+                            (Ghost.reveal 'raw_bytes)
+                            'old_network_out
+                            'old_network_out
+                            'old_app_out
+                            'old_app_out));
+                        assert (pure (
+                          buffer_resp.CT.response.CT.status == CT.StepOk));
+                        assert (pure (
+                          0 < SZ.v buffer_resp.CT.consumed_len));
+                        buffer_resp
+                      }
+                    }
                   }
                   Some resp -> {
                     with st1. assert (
@@ -2455,7 +2931,7 @@ fn process_pending_protected_handshake
           snapshot.CR.pending_protected_parsed;
       match prefix {
         None -> {
-          Trace.emit Trace.client_protected_error
+          Trace.emit Trace.client_protected_buffer
             (SZ.sizet_to_uint64
               snapshot.CR.pending_protected_parsed)
             (SZ.sizet_to_uint64
@@ -2463,10 +2939,16 @@ fn process_pending_protected_handshake
             0UL;
           V.to_vec_pts_to snapshot.CR.pending_protected_fragment;
           V.free snapshot.CR.pending_protected_fragment;
+          // With cross-record reassembly, a pending buffer that does not yet
+          // hold a complete handshake message is the ordinary in-flight
+          // case, not a decode failure: the message is still arriving over
+          // more records. Leaving the state untouched (rather than reporting
+          // DecodeError) lets the driver keep reading network bytes and
+          // buffering them onto this same pending message.
           let resp = {
             CT.network_out_len = 0sz;
             CT.app_out_len = 0sz;
-            CT.status = CT.DecodeError;
+            CT.status = CT.NeedMoreInput;
           };
           assert (pure (
             CT.pending_protected_handshake_result_correct

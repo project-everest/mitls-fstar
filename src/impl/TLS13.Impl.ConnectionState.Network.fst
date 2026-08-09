@@ -1067,7 +1067,6 @@ fn store_pending_protected_handshake
   requires connection_model_exactly c model **
            ArrPts.pts_to fragment 'fragment_bytes **
            pure (
-             CS.protected_handshake_buffer_empty (Ghost.reveal model) /\
              B.length (Ghost.reveal 'fragment_bytes) == SZ.v fragment_len /\
              SZ.v fragment_len <= max_handshake_flight_len /\
              SZ.v parsed <= SZ.v fragment_len)
@@ -1496,6 +1495,125 @@ fn finish_protected_handshake_head
       (Ghost.reveal 'raw_bytes)))
 }
 
+(* Take delivery of a protected handshake record WITHOUT interpreting it:
+   append its plaintext to whatever the previous record left unparsed and
+   advance the read sequence.  This is what makes a handshake message that
+   spans three or more records deliverable -- with only message-bearing steps
+   reassembly stalls as soon as the accumulated bytes still do not contain a
+   whole message, and the record cannot simply be left alone because opening
+   it has already advanced the AEAD sequence number irreversibly.
+
+   [stream] must already hold `leftover ++ this record's plaintext`; the
+   caller builds it, since only it has the decrypted plaintext to hand. *)
+fn buffer_protected_handshake_record
+  (c:connection_state)
+  (raw:array U8.t)
+  (stream:array U8.t)
+  (stream_len:SZ.t)
+  (#step:erased CS.protected_handshake_step)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to stream 'stream_bytes **
+           pure (
+             B.length (Ghost.reveal 'stream_bytes) == SZ.v stream_len /\
+             SZ.v stream_len <= max_handshake_flight_len /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == true /\
+             Seq.equal
+               (Ghost.reveal 'stream_bytes)
+               (CS.protected_handshake_stream
+                 st0.CS.cs_model
+                 (Ghost.reveal step)) /\
+             U64.fits
+               (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnProtectedHandshake (Ghost.reveal step)) /\
+             CS.event_raw_delta_legal
+               st0.CS.cs_model
+               (CS.ConnProtectedHandshake (Ghost.reveal step))
+               B.empty
+               (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (protected_handshake_state
+              st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to stream 'stream_bytes
+{
+  let advanced = Ghost.hide (
+    { st0.CS.cs_model with
+        CS.model_record =
+          { st0.CS.cs_model.CS.model_record with
+              CS.record_read =
+                R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read;
+          };
+    });
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read =
+          R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+  rewrite (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read =
+          R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read })
+    as (record_layer_exactly
+      c.records
+      (Ghost.reveal advanced).CS.model_record);
+  fold (connection_model_exactly c (Ghost.reveal advanced));
+  store_pending_protected_handshake
+    c
+    stream
+    stream_len
+    0sz
+    #advanced;
+  assert (pure (
+    (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes)).CS.cs_model ==
+      CS.set_pending_protected_handshake
+        (Ghost.reveal advanced)
+        (Ghost.reveal 'stream_bytes)
+        0));
+  lemma_protected_handshake_state_evolves
+    st0
+    (Ghost.reveal step)
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes));
+  rewrite (connection_model_exactly
+    c
+    (CS.set_pending_protected_handshake
+      (Ghost.reveal advanced)
+      (Ghost.reveal 'stream_bytes)
+      0))
+    as (connection_model_exactly
+      c
+      (protected_handshake_state
+        st0
+        (Ghost.reveal step)
+        (Ghost.reveal 'raw_bytes)).CS.cs_model);
+  fold (connection_exactly
+    c
+    (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes)))
+}
+
 fn finish_protected_handshake_drain
   (c:connection_state)
   (parsed:SZ.t)
@@ -1815,6 +1933,7 @@ fn mark_received_protected_encrypted_extensions
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_encrypted_extensions lee ee **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.EncryptedExtensions (Ghost.reveal ee) /\
              Seq.equal
@@ -2233,6 +2352,7 @@ fn mark_received_protected_certificate_head
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_certificate_msg lcert cert **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Certificate (Ghost.reveal cert) /\
              Seq.equal
@@ -2344,6 +2464,7 @@ fn mark_received_protected_certificate_drain
            IM.is_valid_certificate_msg lcert cert **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Certificate (Ghost.reveal cert) /\
              Seq.equal
@@ -2779,6 +2900,7 @@ fn mark_received_protected_certificate_verify_head
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_certificate_verify lcv cv **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.CertificateVerify (Ghost.reveal cv) /\
              Seq.equal
@@ -2893,6 +3015,7 @@ fn mark_received_protected_certificate_verify_drain
            IM.is_valid_certificate_verify lcv cv **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.CertificateVerify (Ghost.reveal cv) /\
              Seq.equal
@@ -3478,6 +3601,7 @@ fn mark_received_protected_server_finished_drain
            IM.is_valid_finished lfin fin **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Finished (Ghost.reveal fin) /\
              Seq.equal

@@ -1466,6 +1466,7 @@ let lemma_protected_head_decoder_projection
                B.length raw_received)) /\
         L.content_type_matches content_type T.Handshake /\
         Seq.equal step.protected_handshake_fragment fragment /\
+        step.protected_handshake_buffering == false /\
         step.protected_handshake_offset == 0 /\
         step.protected_handshake_head /\
         WS.parse_handshake fragment ==
@@ -1579,6 +1580,135 @@ let lemma_protected_head_decoder_projection
       Some
         (step.protected_handshake_message,
          step.protected_handshake_consumed));
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_protected_handshake_head_decode
+      st0.CS.cs_model
+      step
+      raw_received);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      (CS.ConnProtectedHandshake step)
+      raw_received)
+
+(* The buffering analogue of [lemma_protected_head_decoder_projection].  A
+   buffering step claims only that this record opened to handshake plaintext
+   equal to its fragment; it delivers no message, so there is nothing to
+   parse and no [parse_handshake] hypothesis to discharge.  That is precisely
+   what makes it usable when the accumulated plaintext does not yet contain a
+   whole message. *)
+let lemma_protected_buffer_decoder_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        protected_decoder_fragment_relation
+          st0 content_type fragment raw_received /\
+        (exists outer_fragment.
+          WS.parse_record raw_received ==
+            Some
+              (T.Application_data,
+               outer_fragment,
+               B.length raw_received)) /\
+        L.content_type_matches content_type T.Handshake /\
+        Seq.equal step.protected_handshake_fragment fragment /\
+        step.protected_handshake_buffering == true /\
+        step.protected_handshake_head)
+      (ensures
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          raw_received)
+=
+  assert (exists outer_fragment.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
+    (exists opened.
+      protected_record_opened st0 raw_received outer_fragment opened /\
+      (exists plaintext.
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext)));
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun outer_fragment ->
+        WS.parse_record_wire raw_received ==
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
+        (exists opened.
+          protected_record_opened st0 raw_received outer_fragment opened /\
+          (exists plaintext.
+            WS.parse_plaintext opened == Some plaintext /\
+            decoder_fragment_matches_plaintext content_type fragment plaintext))) in
+  let parsed_outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun parsed_outer_fragment ->
+        WS.parse_record raw_received ==
+          Some
+            (T.Application_data,
+             parsed_outer_fragment,
+             B.length raw_received)) in
+  CSL.lemma_parse_record_full_raw_records_exactly
+    raw_received
+    T.Application_data
+    parsed_outer_fragment;
+  assert (exists opened.
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    (exists plaintext.
+      WS.parse_plaintext opened == Some plaintext /\
+      decoder_fragment_matches_plaintext content_type fragment plaintext));
+  let opened =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun opened ->
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        (exists plaintext.
+          WS.parse_plaintext opened == Some plaintext /\
+          decoder_fragment_matches_plaintext content_type fragment plaintext)) in
+  let plaintext =
+    ID.indefinite_description_ghost
+      M.plaintext
+      (fun plaintext ->
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext) in
+  assert (L.content_type_matches content_type plaintext.M.content_type);
+  assert (plaintext.M.content_type == T.Handshake);
+  Seq.lemma_eq_elim fragment plaintext.M.fragment;
+  Seq.lemma_eq_elim step.protected_handshake_fragment fragment;
+  assert (TLS13.Spec.StateMachine.Canonical.received_record_opened
+    st0.CS.cs_model
+    raw_received
+    outer_fragment
+    opened);
+  assert (exists outer_fragment' opened' plaintext'.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment', B.length raw_received) /\
+    TLS13.Spec.StateMachine.Canonical.received_record_opened
+      st0.CS.cs_model
+      raw_received
+      outer_fragment'
+      opened' /\
+    WS.parse_plaintext opened' == Some plaintext' /\
+    plaintext'.M.content_type == T.Handshake /\
+    Seq.equal plaintext'.M.fragment step.protected_handshake_fragment);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_protected_handshake_buffer_decode
+      st0.CS.cs_model
+      step
+      raw_received);
   assert (
     TLS13.Spec.StateMachine.Canonical.received_protected_handshake_head_decode
       st0.CS.cs_model
@@ -2664,6 +2794,13 @@ let pending_protected_handshake_result_correct
        exists step.
          protected_handshake_step_correct
            st0 st1 resp step B.empty B.empty B.empty
+     | NeedMoreInput ->
+       (* The pending buffer holds the start of a handshake message whose
+          remaining bytes are still in flight.  Cross-record reassembly makes
+          this a normal, recoverable outcome rather than a decode failure: the
+          drain simply stops, leaving the state untouched, so that the driver
+          reads more network bytes and buffers them onto the same message. *)
+       st1 == st0
      | DecodeError
      | IllegalTransition ->
        st1 == st0
@@ -2678,6 +2815,9 @@ let lemma_legal_protected_handshake_step_some
         CS.legal_event model (CS.ConnProtectedHandshake step))
       (ensures Some? (CS.step_protected_handshake model step))
 =
+  if step.CS.protected_handshake_buffering
+  then ()
+  else
   match step.CS.protected_handshake_message with
   | M.EncryptedExtensions _ -> ()
   | M.Certificate _ -> ()

@@ -6275,6 +6275,35 @@ fn parse_handshake_prefix
   }
 }
 
+fn handshake_prefix_absent
+  (input: array U8.t)
+  (input_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len)
+  returns absent: bool
+  ensures pts_to input 'input_bytes **
+          pure (absent ==> WS.parse_handshake (Ghost.reveal 'input_bytes) == None)
+{
+  Arr.pts_to_len input;
+  let s = S.from_array input input_len;
+  let mut poffset = 0sz;
+  let valid = LPS.validate GHS.handshake_validator s poffset;
+  let consumed = !poffset;
+  S.to_array s;
+  if valid {
+    false
+  } else {
+    Seq.lemma_eq_intro
+      (Seq.slice (Ghost.reveal 'input_bytes) 0 (Seq.length (Ghost.reveal 'input_bytes)))
+      (Ghost.reveal 'input_bytes);
+    Seq.lemma_eq_elim
+      (Seq.slice (Ghost.reveal 'input_bytes) 0 (Seq.length (Ghost.reveal 'input_bytes)))
+      (Ghost.reveal 'input_bytes);
+    WS.lemma_parse_handshake_none_of_lp_none (Ghost.reveal 'input_bytes);
+    true
+  }
+}
+
 fn parse_handshake_prefix_at
   (input: array U8.t)
   (input_len: SZ.t)

@@ -556,6 +556,11 @@ let lemma_step_protected_handshake_not_failed
          | CS.ControlFailed _ -> False
          | _ -> True))
 =
+  (* A buffering step delivers no message: it rewrites only [model_record]
+     and the handshake buffers, so it cannot introduce a failure either. *)
+  if step.CS.protected_handshake_buffering
+  then ()
+  else begin
   assert (CS.protected_handshake_message_supported step.CS.protected_handshake_message);
   match step.CS.protected_handshake_message with
   | M.EncryptedExtensions _
@@ -563,6 +568,7 @@ let lemma_step_protected_handshake_not_failed
   | M.CertificateVerify _
   | M.Finished _ -> ()
   | _ -> assert False
+  end
 #pop-options
 
 let lemma_drain_step_not_failed (st0 st1:CS.connection_state)

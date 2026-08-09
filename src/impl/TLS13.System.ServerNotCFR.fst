@@ -239,7 +239,14 @@ let lemma_step_model_not_shsfv
          step.protected_handshake_message`.  The post-processing that
          `step_protected_handshake` applies on top of `step_handshake_message`
          rewrites only `model_record` and `model_handshake.hs_buffers`, so both
-         `model_control` and `model_config` are those of the stepped model. *)
+         `model_control` and `model_config` are those of the stepped model.
+
+         A buffering step dispatches no message at all: it rewrites only
+         `model_record` and `hs_buffers`, so it cannot reach
+         `HsServerFinishedVerified` from anywhere. *)
+      if step.CS.protected_handshake_buffering
+      then ()
+      else
       (match CS.step_handshake_message m CL.Received
                step.CS.protected_handshake_message with
        | Some stepped ->

@@ -115,6 +115,15 @@ val lemma_single_protected_message_seal_saturates_protected_head
           (M.TlsHandshake sent_msg)
           raw /\
         step.CS.protected_handshake_head /\
+        (* A BUFFERING step delivers no message: it sets a record's plaintext
+           aside so that a handshake message spanning several records can be
+           reassembled.  Its [protected_handshake_offset] and
+           [protected_handshake_consumed] are pinned to 0 by legality and say
+           nothing about the record, so "the head step consumes the whole
+           fragment" is simply not a statement about it.  Callers that reach
+           this lemma are reasoning about a step that DELIVERS [sent_msg], and
+           must say so. *)
+        step.CS.protected_handshake_buffering == false /\
         CS.legal_event receiver (CS.ConnProtectedHandshake step) /\
         TLS13.Spec.StateMachine.Canonical.received_event_decode_projection
           receiver

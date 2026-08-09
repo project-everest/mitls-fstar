@@ -106,7 +106,14 @@ let lemma_step_model_from_failed_results_failed
             msg.CL.message_value == None);
           assert False)
      | ConnProtectedHandshake step ->
-       assert False)
+       (* A buffering step succeeds without consulting the control state, so
+          it is reachable here.  It rewrites only [model_record] and
+          [hs_buffers], leaving [ControlFailed] in place.  Every other
+          protected step goes through [step_handshake_message], which has no
+          arm at [ControlFailed]. *)
+       if step.protected_handshake_buffering
+       then ()
+       else assert False)
   | _ ->
     assert False
 
@@ -582,7 +589,13 @@ let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
        assert_norm (
          step_model st0.cs_model (ConnProtectedHandshake step) ==
            step_protected_handshake st0.cs_model step);
-       (match step.protected_handshake_message, st0.cs_model.model_control with
+       (* A buffering step carries no message, and rewrites only
+          [model_record] and the handshake buffers -- so every field the
+          key-share projection looks at is preserved. *)
+       (if step.protected_handshake_buffering
+        then ()
+        else
+        match step.protected_handshake_message, st0.cs_model.model_control with
         | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
         | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
         | M.CertificateVerify _, ControlHandshaking HsCertificateValidated
@@ -1132,6 +1145,13 @@ let lemma_step_model_supported_profile_key_schedule_reachable_shape
       model'
   | ConnProtectedHandshake step ->
     assert (step_protected_handshake model step == Some model');
+    if step.protected_handshake_buffering
+    then
+      (* A buffering step only moves plaintext into the pending handshake
+         buffer and advances the record read state; it never touches the
+         key schedule. *)
+      lemma_same_key_schedule_reachable_shape model model'
+    else
     if protected_handshake_message_supported step.protected_handshake_message
     then
       match
@@ -1660,6 +1680,11 @@ let lemma_connection_delta_client_x25519_reachable_shape
            step_model st0.cs_model (ConnProtectedHandshake step) ==
              step_protected_handshake st0.cs_model step);
          assert (step_protected_handshake st0.cs_model step == Some st1.cs_model);
+         if step.protected_handshake_buffering
+         then
+           (* Buffering leaves the control state and key schedule untouched. *)
+           assert (client_x25519_reachable_shape st1)
+         else begin
          (match step.protected_handshake_message, st0.cs_model.model_control with
            | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
              assert (st1.cs_model.model_control ==
@@ -1675,7 +1700,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
              ControlHandshaking HsServerFinishedVerified)
            | _, _ -> assert False);
          assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
-         assert (client_x25519_reachable_shape st1))
+         assert (client_x25519_reachable_shape st1) end)
 
 #restart-solver
 let lemma_connection_delta_server_x25519_reachable_shape
@@ -2905,6 +2930,18 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
       | ConnProtectedHandshake step ->
         assert (legal_protected_handshake_step model step);
         assert (step_protected_handshake model step == Some model');
+        if step.protected_handshake_buffering
+        then begin
+          (* Buffering keeps the control state and key schedule fixed and
+             only bumps the read sequence, which [next_seq] does without
+             changing the epoch or its material. *)
+          assert (model'.model_control == model.model_control);
+          assert (model'.model_handshake.hs_keys == model.model_handshake.hs_keys);
+          assert (model'.model_record.record_write == model.model_record.record_write);
+          assert (model'.model_record.record_read.R.epoch ==
+                  (R.next_seq model.model_record.record_read).R.epoch)
+        end
+        else
         (match step.protected_handshake_message, model.model_control with
          | M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
          | M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
@@ -5712,6 +5749,12 @@ let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_
      | _, _, _, _ ->
        ())
   | ConnProtectedHandshake step ->
+    if step.protected_handshake_buffering
+    then
+      (* Buffering leaves the transcript and control state untouched, so any
+         checkpoint that was ready before is still ready. *)
+      ()
+    else
     (match role, step.protected_handshake_message, model0.model_control with
      | ClientEndpoint, M.EncryptedExtensions _,
       ControlHandshaking HsServerHelloReceived ->
@@ -6342,6 +6385,14 @@ let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_ma
          model0
          model1)
   | ConnProtectedHandshake step ->
+    if step.protected_handshake_buffering
+    then
+      (* Buffering rewrites only [model_record] and the handshake buffers,
+         which no traffic-material slot or checkpoint predicate reads. *)
+      lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
+        model0
+        model1
+    else
     (match step.protected_handshake_message, model0.model_control with
      | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
        assert (role == ClientEndpoint);
@@ -7642,6 +7693,20 @@ let lemma_step_model_record_keys_consistent
           assert (model1.model_record == model0.model_record);
           assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)))
   | ConnProtectedHandshake step ->
+    if step.protected_handshake_buffering
+    then begin
+      (* Buffering advances only the read sequence, and [next_seq] keeps the
+         epoch and its installed material. *)
+      assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+      assert (model1.model_record.record_read ==
+        R.next_seq model0.model_record.record_read);
+      assert (model1.model_record.record_write ==
+        model0.model_record.record_write);
+      lemma_record_read_keys_next_seq
+        model0.model_handshake.hs_keys
+        model0.model_record.record_read
+    end
+    else
     (match step.protected_handshake_message, model0.model_control with
      | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
       assert (model1.model_control == ControlHandshaking HsServerFinishedVerified);
@@ -7947,6 +8012,24 @@ let lemma_step_model_record_keys_consistent_for_role
      | ConnProtectedHandshake step ->
        assert False)
 
+(* [set_pending_protected_handshake] rewrites the handshake buffers and nothing
+   else; both of its branches leave [model_record] alone.  Naming the fact
+   spares every caller the case split. *)
+let lemma_set_pending_preserves_record
+  (m:connection_model)
+  (fragment:B.bytes)
+  (parsed:nat)
+  : Lemma
+      (ensures
+        (set_pending_protected_handshake m fragment parsed).model_record ==
+          m.model_record /\
+        (set_pending_protected_handshake m fragment parsed).model_control ==
+          m.model_control /\
+        (set_pending_protected_handshake m fragment parsed).model_handshake.hs_keys ==
+          m.model_handshake.hs_keys)
+=
+  ()
+
 let lemma_step_model_record_layer_delta
   (model0:connection_model)
   (ev:conn_event)
@@ -8248,6 +8331,29 @@ let lemma_step_model_record_layer_delta
        assert (model_record_layer_delta model0 ev model1))
   | ConnProtectedHandshake step ->
     assert (ev == ConnProtectedHandshake step);
+    if step.protected_handshake_buffering
+    then begin
+      (* Buffering rewrites only the handshake buffers on top of a read-sequence
+         bump, so the record layer moves exactly as it does for a head step. *)
+      assert_norm (
+        step_model model0 (ConnProtectedHandshake step) ==
+          step_protected_handshake model0 step);
+      assert (step_protected_handshake model0 step == Some model1);
+      assert (model1 == step_protected_handshake_buffer model0 step);
+      lemma_set_pending_preserves_record
+        { model0 with
+            model_record =
+              { model0.model_record with
+                  record_read = R.next_seq model0.model_record.record_read } }
+        (protected_handshake_stream model0 step)
+        0;
+      assert (model1.model_record ==
+        { model0.model_record with
+            record_read = R.next_seq model0.model_record.record_read });
+      lemma_projected_record_next_read model0.model_record;
+      assert (model_record_layer_delta model0 ev model1)
+    end
+    else
     (match step.protected_handshake_message, model0.model_control with
      | M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
        (match model1.model_handshake.hs_keys.ks_server_application_traffic with

@@ -3352,6 +3352,13 @@ let lemma_cf_producer_core (s:sysp)
   )
 #pop-options
 
+(* CROSS-RECORD REASSEMBLY.  `client_finished_bridge_inputs` gained the
+   `CCShape.no_buffering_steps` conjunct, a `forall ev. L.memP ev log ==> ...`
+   whose body matches on the event.  With the long explicit event spine this
+   proof destructs, that quantifier fires once per cons cell and each firing
+   costs an ifuel inversion, which destabilised an otherwise unchanged proof.
+   A solver restart isolates this VC from the accumulated context. *)
+#restart-solver
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
 let lemma_finish_cf (s:sysp)
   (ms:CS.connection_model)

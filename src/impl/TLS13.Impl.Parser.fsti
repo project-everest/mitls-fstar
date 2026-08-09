@@ -97,6 +97,24 @@ fn parse_handshake_prefix
                     (msg,
                      SZ.v parsed.L.parsed_handshake_consumed)))
 
+(**
+  A one-sided completeness check: it only ever reports [true] when the
+  LowParse validator for [handshake] rejects [input] outright, which is
+  exactly the case where no prefix of [input] can ever be completed into a
+  handshake message by appending more bytes. Reports [false] whenever the
+  validator accepts (including when a full [parse_handshake_prefix] would
+  still fail downstream, e.g. on an unrepresentable message) so callers must
+  treat [false] as "cannot tell".
+**)
+fn handshake_prefix_absent
+  (input: array U8.t)
+  (input_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len)
+  returns absent: bool
+  ensures pts_to input 'input_bytes **
+          pure (absent ==> WS.parse_handshake (Ghost.reveal 'input_bytes) == None)
+
 fn parse_handshake_prefix_at
   (input: array U8.t)
   (input_len: SZ.t)

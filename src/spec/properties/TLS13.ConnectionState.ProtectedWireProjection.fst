@@ -262,6 +262,9 @@ let lemma_single_protected_message_seal_saturates_protected_head
           (M.TlsHandshake sent_msg)
           raw /\
         step.protected_handshake_head /\
+        (* See the interface for why a BUFFERING step is excluded here: it
+           delivers no message, and its offset/consumed fields are inert. *)
+        step.protected_handshake_buffering == false /\
         legal_event receiver (ConnProtectedHandshake step) /\
         received_event_decode_projection
           receiver

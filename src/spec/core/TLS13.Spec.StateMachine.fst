@@ -294,6 +294,16 @@ type protected_handshake_step = {
   protected_handshake_offset: nat;
   protected_handshake_consumed: nat;
   protected_handshake_head: bool;
+  (* A BUFFERING step takes delivery of a record whose plaintext does not
+     complete a handshake message: it appends the plaintext to the pending
+     buffer, advances the read sequence, and steps nothing else.  It is what
+     makes a message spanning three or more records deliverable -- with only
+     ordinary head steps, reassembly would stall as soon as one record plus
+     the leftover still did not contain a whole message.
+
+     [protected_handshake_message], [protected_handshake_offset] and
+     [protected_handshake_consumed] are inert for such a step. *)
+  protected_handshake_buffering: bool;
 }
 type conn_event =
   | ConnNetworkEvent of directed_message M.tls_message
@@ -1076,6 +1086,56 @@ let protected_handshake_message_supported (msg:M.handshake_msg) : bool =
   | M.CertificateVerify _
   | M.Finished _ -> true
   | _ -> false
+
+(* ==================================================================== *)
+(* Cross-record handshake reassembly.                                   *)
+(*                                                                      *)
+(* TLS 1.3 permits a single handshake message to span several records,  *)
+(* so a record's plaintext may end part-way through a message.  The     *)
+(* unconsumed tail is held in the pending buffer and the NEXT record's  *)
+(* plaintext is appended to it before parsing resumes.                  *)
+(*                                                                      *)
+(* The step record deliberately keeps [protected_handshake_fragment]    *)
+(* equal to the RECORD PLAINTEXT for a head step.  That identity is     *)
+(* what [TLS13.Spec.StateMachine.Canonical]'s decode projection relates *)
+(* to the wire, and it is relied on by the receiver-side pairing        *)
+(* proofs.  The concatenation with the leftover is derived here rather  *)
+(* than stored in the step, so the wire relation is untouched.          *)
+(* ==================================================================== *)
+
+(* The unparsed suffix of the pending protected-handshake plaintext.
+
+   [set_pending_protected_handshake] keeps [parsed < length bytes] whenever the
+   buffer is non-empty and otherwise clears it to ([B.empty], 0), so this slice
+   is empty exactly when [protected_handshake_buffer_empty] holds. *)
+let pending_protected_handshake_leftover (model:connection_model) : B.bytes =
+  let hb = model.model_handshake.hs_buffers in
+  let bytes = hb.hb_encrypted_server_handshake_bytes in
+  let parsed = hb.hb_encrypted_server_handshake_parsed in
+  if parsed <= B.length bytes
+  then Seq.slice bytes parsed (B.length bytes)
+  else B.empty
+
+(* The byte stream a step parses out of.
+
+   A HEAD step resumes at the front of the leftover and continues into the
+   record it takes delivery of, so its stream is [leftover ++ fragment].  A
+   TAIL step continues inside the buffer already published by its head, whose
+   fragment IS that buffer, so its stream is the fragment itself.
+
+   When the pending buffer is empty the leftover is empty and a head step's
+   stream is exactly its fragment, which is the pre-reassembly behaviour. *)
+let protected_handshake_stream
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : B.bytes =
+  if step.protected_handshake_head
+  then
+    B.append
+      (pending_protected_handshake_leftover model)
+      step.protected_handshake_fragment
+  else step.protected_handshake_fragment
+
 let set_pending_protected_handshake
   (model:connection_model)
   (fragment:B.bytes)
@@ -1095,11 +1155,41 @@ let set_pending_protected_handshake
           hb_encrypted_server_handshake_parsed = 0;
       } in
   { model with model_handshake = { hs with hs_buffers = buffers } }
+(* A buffering step consumes one record and nothing else: the read sequence
+   advances (exactly as it does for a head step that carries a message, since
+   in both cases one protected record has been opened), the record's plaintext
+   is appended to whatever the previous record left unparsed, and the parse
+   position resets to the front of the accumulated stream.
+
+   Resetting [parsed] to 0 also COMPACTS the buffer: the bytes of messages
+   already delivered are dropped, so the pending buffer only ever holds the
+   prefix of the one message still being assembled. *)
+let step_protected_handshake_buffer
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot connection_model =
+  let advanced =
+    { model with
+        model_record =
+          { model.model_record with
+              record_read = R.next_seq model.model_record.record_read;
+          };
+    } in
+  set_pending_protected_handshake
+    advanced
+    (protected_handshake_stream model step)
+    0
+
 let step_protected_handshake
   (model:connection_model)
   (step:protected_handshake_step)
   : GTot (option connection_model) =
-  if protected_handshake_message_supported step.protected_handshake_message
+  if step.protected_handshake_buffering
+  then
+    (if step.protected_handshake_head
+     then Some (step_protected_handshake_buffer model step)
+     else None)
+  else if protected_handshake_message_supported step.protected_handshake_message
   then
     match
       step_handshake_message
@@ -1464,6 +1554,55 @@ let protected_handshake_buffer_empty (model:connection_model) : prop =
     B.empty /\
   model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed == 0
 
+(* An empty pending buffer leaves nothing to prepend, so a step's parse stream
+   is exactly its fragment.  This is the bridge that keeps every property
+   proved before cross-record reassembly applicable: such properties carry
+   [protected_handshake_buffer_empty] (directly, or via the reachability
+   invariants that establish it), and under it the generalised
+   [legal_protected_handshake_step] and [step_protected_handshake] coincide
+   with the fragment-only versions they replace. *)
+let lemma_protected_handshake_stream_of_buffer_empty
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : Lemma
+      (requires protected_handshake_buffer_empty model)
+      (ensures
+        Seq.equal
+          (protected_handshake_stream model step)
+          step.protected_handshake_fragment)
+      [SMTPat (protected_handshake_stream model step);
+       SMTPat (protected_handshake_buffer_empty model)]
+  = Seq.append_empty_l step.protected_handshake_fragment
+
+(* A tail step never prepends: its stream is its fragment unconditionally. *)
+let lemma_protected_handshake_stream_tail
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : Lemma
+      (requires step.protected_handshake_head == false)
+      (ensures
+        protected_handshake_stream model step ==
+        step.protected_handshake_fragment)
+  = ()
+
+(* Local events never touch the protected-handshake reassembly buffer.  The
+   only [hs_buffers] field any of them writes is [hb_certificate_verify_input]
+   (at [LocalSignCertificateVerify]).  This is what lets a normalisation proved
+   at one model be transported across an intervening local event, e.g. the
+   client's traffic-key install ahead of the server flight. *)
+let lemma_local_event_preserves_protected_handshake_buffer
+  (model:connection_model)
+  (ev:local_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_local_event model ev == Some model1)
+      (ensures
+        model1.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes ==
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
+        model1.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed ==
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed)
+  = ()
+
 let legal_handshake_message
   (model:connection_model)
   (dir:direction)
@@ -1648,40 +1787,124 @@ let legal_tls_message
     True
   | _, _ ->
     False
+(* The largest accumulated protected-handshake plaintext a client will hold
+   while reassembling a message that spans several records.  It matches the
+   implementation's [max_handshake_flight_len].
+
+   A cap is not a convenience: without one, a peer could feed unboundedly
+   many records that each merely extend the pending buffer, and the number of
+   records a client accepts in the handshake-receiving region would no longer
+   be bounded by the number of messages it has taken delivery of.  Capping
+   the buffer restores a bound -- messages plus buffered bytes -- because
+   every buffered record contributes at least one byte. *)
+let max_pending_protected_handshake : nat = 32768
+
+(* The stages at which a CLIENT can receive a protected handshake message,
+   and hence the only stages at which it may set protected plaintext aside.
+
+   These are exactly the [CL.Received] client arms of
+   [legal_handshake_message] for the four supported protected messages:
+   [EncryptedExtensions], [Certificate], [CertificateVerify] and [Finished].
+   Deriving the buffering guard from them is what keeps buffering from
+   weakening any stage-gated property.  In particular
+   [HsCertificateReceived] is absent -- the pipeline is genuinely blocked
+   there until [LocalValidateCertificate] runs -- so "receiving Certificate
+   blocks the pipeline" survives unchanged. *)
+let protected_handshake_buffering_stage (stage:handshake_stage) : bool =
+  match stage with
+  | HsServerHelloReceived
+  | HsEncryptedExtensionsReceived
+  | HsCertificateValidated
+  | HsCertificateVerifyVerified -> true
+  | _ -> false
+
 let legal_protected_handshake_step
   (model:connection_model)
   (step:protected_handshake_step)
   : GTot prop =
-  let fragment = step.protected_handshake_fragment in
   let offset = step.protected_handshake_offset in
   let consumed = step.protected_handshake_consumed in
   model.model_config.config_role == ClientEndpoint /\
-  offset < B.length fragment /\
-  0 < consumed /\
-  offset + consumed <= B.length fragment /\
-  protected_handshake_message_supported step.protected_handshake_message /\
-  W.parse_handshake (Seq.slice fragment offset (B.length fragment)) ==
-    Some (step.protected_handshake_message, consumed) /\
-  legal_handshake_message model CL.Received step.protected_handshake_message /\
-  (if step.protected_handshake_head
+  (if step.protected_handshake_buffering
    then
-     (* The head step takes delivery of a whole record: the offset comes
-        from the wire, not from state, and the buffer must be empty.
+     (* A BUFFERING step takes delivery of a record and sets its plaintext
+        aside without interpreting it.  It is what makes a handshake message
+        spanning three or more records deliverable: with only message-bearing
+        steps, reassembly stalls the moment one record plus the accumulated
+        leftover still does not contain a whole message, because no step is
+        then enabled and the record cannot be left undecrypted (opening it
+        advances the read sequence irreversibly).
 
-        [consumed] is NOT required to be strictly less than the fragment
-        length.  That strict inequality was what forced a record carrying
-        exactly one message down the [ConnNetworkEvent] path and created
-        the fork; dropping it lets the head step describe such a record,
-        with the pending buffer left empty by
-        [set_pending_protected_handshake] and no tail steps following. *)
+        It carries no message, so [protected_handshake_message],
+        [protected_handshake_offset] and [protected_handshake_consumed] say
+        nothing and are pinned to inert values.
+
+        Buffering is confined to the stages at which the client can actually
+        receive a protected handshake message (see
+        [protected_handshake_buffering_stage]).  Anywhere else the buffer
+        could never be drained, so admitting it would be a way to wedge the
+        endpoint while still consuming records. *)
+     step.protected_handshake_head == true /\
      offset == 0 /\
-     protected_handshake_buffer_empty model
+     consumed == 0 /\
+     0 < B.length step.protected_handshake_fragment /\
+     B.length (protected_handshake_stream model step) <=
+       max_pending_protected_handshake /\
+     (match model.model_control with
+      | ControlHandshaking stage -> protected_handshake_buffering_stage stage
+      | _ -> False) /\
+     (* Buffering is a LAST RESORT, not an alternative to delivering a
+        message: it is legal only when a head step is genuinely unavailable.
+        Either there is already pending plaintext (the head rule demands
+        [protected_handshake_buffer_empty], so a non-empty buffer forces this
+        step to be a buffering one), or this record's own plaintext, taken
+        alone, does not parse as a whole handshake message (so the head rule
+        cannot fire on it either).  Without this conjunct a client could
+        legally buffer a record that *does* carry a complete message instead
+        of delivering it, letting it accept arbitrarily many records-worth of
+        already-decodable messages while never advancing past a single
+        buffering-eligible control -- which is exactly the reassembly
+        mechanism, but pointed at messages that need no reassembly at all. *)
+     (~ (protected_handshake_buffer_empty model) \/
+      W.parse_handshake step.protected_handshake_fragment == None)
    else
-     Seq.equal
-       fragment
-       model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
-     offset ==
-       model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed)
+     offset < B.length step.protected_handshake_fragment /\
+     0 < consumed /\
+     offset + consumed <= B.length step.protected_handshake_fragment /\
+     protected_handshake_message_supported step.protected_handshake_message /\
+     W.parse_handshake
+       (Seq.slice
+         step.protected_handshake_fragment
+         offset
+         (B.length step.protected_handshake_fragment)) ==
+       Some (step.protected_handshake_message, consumed) /\
+     legal_handshake_message model CL.Received step.protected_handshake_message /\
+     (if step.protected_handshake_head
+      then
+        (* The head step takes delivery of a whole record, so its offset comes
+           off the wire rather than from state, and nothing may be pending.
+
+           [consumed] is NOT required to be strictly less than the fragment
+           length.  That strict inequality was what forced a record carrying
+           exactly one message down the [ConnNetworkEvent] path and created
+           the fork; dropping it lets the head step describe such a record,
+           with the pending buffer left empty by
+           [set_pending_protected_handshake] and no tail steps following.
+
+           A message spanning several records is NOT handled here: the head
+           step reads only this record's plaintext.  It is handled by
+           BUFFERING steps, which accumulate plaintext until a whole message
+           is present and then let ordinary TAIL steps drain it.  Keeping the
+           head rule exactly as it was is what leaves every sender/receiver
+           pairing proof untouched. *)
+        protected_handshake_buffer_empty model /\
+        offset == 0
+      else
+        Seq.equal
+          step.protected_handshake_fragment
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
+        offset ==
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed))
 let legal_event (model:connection_model) (ev:conn_event) : GTot prop =
   match ev with
   | ConnNetworkEvent msg ->
