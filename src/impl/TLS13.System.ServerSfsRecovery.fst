@@ -142,7 +142,7 @@ let lemma_consistent_client_sfv_flag_shape (st:CS.connection_state)
           p x /\ SMR.connection_state_single_step x y ==> p y) =
       introduce forall (x:CS.connection_state) (y:CS.connection_state).
         p x /\ SMR.connection_state_single_step x y ==> p y
-      with introduce _ ==> _ with _.
+      with introduce _ ==> _ with
         lemma_delta_client_sfv_flag_shape x y in
     RTC.stable_on_closure SMR.connection_state_single_step p stable;
     assert (p (CS.initial st.CS.cs_model.CS.model_config));
@@ -268,11 +268,7 @@ let lemma_server_preappdata_sent_le_marker
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace server
-    returns
-      WStep.server_flight_shape server.CS.cs_model /\
-      WStep.raw_appdata_count server.CS.cs_wire_log.CL.raw_sent
-        <= WStep.server_sent_marker_count server.CS.cs_model
-    with _.
+    with
     (
       WStep.lemma_server_trace_sent_marker init init server trace;
       PNTWL.lemma_server_trace_wire_logs_match init init trace server;
@@ -307,7 +303,7 @@ let lemma_flip_server_not_pre_flight (b:SY.tls_system_state)
     assert (b.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
     introduce
       WStep.server_pre_flight_ctrl b.server.CS.cs_model.CS.model_control ==> False
-    with _.
+    with
       lemma_server_preappdata_sent_le_marker
         b.server.CS.cs_model.CS.model_config b.server
 #pop-options
@@ -429,11 +425,7 @@ let lemma_server_step_s_flag
          SMCan.received_event_nonempty_decode_projection
            st0.CS.cs_model conn_ev (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-      returns
-        (server_s_flag st1.CS.cs_model
-          <= WStep.list_appdata_count (WFSM.event_input_messages ev)
-             + server_s_flag st0.CS.cs_model)
-      with _.
+      with
       (
         let conn_ev =
           CS.ConnNetworkEvent {
@@ -461,11 +453,7 @@ let lemma_server_step_s_flag
            st1 /\
          SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
          SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-      returns
-        (server_s_flag st1.CS.cs_model
-          <= WStep.list_appdata_count (WFSM.event_input_messages ev)
-             + server_s_flag st0.CS.cs_model)
-      with _.
+      with
         lemma_server_s_flag_step
           st0.CS.cs_model conn_ev st1.CS.cs_model raw_sent B.empty
 #pop-options
@@ -513,8 +501,7 @@ let lemma_server_S_received_ge1
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace server
-    returns WStep.raw_appdata_count server.CS.cs_wire_log.CL.raw_received >= 1
-    with _.
+    with
     (
       lemma_server_trace_s_flag init init server trace;
       PNTWL.lemma_server_trace_wire_logs_match init init trace server;
@@ -550,8 +537,7 @@ let lemma_server_preappdata_sent_ge4_finished
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches sm init trace server
-    returns Some? server.CS.cs_model.CS.model_handshake.CS.hs_server_finished
-    with _.
+    with
     (
       WStep.lemma_server_trace_sent_marker init init server trace;
       PNTWL.lemma_server_trace_wire_logs_match init init trace server;
@@ -630,7 +616,7 @@ let lemma_flip_recovers_server_sfs (b:SY.tls_system_state)
     WStep.lemma_connection_state_consistent_server_stage_shape b.server;
     // RECV = 0 excludes the whole S region (a control in S would force RECV >= 1).
     introduce server_s_flag b.server.CS.cs_model == 1 ==> False
-    with _.
+    with
       lemma_server_S_received_ge1
         b.server.CS.cs_model.CS.model_config b.server
 #pop-options

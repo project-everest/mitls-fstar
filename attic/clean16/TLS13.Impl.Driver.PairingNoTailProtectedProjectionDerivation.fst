@@ -219,11 +219,7 @@ let lemma_pairing_protected_projection_witnesses_from_installed_replay_witnesses
       client_state
       server_state
       w
-  returns
-    Pairing.paired_protected_handshake_event_projection_pair_witnesses
-      client_state
-      server_state
-  with _.
+  with
   (
     assert
       (installed_protected_projection_replay_inputs

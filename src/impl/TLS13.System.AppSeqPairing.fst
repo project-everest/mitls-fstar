@@ -194,8 +194,7 @@ let lemma_sent_not_key_update (st:CS.connection_state) (msg:M.tls_message)
       (ensures ~(M.TlsKeyUpdate? msg))
   = eliminate exists (prefix:list CS.conn_event).
        st.CS.cs_event_log == prefix @ [SMKM.sent_tls_event msg]
-    returns ~(M.TlsKeyUpdate? msg)
-    with _pf.
+    with
       lemma_no_key_update_tail prefix (SMKM.sent_tls_event msg)
 
 (** SEND DELTA.  A legal `Sent` model step advances the epoch-collapsing WRITE
@@ -753,10 +752,7 @@ let lemma_client_send_pins_model
       EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
       SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty
-    returns
-      CS.legal_event st0.CS.cs_model (SMKM.sent_tls_event sent) /\
-      CS.step_model st0.CS.cs_model (SMKM.sent_tls_event sent) == Some c'.CS.cs_model
-    with _pf.
+    with
     (
       // `canonical_wire_step` gives `legal_connection_delta`, hence
       //   c'.cs_event_log == st0.cs_event_log @ [conn_ev].
@@ -789,10 +785,7 @@ let lemma_server_send_pins_model
       ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
       SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty
-    returns
-      CS.legal_event st0.CS.cs_model (SMKM.sent_tls_event sent) /\
-      CS.step_model st0.CS.cs_model (SMKM.sent_tls_event sent) == Some s'.CS.cs_model
-    with _pf.
+    with
     (
       L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
       assert (conn_ev == SMKM.sent_tls_event sent)
@@ -866,8 +859,7 @@ let lemma_asp_client_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns app_seq_pairing b
-    with _pf.
+    with
     (
       assert (SMCorr.connection_state_no_key_update_trace c');
       lemma_client_send_pins_model a.client c' local out sent;
@@ -903,8 +895,7 @@ let lemma_asp_server_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns app_seq_pairing b
-    with _pf.
+    with
     (
       assert (SMCorr.connection_state_no_key_update_trace s');
       lemma_server_send_pins_model a.server s' local out sent;
@@ -1083,12 +1074,7 @@ let lemma_client_local_extract
            CS.delta_raw_received = B.empty; } c' /\
        SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-    returns
-      (exists (ce:CS.conn_event).
-        CS.legal_event st0.CS.cs_model ce /\
-        CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
-        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty)
-    with _.
+    with
     (
       WStep.lemma_serialize_all_nil_wire ();
       Seq.lemma_eq_elim raw_sent B.empty;
@@ -1124,12 +1110,7 @@ let lemma_server_local_extract
            CS.delta_raw_received = B.empty; } s' /\
        SMCan.sent_event_nonempty_seal_projection st0.CS.cs_model conn_ev raw_sent /\
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev B.empty)
-    returns
-      (exists (ce:CS.conn_event).
-        CS.legal_event st0.CS.cs_model ce /\
-        CS.step_model st0.CS.cs_model ce == Some s'.CS.cs_model /\
-        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty)
-    with _.
+    with
     (
       WStep.lemma_serialize_all_nil_wire ();
       Seq.lemma_eq_elim raw_sent B.empty;
@@ -1155,16 +1136,14 @@ let lemma_asp_client_local (a b:SY.tls_system_state)
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns app_seq_pairing b
-    with _pf.
+    with
     (
       lemma_client_local_extract a.client c' local out;
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.client.CS.cs_model ce /\
         CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
         CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
-      returns app_seq_pairing b
-      with _pe.
+      with
       (
         (if CS.ControlHandshaking? a.client.CS.cs_model.CS.model_control then begin
            CSL.lemma_handshaking_read_app_seq_zero a.client;
@@ -1192,16 +1171,14 @@ let lemma_asp_server_local (a b:SY.tls_system_state)
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns app_seq_pairing b
-    with _pf.
+    with
     (
       lemma_server_local_extract a.server s' local out;
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.server.CS.cs_model ce /\
         CS.step_model a.server.CS.cs_model ce == Some s'.CS.cs_model /\
         CS.event_raw_delta_legal a.server.CS.cs_model ce B.empty B.empty
-      returns app_seq_pairing b
-      with _pe.
+      with
       (
         (if CS.ControlHandshaking? a.server.CS.cs_model.CS.model_control then begin
            CSL.lemma_handshaking_read_app_seq_zero a.server;
@@ -1244,8 +1221,7 @@ let lemma_recv_not_key_update (st:CS.connection_state) (msg:M.tls_message)
       (ensures ~(M.TlsKeyUpdate? msg))
   = eliminate exists (prefix:list CS.conn_event).
        st.CS.cs_event_log == prefix @ [SMKM.received_tls_event msg]
-    returns ~(M.TlsKeyUpdate? msg)
-    with _pf.
+    with
       lemma_no_key_update_tail prefix (SMKM.received_tls_event msg)
 
 (** A reachable SERVER endpoint is at a server control (grounds the SH/HRR
@@ -1263,8 +1239,7 @@ let lemma_server_reachable_ctrl_ok
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                     CTy.server_local_event EAPI.local_output)).
       SM.trace_reaches (WStep.server_sm init) init trace server
-    returns WStep.server_ctrl_ok server.CS.cs_model.CS.model_control
-    with _.
+    with
       WStep.lemma_server_trace_appdata_post_cf init init server trace
 #pop-options
 
@@ -1751,8 +1726,7 @@ let lemma_send_single_record_count
         eliminate exists (fragment:M.sealed_record) (consumed:nat).
           W.parse_record raw == Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\ consumed <= B.length raw
-        returns CS.protected_record_count CL.Sent sent == 1
-        with _pe.
+        with
         (
           // parse_record -> parse_record_wire agreement: the third component
           // (consumed) must equal `B.length raw` by injectivity of `Some`.
@@ -1811,14 +1785,7 @@ let lemma_client_send_count
       EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
       SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty
-    returns CS.protected_record_count CL.Sent sent == 1 /\
-            (~(CS.network_message_is_cleartext CL.Sent sent) ==>
-               CS.raw_records_exactly (SY.emitted_raw out) T.Application_data
-                 (CS.protected_record_count CL.Sent sent)) /\
-            CS.network_message_raw_delta_legal st0.CS.cs_model
-              ({ CL.message_direction = CL.Sent; CL.message_value = sent })
-              (SY.emitted_raw out)
-    with _pf.
+    with
     (
       L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
       assert (conn_ev == SMKM.sent_tls_event sent);
@@ -1857,14 +1824,7 @@ let lemma_server_send_count
       ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
       SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty
-    returns CS.protected_record_count CL.Sent sent == 1 /\
-            (~(CS.network_message_is_cleartext CL.Sent sent) ==>
-               CS.raw_records_exactly (SY.emitted_raw out) T.Application_data
-                 (CS.protected_record_count CL.Sent sent)) /\
-            CS.network_message_raw_delta_legal st0.CS.cs_model
-              ({ CL.message_direction = CL.Sent; CL.message_value = sent })
-              (SY.emitted_raw out)
-    with _pf.
+    with
     (
       L.append_inv_head st0.CS.cs_event_log [conn_ev] [SMKM.sent_tls_event sent];
       assert (conn_ev == SMKM.sent_tls_event sent);
@@ -1901,9 +1861,7 @@ let lemma_asp_client_send_inflight (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns inflight_sender_stepped b /\ inflight_single_record b /\
-            inflight_raw_delta_legal b
-    with _pf.
+    with
     (
       assert (SMCorr.connection_state_no_key_update_trace c');
       lemma_client_send_pins_model a.client c' local out sent;
@@ -1933,9 +1891,7 @@ let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns inflight_sender_stepped b /\ inflight_single_record b /\
-            inflight_raw_delta_legal b
-    with _pf.
+    with
     (
       assert (SMCorr.connection_state_no_key_update_trace s');
       lemma_server_send_pins_model a.server s' local out sent;
@@ -1978,8 +1934,7 @@ let lemma_asp_client_send_snap_handshake_write (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns inflight_snap_handshake_write b
-    with _pf.
+    with
     (
       lemma_client_send_pins_model a.client c' local out sent;
       assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
@@ -2024,8 +1979,7 @@ let lemma_asp_server_send_snap_handshake_write (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns inflight_snap_handshake_write b
-    with _pf.
+    with
     (
       lemma_server_send_pins_model a.server s' local out sent;
       assert (CS.step_tls_message a.server.CS.cs_model CL.Sent sent == Some s'.CS.cs_model);
@@ -2085,8 +2039,7 @@ let lemma_asp_deliver_to_server
        SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns app_seq_pairing b
-    with _pd.
+    with
     (
       let conn_ev = CS.ConnNetworkEvent
         { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -2103,7 +2056,7 @@ let lemma_asp_deliver_to_server
       // POST-state server is live, the PRE-state server was live too (closing region
       // is absorbing), so `cs_seq_ok a` supplies the pre-state seq equality.
       introduce not_closing (SY.ctrl s') ==> app_wseq a.client == app_rseq s'
-      with _live.
+      with
       (
         lemma_step_preserves_closing a.server.CS.cs_model s'.CS.cs_model conn_ev;
         // EQ_pre : snap_app_wseq p == app_rseq a.server   (cs_seq_ok a, ToServer p, live)
@@ -2343,8 +2296,7 @@ let lemma_asp_deliver_to_client
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
        EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
-    returns app_seq_pairing b
-    with _inv.
+    with
     (
       match conn_ev0 with
       | CS.ConnLocalEvent _ ->
@@ -2376,7 +2328,7 @@ let lemma_asp_deliver_to_client
         lemma_protected_step_read_not_application a.client step;
         lemma_protected_step_seq a.client.CS.cs_model c'.CS.cs_model step;
         introduce not_closing (SY.ctrl c') ==> app_wseq a.server == app_rseq c'
-        with _live.
+        with
         (
           lemma_sent_wseq_delta snap a.server.CS.cs_model sent;
           assert (~(R.Application? (snap_wr p).R.epoch))
@@ -2399,7 +2351,7 @@ let lemma_asp_deliver_to_client
       // POST-state client is live, the PRE-state client was live too (closing region
       // is absorbing), so `sc_seq_ok a` supplies the pre-state seq equality.
       introduce not_closing (SY.ctrl c') ==> app_wseq a.server == app_rseq c'
-      with _live.
+      with
       (
         lemma_step_preserves_closing a.client.CS.cs_model c'.CS.cs_model conn_ev;
         // EQ_pre : snap_app_wseq p == app_rseq a.client   (sc_seq_ok a, ToClient p, live)
@@ -2510,8 +2462,7 @@ let lemma_rwc_client_send (a b:SY.tls_system_state)
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c';
                     channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns read_write_coupling b
-    with _pf.
+    with
     (
       let p : SY.tls_payload =
         { SY.pl_raw = SY.emitted_raw out;
@@ -2521,7 +2472,7 @@ let lemma_rwc_client_send (a b:SY.tls_system_state)
       assert (b.server == a.server);
       introduce WStep.server_recv_region_ctrl (SY.ctrl b.server) ==>
                 (snap_wr p).R.epoch =!= R.Application
-      with _reg.
+      with
       (
         // byte_pairing a @ Quiet: a.client.raw_sent == a.server.raw_received.
         assert (SY.byte_pairing a);
@@ -2688,7 +2639,7 @@ let lemma_ama_deliver_to_server
     assert (a.channel == MP.ToServer p);
     introduce cf_delivered b ==>
                 SMKM.supported_profile_application_record_material_agrees b.client b.server
-    with _cfd.
+    with
     (
       eliminate exists (msg:M.tls_message).
         (let conn_ev = CS.ConnNetworkEvent
@@ -2702,8 +2653,7 @@ let lemma_ama_deliver_to_server
          SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-      returns SMKM.supported_profile_application_record_material_agrees b.client b.server
-      with _pd.
+      with
       (
         let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in

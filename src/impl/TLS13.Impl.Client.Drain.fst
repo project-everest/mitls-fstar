@@ -86,9 +86,8 @@ let rec lemma_drain_chain_snoc
     eliminate
       (st1 == st0) \/
       (exists st'. drain_step st0 st' /\ drain_chain m st' st1)
-    returns (drain_chain (n + 1) st0 st2)
-    with _. lemma_drain_chain_refl n st2
-    and _.
+    with lemma_drain_chain_refl n st2
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state
@@ -183,7 +182,7 @@ let lemma_drain_step_state_correct (st0 st1:CS.connection_state)
   let (resp, step) = drain_step_witness st0 st1 in
   let ev = CS.ConnProtectedHandshake step in
   introduce CT.client_state_correct st0 ==> CT.client_state_correct st1
-  with _. (
+  with (
     assert (Can.sent_event_nonempty_seal_projection st0.CS.cs_model ev B.empty);
     CT.lemma_legal_response_for_event_client_state_correct
       st0 st1 resp ev B.empty B.empty B.empty B.empty)
@@ -236,19 +235,8 @@ let rec lemma_drain_chain_facts (n:nat) (st0 st1:CS.connection_state)
     eliminate
       (st1 == st0) \/
       (exists st'. drain_step st0 st' /\ drain_chain m st' st1)
-    returns
-      (st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
-       Seq.equal
-         st1.CS.cs_wire_log.CL.raw_sent
-         st0.CS.cs_wire_log.CL.raw_sent /\
-       Seq.equal
-         st1.CS.cs_wire_log.CL.raw_received
-         st0.CS.cs_wire_log.CL.raw_received /\
-       (CT.client_end_to_end_invariant st0 ==>
-        CT.client_end_to_end_invariant st1) /\
-       (CT.client_state_correct st0 ==> CT.client_state_correct st1))
-    with _. ()
-    and _.
+    with ()
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state
@@ -306,9 +294,8 @@ let rec lemma_drain_chain_nonfailed_previous (n:nat) (st0 st1:CS.connection_stat
   let m : nat = n - 1 in
     eliminate
       (st1 == st0) \/ (exists st'. drain_step st0 st' /\ drain_chain m st' st1)
-    returns CT.connection_control_not_failed st0
-    with _. ()
-    and _.
+    with ()
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state
@@ -338,7 +325,7 @@ let lemma_drained_nonfailed_previous_imp (st0 st1:CS.connection_state)
   introduce
     CT.connection_control_not_failed st1 ==>
       CT.connection_control_not_failed st0
-  with _. lemma_drained_nonfailed_previous st0 st1
+  with lemma_drained_nonfailed_previous st0 st1
 
 (** ---------------------------------------------------------------------- *)
 (** A network step followed by a drain                                      *)
@@ -595,9 +582,8 @@ let rec lemma_drain_chain_not_failed (n:nat) (st0 st1:CS.connection_state)
   let m : nat = n - 1 in
     eliminate
       (st1 == st0) \/ (exists st'. drain_step st0 st' /\ drain_chain m st' st1)
-    returns CT.connection_control_not_failed st1
-    with _. ()
-    and _.
+    with ()
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state

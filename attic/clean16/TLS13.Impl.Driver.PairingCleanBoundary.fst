@@ -39,17 +39,7 @@ let lemma_client_server_application_record_material_agrees_from_clean_boundary
   eliminate exists
     (w:handshake_complete_boundary_witnesses).
     paired_supported_handshake_complete_boundary_inputs client server w
-  returns
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   ( PR.lemma_client_server_application_record_material_agrees_from_cleartext_prefix_full_replays
       client
       server

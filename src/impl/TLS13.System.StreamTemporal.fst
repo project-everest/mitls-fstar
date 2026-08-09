@@ -101,9 +101,9 @@ let lemma_flagship_stream_integrity cfg_c cfg_s =
   with begin
     introduce
       T.reachable SY.tls_sys_step s0 s' ==> stream_integrity_scoped s'
-    with _reach. begin
+    with begin
       introduce SY.tls_no_rekeying s' ==> SY.stream_integrity_holds s'
-      with _nr. begin
+      with begin
         // `tls_no_rekeying s'` (from the antecedent) unlocks the byte-level
         // reachability payoff; the bridge below is definitional.
         ASI.lemma_reachable_app_stream_inv cfg_c cfg_s s';
@@ -176,14 +176,14 @@ let lemma_flagship_record_material_agreement_ungated cfg_c cfg_s =
   with begin
     introduce
       T.reachable SY.tls_sys_step s0 s' ==> record_material_agrees_when_ready s'
-    with _reach. begin
+    with begin
       introduce
         (SY.tls_no_rekeying s' /\ SY.tls_quiescent s' /\ SY.tls_application_ready s') ==>
           (SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s'.client s'.server /\
            SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s'.client s'.server)
-      with _ant. begin
+      with begin
         // `tls_no_rekeying s'` unlocks BOTH reachability payoffs.
         // (1) The stream-2 invariant DISCHARGES the buffering gate.
         ASI.lemma_reachable_app_stream_inv cfg_c cfg_s s';

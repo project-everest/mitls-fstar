@@ -100,9 +100,7 @@ let lemma_server_sent_delta_segmented
       msg.CL.message_value == M.TlsHandshake (M.ServerHello sh));
     eliminate exists (sh:GSH.serverHello).
       msg.CL.message_value == M.TlsHandshake (M.ServerHello sh)
-    returns (exists (outer:T.content_type) (k:nat).
-      outer <> T.Change_cipher_spec /\ raw_records_segmented raw outer k)
-    with _.
+    with
     (
       assert (CS.cleartext_tls_message_raw msg.CL.message_value raw);
       assert (Seq.equal raw
@@ -207,10 +205,7 @@ let lemma_server_step_outputs_no_ccs
        SMCan.received_event_nonempty_decode_projection st0.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns (forall (wm:CW.wire_message).
-      L.memP wm out.SM.so_wire_outputs ==>
-      wm.CW.wm_content_type <> T.Change_cipher_spec)
-    with _.
+    with
     (
       // event_raw_delta_legal (Received) forces delta_raw_sent == empty
       assert (Seq.equal
@@ -224,10 +219,7 @@ let lemma_server_step_outputs_no_ccs
        ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
        SMCan.canonical_wire_step st0 st1 conn_ev raw_sent B.empty)
-    returns (forall (wm:CW.wire_message).
-      L.memP wm out.SM.so_wire_outputs ==>
-      wm.CW.wm_content_type <> T.Change_cipher_spec)
-    with _.
+    with
     (
       // convert the CTy representation to the semantic vocabulary.
       CTy.lemma_server_local_event_semantic_exact local conn_ev;
@@ -254,10 +246,7 @@ let lemma_server_step_outputs_no_ccs
           (CTy.server_local_event_semantic local) msg raw_sent;
         eliminate exists (outer:T.content_type) (k:nat).
           outer <> T.Change_cipher_spec /\ raw_records_segmented raw_sent outer k
-        returns (forall (wm:CW.wire_message).
-          L.memP wm out.SM.so_wire_outputs ==>
-          wm.CW.wm_content_type <> T.Change_cipher_spec)
-        with _.
+        with
         (
           assert (raw_records_segmented
             (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
@@ -296,7 +285,7 @@ let rec lemma_server_trace_outputs_ccs_free
       L.memP wm (SM.trace_wire_outputs trace) ==>
       wm.CW.wm_content_type <> T.Change_cipher_spec
     with (introduce _ ==> _
-      with _hyp.
+      with
       L.append_memP tr.SM.tr_output.SM.so_wire_outputs
                     (SM.trace_wire_outputs rest) wm)
 #pop-options

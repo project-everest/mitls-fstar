@@ -2024,6 +2024,7 @@ let client_network_common_witness
 //   Case A – DecodeError  → LocalFail (tls_decode_error)
 //   Case B1 – legal_received_tls_response → WireEvent
 //   Case B2 – unexpected_message_response → LocalFail (tls_unexpected_message_error)
+#push-options "--z3rlimit 40"
 let lemma_client_network_changed_canonical_step
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2131,11 +2132,22 @@ let lemma_client_network_changed_canonical_step
         st0.CS.cs_model
         conn_ev'
         B.empty);
+    (* The witnesses are supplied explicitly: matching the two existentials up
+       by SMT alone is beyond the solver here. *)
+    introduce exists conn_ev' raw_sent.
+      client_representation_matches st0 (CTypes.ClientAPI api) conn_ev' /\
+      client_wire_outputs_match raw_sent [] /\
+      client_local_outputs_match conn_ev' [] /\
+      SMCan.canonical_wire_step st0 st1 conn_ev' raw_sent B.empty
+    with conn_ev (WF.serialize_all CW.tls_record_wire_format [])
+    and ();
     assert (client_step st0 (SM.LocalEvent (CTypes.ClientAPI api)) st1 (CPI.step_output [] []))
     by (
       Tac.norm
         [delta_only
-          [`%client_step];
+          [`%client_step;
+           `%SMCan.canonical_wire_step;
+           `%CPI.step_output];
          iota; zeta; primops];
       Tac.smt ());
     assert (client_canonical_step_rel #CTypes.client_local_event st0 st1)
@@ -2382,6 +2394,7 @@ let lemma_client_network_changed_canonical_step
     )
   )
 
+#pop-options
 let lemma_client_network_progress
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2935,22 +2948,7 @@ let lemma_client_step_wire_log_delta
         }
         st1 /\
       client_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == [wire]);
       Seq.append_empty_r (CW.wire_serialize wire)
@@ -2969,22 +2967,7 @@ let lemma_client_step_wire_log_delta
           CS.delta_raw_received = B.empty;
         }
         st1
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == []);
       assert (Seq.equal
@@ -3116,14 +3099,7 @@ let lemma_client_state_ahead_valid_byte_trace
       initial
       trace
       st
-  returns
-    WFSM.valid_byte_trace
-      (client_system #CTypes.client_local_event initial)
-      received
-      st
-      sent
-      Seq.empty
-  with _.
+  with
   (
     assert ((client_system #CTypes.client_local_event initial).WFSM.wfsm_state_machine ==
       client_state_machine initial);
@@ -4368,11 +4344,22 @@ let lemma_client_local_fail_bridge_result
     (CT.response_network_out resp network_out));
   Seq.lemma_eq_elim (WF.serialize_all CW.tls_record_wire_format wire_outputs) B.empty;
   assert (wire_outputs == []);
+  introduce exists conn_ev' raw_sent.
+    client_representation_matches st0 (CTypes.ClientAPI api) conn_ev' /\
+    client_wire_outputs_match raw_sent wire_outputs /\
+    client_local_outputs_match conn_ev' local_outputs /\
+    SMCan.canonical_wire_step st0 st1 conn_ev' raw_sent B.empty
+  with conn_ev (WF.serialize_all CW.tls_record_wire_format [])
+  and ();
   assert (client_step st0 (SM.LocalEvent (CTypes.ClientAPI api)) st1
     (CPI.step_output wire_outputs local_outputs))
   by (
     Tac.norm
-      [delta_only [`%client_step]; iota; zeta; primops];
+      [delta_only
+        [`%client_step;
+         `%SMCan.canonical_wire_step;
+         `%CPI.step_output];
+       iota; zeta; primops];
     Tac.smt ());
   let consumed : B.bytes = B.empty in
   let result = CTypes.client_process_result buffer_resp in
@@ -4921,11 +4908,24 @@ let lemma_client_network_wire_event_bridge_result
     msg
     wire;
   assert (EC.network_input_message_projection st0 wire msg);
+  introduce exists conn_ev'.
+    EC.client_wire_received_event st0 wire conn_ev' /\
+    SMCan.canonical_wire_step
+      st0 st1 conn_ev'
+      (WF.serialize_all CW.tls_record_wire_format wire_outputs)
+      (CW.wire_serialize wire) /\
+    client_local_outputs_match conn_ev' local_outputs
+  with conn_ev
+  and ();
   assert (client_step #CTypes.client_local_event st0 (SM.WireEvent wire) st1
     (CPI.step_output wire_outputs local_outputs))
   by (
     Tac.norm
-      [delta_only [`%client_step]; iota; zeta; primops];
+      [delta_only
+        [`%client_step;
+         `%SMCan.canonical_wire_step;
+         `%CPI.step_output];
+       iota; zeta; primops];
     Tac.smt ());
   let consumed = raw_consumed in
   let result = CTypes.client_process_result buffer_resp in
@@ -5205,7 +5205,7 @@ let lemma_client_network_bridge_obligation
           app_out
           buffer_resp
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     let old_app_out = Ghost.reveal base.tls_client_network_old_app_out in
     match buffer_resp.CT.response.CT.status with
     | CT.StepOk ->
@@ -6086,8 +6086,7 @@ let lemma_protected_step_empty_raw_is_tail
     WS.lemma_parse_record_implies_parse_record_wire B.empty;
     eliminate exists fragment.
       WS.parse_record B.empty == Some (T.Application_data, fragment, B.length B.empty)
-    returns False
-    with _pr.
+    with
       WS.lemma_parse_record_wire_some_consumed_positive
         B.empty T.Application_data fragment (B.length B.empty)
   )
@@ -6133,21 +6132,19 @@ let lemma_no_internal_step_when_not_pending
       client_is_internal
       st0
     ==> False
-  with _pf. (
+  with (
     eliminate exists (ev:CTypes.client_local_event)
                      (st1:CS.connection_state)
                      (output:SM.step_output CW.wire_message EAPI.local_output).
       client_is_internal ev /\
       client_step st0 (SM.LocalEvent ev) st1 output
-    returns False
-    with _pe. (
+    with (
       eliminate exists conn_ev raw_sent.
         client_representation_matches st0 ev conn_ev /\
         client_wire_outputs_match raw_sent output.SM.so_wire_outputs /\
         client_local_outputs_match conn_ev output.SM.so_local_outputs /\
         SMCan.canonical_wire_step st0 st1 conn_ev raw_sent B.empty
-      returns False
-      with _pc. (
+      with (
         lemma_client_is_internal_api_kind ev;
         assert (CTypes.client_local_event_matches st0 ev conn_ev);
         assert (CT.local_event_kind_matches
@@ -6162,8 +6159,7 @@ let lemma_no_internal_step_when_not_pending
         eliminate exists step.
           conn_ev == CS.ConnProtectedHandshake step /\
           step.CS.protected_handshake_head == false
-        returns False
-        with _ps. (
+        with (
           assert (CS.legal_protected_handshake_step st0.CS.cs_model step);
           assert (step.CS.protected_handshake_offset <
             B.length step.CS.protected_handshake_fragment)
@@ -6328,21 +6324,7 @@ let lemma_internal_progress_correct
 =
   eliminate exists step.
     CT.protected_handshake_step_correct st0 st1 resp step B.empty B.empty B.empty
-  returns
-    st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config /\
-    CPI.internal_process_correct
-      (client_system #CTypes.client_local_event initial)
-      client_is_internal
-      client_internal_pending
-      old_out old_out out_len
-      received0 sent0 st0
-      internal_progress_result
-      st1.CS.cs_wire_log.CL.raw_received
-      st1.CS.cs_wire_log.CL.raw_sent
-      st1
-      ([] <: list CW.wire_message)
-      ([] <: list EAPI.local_output)
-  with _ps. (
+  with (
     lemma_internal_step_is_client_step st0 st1 resp step;
     lemma_client_internal_event_is_internal ();
     CSL.lemma_step_model_preserves_config
@@ -6436,8 +6418,7 @@ let lemma_internal_progress_preorder
   else (
     eliminate exists step.
       CT.protected_handshake_step_correct st0 st1 resp step B.empty B.empty B.empty
-    returns client_canonical_step_rel #CTypes.client_local_event st0 st1
-    with _ps. lemma_internal_step_is_client_step st0 st1 resp step;
+    with lemma_internal_step_is_client_step st0 st1 resp step;
     RTC.closure_step
       (client_canonical_step_rel #CTypes.client_local_event)
       st0

@@ -263,7 +263,7 @@ let lemma_mk_cleartext_network_input_wf
     CT.wire_parse_success content_type fragment msg ==>
     CT.received_tls_raw_delta_legal st0 msg raw
   with introduce _ ==> _
-  with _hyp. (
+  with (
     lemma_wire_parse_unique content_type fragment msg m;
     lemma_l_received_cleartext_matches content_type fragment l m;
     lemma_cleartext_tls_message_raw_of_parse content_type outer_ct fragment raw l m
@@ -305,7 +305,7 @@ let lemma_mk_cleartext_network_input_wf_none
     CT.wire_parse_success content_type fragment msg ==>
     CT.received_tls_raw_delta_legal st0 msg raw
   with introduce _ ==> _
-  with _hyp. (
+  with (
     assert (exists ct.
       L.content_type_matches content_type ct /\
       WS.parse_tls_message ct fragment == Some msg);
@@ -353,7 +353,7 @@ let lemma_mk_protected_network_input_wf
     CT.wire_parse_success content_type fragment msg ==>
     CT.received_tls_raw_delta_legal st0 msg raw
   with introduce _ ==> _
-  with _hyp. (
+  with (
     lemma_wire_parse_unique content_type fragment msg m;
     lemma_l_received_cleartext_matches content_type fragment l m;
     CSL.lemma_parse_record_full_raw_records_exactly raw T.Application_data outer_fragment
@@ -373,7 +373,7 @@ let lemma_mk_protected_network_input_wf_none
     CT.wire_parse_success content_type fragment msg ==>
     CT.received_tls_raw_delta_legal st0 msg raw
   with introduce _ ==> _
-  with _hyp. (
+  with (
     assert (exists ct.
       L.content_type_matches content_type ct /\
       WS.parse_tls_message ct fragment == Some msg);

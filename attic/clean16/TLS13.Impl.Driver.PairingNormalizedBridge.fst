@@ -352,17 +352,7 @@ let lemma_raw_inputs_from_normalized_replay_boundary_inputs
       server_raw_received
       client_raw_sent
       client_raw_received
-  returns
-    exists server_raw_sent' server_raw_received' client_raw_sent' client_raw_received'.
-      normalized_replay_boundary_raw_inputs
-        client
-        server
-        w
-        server_raw_sent'
-        server_raw_received'
-        client_raw_sent'
-        client_raw_received'
-  with _.
+  with
   ( assert (exists server_raw_sent' server_raw_received' client_raw_sent' client_raw_received'.
       normalized_replay_boundary_raw_inputs
         client
@@ -402,11 +392,7 @@ let lemma_paired_successful_handshake_normalized_replay_shape_from_normalized_re
       server_raw_received
       client_raw_sent
       client_raw_received
-  returns
-    PNS.paired_successful_handshake_normalized_replay_shape
-      client
-      server
-  with _.
+  with
   (
     PWS.lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contiguous_replay_views
       client
@@ -479,11 +465,7 @@ let lemma_paired_successful_handshake_normalized_replay_shape_from_normalized_re
   eliminate exists
     (w:PCB.handshake_complete_boundary_witnesses).
     PNB.paired_supported_normalized_replay_boundary_inputs client server w
-  returns
-    PNS.paired_successful_handshake_normalized_replay_shape
-      client
-      server
-  with _.
+  with
   ( lemma_paired_successful_handshake_normalized_replay_shape_from_normalized_replay_boundary_inputs
       client
       server

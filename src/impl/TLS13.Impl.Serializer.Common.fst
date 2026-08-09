@@ -215,7 +215,7 @@ let lemma_copy_expr_preserves_prefix_slice
     Seq.index (CL.raw_slice copied lo hi) i ==
     Seq.index (CL.raw_slice old lo hi) i
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_raw_slice_index copied lo hi i;
     lemma_raw_slice_index old lo hi i;
     lemma_copy_expr_preserves_prefix_index old src_part dst_off copy_len old_len (lo + i)
@@ -259,7 +259,7 @@ let lemma_copy_expr_copied_slice
     Seq.index (CL.raw_slice copied dst_off (dst_off + copy_len)) i ==
     Seq.index src_part i
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_raw_slice_index copied dst_off (dst_off + copy_len) i;
     Seq.lemma_index_app2 (CL.raw_slice old 0 dst_off) tail (dst_off + i);
     assert ((dst_off + i) - B.length (CL.raw_slice old 0 dst_off) == i);
@@ -307,7 +307,7 @@ let lemma_copy_expr_preserves_suffix_slice
     Seq.index (CL.raw_slice copied lo hi) i ==
     Seq.index (CL.raw_slice old lo hi) i
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_raw_slice_index copied lo hi i;
     lemma_raw_slice_index old lo hi i;
     lemma_copy_expr_preserves_suffix_index old src_part dst_off copy_len old_len (lo + i)

@@ -739,9 +739,8 @@ let rec lemma_drain_chain_application_log (n:nat) (st0 st1:CS.connection_state)
   let m : nat = n - 1 in
     eliminate
       (st1 == st0) \/ (exists st'. D.drain_step st0 st' /\ D.drain_chain m st' st1)
-    returns TChannel.application_log st1 == TChannel.application_log st0
-    with _. ()
-    and _.
+    with ()
+    and
       (let st' =
          ID.indefinite_description_ghost
            CS.connection_state

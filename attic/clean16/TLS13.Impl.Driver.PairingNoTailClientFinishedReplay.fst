@@ -123,25 +123,7 @@ let lemma_client_application_write_install_event_step_model_as_plain_legal
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
         })) == Some model1
-  returns
-    exists material'.
-      CS.legal_event
-        model
-        (CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficApplication;
-            CS.install_direction = CS.TrafficWrite;
-            CS.install_material = material';
-          })) /\
-      CS.step_model
-        model
-        (CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficApplication;
-            CS.install_direction = CS.TrafficWrite;
-            CS.install_material = material';
-          })) == Some model1
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
@@ -234,25 +216,7 @@ let lemma_client_application_read_install_event_step_model_as_plain_legal
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
         })) == Some model1
-  returns
-    exists material'.
-      CS.legal_event
-        model
-        (CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficApplication;
-            CS.install_direction = CS.TrafficRead;
-            CS.install_material = material';
-          })) /\
-      CS.step_model
-        model
-        (CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficApplication;
-            CS.install_direction = CS.TrafficRead;
-            CS.install_material = material';
-          })) == Some model1
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
@@ -377,44 +341,7 @@ let lemma_client_application_install_cover_step_model_canonical_write_read
             CS.install_direction = CS.TrafficWrite;
             CS.install_material = write_material;
           })) == Some model1
-    returns
-      exists
-        (write_material':CS.traffic_key_material)
-        (read_material':CS.traffic_key_material)
-        (after_write':CS.connection_model).
-        CS.legal_event
-          model0
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficWrite;
-              CS.install_material = write_material';
-            })) /\
-        CS.step_model
-          model0
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficWrite;
-              CS.install_material = write_material';
-            })) == Some after_write' /\
-        CS.legal_event
-          after_write'
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficRead;
-              CS.install_material = read_material';
-            })) /\
-        CS.step_model
-          after_write'
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficRead;
-              CS.install_material = read_material';
-            })) == Some model2
-    with _.
+    with
     (
       lemma_client_application_read_install_event_step_model_as_plain_legal
         model1
@@ -437,44 +364,7 @@ let lemma_client_application_install_cover_step_model_canonical_write_read
               CS.install_direction = CS.TrafficRead;
               CS.install_material = read_material;
             })) == Some model2
-      returns
-        exists
-          (write_material':CS.traffic_key_material)
-          (read_material':CS.traffic_key_material)
-          (after_write':CS.connection_model).
-          CS.legal_event
-            model0
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficWrite;
-                CS.install_material = write_material';
-              })) /\
-          CS.step_model
-            model0
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficWrite;
-                CS.install_material = write_material';
-              })) == Some after_write' /\
-          CS.legal_event
-            after_write'
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficRead;
-                CS.install_material = read_material';
-              })) /\
-          CS.step_model
-            after_write'
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficRead;
-                CS.install_material = read_material';
-              })) == Some model2
-      with _.
+      with
       (
         introduce exists
           (write_material':CS.traffic_key_material)
@@ -541,44 +431,7 @@ let lemma_client_application_install_cover_step_model_canonical_write_read
             CS.install_direction = CS.TrafficRead;
             CS.install_material = read_material;
           })) == Some model1
-    returns
-      exists
-        (write_material':CS.traffic_key_material)
-        (read_material':CS.traffic_key_material)
-        (after_write':CS.connection_model).
-        CS.legal_event
-          model0
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficWrite;
-              CS.install_material = write_material';
-            })) /\
-        CS.step_model
-          model0
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficWrite;
-              CS.install_material = write_material';
-            })) == Some after_write' /\
-        CS.legal_event
-          after_write'
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficRead;
-              CS.install_material = read_material';
-            })) /\
-        CS.step_model
-          after_write'
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficRead;
-              CS.install_material = read_material';
-            })) == Some model2
-    with _.
+    with
     (
       lemma_client_application_write_install_event_step_model_as_plain_legal
         model1
@@ -601,44 +454,7 @@ let lemma_client_application_install_cover_step_model_canonical_write_read
               CS.install_direction = CS.TrafficWrite;
               CS.install_material = write_material;
             })) == Some model2
-      returns
-        exists
-          (write_material':CS.traffic_key_material)
-          (read_material':CS.traffic_key_material)
-          (after_write':CS.connection_model).
-          CS.legal_event
-            model0
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficWrite;
-                CS.install_material = write_material';
-              })) /\
-          CS.step_model
-            model0
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficWrite;
-                CS.install_material = write_material';
-              })) == Some after_write' /\
-          CS.legal_event
-            after_write'
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficRead;
-                CS.install_material = read_material';
-              })) /\
-          CS.step_model
-            after_write'
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficRead;
-                CS.install_material = read_material';
-              })) == Some model2
-      with _.
+      with
       (
         let write_ev =
           CS.ConnLocalEvent
@@ -805,52 +621,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
     CS.step_model after_verify e13 == Some after_e13 /\
     CS.step_model after_e13 e14 == Some after_e14 /\
     CS.step_model after_e14 sent_ev == Some final_model
-  returns
-    exists
-      (after_verify':CS.connection_model)
-      (after_app_write':CS.connection_model)
-      (after_app_read':CS.connection_model)
-      (client_app_write_material':CS.traffic_key_material)
-      (client_app_read_material':CS.traffic_key_material).
-      TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
-        model12
-        (CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
-         CS.ConnLocalEvent
-           (CS.LocalInstallTrafficKeys {
-             CS.install_epoch = CS.TrafficApplication;
-             CS.install_direction = CS.TrafficWrite;
-             CS.install_material = client_app_write_material';
-           }) ::
-         CS.ConnLocalEvent
-           (CS.LocalInstallTrafficKeys {
-             CS.install_epoch = CS.TrafficApplication;
-             CS.install_direction = CS.TrafficRead;
-             CS.install_material = client_app_read_material';
-           }) ::
-         sent_ev ::
-         [])
-        suffix_sent
-        suffix_received
-        final_model /\
-      CS.step_model model12 verify_ev == Some after_verify' /\
-      CS.step_model
-        after_verify'
-        (CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficApplication;
-            CS.install_direction = CS.TrafficWrite;
-            CS.install_material = client_app_write_material';
-          })) == Some after_app_write' /\
-      CS.step_model
-        after_app_write'
-        (CS.ConnLocalEvent
-          (CS.LocalInstallTrafficKeys {
-            CS.install_epoch = CS.TrafficApplication;
-            CS.install_direction = CS.TrafficRead;
-            CS.install_material = client_app_read_material';
-          })) == Some after_app_read' /\
-      CS.step_model after_app_read' sent_ev == Some final_model
-  with _.
+  with
   (
     PWR.lemma_conn_events_sent_seal_replay_head
       model12
@@ -877,52 +648,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
         tail0_sent
         tail0_received
         final_model
-    returns
-      exists
-        (after_verify':CS.connection_model)
-        (after_app_write':CS.connection_model)
-        (after_app_read':CS.connection_model)
-        (client_app_write_material':CS.traffic_key_material)
-        (client_app_read_material':CS.traffic_key_material).
-        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
-          model12
-          (verify_ev ::
-           CS.ConnLocalEvent
-             (CS.LocalInstallTrafficKeys {
-               CS.install_epoch = CS.TrafficApplication;
-               CS.install_direction = CS.TrafficWrite;
-               CS.install_material = client_app_write_material';
-             }) ::
-           CS.ConnLocalEvent
-             (CS.LocalInstallTrafficKeys {
-               CS.install_epoch = CS.TrafficApplication;
-               CS.install_direction = CS.TrafficRead;
-               CS.install_material = client_app_read_material';
-             }) ::
-           sent_ev ::
-           [])
-          suffix_sent
-          suffix_received
-          final_model /\
-        CS.step_model model12 verify_ev == Some after_verify' /\
-        CS.step_model
-          after_verify'
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficWrite;
-              CS.install_material = client_app_write_material';
-            })) == Some after_app_write' /\
-        CS.step_model
-          after_app_write'
-          (CS.ConnLocalEvent
-            (CS.LocalInstallTrafficKeys {
-              CS.install_epoch = CS.TrafficApplication;
-              CS.install_direction = CS.TrafficRead;
-              CS.install_material = client_app_read_material';
-            })) == Some after_app_read' /\
-        CS.step_model after_app_read' sent_ev == Some final_model
-    with _.
+    with
     (
       assert (model1 == after_verify);
       PWR.lemma_conn_events_sent_seal_replay_head
@@ -950,52 +676,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
           tail1_sent
           tail1_received
           final_model
-      returns
-        exists
-          (after_verify':CS.connection_model)
-          (after_app_write':CS.connection_model)
-          (after_app_read':CS.connection_model)
-          (client_app_write_material':CS.traffic_key_material)
-          (client_app_read_material':CS.traffic_key_material).
-          TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
-            model12
-            (verify_ev ::
-             CS.ConnLocalEvent
-               (CS.LocalInstallTrafficKeys {
-                 CS.install_epoch = CS.TrafficApplication;
-                 CS.install_direction = CS.TrafficWrite;
-                 CS.install_material = client_app_write_material';
-               }) ::
-             CS.ConnLocalEvent
-               (CS.LocalInstallTrafficKeys {
-                 CS.install_epoch = CS.TrafficApplication;
-                 CS.install_direction = CS.TrafficRead;
-                 CS.install_material = client_app_read_material';
-               }) ::
-             sent_ev ::
-             [])
-            suffix_sent
-            suffix_received
-            final_model /\
-          CS.step_model model12 verify_ev == Some after_verify' /\
-          CS.step_model
-            after_verify'
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficWrite;
-                CS.install_material = client_app_write_material';
-              })) == Some after_app_write' /\
-          CS.step_model
-            after_app_write'
-            (CS.ConnLocalEvent
-              (CS.LocalInstallTrafficKeys {
-                CS.install_epoch = CS.TrafficApplication;
-                CS.install_direction = CS.TrafficRead;
-                CS.install_material = client_app_read_material';
-              })) == Some after_app_read' /\
-          CS.step_model after_app_read' sent_ev == Some final_model
-      with _.
+      with
       (
         assert (model2 == after_e13);
         PWR.lemma_conn_events_sent_seal_replay_head
@@ -1023,52 +704,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
             tail2_sent
             tail2_received
             final_model
-        returns
-          exists
-            (after_verify':CS.connection_model)
-            (after_app_write':CS.connection_model)
-            (after_app_read':CS.connection_model)
-            (client_app_write_material':CS.traffic_key_material)
-            (client_app_read_material':CS.traffic_key_material).
-            TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
-              model12
-              (verify_ev ::
-               CS.ConnLocalEvent
-                 (CS.LocalInstallTrafficKeys {
-                   CS.install_epoch = CS.TrafficApplication;
-                   CS.install_direction = CS.TrafficWrite;
-                   CS.install_material = client_app_write_material';
-                 }) ::
-               CS.ConnLocalEvent
-                 (CS.LocalInstallTrafficKeys {
-                   CS.install_epoch = CS.TrafficApplication;
-                   CS.install_direction = CS.TrafficRead;
-                   CS.install_material = client_app_read_material';
-                 }) ::
-               sent_ev ::
-               [])
-              suffix_sent
-              suffix_received
-              final_model /\
-            CS.step_model model12 verify_ev == Some after_verify' /\
-            CS.step_model
-              after_verify'
-              (CS.ConnLocalEvent
-                (CS.LocalInstallTrafficKeys {
-                  CS.install_epoch = CS.TrafficApplication;
-                  CS.install_direction = CS.TrafficWrite;
-                  CS.install_material = client_app_write_material';
-                })) == Some after_app_write' /\
-            CS.step_model
-              after_app_write'
-              (CS.ConnLocalEvent
-                (CS.LocalInstallTrafficKeys {
-                  CS.install_epoch = CS.TrafficApplication;
-                  CS.install_direction = CS.TrafficRead;
-                  CS.install_material = client_app_read_material';
-                })) == Some after_app_read' /\
-            CS.step_model after_app_read' sent_ev == Some final_model
-        with _.
+        with
         (
           assert (model3 == after_e14);
           PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
@@ -1128,52 +764,7 @@ let lemma_client_finished_sent_seal_replay_canonicalize_application_installs
                   CS.install_direction = CS.TrafficRead;
                   CS.install_material = read_material;
                 })) == Some model3
-          returns
-            exists
-              (after_verify':CS.connection_model)
-              (after_app_write':CS.connection_model)
-              (after_app_read':CS.connection_model)
-              (client_app_write_material':CS.traffic_key_material)
-              (client_app_read_material':CS.traffic_key_material).
-              TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
-                model12
-                (verify_ev ::
-                 CS.ConnLocalEvent
-                   (CS.LocalInstallTrafficKeys {
-                     CS.install_epoch = CS.TrafficApplication;
-                     CS.install_direction = CS.TrafficWrite;
-                     CS.install_material = client_app_write_material';
-                   }) ::
-                 CS.ConnLocalEvent
-                   (CS.LocalInstallTrafficKeys {
-                     CS.install_epoch = CS.TrafficApplication;
-                     CS.install_direction = CS.TrafficRead;
-                     CS.install_material = client_app_read_material';
-                   }) ::
-                 sent_ev ::
-                 [])
-                suffix_sent
-                suffix_received
-                final_model /\
-              CS.step_model model12 verify_ev == Some after_verify' /\
-              CS.step_model
-                after_verify'
-                (CS.ConnLocalEvent
-                  (CS.LocalInstallTrafficKeys {
-                    CS.install_epoch = CS.TrafficApplication;
-                    CS.install_direction = CS.TrafficWrite;
-                    CS.install_material = client_app_write_material';
-                  })) == Some after_app_write' /\
-              CS.step_model
-                after_app_write'
-                (CS.ConnLocalEvent
-                  (CS.LocalInstallTrafficKeys {
-                    CS.install_epoch = CS.TrafficApplication;
-                    CS.install_direction = CS.TrafficRead;
-                    CS.install_material = client_app_read_material';
-                  })) == Some after_app_read' /\
-              CS.step_model after_app_read' sent_ev == Some final_model
-          with _.
+          with
           (
             let write_ev =
               CS.ConnLocalEvent
@@ -1371,8 +962,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
       tail0_sent
       tail0_received
       final_model
-  returns CS.raw_records_exactly raw_sent T.Application_data 1
-  with _.
+  with
   (
     PWR.lemma_conn_events_sent_seal_replay_head
       model1
@@ -1399,8 +989,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
         tail1_sent
         tail1_received
         final_model
-    returns CS.raw_records_exactly raw_sent T.Application_data 1
-    with _.
+    with
     (
       PWR.lemma_conn_events_sent_seal_replay_head
         model2
@@ -1427,8 +1016,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
           tail2_sent
           tail2_received
           final_model
-      returns CS.raw_records_exactly raw_sent T.Application_data 1
-      with _.
+      with
       (
         PWR.lemma_conn_events_sent_seal_replay_head
           model3
@@ -1455,8 +1043,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_slice
             tail3_sent
             tail3_received
             final_model
-        returns CS.raw_records_exactly raw_sent T.Application_data 1
-        with _.
+        with
         (
           PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
           assert (
@@ -1574,9 +1161,7 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
       [] /\
     TLS13.Impl.Driver.PairingNoTailClientPostSharedShape.client_no_tail_two_handshake_install_cover e4 e5 /\
     PNTCAS.client_no_tail_application_install_cover e13 e14
-  returns
-    client_finished_exact_suffix_sent_seal_replay_slice client
-  with _.
+  with
   (
     let ev0 = CS.ConnLocalEvent (CS.LocalStartHandshake start) in
     let ev1 =
@@ -1764,9 +1349,7 @@ let lemma_client_finished_exact_suffix_sent_seal_replay_slice_from_staged_milest
         suffix_sent
         suffix_received
         client.CS.cs_model
-    returns
-      client_finished_exact_suffix_sent_seal_replay_slice client
-    with _.
+    with
     (
       introduce exists
         (start':CS.handshake_start)
@@ -2034,9 +1617,7 @@ let lemma_client_finished_exact_suffix_sent_seal_raw_record_slice_from_replay_sl
       suffix_sent
       suffix_received
       client.CS.cs_model
-  returns
-    client_finished_exact_suffix_sent_seal_raw_record_slice client
-  with _.
+  with
   (
     lemma_client_finished_exact_suffix_sent_seal_raw_slice
       model12
@@ -2258,8 +1839,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
       tail0_sent
       tail0_received
       final_model
-  returns client_finished_sent_seal_suffix_head_steps model12 sf e13 e14 cf final_model
-  with _.
+  with
   (
     PWR.lemma_conn_events_sent_seal_replay_head
       after_verify
@@ -2286,8 +1866,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
         tail1_sent
         tail1_received
         final_model
-    returns client_finished_sent_seal_suffix_head_steps model12 sf e13 e14 cf final_model
-    with _.
+    with
     (
       PWR.lemma_conn_events_sent_seal_replay_head
         after_e13
@@ -2314,8 +1893,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
           tail2_sent
           tail2_received
           final_model
-      returns client_finished_sent_seal_suffix_head_steps model12 sf e13 e14 cf final_model
-      with _.
+      with
       (
         PWR.lemma_conn_events_sent_seal_replay_head
           after_e14
@@ -2342,8 +1920,7 @@ let lemma_client_finished_sent_seal_suffix_head_steps
             tail3_sent
             tail3_received
             final_model
-        returns client_finished_sent_seal_suffix_head_steps model12 sf e13 e14 cf final_model
-        with _.
+        with
         (
           assert_norm (
             TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
@@ -2502,9 +2079,7 @@ let lemma_client_finished_exact_suffix_sent_seal_head_step_slice_from_replay_sli
       suffix_sent
       suffix_received
       client.CS.cs_model
-  returns
-    client_finished_exact_suffix_sent_seal_head_step_slice client
-  with _.
+  with
   (
     lemma_client_finished_exact_suffix_sent_seal_raw_slice
       model12
@@ -2706,8 +2281,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
       cf
       client.CS.cs_model /\
     CS.raw_records_exactly suffix_sent T.Application_data 1
-  returns client_finished_canonical_sent_seal_replay_slice client
-  with _.
+  with
   (
     lemma_client_finished_sent_seal_replay_canonicalize_application_installs
       model12
@@ -2773,8 +2347,7 @@ let lemma_client_finished_canonical_sent_seal_replay_slice_from_head_step_slice
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.Finished cf);
         })) == Some client.CS.cs_model
-    returns client_finished_canonical_sent_seal_replay_slice client
-    with _.
+    with
     (
       introduce exists
         (sf':GFin.finished)

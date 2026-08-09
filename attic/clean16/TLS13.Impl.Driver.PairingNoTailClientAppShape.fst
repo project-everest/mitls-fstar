@@ -894,8 +894,7 @@ let lemma_client_after_server_finished_verified_next_event_application_install
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns client_no_tail_application_install_event ev
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent local ->
@@ -1002,8 +1001,7 @@ let lemma_client_after_one_application_install_next_event_application_install
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns client_no_tail_application_install_event ev
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent local ->
@@ -1115,13 +1113,7 @@ let lemma_client_after_application_installs_next_event_client_finished
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    exists cf.
-      ev == CS.ConnNetworkEvent {
-        CL.message_direction = CL.Sent;
-        CL.message_value = M.TlsHandshake (M.Finished cf);
-      }
-  with _.
+  with
   (
     match ev with
     | CS.ConnLocalEvent local ->
@@ -1332,55 +1324,7 @@ let lemma_client_no_tail_model15_witness
       tail_received
       client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns
-    exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 rest11 model15 tail_sent tail_received.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-        e4 ::
-        e5 ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.Certificate cert);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.Finished sf);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
-        e13 ::
-        e14 ::
-        rest11 /\
-      FStar.List.Tot.length rest11 == 1 /\
-      PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-      client_no_tail_application_install_cover e13 e14 /\
-      client_after_application_installs_model model15 /\
-      TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-        model15
-        rest11
-        tail_sent
-        tail_received
-        client.CS.cs_model /\
-      PNI.client_application_progress_rank client.CS.cs_model == 0
-  with _.
+  with
   (
     match rest9 with
     | e13 :: rest10 ->
@@ -1409,55 +1353,7 @@ let lemma_client_no_tail_model15_witness
         Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
         Seq.equal tail_received (B.append delta_received tail_received2) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model14 rest10 tail_sent2 tail_received2 client.CS.cs_model
-      returns
-        exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 rest11 model15 tail_sent tail_received.
-          client.CS.cs_event_log ==
-            CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Sent;
-              CL.message_value = M.TlsHandshake (M.ClientHello ch);
-            }) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.ServerHello sh);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-            e4 ::
-            e5 ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-            }) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.Certificate cert);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.Finished sf);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
-            e13 ::
-            e14 ::
-            rest11 /\
-          FStar.List.Tot.length rest11 == 1 /\
-          PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-          client_no_tail_application_install_cover e13 e14 /\
-          client_after_application_installs_model model15 /\
-          TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-            model15
-            rest11
-            tail_sent
-            tail_received
-            client.CS.cs_model /\
-          PNI.client_application_progress_rank client.CS.cs_model == 0
-      with _.
+      with
       (
         lemma_client_first_application_install_step_model_shape model13 model14 e13;
         assert (client_after_one_application_install_model model14);
@@ -1488,55 +1384,7 @@ let lemma_client_no_tail_model15_witness
             Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
             Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
             TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model15 rest11 tail_sent3 tail_received3 client.CS.cs_model
-          returns
-            exists start ch sh client_shared e4 e5 ee cert peer cv sf e13 e14 rest11 model15 tail_sent tail_received.
-              client.CS.cs_event_log ==
-                CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Sent;
-                  CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                }) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.ServerHello sh);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-                e4 ::
-                e5 ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-                }) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.Certificate cert);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.Finished sf);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalVerifyFinished sf) ::
-                e13 ::
-                e14 ::
-                rest11 /\
-              FStar.List.Tot.length rest11 == 1 /\
-              PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
-              client_no_tail_application_install_cover e13 e14 /\
-              client_after_application_installs_model model15 /\
-              TLS13.Spec.StateMachine.Replay.conn_events_raw_replay
-                model15
-                rest11
-                tail_sent
-                tail_received
-                client.CS.cs_model /\
-              PNI.client_application_progress_rank client.CS.cs_model == 0
-          with _.
+          with
           (
             let e13_write = client_no_tail_application_write_install_event e13 in
             let e13_read = client_no_tail_application_read_install_event e13 in
@@ -1712,8 +1560,7 @@ let lemma_client_no_tail_fourteenth_and_fifteenth_events_application_install_cov
       tail_received
       client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns client_no_tail_application_installs_shape client
-  with _.
+  with
   (
     introduce exists
       (start0:CS.handshake_start)
@@ -1829,8 +1676,7 @@ let lemma_client_no_tail_sixteenth_event_client_finished_clean
       tail_received
       client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns client_no_tail_finished_sent_shape client
-  with _.
+  with
   (
     match rest11 with
     | e15 :: rest12 ->
@@ -1847,8 +1693,7 @@ let lemma_client_no_tail_sixteenth_event_client_finished_clean
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.Finished cf);
         }
-      returns client_no_tail_finished_sent_shape client
-      with _.
+      with
       (
         match rest12 with
         | [] ->

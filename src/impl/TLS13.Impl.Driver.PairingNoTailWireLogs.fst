@@ -73,14 +73,7 @@ let rec lemma_wire_parses_as_serialize_with_tail
         bytes_after_msg
         rest
         residual
-    returns
-      Seq.equal
-        bytes
-        (WF.serialize_with_tail
-          CW.tls_record_wire_format
-          (msg :: rest)
-          residual)
-    with _.
+    with
     (
       match W.parse_record_wire bytes with
       | None ->
@@ -257,8 +250,7 @@ let rec lemma_wire_parses_as_unique_empty_residual
         bytes_after_msg
         r_tl
         Seq.empty
-    returns False
-    with _.
+    with
     (
       assert False
     )
@@ -274,8 +266,7 @@ let rec lemma_wire_parses_as_unique_empty_residual
         bytes_after_msg
         l_tl
         Seq.empty
-    returns False
-    with _.
+    with
     (
       assert False
     )
@@ -288,8 +279,7 @@ let rec lemma_wire_parses_as_unique_empty_residual
         left_after
         l_tl
         Seq.empty
-    returns l_hd :: l_tl == r_hd :: r_tl
-    with _.
+    with
     (
       eliminate exists (right_msg:CW.wire_message) (right_after:B.bytes).
         CW.wire_parse bytes == Some (right_msg, right_after) /\
@@ -299,8 +289,7 @@ let rec lemma_wire_parses_as_unique_empty_residual
           right_after
           r_tl
           Seq.empty
-      returns l_hd :: l_tl == r_hd :: r_tl
-      with _.
+      with
       (
         assert (left_msg == right_msg);
         assert (left_after == right_after);
@@ -423,22 +412,7 @@ let lemma_client_step_wire_log_delta
         }
         st1 /\
       EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == [wire]);
       Seq.append_empty_r (CW.wire_serialize wire)
@@ -456,22 +430,7 @@ let lemma_client_step_wire_log_delta
           CS.delta_raw_received = B.empty;
         }
         st1
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == []);
       assert (Seq.equal
@@ -528,22 +487,7 @@ let lemma_server_step_wire_log_delta
         }
         st1 /\
       ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == [wire]);
       Seq.append_empty_r (CW.wire_serialize wire)
@@ -561,22 +505,7 @@ let lemma_server_step_wire_log_delta
           CS.delta_raw_received = B.empty;
         }
         st1
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == []);
       assert (Seq.equal
@@ -873,28 +802,7 @@ let lemma_client_valid_byte_trace_strong_parse
       (WF.serialize_all
         (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    exists (trace:list (SM.transition
-                          CS.connection_state
-                          CW.wire_message
-                          CTypes.client_local_event
-                          EAPI.local_output)).
-      SM.trace_reaches
-        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine
-        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
-        trace
-        client /\
-      WF.parses_as
-        (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
-        client_received
-        (WFSM.trace_input_messages trace)
-        residual /\
-      Seq.equal
-        client_sent
-        (WF.serialize_all
-          (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
-          (SM.trace_wire_outputs trace))
-  with _.
+  with
   (
     introduce
       Seq.equal
@@ -910,7 +818,7 @@ let lemma_client_valid_byte_trace_strong_parse
         client_received
         (WFSM.trace_input_messages trace)
         residual
-    with _.
+    with
     (
       lemma_wire_serialize_all_append_tail
         (WFSM.trace_input_messages trace)
@@ -1032,28 +940,7 @@ let lemma_server_valid_byte_trace_strong_parse
       (WF.serialize_all
         (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    exists (trace:list (SM.transition
-                          CS.connection_state
-                          CW.wire_message
-                          CTypes.server_local_event
-                          EAPI.local_output)).
-      SM.trace_reaches
-        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine
-        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_state_machine.SM.sm_initial_state
-        trace
-        server /\
-      WF.parses_as
-        (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
-        server_received
-        (WFSM.trace_input_messages trace)
-        residual /\
-      Seq.equal
-        server_sent
-        (WF.serialize_all
-          (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
-          (SM.trace_wire_outputs trace))
-  with _.
+  with
   (
     introduce
       Seq.equal
@@ -1069,7 +956,7 @@ let lemma_server_valid_byte_trace_strong_parse
         server_received
         (WFSM.trace_input_messages trace)
         residual
-    with _.
+    with
     (
       lemma_wire_serialize_all_append_tail
         (WFSM.trace_input_messages trace)
@@ -1174,29 +1061,7 @@ let lemma_client_valid_byte_trace_inverts_to_serialized_trace
       (WF.serialize_all
         (EC.client_system #CTypes.client_local_event client_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    exists (trace:list
-      (SM.transition
-        CS.connection_state
-        CW.wire_message
-        CTypes.client_local_event
-        EAPI.local_output)).
-      SM.trace_reaches
-        (EC.client_state_machine #CTypes.client_local_event client_initial)
-        client_initial
-        trace
-        client /\
-      Seq.equal
-        client_received
-        (WF.serialize_all
-          CW.tls_record_wire_format
-          (WFSM.trace_input_messages trace)) /\
-      Seq.equal
-        client_sent
-        (WF.serialize_all
-          CW.tls_record_wire_format
-          (SM.trace_wire_outputs trace))
-  with _.
+  with
   (
     lemma_wire_parses_as_serialize_all
       client_received
@@ -1282,29 +1147,7 @@ let lemma_server_valid_byte_trace_inverts_to_serialized_trace
       (WF.serialize_all
         (ES.server_system #CTypes.server_local_event server_initial).WFSM.wfsm_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    exists (trace:list
-      (SM.transition
-        CS.connection_state
-        CW.wire_message
-        CTypes.server_local_event
-        EAPI.local_output)).
-      SM.trace_reaches
-        (ES.server_state_machine #CTypes.server_local_event server_initial)
-        server_initial
-        trace
-        server /\
-      Seq.equal
-        server_received
-        (WF.serialize_all
-          CW.tls_record_wire_format
-          (WFSM.trace_input_messages trace)) /\
-      Seq.equal
-        server_sent
-        (WF.serialize_all
-          CW.tls_record_wire_format
-          (SM.trace_wire_outputs trace))
-  with _.
+  with
   (
     lemma_wire_parses_as_serialize_all
       server_received
@@ -1378,10 +1221,7 @@ let lemma_client_valid_byte_trace_wire_logs_exact
       (WF.serialize_all
         CW.tls_record_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    Seq.equal client_sent client.CS.cs_wire_log.CL.raw_sent /\
-    Seq.equal client_received client.CS.cs_wire_log.CL.raw_received
-  with _.
+  with
   (
     lemma_client_trace_wire_logs_match
       client_initial
@@ -1450,10 +1290,7 @@ let lemma_server_valid_byte_trace_wire_logs_exact
       (WF.serialize_all
         CW.tls_record_wire_format
         (SM.trace_wire_outputs trace))
-  returns
-    Seq.equal server_sent server.CS.cs_wire_log.CL.raw_sent /\
-    Seq.equal server_received server.CS.cs_wire_log.CL.raw_received
-  with _.
+  with
   (
     lemma_server_trace_wire_logs_match
       server_initial

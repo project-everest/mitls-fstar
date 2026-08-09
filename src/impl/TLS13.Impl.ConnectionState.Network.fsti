@@ -263,45 +263,6 @@ fn mark_received_client_hello
           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
           IM.is_valid_client_hello lch ch
 
-fn mark_received_encrypted_extensions
-  (c:connection_state)
-  (raw:array U8.t)
-  (fragment:array U8.t)
-  (fragment_len:SZ.t)
-  (lee:IM.encrypted_extensions)
-  (#ee:erased GEE.encryptedExtensions)
-  (#st0:erased CS.connection_state)
-  requires connection_exactly c st0 **
-           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
-           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
-           IM.is_valid_encrypted_extensions lee ee **
-           pure (st0.CS.cs_model.CS.model_control ==
-                    CS.ControlHandshaking CS.HsServerHelloReceived /\
-                  st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-                  st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None /\
-                  Some?
-                    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
-                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
-                  B.length 'fragment_bytes == SZ.v fragment_len /\
-                  Seq.equal
-                    (Ghost.reveal 'fragment_bytes)
-                    (W.serialize_handshake (M.EncryptedExtensions ee)) /\
-                  B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-                    SZ.v fragment_len <= max_transcript_len /\
-                  CS.event_raw_delta_legal
-                    st0.CS.cs_model
-                    (CS.ConnNetworkEvent {
-                      CL.message_direction = CL.Received;
-                      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
-                    })
-                    B.empty
-                    (Ghost.reveal 'raw_bytes))
-  ensures connection_exactly
-            c
-            (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)) **
-          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
-          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes
-
 (* Take delivery of a protected handshake record WITHOUT interpreting it:
    append its plaintext to whatever the previous record left unparsed and
    advance the read sequence.  This is what makes a handshake message that
@@ -349,6 +310,45 @@ fn buffer_protected_handshake_record
               (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
           Pulse.Lib.Array.PtsTo.pts_to stream 'stream_bytes
+
+fn mark_received_encrypted_extensions
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lee:IM.encrypted_extensions)
+  (#ee:erased GEE.encryptedExtensions)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
+           IM.is_valid_encrypted_extensions lee ee **
+           pure (st0.CS.cs_model.CS.model_control ==
+                    CS.ControlHandshaking CS.HsServerHelloReceived /\
+                  st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None /\
+                  Some?
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                  B.length 'fragment_bytes == SZ.v fragment_len /\
+                  Seq.equal
+                    (Ghost.reveal 'fragment_bytes)
+                    (W.serialize_handshake (M.EncryptedExtensions ee)) /\
+                  B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                    SZ.v fragment_len <= max_transcript_len /\
+                  CS.event_raw_delta_legal
+                    st0.CS.cs_model
+                    (CS.ConnNetworkEvent {
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+                    })
+                    B.empty
+                    (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes
 
 fn mark_received_protected_encrypted_extensions
   (c:connection_state)

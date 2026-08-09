@@ -139,7 +139,7 @@ let lemma_single_step_client_hs_write_seq_shape (_:unit)
   = introduce forall x y.
       conn_client_hs_write_seq_shape x /\ connection_state_single_step x y ==>
       conn_client_hs_write_seq_shape y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_client_hs_write_seq_shape x y
 
 let lemma_initial_client_hs_write_seq_shape (cfg:connection_config)
@@ -231,7 +231,7 @@ let lemma_single_step_server_hs_read_seq_shape (_:unit)
   = introduce forall x y.
       conn_server_hs_read_seq_shape x /\ connection_state_single_step x y ==>
       conn_server_hs_read_seq_shape y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_server_hs_read_seq_shape x y
 
 let lemma_initial_server_hs_read_seq_shape (cfg:connection_config)

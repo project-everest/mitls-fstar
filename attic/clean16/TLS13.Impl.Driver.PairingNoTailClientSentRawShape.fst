@@ -139,8 +139,7 @@ let lemma_finished_event_raw_slice
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 [] tail_sent tail_received final_model
-  returns CS.raw_records_exactly raw_sent T.Application_data 1
-  with _.
+  with
   (
     assert_norm (CS.network_message_is_cleartext
       CL.Sent
@@ -221,11 +220,7 @@ let rec lemma_empty_sent_until_finished_raw_slice
           tail_sent
           tail_received
           final_model
-      returns
-        exists finished_raw.
-          Seq.equal raw_sent finished_raw /\
-          CS.raw_records_exactly finished_raw T.Application_data 1
-      with _.
+      with
       (
         assert (event_has_empty_sent_delta ev);
         lemma_event_raw_delta_legal_empty_sent
@@ -243,11 +238,7 @@ let rec lemma_empty_sent_until_finished_raw_slice
         eliminate exists finished_raw.
           Seq.equal tail_sent finished_raw /\
           CS.raw_records_exactly finished_raw T.Application_data 1
-        returns
-          exists finished_raw.
-            Seq.equal raw_sent finished_raw /\
-            CS.raw_records_exactly finished_raw T.Application_data 1
-        with _.
+        with
         (
           Seq.lemma_eq_elim delta_sent B.empty;
           CL.lemma_append_empty_left tail_sent;
@@ -582,16 +573,7 @@ let lemma_client_no_tail_finished_sent_raw_slices_for_shape
         client.CS.cs_wire_log.CL.raw_received
         (B.append delta0_received tail0_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: tail) tail0_sent tail0_received client.CS.cs_model
-    returns
-      exists client_ch_raw client_finished_raw.
-        Seq.equal
-          client.CS.cs_wire_log.CL.raw_sent
-          (B.append client_ch_raw client_finished_raw) /\
-        CS.cleartext_tls_message_raw
-          (M.TlsHandshake (M.ClientHello ch))
-          client_ch_raw /\
-        CS.raw_records_exactly client_finished_raw T.Application_data 1
-    with _.
+    with
     (
       PWR.lemma_conn_events_raw_replay_head
         model1
@@ -607,16 +589,7 @@ let lemma_client_no_tail_finished_sent_raw_slices_for_shape
         Seq.equal tail0_sent (B.append delta1_sent tail1_sent) /\
         Seq.equal tail0_received (B.append delta1_received tail1_received) /\
         TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model2 tail tail1_sent tail1_received client.CS.cs_model
-      returns
-        exists client_ch_raw client_finished_raw.
-          Seq.equal
-            client.CS.cs_wire_log.CL.raw_sent
-            (B.append client_ch_raw client_finished_raw) /\
-          CS.cleartext_tls_message_raw
-            (M.TlsHandshake (M.ClientHello ch))
-            client_ch_raw /\
-          CS.raw_records_exactly client_finished_raw T.Application_data 1
-      with _.
+      with
       (
         lemma_event_raw_delta_legal_local
           model0
@@ -651,16 +624,7 @@ let lemma_client_no_tail_finished_sent_raw_slices_for_shape
         eliminate exists finished_raw.
           Seq.equal tail1_sent finished_raw /\
           CS.raw_records_exactly finished_raw T.Application_data 1
-        returns
-          exists client_ch_raw client_finished_raw.
-            Seq.equal
-              client.CS.cs_wire_log.CL.raw_sent
-              (B.append client_ch_raw client_finished_raw) /\
-            CS.cleartext_tls_message_raw
-              (M.TlsHandshake (M.ClientHello ch))
-              client_ch_raw /\
-            CS.raw_records_exactly client_finished_raw T.Application_data 1
-        with _.
+        with
         (
           Seq.lemma_eq_elim delta0_sent B.empty;
           CL.lemma_append_empty_left tail0_sent;
@@ -732,8 +696,7 @@ let lemma_client_no_tail_finished_sent_raw_slices
     [] /\
   PCPS.client_no_tail_two_handshake_install_cover e4 e5 /\
   PNTCAS.client_no_tail_application_install_cover e13 e14
-  returns client_sent_cleartext_and_finished_raw_slices client
-  with _.
+  with
   (
   lemma_client_no_tail_finished_sent_raw_slices_for_shape
     client
@@ -759,8 +722,7 @@ let lemma_client_no_tail_finished_sent_raw_slices
       (M.TlsHandshake (M.ClientHello ch))
       client_ch_raw /\
     CS.raw_records_exactly client_finished_raw T.Application_data 1
-  returns client_sent_cleartext_and_finished_raw_slices client
-  with _.
+  with
   (
     assert (exists (ch0:GCH.clientHello) (cf0:GFin.finished) client_ch_raw0 client_finished_raw0.
       Seq.equal

@@ -1262,22 +1262,7 @@ let lemma_server_step_wire_log_delta
         }
         st1 /\
       server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == [wire]);
       Seq.append_empty_r (CW.wire_serialize wire)
@@ -1296,22 +1281,7 @@ let lemma_server_step_wire_log_delta
           CS.delta_raw_received = B.empty;
         }
         st1
-    returns
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_sent
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_sent
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            out.SM.so_wire_outputs)) /\
-      Seq.equal
-        st1.CS.cs_wire_log.CL.raw_received
-        (B.append
-          st0.CS.cs_wire_log.CL.raw_received
-          (WF.serialize_all
-            CW.tls_record_wire_format
-            (WFSM.event_input_messages ev)))
-    with _.
+    with
     (
       assert (WFSM.event_input_messages ev == []);
       assert (Seq.equal
@@ -1443,14 +1413,7 @@ let lemma_server_state_ahead_valid_byte_trace
       initial
       trace
       st
-  returns
-    WFSM.valid_byte_trace
-      (server_system #CTypes.server_local_event initial)
-      received
-      st
-      sent
-      Seq.empty
-  with _.
+  with
   (
     assert ((server_system #CTypes.server_local_event initial).WFSM.wfsm_state_machine ==
       server_state_machine #CTypes.server_local_event initial);
@@ -4057,7 +4020,7 @@ let lemma_server_network_bridge_obligation
           app_out
           buffer_resp
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     match buffer_resp.ST.response.ST.status with
     | ST.StepOk ->
       lemma_server_network_step_ok_bridge_result
@@ -5110,7 +5073,7 @@ let lemma_server_local_bridge_obligation
           app_out
           resp
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     let wire_outputs = server_response_wire_outputs resp network_out in
     let local_outputs = server_response_local_outputs resp app_out in
     lemma_server_local_process_correct

@@ -1224,7 +1224,7 @@ let lemma_connection_state_single_step_supported_profile_key_schedule_reachable_
     connection_state_single_step x y ==>
     connection_supported_profile_key_schedule_reachable_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_supported_profile_key_schedule_reachable_shape x y
 
 let lemma_connection_state_consistent_supported_profile_key_schedule_reachable_shape
@@ -1949,7 +1949,7 @@ let lemma_connection_state_single_step_client_x25519_reachable_shape
     connection_state_single_step x y ==>
     client_x25519_reachable_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_client_x25519_reachable_shape x y
 
 let lemma_connection_state_single_step_server_x25519_reachable_shape
@@ -1969,7 +1969,7 @@ let lemma_connection_state_single_step_server_x25519_reachable_shape
     connection_state_single_step x y ==>
     server_x25519_reachable_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_server_x25519_reachable_shape x y
 
 let lemma_connection_state_consistent_client_x25519_reachable_shape
@@ -2400,7 +2400,7 @@ let lemma_connection_state_single_step_server_handshake_write_key_reachable_shap
     connection_state_single_step x y ==>
     server_handshake_write_key_reachable_shape y.cs_model
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_server_handshake_write_key_reachable_shape x y
 
 let lemma_connection_state_consistent_server_handshake_write_key_reachable_shape
@@ -3272,7 +3272,7 @@ let lemma_connection_state_single_step_application_record_epoch_reachable_shape_
     connection_state_single_step x y ==>
     connection_application_record_epoch_reachable_shape_for_role role y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_application_record_epoch_reachable_shape_for_role
       role
       x
@@ -3691,7 +3691,7 @@ let lemma_single_step_handshaking_read_epoch_shape (_:unit)
   = introduce forall x y.
       conn_handshaking_read_epoch_shape x /\ connection_state_single_step x y ==>
       conn_handshaking_read_epoch_shape y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_handshaking_read_epoch_shape x y
 
 let lemma_initial_handshaking_read_epoch_shape (cfg:connection_config)
@@ -3823,7 +3823,7 @@ let lemma_single_step_handshaking_write_epoch_shape (_:unit)
   = introduce forall x y.
       conn_handshaking_write_epoch_shape x /\ connection_state_single_step x y ==>
       conn_handshaking_write_epoch_shape y
-    with introduce _ ==> _ with _.
+    with introduce _ ==> _ with
       lemma_delta_handshaking_write_epoch_shape x y
 
 let lemma_initial_handshaking_write_epoch_shape (cfg:connection_config)
@@ -5201,11 +5201,7 @@ let rec lemma_step_model_many_append_split
        eliminate exists (mid:connection_model).
          step_model_many model1 rest == Some mid /\
          step_model_many mid suffix == Some final
-       returns
-         exists mid'.
-           step_model_many model0 (ev :: rest) == Some mid' /\
-           step_model_many mid' suffix == Some final
-       with _.
+       with
        ( assert (step_model_many model0 (ev :: rest) == Some mid);
          introduce exists (mid':connection_model).
            step_model_many model0 (ev :: rest) == Some mid' /\
@@ -6583,6 +6579,7 @@ let rec lemma_conn_events_raw_replay_no_key_update_first_epoch_application_traff
   | ev :: rest ->
     assert (conn_event_is_key_update ev == false);
     assert (conn_events_no_key_update rest == true);
+    lemma_raw_replay_cons_unfold model ev rest raw_sent raw_received final_model;
     eliminate exists
       (model1:connection_model)
       (delta_sent:B.bytes)
@@ -6595,11 +6592,7 @@ let rec lemma_conn_events_raw_replay_no_key_update_first_epoch_application_traff
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      first_epoch_application_traffic_material_replay_invariant_for_role
-        role
-        final_model
-    with _.
+    with
     ( lemma_step_model_preserves_first_epoch_application_traffic_material_replay_invariant_for_role
         role
         model
@@ -7104,15 +7097,9 @@ let lemma_step_model_preserves_application_traffic_material_replay_invariant_at_
      ns == 0 /\
      first_epoch_application_traffic_material_slots_match_expected_model model0)
     \/ application_traffic_material_epoch_phase_two model0 nc ns
-  returns
-    application_traffic_material_replay_invariant_at_counts_for_role
-      role
-      model1
-      (nc + key_update_delta_for_label role ev ClientTraffic)
-      (ns + key_update_delta_for_label role ev ServerTraffic)
-  with _.
+  with
     lemma_step_model_preserves_epoch_phase_one role model0 ev model1
-  and _.
+  and
     lemma_step_model_preserves_epoch_phase_two role model0 ev model1 nc ns
 
 #push-options "--fuel 1 --ifuel 1"
@@ -7156,6 +7143,10 @@ let rec lemma_conn_events_raw_replay_application_traffic_material_at_counts_for_
   | ev :: rest ->
     lemma_key_update_count_for_label_cons role ev rest ClientTraffic;
     lemma_key_update_count_for_label_cons role ev rest ServerTraffic;
+    // `eliminate exists` desugars through `indefinite_description5`, whose
+    // precondition is the existential itself.  Supply it as a folded unfolding
+    // equation rather than making Z3 re-derive it from the recursive definition.
+    lemma_raw_replay_cons_unfold model ev rest raw_sent raw_received final_model;
     eliminate exists
       (model1:connection_model)
       (delta_sent:B.bytes)
@@ -7168,13 +7159,7 @@ let rec lemma_conn_events_raw_replay_application_traffic_material_at_counts_for_
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      application_traffic_material_replay_invariant_at_counts_for_role
-        role
-        final_model
-        (nc + key_update_count_for_label role events ClientTraffic)
-        (ns + key_update_count_for_label role events ServerTraffic)
-    with _.
+    with
     ( lemma_step_model_preserves_application_traffic_material_replay_invariant_at_counts_for_role
         role model ev model1 nc ns;
       lemma_conn_events_raw_replay_application_traffic_material_at_counts_for_role
@@ -7381,7 +7366,7 @@ let lemma_connection_state_single_step_server_certificate_verify_body_empty_reac
     connection_state_single_step x y ==>
     server_certificate_verify_body_empty_reachable_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_server_certificate_verify_body_empty_reachable_shape x y
 
 let lemma_connection_state_consistent_server_certificate_verify_body_empty
@@ -9109,16 +9094,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal
         R.fragment = sent_tls_inner_plaintext_fragment msg;
       } ==
       Some (ciphertext, R.next_seq sender.model_record.record_write)
-  returns
-    exists outer_fragment.
-      W.parse_record raw ==
-        Some (T.Application_data, outer_fragment, B.length raw) /\
-      received_record_opened
-        receiver
-        raw
-        outer_fragment
-        (sent_tls_inner_plaintext_fragment msg)
-  with _.
+  with
   ( let st = sender.model_record.record_write in
     let aad = record_header_aad raw in
     let pt = {
@@ -9178,9 +9154,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
       raw
       outer_fragment
       (sent_tls_inner_plaintext_fragment msg)
-  returns
-    received_single_protected_message_decode receiver msg raw
-  with _.
+  with
   ( let (content_type, fragment) = W.serialize_tls_message msg in
     let plaintext = { M.content_type = content_type; M.fragment = fragment } in
     assert (sent_tls_inner_plaintext_fragment msg ==
@@ -9247,16 +9221,7 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
         R.fragment = sent_tls_inner_plaintext_fragment msg;
       } ==
       Some (ciphertext, R.next_seq sender.model_record.record_write)
-  returns
-    exists outer_fragment.
-      W.parse_record raw ==
-        Some (T.Application_data, outer_fragment, B.length raw) /\
-      received_record_opened
-        receiver
-        raw
-        outer_fragment
-        (sent_tls_inner_plaintext_fragment msg)
-  with _.
+  with
   ( let write_st = sender.model_record.record_write in
     let read_st = receiver.model_record.record_read in
     let aad = record_header_aad raw in
@@ -9331,9 +9296,7 @@ let lemma_received_single_protected_message_decode_from_sent_single_protected_me
       raw
       outer_fragment
       (sent_tls_inner_plaintext_fragment msg)
-  returns
-    received_single_protected_message_decode receiver msg raw
-  with _.
+  with
   ( let (content_type, fragment) = W.serialize_tls_message msg in
     let plaintext = { M.content_type = content_type; M.fragment = fragment } in
     assert (sent_tls_inner_plaintext_fragment msg ==
@@ -12366,8 +12329,7 @@ let lemma_delta_record_keys_consistent_config_role_shape
       (ensures record_keys_consistent_config_role_shape st1)
 =
   eliminate exists delta. legal_connection_delta st0 delta st1
-  returns record_keys_consistent_config_role_shape st1
-  with _.
+  with
     (lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
      assert (st1.cs_model.model_config == st0.cs_model.model_config);
      lemma_legal_connection_delta_record_keys_consistent_for_role
@@ -12388,7 +12350,7 @@ let lemma_single_step_record_keys_consistent_config_role_shape (_:unit)
     connection_state_single_step x y ==>
     record_keys_consistent_config_role_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_delta_record_keys_consistent_config_role_shape x y
 
 let lemma_initial_record_keys_consistent_config_role_shape (cfg:connection_config)
@@ -13108,8 +13070,7 @@ let lemma_delta_handshake_slots_match_shape
       (ensures handshake_slots_match_shape st1)
 =
   eliminate exists delta. legal_connection_delta st0 delta st1
-  returns handshake_slots_match_shape st1
-  with _.
+  with
     (let role = st0.cs_model.model_config.config_role in
      lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
      assert (st1.cs_model.model_config == st0.cs_model.model_config);
@@ -13137,7 +13098,7 @@ let lemma_single_step_handshake_slots_match_shape (_:unit)
     connection_state_single_step x y ==>
     handshake_slots_match_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_delta_handshake_slots_match_shape x y
 
 let lemma_initial_handshake_slots_match_shape (cfg:connection_config)
@@ -13387,8 +13348,7 @@ let lemma_delta_client_hs_read_link_shape
       (ensures client_hs_read_link_shape st1)
 =
   eliminate exists delta. legal_connection_delta st0 delta st1
-  returns client_hs_read_link_shape st1
-  with _.
+  with
   (
     lemma_delta_record_keys_consistent_config_role_shape st0 st1;
     lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
@@ -13397,7 +13357,7 @@ let lemma_delta_client_hs_read_link_shape
       (st1.cs_model.model_config.config_role == ClientEndpoint /\
        R.Handshake? st1.cs_model.model_record.record_read.R.epoch)
       ==> client_hs_read_slot_link st1.cs_model
-    with _hyp.
+    with
     (
       if ControlFailed? st1.cs_model.model_control then
       (
@@ -13440,7 +13400,7 @@ let lemma_single_step_client_hs_read_link_shape (_:unit)
     connection_state_single_step x y ==>
     client_hs_read_link_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_delta_client_hs_read_link_shape x y
 
 let lemma_initial_client_hs_read_link_shape (cfg:connection_config)
@@ -13514,8 +13474,7 @@ let lemma_delta_server_hs_read_link_shape
       (ensures server_hs_read_link_shape st1)
 =
   eliminate exists delta. legal_connection_delta st0 delta st1
-  returns server_hs_read_link_shape st1
-  with _.
+  with
   (
     lemma_delta_record_keys_consistent_config_role_shape st0 st1;
     lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
@@ -13524,7 +13483,7 @@ let lemma_delta_server_hs_read_link_shape
       (st1.cs_model.model_config.config_role == ServerEndpoint /\
        R.Handshake? st1.cs_model.model_record.record_read.R.epoch)
       ==> server_hs_read_slot_link st1.cs_model
-    with _hyp.
+    with
     (
       if ControlFailed? st1.cs_model.model_control then
       (
@@ -13567,7 +13526,7 @@ let lemma_single_step_server_hs_read_link_shape (_:unit)
     connection_state_single_step x y ==>
     server_hs_read_link_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_delta_server_hs_read_link_shape x y
 
 let lemma_initial_server_hs_read_link_shape (cfg:connection_config)

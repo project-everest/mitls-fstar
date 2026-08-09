@@ -255,8 +255,7 @@ let lemma_ama_server_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns ASP.app_material_agreement b
-    with _pf.
+    with
     (
       ASP.lemma_server_send_pins_model a.server s' local out sent;
       let ev = SMKM.sent_tls_event sent in
@@ -265,7 +264,7 @@ let lemma_ama_server_send (a b:SY.tls_system_state)
       ASP.lemma_sent_not_key_update s' sent;
       introduce ASP.cf_delivered b ==>
                   SMKM.supported_profile_application_record_material_agrees b.client b.server
-      with _cfd.
+      with
       (
         // b.client == a.client, b.server == s'.
         lemma_sent_preserves_read_epoch a.server.CS.cs_model sent s'.CS.cs_model;
@@ -296,20 +295,18 @@ let lemma_ama_client_local (a b:SY.tls_system_state)
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns ASP.app_material_agreement b
-    with _pf.
+    with
     (
       ASP.lemma_client_local_extract a.client c' local out;
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.client.CS.cs_model ce /\
         CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
         CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
-      returns ASP.app_material_agreement b
-      with _pe.
+      with
       (
         introduce ASP.cf_delivered b ==>
                     SMKM.supported_profile_application_record_material_agrees b.client b.server
-        with _cfd.
+        with
         (
           lemma_client_local_preserves_write_epoch a.client.CS.cs_model c'.CS.cs_model ce;
           assert (ASP.cf_delivered a);
@@ -348,8 +345,7 @@ let lemma_ama_client_local (a b:SY.tls_system_state)
                 eliminate exists (fragment:B.bytes).
                   WSpec.parse_record B.empty ==
                     Some (T.Application_data, fragment, B.length B.empty)
-                returns False
-                with _.
+                with
                 ( WSpec.lemma_parse_record_implies_parse_record_wire B.empty;
                   WSpec.lemma_parse_record_wire_some_consumed_positive
                     B.empty T.Application_data fragment (B.length B.empty) )
@@ -387,8 +383,7 @@ let lemma_ama_server_local (a b:SY.tls_system_state)
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns ASP.app_material_agreement b
-    with _pf.
+    with
     (
       ASP.lemma_server_local_extract a.server s' local out;
       SNCFR.lemma_consistent_not_cfr a.server;
@@ -396,12 +391,11 @@ let lemma_ama_server_local (a b:SY.tls_system_state)
         CS.legal_event a.server.CS.cs_model ce /\
         CS.step_model a.server.CS.cs_model ce == Some s'.CS.cs_model /\
         CS.event_raw_delta_legal a.server.CS.cs_model ce B.empty B.empty
-      returns ASP.app_material_agreement b
-      with _pe.
+      with
       (
         introduce ASP.cf_delivered b ==>
                     SMKM.supported_profile_application_record_material_agrees b.client b.server
-        with _cfd.
+        with
         (
           lemma_server_local_preserves_read_epoch a.server.CS.cs_model s'.CS.cs_model ce;
           assert (ASP.cf_delivered a);
@@ -444,7 +438,7 @@ let lemma_ama_deliver_to_client
   = let b : SY.tls_system_state = { a with client = c'; channel = MP.Quiet } in
     introduce ASP.cf_delivered b ==>
                 SMKM.supported_profile_application_record_material_agrees b.client b.server
-    with _cfd.
+    with
     (
       EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
       eliminate exists (conn_ev0:CS.conn_event).
@@ -453,8 +447,7 @@ let lemma_ama_deliver_to_client
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
          EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
-      returns SMKM.supported_profile_application_record_material_agrees b.client b.server
-      with _pd.
+      with
       (
       match conn_ev0 with
       | CS.ConnLocalEvent _ -> ()   // `client_wire_received_event` is False here
@@ -546,8 +539,7 @@ let lemma_ama_client_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns ASP.app_material_agreement b
-    with _pf.
+    with
     (
       ASP.lemma_client_send_pins_model a.client c' local out sent;
       let ev = SMKM.sent_tls_event sent in
@@ -559,7 +551,7 @@ let lemma_ama_client_send (a b:SY.tls_system_state)
       let cfg_s = a.server.CS.cs_model.CS.model_config in
       introduce ASP.cf_delivered b ==>
                   SMKM.supported_profile_application_record_material_agrees b.client b.server
-      with _cfd.
+      with
       (
         // cf_delivered b : App(wr c') /\ App(rd a.server).  b.server == a.server.
         if R.Application? (wr a.client).R.epoch then
@@ -579,7 +571,7 @@ let lemma_ama_client_send (a b:SY.tls_system_state)
           // ~(a.client @ ControlApplicationData): else its app write epoch would be
           // Application, contradicting the branch.
           introduce a.client.CS.cs_model.CS.model_control == CS.ControlApplicationData ==> False
-          with _.
+          with
           (
             CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint a.client;
             CSL.lemma_connection_application_ready_record_epochs_installed CS.ClientEndpoint a.client
@@ -642,15 +634,14 @@ let lemma_chwsl_client_transfer (ca cb:CS.connection_state)
         WStep.model_stepped ca.CS.cs_model cb.CS.cs_model)
       (ensures (R.Handshake? (wr cb).R.epoch ==> match_cw cb))
   = introduce R.Handshake? (wr cb).R.epoch ==> match_cw cb
-    with _hs.
+    with
     (
       if CS.ControlFailed? cb.CS.cs_model.CS.model_control then
       (
         eliminate exists (ce:CS.conn_event).
           CS.legal_event ca.CS.cs_model ce /\
           CS.step_model ca.CS.cs_model ce == Some cb.CS.cs_model
-        returns match_cw cb
-        with _ce.
+        with
         (
           lemma_step_failed_result_preserves_record_keys ca.CS.cs_model cb.CS.cs_model ce;
           assert (wr cb == wr ca);
@@ -696,8 +687,7 @@ let lemma_chwsl_server_local (a b:SY.tls_system_state)
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns ASP.client_hs_write_record_slot_link b
-    with _pf. ()
+    with ()
 #pop-options
 
 (** CONJUNCT 2 — DELIVER TO SERVER (trivial: client frozen). **)
@@ -727,8 +717,7 @@ let lemma_chwsl_client_send (a b:SY.tls_system_state)
       out.SM.so_wire_outputs == [w] /\
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns ASP.client_hs_write_record_slot_link b
-    with _pf.
+    with
     (
       WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
       lemma_chwsl_client_transfer a.client c'
@@ -748,8 +737,7 @@ let lemma_chwsl_client_local (a b:SY.tls_system_state)
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns ASP.client_hs_write_record_slot_link b
-    with _pf.
+    with
     (
       WStep.lemma_client_step_model_stepped a.client (SM.LocalEvent local) c' out;
       lemma_chwsl_client_transfer a.client c'
@@ -772,8 +760,7 @@ let lemma_chwsl_deliver_to_client (a b:SY.tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
       b == { a with client = c'; channel = MP.Quiet }
-    returns ASP.client_hs_write_record_slot_link b
-    with _pf.
+    with
     (
       WStep.lemma_client_step_model_stepped a.client (SM.WireEvent wire) c' out;
       lemma_chwsl_client_transfer a.client c'

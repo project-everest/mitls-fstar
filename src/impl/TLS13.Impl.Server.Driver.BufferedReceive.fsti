@@ -37,6 +37,24 @@ let receive_succeeded (result:receive_result) : bool =
 noextract
 let receive_result_length (result:receive_result) : SZ.t = result.receive_len
 
+fn await_peer_close
+  (d:DS.top_server_driver)
+  (network_fuel:SZ.t)
+  requires
+    DS.top_server_driver_connected
+      d 'st0 'certificate_chain 'credential_identity 'received0 'sent0 **
+    pure (TLS13.Impl.Server.Types.server_connection_control_not_failed 'st0)
+  returns status:receive_status
+  ensures
+    exists* st1 received1 sent1.
+      DS.top_server_driver_connected
+        d st1 'certificate_chain 'credential_identity received1 sent1 **
+      pure (
+        status <> BufferedReceiveOk /\
+        status <> BufferedReceiveOutputBufferTooSmall /\
+        (status == BufferedReceiveExhausted ==>
+          TLS13.Impl.Server.Types.server_connection_control_not_failed st1))
+
 fn run
   (d:DS.top_server_driver)
   (wire_received0:Ghost.erased B.bytes)
@@ -100,21 +118,3 @@ fn run
                wire_received1
                wire_sent1
                app_log1))
-
-fn await_peer_close
-  (d:DS.top_server_driver)
-  (network_fuel:SZ.t)
-  requires
-    DS.top_server_driver_connected
-      d 'st0 'certificate_chain 'credential_identity 'received0 'sent0 **
-    pure (TLS13.Impl.Server.Types.server_connection_control_not_failed 'st0)
-  returns status:receive_status
-  ensures
-    exists* st1 received1 sent1.
-      DS.top_server_driver_connected
-        d st1 'certificate_chain 'credential_identity received1 sent1 **
-      pure (
-        status <> BufferedReceiveOk /\
-        status <> BufferedReceiveOutputBufferTooSmall /\
-        (status == BufferedReceiveExhausted ==>
-          TLS13.Impl.Server.Types.server_connection_control_not_failed st1))

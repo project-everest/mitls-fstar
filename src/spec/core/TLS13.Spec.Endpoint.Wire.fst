@@ -286,14 +286,7 @@ let rec lemma_wire_parses_as_serialize_with_tail
         bytes_after_msg
         rest
         residual
-    returns
-      Seq.equal
-        bytes
-        (WF.serialize_with_tail
-          tls_record_wire_format
-          (msg :: rest)
-          residual)
-    with _.
+    with
     (
       match WS.parse_record_wire bytes with
       | None ->

@@ -64,6 +64,390 @@ fn build_server_certificate_verify_input
                   (Ghost.reveal out_bytes)
                   (WS.serialize_server_certificate_verify_input (Ghost.reveal 'hash_bytes)))
 
+fn serialize_finished_handshake
+  (#fin: erased GFin.finished)
+  (lfin: L.finished)
+  (handshake_out: array U8.t)
+  (handshake_out_len: SZ.t)
+  requires L.is_valid_finished lfin (Ghost.reveal fin) **
+           pts_to handshake_out 'old_handshake **
+           pure (B.length 'old_handshake == SZ.v handshake_out_len /\
+                 SZ.v handshake_out_len == 36)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v handshake_out_len})
+  ensures exists* handshake_bytes.
+          L.is_valid_finished lfin (Ghost.reveal fin) **
+          pts_to handshake_out handshake_bytes **
+          pure (B.length handshake_bytes == 36 /\
+                SZ.v written == 36 /\
+                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
+                WS.parse_tls_message T.Handshake handshake_bytes ==
+                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
+
+fn encode_inner_plaintext_no_padding_slice
+  (plain: array U8.t)
+  (plain_total_len: SZ.t)
+  (plain_offset: SZ.t)
+  (plain_len: SZ.t)
+  (content_type: U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to plain 'plain_bytes **
+           pts_to out 'old_bytes **
+           pure (B.length 'plain_bytes == SZ.v plain_total_len /\
+                 B.length 'old_bytes == SZ.v out_len /\
+                 0 <= SZ.v plain_offset /\
+                 0 <= SZ.v plain_len /\
+                 SZ.v out_len == SZ.v plain_len + 1 /\
+                 SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
+  ensures exists* out_bytes.
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               0 <= SZ.v plain_offset /\
+               0 <= SZ.v plain_len /\
+               SZ.v plain_len <= Seq.length (Ghost.reveal out_bytes) /\
+               SZ.v plain_offset <= SZ.v plain_offset + SZ.v plain_len /\
+               SZ.v plain_offset + SZ.v plain_len <= Seq.length (Ghost.reveal 'plain_bytes) /\
+               Seq.equal
+                 (Seq.slice (Ghost.reveal out_bytes) 0 (SZ.v plain_len))
+                 (Seq.slice
+                    (Ghost.reveal 'plain_bytes)
+                    (SZ.v plain_offset)
+                    (SZ.v plain_offset + SZ.v plain_len)) /\
+                Seq.equal
+                  (Seq.slice
+                    (Ghost.reveal out_bytes)
+                    (SZ.v plain_len)
+                    (Seq.length (Ghost.reveal out_bytes)))
+                  (B.singleton content_type) /\
+                (forall ct.
+                  L.content_type_matches content_type ct ==>
+                  Seq.equal
+                    (Ghost.reveal out_bytes)
+                    (WS.serialize_plaintext {
+                      M.content_type = ct;
+                      M.fragment =
+                        Seq.slice
+                          (Ghost.reveal 'plain_bytes)
+                          (SZ.v plain_offset)
+                          (SZ.v plain_offset + SZ.v plain_len);
+                   }) /\
+                  WS.parse_plaintext (Ghost.reveal out_bytes) ==
+                    Some {
+                      M.content_type = ct;
+                      M.fragment =
+                        Seq.slice
+                          (Ghost.reveal 'plain_bytes)
+                          (SZ.v plain_offset)
+                          (SZ.v plain_offset + SZ.v plain_len);
+                    }))
+
+fn serialize_application_data_header
+  (fragment_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+           pure (B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == 5 /\
+                 SZ.v fragment_len <= 16640)
+  ensures exists* header_bytes.
+          pts_to out header_bytes **
+          pure (B.length header_bytes == 5 /\
+                Seq.equal
+                  (Ghost.reveal header_bytes)
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) /\
+                WS.parse_record_header (Ghost.reveal header_bytes) ==
+                  Some (T.Application_data, SZ.v fragment_len))
+
+fn serialize_raw_application_data_record
+  (fragment: array U8.t)
+  (fragment_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to fragment 'fragment_bytes **
+          pts_to out 'old_out **
+          pure (B.length 'old_out == SZ.v out_len /\
+                B.length 'fragment_bytes == SZ.v fragment_len /\
+                SZ.v fragment_len <= 16640 /\
+                SZ.v fragment_len + 5 <= SZ.v out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          pts_to fragment 'fragment_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               SZ.v written == SZ.v fragment_len + 5 /\
+               (let raw_prefix =
+                  Seq.slice out_bytes 0 (SZ.v written) in
+                Seq.equal raw_prefix (WS.serialize_record T.Application_data (Ghost.reveal 'fragment_bytes)) /\
+                Seq.equal
+                  (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) /\
+                WS.parse_record raw_prefix ==
+                  Some (T.Application_data, (Ghost.reveal 'fragment_bytes), SZ.v written) /\
+                CS.raw_records_exactly raw_prefix T.Application_data 1))
+
+fn serialize_protected_handshake_record
+  (#msg: erased M.handshake_msg)
+  (write_state: Rec.record_state)
+  (handshake: array U8.t)
+  (handshake_len: SZ.t)
+  (network_out: array U8.t)
+  (network_out_len: SZ.t)
+  (#record_write: erased R.direction_state)
+  (#handshake_bytes: erased B.bytes)
+  (#old_network: erased B.bytes)
+  requires Rec.is_record_state write_state (Ghost.reveal record_write) **
+           pts_to handshake (Ghost.reveal handshake_bytes) **
+           pts_to network_out (Ghost.reveal old_network) **
+           pure (B.length (Ghost.reveal handshake_bytes) == SZ.v handshake_len /\
+                Seq.equal
+                  (Ghost.reveal handshake_bytes)
+                  (WS.serialize_handshake (Ghost.reveal msg)) /\
+                B.length (Ghost.reveal old_network) == SZ.v network_out_len /\
+                SZ.v handshake_len + 17 <= 16640 /\
+                SZ.v handshake_len + 22 <= SZ.v network_out_len /\
+                Some? (R.seal
+                  (Ghost.reveal record_write)
+                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))
+                  {
+                    R.content_type = T.Application_data;
+                    R.fragment =
+                      TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
+                        (M.TlsHandshake (Ghost.reveal msg));
+                  }))
+  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
+  ensures exists* network_bytes.
+          Rec.is_record_state write_state (Ghost.reveal record_write) **
+          pts_to handshake (Ghost.reveal handshake_bytes) **
+          pts_to network_out network_bytes **
+          pure (B.length network_bytes == SZ.v network_out_len /\
+                SZ.v written == SZ.v handshake_len + 22 /\
+                (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
+                CS.raw_records_exactly raw_prefix T.Application_data 1 /\
+                (exists outer_fragment.
+                   WS.parse_record raw_prefix ==
+                     Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
+                   Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
+                   Seq.equal
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                     (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17)) /\
+                   R.seal
+                     (Ghost.reveal record_write)
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                     {
+                       R.content_type = T.Application_data;
+                       R.fragment =
+                         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
+                           (M.TlsHandshake (Ghost.reveal msg));
+                     } ==
+                     Some (outer_fragment, R.next_seq (Ghost.reveal record_write)))))
+
+fn serialize_client_finished_outputs
+  (write_state: Rec.record_state)
+  (lfin: L.finished)
+  (handshake_out: array U8.t)
+  (network_out: array U8.t)
+  (network_out_len: SZ.t)
+  requires Rec.is_record_state write_state 'record_write **
+           (exists* fin. L.is_valid_finished lfin fin **
+             pure (Some? (R.seal
+               'record_write
+               (TLS13.Spec.StateMachine.Canonical.application_data_record_header 53)
+               {
+                 R.content_type = T.Application_data;
+                 R.fragment =
+                   TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
+                     (M.TlsHandshake (M.Finished fin));
+               }))) **
+           pts_to handshake_out 'old_handshake **
+           pts_to network_out 'old_network **
+           pure (B.length 'old_handshake == 36 /\
+                B.length 'old_network == SZ.v network_out_len /\
+                58 <= SZ.v network_out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
+  ensures exists* fin handshake_bytes network_bytes.
+          Rec.is_record_state write_state 'record_write **
+          L.is_valid_finished lfin fin **
+          pts_to handshake_out handshake_bytes **
+          pts_to network_out network_bytes **
+          pure (B.length handshake_bytes == 36 /\
+                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished fin)) /\
+                WS.parse_tls_message T.Handshake handshake_bytes ==
+                  Some (M.TlsHandshake (M.Finished fin)) /\
+                B.length network_bytes == SZ.v network_out_len /\
+                SZ.v written == 58 /\
+                (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
+                CS.raw_records_exactly raw_prefix T.Application_data 1 /\
+                (exists outer_fragment.
+                   WS.parse_record raw_prefix ==
+                     Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
+                   Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
+                   Seq.equal
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                     (TLS13.Spec.StateMachine.Canonical.application_data_record_header 53) /\
+                   R.seal
+                     'record_write
+                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
+                     {
+                       R.content_type = T.Application_data;
+                       R.fragment =
+                         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
+                           (M.TlsHandshake (M.Finished fin));
+                     } ==
+                     Some (outer_fragment, R.next_seq 'record_write))))
+
+fn serialize_server_hello_from_selection
+  (#sh: erased GSH.serverHello)
+  (#rnd: erased B.bytes)
+  (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
+  (#cs: erased GCS.cipherSuite)
+  (lsh: L.server_hello)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
+  requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                SZ.v out_len == 122 /\
+                Seq.length (Ghost.reveal rnd) == 32 /\
+                (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
+                Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal sid) == 32 /\
+                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
+                Ghost.reveal sh ==
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          L.is_valid_server_hello lsh (Ghost.reveal sh) **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 122 /\
+                SZ.v written == 122 /\
+                Seq.equal out_bytes
+                 (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
+
+fn serialize_server_hello_record_from_selection
+  (#sh: erased GSH.serverHello)
+  (#rnd: erased B.bytes)
+  (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
+  (#cs: erased GCS.cipherSuite)
+  (lsh: L.server_hello)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
+  requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                SZ.v out_len == 127 /\
+                Seq.length (Ghost.reveal rnd) == 32 /\
+                (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
+                Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal sid) == 32 /\
+                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
+                Ghost.reveal sh ==
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          L.is_valid_server_hello lsh (Ghost.reveal sh) **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 127 /\
+                SZ.v written == 127 /\
+                Seq.equal out_bytes
+                 (WS.serialize_record
+                   T.Handshake
+                   (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)))) /\
+                 Seq.equal out_bytes
+                 (CS.serialized_cleartext_tls_message
+                   (M.TlsHandshake (M.ServerHello (Ghost.reveal sh)))) /\
+                WS.parse_record out_bytes ==
+                 Some
+                   (T.Handshake,
+                    WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
+                    127) /\
+                CS.raw_records_exactly out_bytes T.Handshake 1)
+
+fn serialize_empty_encrypted_extensions
+  (out: array U8.t)
+  (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
+  requires pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                SZ.v out_len == 6)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 6 /\
+                SZ.v written == 6 /\
+                // empty EncryptedExtensions handshake message: [] is the canonical
+                // empty generated record (its serialize_handshake is the same 6 bytes
+                // the deleted WS.serialize_empty_encrypted_extensions () produced).
+                Seq.equal out_bytes
+                 (WS.serialize_handshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions))))
+
+fn serialize_certificate_from_credential
+  (#cert: erased GCert.certificate)
+  (#chain: erased B.bytes)
+  (lcert: L.certificate_msg)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
+  requires L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                1 <= Seq.length (Ghost.reveal chain) /\
+                Seq.length (Ghost.reveal chain) <= 32768 /\
+                Ghost.reveal cert == SerH.poc_canonical_cert (Ghost.reveal chain) /\
+                SZ.v out_len == B.length (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v written == SZ.v out_len /\
+                Seq.equal out_bytes
+                 (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
+
+fn serialize_certificate_verify_from_signature
+  (#cv: erased GCV.certificateVerify)
+  (lcv: L.certificate_verify)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
+  requires L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                SZ.v out_len == B.length (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v written == SZ.v out_len /\
+                Seq.equal out_bytes
+                 (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
+
+fn serialize_server_finished
+  (#fin: erased GFin.finished)
+  (lfin: L.finished)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  (#old_bytes: erased B.bytes)
+  requires L.is_valid_finished lfin (Ghost.reveal fin) **
+           pts_to out (Ghost.reveal old_bytes) **
+           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
+                SZ.v out_len == 36)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          L.is_valid_finished lfin (Ghost.reveal fin) **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 36 /\
+                SZ.v written == 36 /\
+                Seq.equal out_bytes
+                 (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
+                WS.parse_tls_message T.Handshake out_bytes ==
+                 Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
+
 fn serialize_client_hello_from_start
   (#start: erased CS.handshake_start)
   (#ch: erased GCH.clientHello)
@@ -284,387 +668,3 @@ fn serialize_client_hello_from_start
                  (CL.raw_slice network_out_bytes 0 (SZ.v written))
                  T.Handshake
                  1)
-
-fn encode_inner_plaintext_no_padding_slice
-  (plain: array U8.t)
-  (plain_total_len: SZ.t)
-  (plain_offset: SZ.t)
-  (plain_len: SZ.t)
-  (content_type: U8.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires pts_to plain 'plain_bytes **
-           pts_to out 'old_bytes **
-           pure (B.length 'plain_bytes == SZ.v plain_total_len /\
-                 B.length 'old_bytes == SZ.v out_len /\
-                 0 <= SZ.v plain_offset /\
-                 0 <= SZ.v plain_len /\
-                 SZ.v out_len == SZ.v plain_len + 1 /\
-                 SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
-  ensures exists* out_bytes.
-          pts_to plain 'plain_bytes **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-               0 <= SZ.v plain_offset /\
-               0 <= SZ.v plain_len /\
-               SZ.v plain_len <= Seq.length (Ghost.reveal out_bytes) /\
-               SZ.v plain_offset <= SZ.v plain_offset + SZ.v plain_len /\
-               SZ.v plain_offset + SZ.v plain_len <= Seq.length (Ghost.reveal 'plain_bytes) /\
-               Seq.equal
-                 (Seq.slice (Ghost.reveal out_bytes) 0 (SZ.v plain_len))
-                 (Seq.slice
-                    (Ghost.reveal 'plain_bytes)
-                    (SZ.v plain_offset)
-                    (SZ.v plain_offset + SZ.v plain_len)) /\
-                Seq.equal
-                  (Seq.slice
-                    (Ghost.reveal out_bytes)
-                    (SZ.v plain_len)
-                    (Seq.length (Ghost.reveal out_bytes)))
-                  (B.singleton content_type) /\
-                (forall ct.
-                  L.content_type_matches content_type ct ==>
-                  Seq.equal
-                    (Ghost.reveal out_bytes)
-                    (WS.serialize_plaintext {
-                      M.content_type = ct;
-                      M.fragment =
-                        Seq.slice
-                          (Ghost.reveal 'plain_bytes)
-                          (SZ.v plain_offset)
-                          (SZ.v plain_offset + SZ.v plain_len);
-                   }) /\
-                  WS.parse_plaintext (Ghost.reveal out_bytes) ==
-                    Some {
-                      M.content_type = ct;
-                      M.fragment =
-                        Seq.slice
-                          (Ghost.reveal 'plain_bytes)
-                          (SZ.v plain_offset)
-                          (SZ.v plain_offset + SZ.v plain_len);
-                    }))
-
-fn serialize_application_data_header
-  (fragment_len: SZ.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires pts_to out 'old_bytes **
-           pure (B.length 'old_bytes == SZ.v out_len /\
-                 SZ.v out_len == 5 /\
-                 SZ.v fragment_len <= 16640)
-  ensures exists* header_bytes.
-          pts_to out header_bytes **
-          pure (B.length header_bytes == 5 /\
-                Seq.equal
-                  (Ghost.reveal header_bytes)
-                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) /\
-                WS.parse_record_header (Ghost.reveal header_bytes) ==
-                  Some (T.Application_data, SZ.v fragment_len))
-
-fn serialize_raw_application_data_record
-  (fragment: array U8.t)
-  (fragment_len: SZ.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires pts_to fragment 'fragment_bytes **
-          pts_to out 'old_out **
-          pure (B.length 'old_out == SZ.v out_len /\
-                B.length 'fragment_bytes == SZ.v fragment_len /\
-                SZ.v fragment_len <= 16640 /\
-                SZ.v fragment_len + 5 <= SZ.v out_len)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          pts_to fragment 'fragment_bytes **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-               SZ.v written == SZ.v fragment_len + 5 /\
-               (let raw_prefix =
-                  Seq.slice out_bytes 0 (SZ.v written) in
-                Seq.equal raw_prefix (WS.serialize_record T.Application_data (Ghost.reveal 'fragment_bytes)) /\
-                Seq.equal
-                  (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
-                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v fragment_len)) /\
-                WS.parse_record raw_prefix ==
-                  Some (T.Application_data, (Ghost.reveal 'fragment_bytes), SZ.v written) /\
-                CS.raw_records_exactly raw_prefix T.Application_data 1))
-
-fn serialize_protected_handshake_record
-  (#msg: erased M.handshake_msg)
-  (write_state: Rec.record_state)
-  (handshake: array U8.t)
-  (handshake_len: SZ.t)
-  (network_out: array U8.t)
-  (network_out_len: SZ.t)
-  (#record_write: erased R.direction_state)
-  (#handshake_bytes: erased B.bytes)
-  (#old_network: erased B.bytes)
-  requires Rec.is_record_state write_state (Ghost.reveal record_write) **
-           pts_to handshake (Ghost.reveal handshake_bytes) **
-           pts_to network_out (Ghost.reveal old_network) **
-           pure (B.length (Ghost.reveal handshake_bytes) == SZ.v handshake_len /\
-                Seq.equal
-                  (Ghost.reveal handshake_bytes)
-                  (WS.serialize_handshake (Ghost.reveal msg)) /\
-                B.length (Ghost.reveal old_network) == SZ.v network_out_len /\
-                SZ.v handshake_len + 17 <= 16640 /\
-                SZ.v handshake_len + 22 <= SZ.v network_out_len /\
-                Some? (R.seal
-                  (Ghost.reveal record_write)
-                  (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17))
-                  {
-                    R.content_type = T.Application_data;
-                    R.fragment =
-                      TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
-                        (M.TlsHandshake (Ghost.reveal msg));
-                  }))
-  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
-  ensures exists* network_bytes.
-          Rec.is_record_state write_state (Ghost.reveal record_write) **
-          pts_to handshake (Ghost.reveal handshake_bytes) **
-          pts_to network_out network_bytes **
-          pure (B.length network_bytes == SZ.v network_out_len /\
-                SZ.v written == SZ.v handshake_len + 22 /\
-                (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
-                CS.raw_records_exactly raw_prefix T.Application_data 1 /\
-                (exists outer_fragment.
-                   WS.parse_record raw_prefix ==
-                     Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
-                   Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
-                   Seq.equal
-                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
-                     (TLS13.Spec.StateMachine.Canonical.application_data_record_header (SZ.v handshake_len + 17)) /\
-                   R.seal
-                     (Ghost.reveal record_write)
-                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
-                     {
-                       R.content_type = T.Application_data;
-                       R.fragment =
-                         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
-                           (M.TlsHandshake (Ghost.reveal msg));
-                     } ==
-                     Some (outer_fragment, R.next_seq (Ghost.reveal record_write)))))
-
-fn serialize_client_finished_outputs
-  (write_state: Rec.record_state)
-  (lfin: L.finished)
-  (handshake_out: array U8.t)
-  (network_out: array U8.t)
-  (network_out_len: SZ.t)
-  requires Rec.is_record_state write_state 'record_write **
-           (exists* fin. L.is_valid_finished lfin fin **
-             pure (Some? (R.seal
-               'record_write
-               (TLS13.Spec.StateMachine.Canonical.application_data_record_header 53)
-               {
-                 R.content_type = T.Application_data;
-                 R.fragment =
-                   TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
-                     (M.TlsHandshake (M.Finished fin));
-               }))) **
-           pts_to handshake_out 'old_handshake **
-           pts_to network_out 'old_network **
-           pure (B.length 'old_handshake == 36 /\
-                B.length 'old_network == SZ.v network_out_len /\
-                58 <= SZ.v network_out_len)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
-  ensures exists* fin handshake_bytes network_bytes.
-          Rec.is_record_state write_state 'record_write **
-          L.is_valid_finished lfin fin **
-          pts_to handshake_out handshake_bytes **
-          pts_to network_out network_bytes **
-          pure (B.length handshake_bytes == 36 /\
-                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished fin)) /\
-                WS.parse_tls_message T.Handshake handshake_bytes ==
-                  Some (M.TlsHandshake (M.Finished fin)) /\
-                B.length network_bytes == SZ.v network_out_len /\
-                SZ.v written == 58 /\
-                (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
-                CS.raw_records_exactly raw_prefix T.Application_data 1 /\
-                (exists outer_fragment.
-                   WS.parse_record raw_prefix ==
-                     Some (T.Application_data, outer_fragment, B.length raw_prefix) /\
-                   Seq.equal raw_prefix (WS.serialize_record T.Application_data outer_fragment) /\
-                   Seq.equal
-                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
-                     (TLS13.Spec.StateMachine.Canonical.application_data_record_header 53) /\
-                   R.seal
-                     'record_write
-                     (TLS13.Spec.StateMachine.Canonical.record_header_aad raw_prefix)
-                     {
-                       R.content_type = T.Application_data;
-                       R.fragment =
-                         TLS13.Spec.StateMachine.Canonical.sent_tls_inner_plaintext_fragment
-                           (M.TlsHandshake (M.Finished fin));
-                     } ==
-                     Some (outer_fragment, R.next_seq 'record_write))))
-
-fn serialize_finished_handshake
-  (#fin: erased GFin.finished)
-  (lfin: L.finished)
-  (handshake_out: array U8.t)
-  (handshake_out_len: SZ.t)
-  requires L.is_valid_finished lfin (Ghost.reveal fin) **
-           pts_to handshake_out 'old_handshake **
-           pure (B.length 'old_handshake == SZ.v handshake_out_len /\
-                 SZ.v handshake_out_len == 36)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v handshake_out_len})
-  ensures exists* handshake_bytes.
-          L.is_valid_finished lfin (Ghost.reveal fin) **
-          pts_to handshake_out handshake_bytes **
-          pure (B.length handshake_bytes == 36 /\
-                SZ.v written == 36 /\
-                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
-                WS.parse_tls_message T.Handshake handshake_bytes ==
-                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
-
-fn serialize_server_hello_from_selection
-  (#sh: erased GSH.serverHello)
-  (#rnd: erased B.bytes)
-  (#ks: erased B.bytes)
-  (#sid: erased B.bytes)
-  (#cs: erased GCS.cipherSuite)
-  (lsh: L.server_hello)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (#old_bytes: erased B.bytes)
-  requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
-           pts_to out (Ghost.reveal old_bytes) **
-           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 122 /\
-                Seq.length (Ghost.reveal rnd) == 32 /\
-                (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-                Seq.length (Ghost.reveal ks) == 32 /\
-                Seq.length (Ghost.reveal sid) == 32 /\
-                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
-                Ghost.reveal sh ==
-                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          L.is_valid_server_hello lsh (Ghost.reveal sh) **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == 122 /\
-                SZ.v written == 122 /\
-                Seq.equal out_bytes
-                 (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
-
-fn serialize_server_hello_record_from_selection
-  (#sh: erased GSH.serverHello)
-  (#rnd: erased B.bytes)
-  (#ks: erased B.bytes)
-  (#sid: erased B.bytes)
-  (#cs: erased GCS.cipherSuite)
-  (lsh: L.server_hello)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (#old_bytes: erased B.bytes)
-  requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
-           pts_to out (Ghost.reveal old_bytes) **
-           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 127 /\
-                Seq.length (Ghost.reveal rnd) == 32 /\
-                (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-                Seq.length (Ghost.reveal ks) == 32 /\
-                Seq.length (Ghost.reveal sid) == 32 /\
-                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
-                Ghost.reveal sh ==
-                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          L.is_valid_server_hello lsh (Ghost.reveal sh) **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == 127 /\
-                SZ.v written == 127 /\
-                Seq.equal out_bytes
-                 (WS.serialize_record
-                   T.Handshake
-                   (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)))) /\
-                 Seq.equal out_bytes
-                 (CS.serialized_cleartext_tls_message
-                   (M.TlsHandshake (M.ServerHello (Ghost.reveal sh)))) /\
-                WS.parse_record out_bytes ==
-                 Some
-                   (T.Handshake,
-                    WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
-                    127) /\
-                CS.raw_records_exactly out_bytes T.Handshake 1)
-
-fn serialize_empty_encrypted_extensions
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (#old_bytes: erased B.bytes)
-  requires pts_to out (Ghost.reveal old_bytes) **
-           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 6)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          pts_to out out_bytes **
-          pure (B.length out_bytes == 6 /\
-                SZ.v written == 6 /\
-                // empty EncryptedExtensions handshake message: [] is the canonical
-                // empty generated record (its serialize_handshake is the same 6 bytes
-                // the deleted WS.serialize_empty_encrypted_extensions () produced).
-                Seq.equal out_bytes
-                 (WS.serialize_handshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions))))
-
-fn serialize_certificate_from_credential
-  (#cert: erased GCert.certificate)
-  (#chain: erased B.bytes)
-  (lcert: L.certificate_msg)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (#old_bytes: erased B.bytes)
-  requires L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
-           pts_to out (Ghost.reveal old_bytes) **
-           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                1 <= Seq.length (Ghost.reveal chain) /\
-                Seq.length (Ghost.reveal chain) <= 32768 /\
-                Ghost.reveal cert == SerH.poc_canonical_cert (Ghost.reveal chain) /\
-                SZ.v out_len == B.length (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          L.is_valid_certificate_msg lcert (Ghost.reveal cert) **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v written == SZ.v out_len /\
-                Seq.equal out_bytes
-                 (WS.serialize_handshake (M.Certificate (Ghost.reveal cert))))
-
-fn serialize_certificate_verify_from_signature
-  (#cv: erased GCV.certificateVerify)
-  (lcv: L.certificate_verify)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (#old_bytes: erased B.bytes)
-  requires L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
-           pts_to out (Ghost.reveal old_bytes) **
-           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == B.length (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          L.is_valid_certificate_verify lcv (Ghost.reveal cv) **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v written == SZ.v out_len /\
-                Seq.equal out_bytes
-                 (WS.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))))
-
-fn serialize_server_finished
-  (#fin: erased GFin.finished)
-  (lfin: L.finished)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  (#old_bytes: erased B.bytes)
-  requires L.is_valid_finished lfin (Ghost.reveal fin) **
-           pts_to out (Ghost.reveal old_bytes) **
-           pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 36)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          L.is_valid_finished lfin (Ghost.reveal fin) **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == 36 /\
-                SZ.v written == 36 /\
-                Seq.equal out_bytes
-                 (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
-                WS.parse_tls_message T.Handshake out_bytes ==
-                 Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))

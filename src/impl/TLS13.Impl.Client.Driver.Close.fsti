@@ -15,6 +15,11 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 open TLS13.Impl.Client.Driver.State
 
+fn abort
+  (d:client_driver)
+  requires client_driver_connected d 'st0 'received0 'sent0
+  ensures client_driver_closed d 'st0
+
 fn run
   (d:client_driver)
   (wait_for_peer:bool)
@@ -40,7 +45,3 @@ fn run
   Safely disposes a connected transport after a workflow failure without
   attempting to send close_notify.
 **)
-fn abort
-  (d:client_driver)
-  requires client_driver_connected d 'st0 'received0 'sent0
-  ensures client_driver_closed d 'st0

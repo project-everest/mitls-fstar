@@ -141,8 +141,7 @@ let lemma_client_hello_sent_received_eq
       Some (T.Handshake, fragment, B.length received_raw) /\
     W.parse_tls_message T.Handshake fragment ==
       Some (M.TlsHandshake (M.ClientHello received_ch))
-  returns sent_ch == received_ch
-  with _.
+  with
   ( assert (fragment == sent_fragment);
     assert (W.parse_tls_message T.Handshake sent_fragment ==
       Some (M.TlsHandshake (M.ClientHello received_ch)));
@@ -259,12 +258,7 @@ let lemma_received_client_hello_raw_length
     W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
     W.parse_tls_message T.Handshake fragment ==
       Some (M.TlsHandshake (M.ClientHello ch))
-  returns
-    B.length raw ==
-      B.length
-        (CS.serialized_cleartext_tls_message
-          (M.TlsHandshake (M.ClientHello ch)))
-  with _.
+  with
   ( W.lemma_parse_tls_message_round_trip T.Handshake fragment;
     assert (Seq.equal fragment (W.serialize_handshake (M.ClientHello ch)));
     W.lemma_serialize_tls_message_handshake (M.ClientHello ch);
@@ -751,7 +745,7 @@ let lemma_connection_state_single_step_client_config_shape
     TLS13.Spec.StateMachine.Reachability.connection_state_single_step x y ==>
     client_config_shape y
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_client_config_shape x y
 
 let lemma_connection_state_consistent_client_config_shape

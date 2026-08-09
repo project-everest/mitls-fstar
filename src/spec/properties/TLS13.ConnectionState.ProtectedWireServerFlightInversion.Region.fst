@@ -38,11 +38,7 @@ let peel_sent_empty_dsent
     Seq.equal rs (B.append delta_sent tail_sent) /\
     Seq.equal rr (B.append delta_received tail_received) /\
     SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final
-  returns
-    (CS.step_model model ev == Some (step_next model ev) /\
-     (exists (tr:B.bytes).
-       SMReplay.conn_events_sent_seal_replay (step_next model ev) rest rs tr final))
-  with _.
+  with
   (
     assert (Seq.equal delta_sent B.empty);
     Seq.append_empty_l tail_sent;
@@ -79,11 +75,7 @@ let peel_received_empty_drecv
     Seq.equal rs (B.append delta_sent tail_sent) /\
     Seq.equal rr (B.append delta_received tail_received) /\
     SMReplay.conn_events_received_decode_replay model1 rest tail_sent tail_received final
-  returns
-    (CS.step_model model ev == Some (step_next model ev) /\
-     (exists (ts:B.bytes).
-       SMReplay.conn_events_received_decode_replay (step_next model ev) rest ts rr final))
-  with _.
+  with
   (
     assert (Seq.equal delta_received B.empty);
     Seq.append_empty_l tail_received;
@@ -113,8 +105,7 @@ let rec lemma_empty_sent_tail_collapses
     peel_sent_empty_dsent model ev rest rs rr final;
     eliminate exists (tr:B.bytes).
       SMReplay.conn_events_sent_seal_replay (step_next model ev) rest rs tr final
-    returns Seq.equal rs B.empty
-    with _. (
+    with (
       lemma_empty_sent_tail_collapses (step_next model ev) rest rs tr final
     )
 #pop-options
@@ -135,8 +126,7 @@ let rec lemma_empty_recv_tail_collapses
     peel_received_empty_drecv model ev rest rs rr final;
     eliminate exists (ts:B.bytes).
       SMReplay.conn_events_received_decode_replay (step_next model ev) rest ts rr final
-    returns Seq.equal rr B.empty
-    with _. (
+    with (
       lemma_empty_recv_tail_collapses (step_next model ev) rest ts rr final
     )
 #pop-options

@@ -115,8 +115,7 @@ let peel_local_deconstruct
        Seq.equal rs (B.append delta_sent tail_sent) /\
        Seq.equal rr (B.append delta_received tail_received) /\
        SMReplay.conn_events_sent_seal_replay model1 rest tail_sent tail_received final)
-  returns (SMReplay.conn_events_sent_seal_replay m1 rest rs rr final /\ CS.legal_event m lev)
-  with _.
+  with
   (
     // local event: delta_sent, delta_received empty; model1 == m1
     assert (Seq.equal delta_sent B.empty);
@@ -253,12 +252,11 @@ let lemma_two_app_install_events_are_local
      PNTCAS.client_no_tail_application_read_install_event e14) \/
     (PNTCAS.client_no_tail_application_read_install_event e13 /\
      PNTCAS.client_no_tail_application_write_install_event e14)
-  returns (CS.ConnLocalEvent? e13 /\ CS.ConnLocalEvent? e14)
-  with _. (
+  with (
     PNTCAS.lemma_client_no_tail_application_write_install_event_cases e13;
     PNTCAS.lemma_client_no_tail_application_read_install_event_cases e14
   )
-  and _. (
+  and (
     PNTCAS.lemma_client_no_tail_application_read_install_event_cases e13;
     PNTCAS.lemma_client_no_tail_application_write_install_event_cases e14
   )
@@ -311,8 +309,7 @@ let lemma_cover_to_self_install_replay
        CS.step_model after_verify e13 == Some after_e13 /\
        CS.step_model after_e13 e14 == Some after_e14 /\
        CS.step_model after_e14 ev_sent == Some final)
-  returns goal
-  with _hs.
+  with
   (
     PNTCAS.lemma_client_no_tail_application_install_cover_cases e13 e14;
     lemma_two_app_install_events_are_local e13 e14;
@@ -325,18 +322,15 @@ let lemma_cover_to_self_install_replay
         PNTCAS.client_no_tail_application_read_install_event e14) \/
        (PNTCAS.client_no_tail_application_read_install_event e13 /\
         PNTCAS.client_no_tail_application_write_install_event e14)
-    returns goal
-    with _caseA.
+    with
     (
       PNTCAS.lemma_client_no_tail_application_write_install_event_step_model_as_plain after_verify after_e13 e13;
       PNTCAS.lemma_client_no_tail_application_read_install_event_step_model_as_plain after_e13 after_e14 e14;
       eliminate exists cawm. CS.step_model after_verify (iaw cawm) == Some after_e13
-      returns goal
-      with _pw.
+      with
       (
         eliminate exists carm. CS.step_model after_e13 (iar carm) == Some after_e14
-        returns goal
-        with _pr.
+        with
         (
           plain_write_install_legal after_verify after_e13 e13 cawm;
           plain_read_install_legal after_e13 after_e14 e14 carm;
@@ -347,24 +341,21 @@ let lemma_cover_to_self_install_replay
         )
       )
     )
-    and _caseB.
+    and
     (
       PNTCAS.lemma_client_no_tail_application_read_install_event_step_model_as_plain after_verify after_e13 e13;
       PNTCAS.lemma_client_no_tail_application_write_install_event_step_model_as_plain after_e13 after_e14 e14;
       eliminate exists carm. CS.step_model after_verify (iar carm) == Some after_e13
-      returns goal
-      with _pr.
+      with
       (
         eliminate exists cawm. CS.step_model after_e13 (iaw cawm) == Some after_e14
-        returns goal
-        with _pw.
+        with
         (
           plain_read_install_legal after_verify after_e13 e13 carm;
           plain_write_install_legal after_e13 after_e14 e14 cawm;
           install_commute_full after_verify cawm carm after_e13 after_e14;
           eliminate exists aw. (CS.step_model after_verify (iaw cawm) == Some aw /\ CS.step_model aw (iar carm) == Some after_e14 /\ CS.legal_event after_verify (iaw cawm) /\ CS.legal_event aw (iar carm))
-          returns goal
-          with _cm.
+          with
           (
             peel_local_construct aw (iar carm) (ev_sent :: []) suffix_sent suffix_received final after_e14;
             peel_local_construct after_verify (iaw cawm) (iar carm :: ev_sent :: []) suffix_sent suffix_received final aw;
@@ -585,8 +576,7 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
       client.CS.cs_model
 
     )
-  returns goalp
-  with _ex.
+  with
   (
     lemma_cover_to_self_install_replay model12 sf e13 e14 cf suffix_sent suffix_received client.CS.cs_model;
     eliminate exists client_start client_ch client_sh client_shared2 client_rest
@@ -601,8 +591,7 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
        client.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some client_sh /\
        server.CS.cs_model.CS.model_handshake.CS.hs_client_hello == Some server_ch /\
        server.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some server_sh)
-    returns goalp
-    with _prof.
+    with
     (
       assert (ch == client_ch);
       lemma_client_exact_prefix_sent_ch
@@ -612,8 +601,7 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
       lemma_client_hello_sent_is_wire_h4 ch prefix_sent;
       eliminate exists frag.
         W.parse_record_wire prefix_sent == Some (T.Handshake, frag, B.length prefix_sent)
-      returns goalp
-      with _wire.
+      with
       (
         eliminate exists (cawm carm:CS.traffic_key_material) (av aw ar:CS.connection_model).
           (CS.step_model model12 (ev_vf_of sf) == Some av /\
@@ -623,8 +611,7 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
            SMReplay.conn_events_sent_seal_replay model12
              (ev_vf_of sf :: iaw cawm :: iar carm :: ev_sent_of cf :: [])
              suffix_sent suffix_received client.CS.cs_model)
-        returns goalp
-        with _rec.
+        with
         (
           introduce exists (model12':CS.connection_model) (sf':GFin.finished) (cf':GFin.finished)
              (cawm':CS.traffic_key_material) (carm':CS.traffic_key_material)
@@ -776,8 +763,7 @@ let lemma_client_identity_determinism
     Seq.equal ps (B.append ps1 ss1) /\ Seq.equal pr (B.append pr1 sr1) /\
     SMReplay.conn_events_sent_seal_replay initial pre4 ps1 pr1 mid1 /\
     SMReplay.conn_events_sent_seal_replay mid1 (L.append two six) ss1 sr1 model12_ex
-  returns model12_ex == c_after3
-  with _.
+  with
   (
     PWReplay.lemma_conn_events_sent_received_replays_same_events_final_model_equal
       initial pre4 ps1 pr1 mid1 rs1 rr1 model4_c;
@@ -788,8 +774,7 @@ let lemma_client_identity_determinism
       Seq.equal ss1 (B.append ps2 ss2) /\ Seq.equal sr1 (B.append pr2 sr2) /\
       SMReplay.conn_events_sent_seal_replay model4_c two ps2 pr2 mid2 /\
       SMReplay.conn_events_sent_seal_replay mid2 six ss2 sr2 model12_ex
-    returns model12_ex == c_after3
-    with _.
+    with
     (
       PWReplay.lemma_conn_events_sent_received_replays_same_events_final_model_equal
         model4_c two ps2 pr2 mid2 rs2 rr2 client_after_installs_c;
@@ -926,8 +911,7 @@ let lemma_hole3_alignment_covers
   eliminate
     (PNTSS.server_no_tail_handshake_write_install_event e5_r /\ PNTSS.server_no_tail_handshake_read_install_event e6_r) \/
     (PNTSS.server_no_tail_handshake_read_install_event e5_r /\ PNTSS.server_no_tail_handshake_write_install_event e6_r)
-  returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-  with _sw. (
+  with (
     // server write-first: e5_r=write, e6_r=read. server read-pre = server_after_e5_r (== model5_r secret via preserve)
     install_preserves_hs_secret_transcript model5_r server_after_e5_r (CS.ConnLocalEvent?._0 e5_r);
     lemma_server_read_install_normalize server_after_e5_r server_rr e6_r;
@@ -937,13 +921,11 @@ let lemma_hole3_alignment_covers
       CS.step_model server_after_e5_r (CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole {
         CS.install_role = CS.ServerEndpoint;
         CS.install_payload = { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficRead; CS.install_material = mat_r; }; })) == Some server_rr
-    returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-    with _sr2. (
+    with (
       eliminate
         (PCPS.client_no_tail_handshake_write_install_event e4_c /\ PCPS.client_no_tail_handshake_read_install_event e5_c) \/
         (PCPS.client_no_tail_handshake_read_install_event e4_c /\ PCPS.client_no_tail_handshake_write_install_event e5_c)
-      returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-      with _cw. (
+      with (
         // client write-first: e4_c=write@model4_c
         lemma_client_write_install_normalize model4_c client_after_e4_c e4_c;
         eliminate exists (mat_w:CS.traffic_key_material).
@@ -951,13 +933,12 @@ let lemma_hole3_alignment_covers
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; } /\
           CS.step_model model4_c (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; })) == Some client_after_e4_c
-        returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-        with _cw2. (
+        with (
           apply_ra model4_c client_after_e4_c server_after_e5_r server_rr mat_w mat_r;
           push_client_read client_after_e4_c client_after_installs_c server_rr e5_c
         )
       )
-      and _cr. (
+      and (
         // client read-first: e4_c=read, e5_c=write@client_after_e4_c
         lemma_read_install_preserves_hs_secret_transcript model4_c client_after_e4_c e4_c;
         lemma_client_write_install_normalize client_after_e4_c client_after_installs_c e5_c;
@@ -966,14 +947,13 @@ let lemma_hole3_alignment_covers
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; } /\
           CS.step_model client_after_e4_c (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; })) == Some client_after_installs_c
-        returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-        with _cw2. (
+        with (
           apply_ra client_after_e4_c client_after_installs_c server_after_e5_r server_rr mat_w mat_r
         )
       )
     )
   )
-  and _sr. (
+  and (
     // server read-first: e5_r=read@model5_r, e6_r=write@server_after_e5_r. server read-pre = model5_r
     lemma_server_read_install_normalize model5_r server_after_e5_r e5_r;
     eliminate exists (mat_r:CS.traffic_key_material).
@@ -982,13 +962,11 @@ let lemma_hole3_alignment_covers
       CS.step_model model5_r (CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole {
         CS.install_role = CS.ServerEndpoint;
         CS.install_payload = { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficRead; CS.install_material = mat_r; }; })) == Some server_after_e5_r
-    returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-    with _sr2. (
+    with (
       eliminate
         (PCPS.client_no_tail_handshake_write_install_event e4_c /\ PCPS.client_no_tail_handshake_read_install_event e5_c) \/
         (PCPS.client_no_tail_handshake_read_install_event e4_c /\ PCPS.client_no_tail_handshake_write_install_event e5_c)
-      returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-      with _cw. (
+      with (
         // client write-first
         lemma_client_write_install_normalize model4_c client_after_e4_c e4_c;
         eliminate exists (mat_w:CS.traffic_key_material).
@@ -996,14 +974,13 @@ let lemma_hole3_alignment_covers
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; } /\
           CS.step_model model4_c (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; })) == Some client_after_e4_c
-        returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-        with _cw2. (
+        with (
           apply_ra model4_c client_after_e4_c model5_r server_after_e5_r mat_w mat_r;
           push_client_read client_after_e4_c client_after_installs_c server_after_e5_r e5_c;
           push_server_write client_after_installs_c server_after_e5_r server_rr e6_r
         )
       )
-      and _cr. (
+      and (
         // client read-first
         lemma_read_install_preserves_hs_secret_transcript model4_c client_after_e4_c e4_c;
         lemma_client_write_install_normalize client_after_e4_c client_after_installs_c e5_c;
@@ -1012,8 +989,7 @@ let lemma_hole3_alignment_covers
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; } /\
           CS.step_model client_after_e4_c (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys
             { CS.install_epoch = CS.TrafficHandshake; CS.install_direction = CS.TrafficWrite; CS.install_material = mat_w; })) == Some client_after_installs_c
-        returns PWL.write_read_record_material_aligned client_after_installs_c server_rr
-        with _cw2. (
+        with (
           apply_ra client_after_e4_c client_after_installs_c model5_r server_after_e5_r mat_w mat_r;
           push_server_write client_after_installs_c server_after_e5_r server_rr e6_r
         )
@@ -1255,10 +1231,7 @@ let lemma_extract_client_two_six
     Seq.equal rs (B.append ps1 ss1) /\ Seq.equal rr (B.append pr1 sr1) /\
     SMReplay.conn_events_received_decode_replay model4_c [e4_c; e5_c] ps1 pr1 mid1 /\
     SMReplay.conn_events_received_decode_replay mid1 (L.append six tail) ss1 sr1 finalm
-  returns
-    ((exists a b. SMReplay.conn_events_received_decode_replay model4_c [e4_c; e5_c] a b client_after_installs_c) /\
-     (exists a b. SMReplay.conn_events_received_decode_replay client_after_installs_c (cf_six ee cert peer cv sf) a b c_after3))
-  with _.
+  with
   (
     // mid1 == client_after_installs_c via peel
     peel_received model4_c e4_c [e5_c] mid1;
@@ -1274,8 +1247,7 @@ let lemma_extract_client_two_six
       Seq.equal ss1 (B.append ps2 ss2) /\ Seq.equal sr1 (B.append pr2 sr2) /\
       SMReplay.conn_events_received_decode_replay client_after_installs_c six ps2 pr2 mid2 /\
       SMReplay.conn_events_received_decode_replay mid2 tail ss2 sr2 finalm
-    returns (exists a b. SMReplay.conn_events_received_decode_replay client_after_installs_c (cf_six ee cert peer cv sf) a b c_after3)
-    with _.
+    with
     (
       let ev0 = CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee); } in
       let ev1 = CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert); } in
@@ -1876,12 +1848,10 @@ let lemma_cf_client_identity
       CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished cf_c); } ]
     ss sr;
   eliminate exists a2 b2. SMReplay.conn_events_received_decode_replay model4_c [e4_c; e5_c] a2 b2 client_after_installs_c
-  returns model12_ex == c_after3
-  with _.
+  with
   (
     eliminate exists a3 b3. SMReplay.conn_events_received_decode_replay client_after_installs_c (cf_six ee_c cert_c peer_c cv_c sf_c) a3 b3 c_after3
-    returns model12_ex == c_after3
-    with _.
+    with
     (
       lemma_client_identity_determinism initial model4_c client_after_installs_c c_after3 model12_ex
         (PWSeg.client_cleartext_handshake_prefix_events start_c ch_c sh_c shared_c)

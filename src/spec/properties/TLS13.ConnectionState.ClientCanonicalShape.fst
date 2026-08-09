@@ -166,13 +166,7 @@ let lemma_client_local_step_event_log_append
        EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
        EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
        SMCan.canonical_wire_step st0 c' conn_ev raw_sent B.empty)
-    returns
-      (exists (ce:CS.conn_event).
-        CS.legal_event st0.CS.cs_model ce /\
-        CS.step_model st0.CS.cs_model ce == Some c'.CS.cs_model /\
-        CS.event_raw_delta_legal st0.CS.cs_model ce B.empty B.empty /\
-        c'.CS.cs_event_log == L.append st0.CS.cs_event_log [ce])
-    with _.
+    with
     (
       (* [out.so_wire_outputs == []] forces [raw_sent == B.empty] via
          [client_wire_outputs_match]: serializing the empty output list
@@ -650,13 +644,7 @@ let lemma_client_step_facts
            (Common.WireFormat.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs)
-      returns
-        (exists (conn_ev:CS.conn_event).
-          s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
-          CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
-          CS.legal_event st0.CS.cs_model conn_ev /\
-          is_client_canonical_event conn_ev)
-      with _.
+      with
       (
         assert (is_client_canonical_event conn_ev)
       )
@@ -666,13 +654,7 @@ let lemma_client_step_facts
          EC.client_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
          EC.client_local_outputs_match conn_ev out.SM.so_local_outputs /\
          SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty)
-      returns
-        (exists (conn_ev:CS.conn_event).
-          s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
-          CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
-          CS.legal_event st0.CS.cs_model conn_ev /\
-          is_client_canonical_event conn_ev)
-      with _.
+      with
       (
         CTy.lemma_client_local_event_semantic_exact st0 local conn_ev;
         lemma_semantic_canonical st0 (CTy.client_local_event_semantic local) conn_ev
@@ -738,10 +720,7 @@ let raw_suffix_snoc
            new_log == L.append p (L.append region raw_suffix)))
   = eliminate exists (raw_suffix:list CS.conn_event).
       old_log == L.append p (L.append region raw_suffix)
-    returns
-      (exists (raw_suffix':list CS.conn_event).
-         new_log == L.append p (L.append region raw_suffix'))
-    with _.
+    with
     ( snoc_tail p region raw_suffix ev;
       introduce exists (raw_suffix':list CS.conn_event).
           new_log == L.append p (L.append region raw_suffix')
@@ -777,7 +756,7 @@ let all_hs_installs_snoc (region:list CS.conn_event) (x:CS.conn_event)
           (ensures all_hs_installs (L.append region [x]))
   = introduce forall (e:CS.conn_event). L.memP e (L.append region [x]) ==> is_client_hs_install e == true
     with introduce _ ==> _
-    with _. ( L.append_memP region [x] e )
+    with ( L.append_memP region [x] e )
 
 let has_write_snoc_new (region:list CS.conn_event) (x:CS.conn_event)
   : Lemma (requires is_client_hs_install_dir CS.TrafficWrite x == true)
@@ -790,8 +769,7 @@ let has_write_snoc_mono (region:list CS.conn_event) (x:CS.conn_event)
   : Lemma (requires has_write_install region)
           (ensures has_write_install (L.append region [x]))
   = eliminate exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew
-    returns has_write_install (L.append region [x])
-    with _.
+    with
     ( L.append_memP region [x] ew;
       introduce exists (ew2:CS.conn_event). L.memP ew2 (L.append region [x]) /\ is_client_hs_install_dir CS.TrafficWrite ew2
       with ew and () )
@@ -807,8 +785,7 @@ let has_read_snoc_mono (region:list CS.conn_event) (x:CS.conn_event)
   : Lemma (requires has_read_install region)
           (ensures has_read_install (L.append region [x]))
   = eliminate exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er
-    returns has_read_install (L.append region [x])
-    with _.
+    with
     ( L.append_memP region [x] er;
       introduce exists (er2:CS.conn_event). L.memP er2 (L.append region [x]) /\ is_client_hs_install_dir CS.TrafficRead er2
       with er and () )
@@ -904,8 +881,7 @@ let step_from_shr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
     match conn_ev with
     | CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared) ->
       eliminate exists (region:list CS.conn_event). shr_region_ok m0 st0.CS.cs_event_log region
-      returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-      with _.
+      with
       ( (* legal derive requires ks_shared_secret == None: we are in the None branch *)
         let start = Some?.v hs.CS.hs_start in
         let ch = Some?.v hs.CS.hs_client_hello in
@@ -925,8 +901,7 @@ let step_from_shr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         with [] and () )
     | CS.ConnLocalEvent (CS.LocalInstallTrafficKeys ri) ->
       eliminate exists (region:list CS.conn_event). shr_region_ok m0 st0.CS.cs_event_log region
-      returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-      with _.
+      with
       ( (* legal install at HsServerHelloReceived forces ks_shared_secret == Some and
            epoch == TrafficHandshake: we are in the Some branch *)
         assert (Some? keys.CS.ks_shared_secret);
@@ -942,12 +917,12 @@ let step_from_shr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         snoc_region pfx region conn_ev;
         all_hs_installs_snoc region conn_ev;
         introduce (Some? keys'.CS.ks_server_handshake_traffic) ==> has_read_install region'
-        with _.
+        with
           (match ri.CS.install_direction with
            | CS.TrafficRead -> has_read_snoc_new region conn_ev
            | CS.TrafficWrite -> has_read_snoc_mono region conn_ev);
         introduce (Some? keys'.CS.ks_client_handshake_traffic) ==> has_write_install region'
-        with _.
+        with
           (match ri.CS.install_direction with
            | CS.TrafficWrite -> has_write_snoc_new region conn_ev
            | CS.TrafficRead -> has_write_snoc_mono region conn_ev);
@@ -961,8 +936,7 @@ let step_from_shr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
          (match msg.CL.message_direction, msg.CL.message_value with
           | CL.Received, M.TlsHandshake (M.EncryptedExtensions ee) ->
             eliminate exists (region:list CS.conn_event). shr_region_ok m0 st0.CS.cs_event_log region
-            returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-            with _.
+            with
             ( (* legal recv EE forces ks_server_handshake_traffic == Some, hence shared derived *)
               assert (Some? keys.CS.ks_server_handshake_traffic);
               assert (Some? keys.CS.ks_shared_secret);
@@ -1028,8 +1002,7 @@ let step_from_eer (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
       (match msg.CL.message_direction, msg.CL.message_value with
        | CL.Received, M.TlsHandshake (M.Certificate cert) ->
          eliminate exists (region:list CS.conn_event). eer_region_ok m0 st0.CS.cs_event_log region
-         returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-         with _.
+         with
          ( let start = Some?.v hs.CS.hs_start in
            let ch = Some?.v hs.CS.hs_client_hello in
            let sh = Some?.v hs.CS.hs_server_hello in
@@ -1084,8 +1057,7 @@ let step_from_cr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
     match conn_ev with
     | CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ->
       eliminate exists (region:list CS.conn_event). cr_region_ok m0 st0.CS.cs_event_log region
-      returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-      with _.
+      with
       ( let start = Some?.v hs.CS.hs_start in
         let ch = Some?.v hs.CS.hs_client_hello in
         let sh = Some?.v hs.CS.hs_server_hello in
@@ -1126,8 +1098,7 @@ let step_from_cvd (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
        | CL.Received, M.TlsHandshake (M.CertificateVerify cv) ->
          eliminate exists (region:list CS.conn_event) (validate:CS.local_event).
              cvd_region_ok m0 st0.CS.cs_event_log region validate
-         returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-         with _.
+         with
          ( let start = Some?.v hs.CS.hs_start in
            let ch = Some?.v hs.CS.hs_client_hello in
            let sh = Some?.v hs.CS.hs_server_hello in
@@ -1179,8 +1150,7 @@ let step_from_cvr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
     | CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv0) ->
       eliminate exists (region:list CS.conn_event) (validate:CS.local_event).
           cvr_region_ok m0 st0.CS.cs_event_log region validate
-      returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-      with _.
+      with
       ( let start = Some?.v hs.CS.hs_start in
         let ch = Some?.v hs.CS.hs_client_hello in
         let sh = Some?.v hs.CS.hs_server_hello in
@@ -1228,8 +1198,7 @@ let step_from_cvv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
        | CL.Received, M.TlsHandshake (M.Finished sf) ->
          eliminate exists (region:list CS.conn_event) (validate:CS.local_event) (verifysig:CS.local_event).
              cvv_region_ok m0 st0.CS.cs_event_log region validate verifysig
-         returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-         with _.
+         with
          ( let start = Some?.v hs.CS.hs_start in
            let ch = Some?.v hs.CS.hs_client_hello in
            let sh = Some?.v hs.CS.hs_server_hello in
@@ -1306,8 +1275,7 @@ let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
       eliminate exists (region:list CS.conn_event) (validate:CS.local_event) (verifysig:CS.local_event)
           (tail:list CS.conn_event).
           sfv_region_ok m0 st0.CS.cs_event_log region validate verifysig tail
-      returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-      with _.
+      with
       ( let start = Some?.v hs.CS.hs_start in
         let ch = Some?.v hs.CS.hs_client_hello in
         let sh = Some?.v hs.CS.hs_server_hello in
@@ -1343,8 +1311,7 @@ let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
          eliminate exists (region:list CS.conn_event) (validate:CS.local_event) (verifysig:CS.local_event)
              (tail:list CS.conn_event).
              sfv_region_ok m0 st0.CS.cs_event_log region validate verifysig tail
-         returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-         with _.
+         with
          ( (* legal Sent Finished forces ks_client_handshake_traffic == Some -> has_write *)
            assert (Some? keys.CS.ks_client_handshake_traffic);
            assert (has_write_install region);
@@ -1417,8 +1384,7 @@ let step_from_appdata (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
       eliminate exists (region:list CS.conn_event) (validate:CS.local_event) (verifysig:CS.local_event)
           (tail:list CS.conn_event).
           appdata_region_ok m0 st0.CS.cs_event_log region validate verifysig tail
-      returns log_shape s'.CS.cs_model s'.CS.cs_event_log
-      with _.
+      with
       ( let start = Some?.v hs.CS.hs_start in
         let ch = Some?.v hs.CS.hs_client_hello in
         let sh = Some?.v hs.CS.hs_server_hello in
@@ -1509,8 +1475,7 @@ let lemma_client_step_config
        CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
        CS.legal_event st0.CS.cs_model conn_ev /\
        is_client_canonical_event conn_ev)
-    returns (s'.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
-    with _.
+    with
       CLem.lemma_step_model_preserves_config st0.CS.cs_model conn_ev s'.CS.cs_model
 #pop-options
 
@@ -1545,16 +1510,10 @@ let rec lemma_trace_log_extends
            CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
            CS.legal_event st0.CS.cs_model conn_ev /\
            is_client_canonical_event conn_ev)
-        returns
-          (exists (ext:list CS.conn_event).
-            st1.CS.cs_event_log == L.append st0.CS.cs_event_log ext)
-        with _.
+        with
           eliminate exists (ext':list CS.conn_event).
             st1.CS.cs_event_log == L.append s'.CS.cs_event_log ext'
-          returns
-            (exists (ext:list CS.conn_event).
-              st1.CS.cs_event_log == L.append st0.CS.cs_event_log ext)
-          with _.
+          with
           ( L.append_assoc st0.CS.cs_event_log [conn_ev] ext';
             introduce exists (ext:list CS.conn_event).
               st1.CS.cs_event_log == L.append st0.CS.cs_event_log ext
@@ -1607,12 +1566,10 @@ let rec lemma_trace_shape
            CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
            CS.legal_event st0.CS.cs_model conn_ev /\
            is_client_canonical_event conn_ev)
-        returns client_canonical_shape st1
-        with _.
+        with
           eliminate exists (ext':list CS.conn_event).
             st1.CS.cs_event_log == L.append s'.CS.cs_event_log ext'
-          returns client_canonical_shape st1
-          with _.
+          with
           (
             L.append_memP st0.CS.cs_event_log [conn_ev] conn_ev;
             L.append_memP s'.CS.cs_event_log ext' conn_ev;
@@ -1672,37 +1629,7 @@ let lemma_client_canonical_appdata_exact_spine
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                                  CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches (WStep.client_sm init) init trace s
-    returns
-       (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
-          (client_shared:C.x25519_shared_secret)
-          (region:list CS.conn_event)
-          (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
-          (cv_validate:CS.local_event)
-          (cv:GCV.certificateVerify)
-          (cv_verify:CS.local_event)
-          (sf:GFin.finished)
-          (tail:list CS.conn_event).
-          (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
-          (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
-          (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
-          (exists (raw_suffix:list CS.conn_event).
-             s.CS.cs_event_log ==
-               L.append
-                 (PWSeg.client_cleartext_handshake_prefix_events
-                   start ch sh client_shared)
-                 (L.append region raw_suffix)) /\
-          canonical_log s.CS.cs_event_log ==
-            L.append
-              (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
-              (L.append region
-                 (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
-                  CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
-                  CS.ConnLocalEvent cv_validate ::
-                  CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
-                  CS.ConnLocalEvent cv_verify ::
-                  CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
-                  tail)))
-    with _.
+    with
     (
       lemma_trace_config init init s trace;
       lemma_trace_shape init init s trace;
@@ -1710,37 +1637,7 @@ let lemma_client_canonical_appdata_exact_spine
       eliminate exists (region:list CS.conn_event) (validate:CS.local_event)
           (verifysig:CS.local_event) (tail:list CS.conn_event).
           appdata_region_ok s.CS.cs_model s.CS.cs_event_log region validate verifysig tail
-      returns
-         (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
-            (client_shared:C.x25519_shared_secret)
-            (region:list CS.conn_event)
-            (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
-            (cv_validate:CS.local_event)
-            (cv:GCV.certificateVerify)
-            (cv_verify:CS.local_event)
-            (sf:GFin.finished)
-            (tail:list CS.conn_event).
-            (forall (e:CS.conn_event). L.memP e region ==> is_client_hs_install e == true) /\
-            (exists (er:CS.conn_event). L.memP er region /\ is_client_hs_install_dir CS.TrafficRead er) /\
-            (exists (ew:CS.conn_event). L.memP ew region /\ is_client_hs_install_dir CS.TrafficWrite ew) /\
-            (exists (raw_suffix:list CS.conn_event).
-               s.CS.cs_event_log ==
-                 L.append
-                   (PWSeg.client_cleartext_handshake_prefix_events
-                     start ch sh client_shared)
-                   (L.append region raw_suffix)) /\
-            canonical_log s.CS.cs_event_log ==
-              L.append
-                (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
-                (L.append region
-                   (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
-                    CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
-                    CS.ConnLocalEvent cv_validate ::
-                    CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
-                    CS.ConnLocalEvent cv_verify ::
-                    CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
-                    tail)))
-      with _.
+      with
       (
         let hs = s.CS.cs_model.CS.model_handshake in
         let keys = hs.CS.hs_keys in
@@ -1816,8 +1713,7 @@ let lemma_client_reachable_sfv_shared_secret_present
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
                                                  CTy.client_local_event EAPI.local_output)).
       SM.trace_reaches (WStep.client_sm init) init trace s
-    returns Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret
-    with _.
+    with
     (
       lemma_trace_config init init s trace;
       lemma_trace_shape init init s trace;
@@ -1825,7 +1721,6 @@ let lemma_client_reachable_sfv_shared_secret_present
       eliminate exists (region:list CS.conn_event) (validate:CS.local_event)
           (verifysig:CS.local_event) (tail:list CS.conn_event).
           sfv_region_ok s.CS.cs_model s.CS.cs_event_log region validate verifysig tail
-      returns Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret
-      with _. ()
+      with ()
     )
 #pop-options

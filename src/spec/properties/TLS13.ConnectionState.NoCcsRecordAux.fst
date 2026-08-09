@@ -265,9 +265,7 @@ let rec lemma_segmented_msgs_outer
       consumed > 0 /\
       consumed <= B.length raw /\
       raw_records_segmented (Seq.slice raw consumed (B.length raw)) outer (count - 1)
-    returns (forall (wm:CW.wire_message).
-      L.memP wm msgs ==> wm.CW.wm_content_type == outer)
-    with _.
+    with
     (
       W.lemma_parse_record_implies_parse_record_wire raw;
       assert (W.parse_record_wire raw == Some (outer, frag, consumed));
@@ -278,9 +276,7 @@ let rec lemma_segmented_msgs_outer
           CW.wire_parse raw == Some (parsed, bytes_after) /\
           parsed == w /\
           WF.parses_as CW.tls_record_wire_format bytes_after rest Seq.empty
-        returns (forall (wm:CW.wire_message).
-          L.memP wm msgs ==> wm.CW.wm_content_type == outer)
-        with _.
+        with
         (
           match W.parse_record_wire raw with
           | None -> ()

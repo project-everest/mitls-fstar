@@ -36,8 +36,7 @@ let lemma_paired_no_tail_client_finished_staged_milestone_client_finished_raw_re
       (M.TlsHandshake (M.ClientHello ch))
       client_ch_raw /\
     CS.raw_records_exactly client_finished_raw T.Application_data 1
-  returns paired_client_finished_raw_record_equality client server
-  with _.
+  with
   (
     assert (Seq.equal
       client.CS.cs_wire_log.CL.raw_sent

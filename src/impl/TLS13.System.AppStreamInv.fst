@@ -194,8 +194,7 @@ let lemma_step_local_streams
         then begin
           eliminate exists (pending:B.bytes).
             Seq.equal m.CS.model_application.CS.app_pending_plaintext (B.append bytes pending)
-          returns Seq.equal (m_recv m') (m_recv m)
-          with _pf.
+          with
           (
             // |bytes| + |pending| == |empty| == 0, so `bytes` is empty and the
             // appended chunk is invisible to the concatenation.
@@ -366,8 +365,7 @@ let lemma_prefix_append_r (pre full delta:B.bytes)
   : Lemma (requires SY.is_byte_prefix pre full)
           (ensures SY.is_byte_prefix pre (B.append full delta))
   = eliminate exists (rest:B.bytes). Seq.equal full (B.append pre rest)
-    returns SY.is_byte_prefix pre (B.append full delta)
-    with _pf.
+    with
     (
       Seq.append_assoc pre rest delta;
       introduce exists (r:B.bytes). Seq.equal (B.append full delta) (B.append pre r)
@@ -529,8 +527,7 @@ let lemma_asi_client_send (a b:SY.tls_system_state)
       c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with client = c';
                     channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
-    returns app_stream_pairing b
-    with _pf.
+    with
     (
       ASP.lemma_client_send_pins_model a.client c' local out sent;
       lemma_step_tls_streams a.client.CS.cs_model c'.CS.cs_model CL.Sent sent;
@@ -545,7 +542,7 @@ let lemma_asi_client_send (a b:SY.tls_system_state)
       Seq.append_empty_r cs;
       introduce ASP.not_closing (SY.ctrl b.server) ==>
                 Seq.equal cs' (B.append sr (cs_flight b))
-      with _g.
+      with
       (
         assert (Seq.equal cs (B.append sr (cs_flight a)));
         Seq.append_empty_r sr;
@@ -576,8 +573,7 @@ let lemma_asi_server_send (a b:SY.tls_system_state)
       s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
       b == { a with server = s';
                     channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
-    returns app_stream_pairing b
-    with _pf.
+    with
     (
       ASP.lemma_server_send_pins_model a.server s' local out sent;
       lemma_step_tls_streams a.server.CS.cs_model s'.CS.cs_model CL.Sent sent;
@@ -591,7 +587,7 @@ let lemma_asi_server_send (a b:SY.tls_system_state)
       Seq.append_empty_r ss;
       introduce ASP.not_closing (SY.ctrl b.client) ==>
                 Seq.equal ss' (B.append cr (sc_flight b))
-      with _g.
+      with
       (
         assert (Seq.equal ss (B.append cr (sc_flight a)));
         Seq.append_empty_r cr;
@@ -621,16 +617,14 @@ let lemma_asi_client_local (a b:SY.tls_system_state)
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with client = c' }
-    returns app_stream_pairing b
-    with _pf.
+    with
     (
       ASP.lemma_client_local_extract a.client c' local out;
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.client.CS.cs_model ce /\
         CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
         CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
-      returns app_stream_pairing b
-      with _pe.
+      with
       (
         lemma_step_empty_delta_streams a.client.CS.cs_model c'.CS.cs_model ce;
         ASP.lemma_step_preserves_closing a.client.CS.cs_model c'.CS.cs_model ce;
@@ -657,16 +651,14 @@ let lemma_asi_server_local (a b:SY.tls_system_state)
       ES.server_step a.server (SM.LocalEvent local) s' out /\
       out.SM.so_wire_outputs == [] /\
       b == { a with server = s' }
-    returns app_stream_pairing b
-    with _pf.
+    with
     (
       ASP.lemma_server_local_extract a.server s' local out;
       eliminate exists (ce:CS.conn_event).
         CS.legal_event a.server.CS.cs_model ce /\
         CS.step_model a.server.CS.cs_model ce == Some s'.CS.cs_model /\
         CS.event_raw_delta_legal a.server.CS.cs_model ce B.empty B.empty
-      returns app_stream_pairing b
-      with _pe.
+      with
       (
         lemma_step_empty_delta_streams a.server.CS.cs_model s'.CS.cs_model ce;
         ASP.lemma_step_preserves_closing a.server.CS.cs_model s'.CS.cs_model ce;
@@ -748,8 +740,7 @@ let lemma_asi_deliver_to_server_raw
        SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
          (CW.wire_serialize wire) /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
-    returns app_stream_pairing b
-    with _pd.
+    with
     (
       let conn_ev = CS.ConnNetworkEvent
         { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -770,7 +761,7 @@ let lemma_asi_deliver_to_server_raw
       let dm = SY.app_bytes_delta msg in
       // (i) OFF the gate the receiver cannot have appended anything.
       introduce ~(ASP.not_closing (SY.ctrl s')) ==> Seq.equal dm B.empty
-      with _g.
+      with
       (
         if M.TlsApplicationData? msg
         then lemma_recv_appdata_pins_cad a.server.CS.cs_model s'.CS.cs_model msg
@@ -778,7 +769,7 @@ let lemma_asi_deliver_to_server_raw
       );
       // (ii) ON the gate the delivery is byte-faithful.
       introduce ASP.not_closing (SY.ctrl s') ==> Seq.equal dm (SY.app_bytes_of p)
-      with _g.
+      with
       (
         assert (ASP.not_closing (SY.ctrl a.server));
         if R.Application? (ASP.snap_wr p).R.epoch
@@ -821,7 +812,7 @@ let lemma_asi_deliver_to_server_raw
       Seq.append_empty_r sr;
       introduce ASP.not_closing (SY.ctrl b.server) ==>
                 Seq.equal cs (B.append sr' (cs_flight b))
-      with _g.
+      with
       (
         assert (Seq.equal cs (B.append sr (SY.app_bytes_of p)));
         Seq.append_empty_r sr'
@@ -862,8 +853,7 @@ let lemma_asi_deliver_to_client_raw
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
        EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
-    returns app_stream_pairing b
-    with _inv.
+    with
     (
       match conn_ev0 with
       | CS.ConnLocalEvent _ ->
@@ -908,14 +898,14 @@ let lemma_asi_deliver_to_client_raw
       let cr' = SY.app_stream_received b.client in
       let dm = SY.app_bytes_delta msg in
       introduce ~(ASP.not_closing (SY.ctrl c')) ==> Seq.equal dm B.empty
-      with _g.
+      with
       (
         if M.TlsApplicationData? msg
         then lemma_recv_appdata_pins_cad a.client.CS.cs_model c'.CS.cs_model msg
         else ()
       );
       introduce ASP.not_closing (SY.ctrl c') ==> Seq.equal dm (SY.app_bytes_of p)
-      with _g.
+      with
       (
         assert (ASP.not_closing (SY.ctrl a.client));
         if R.Application? (ASP.snap_wr p).R.epoch
@@ -941,7 +931,7 @@ let lemma_asi_deliver_to_client_raw
       Seq.append_empty_r cr;
       introduce ASP.not_closing (SY.ctrl b.client) ==>
                 Seq.equal ss (B.append cr' (sc_flight b))
-      with _g.
+      with
       (
         assert (Seq.equal ss (B.append cr (SY.app_bytes_of p)));
         Seq.append_empty_r cr'
@@ -969,8 +959,7 @@ let lemma_asi_deliver_to_server (a b:SY.tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
       b == { a with server = s'; channel = MP.Quiet }
-    returns app_stream_pairing b
-    with _pf. lemma_asi_deliver_to_server_raw a wire s' out raw snap sent
+    with lemma_asi_deliver_to_server_raw a wire s' out raw snap sent
 
 let lemma_asi_deliver_to_client (a b:SY.tls_system_state)
   : Lemma
@@ -986,8 +975,7 @@ let lemma_asi_deliver_to_client (a b:SY.tls_system_state)
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
       b == { a with client = c'; channel = MP.Quiet }
-    returns app_stream_pairing b
-    with _pf. lemma_asi_deliver_to_client_raw a wire c' out raw snap sent
+    with lemma_asi_deliver_to_client_raw a wire c' out raw snap sent
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
@@ -1029,7 +1017,7 @@ let lemma_stream3_combined_inv_preserved (x y:SY.tls_system_state)
           (ensures stream3_combined_inv y)
   = AEI.lemma_stream2_combined_inv_preserved x y;
     introduce SY.tls_no_rekeying y ==> app_stream_pairing y
-    with _nr.
+    with
     (
       SY.lemma_no_key_update_backward x y;
       assert (SY.tls_system_inv x);

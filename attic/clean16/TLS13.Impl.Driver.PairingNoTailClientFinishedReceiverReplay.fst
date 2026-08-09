@@ -125,8 +125,7 @@ let lemma_server_client_finished_received_decode_suffix_replay_slice_from_ordere
       suffix_sent
       suffix_received
       server.CS.cs_model
-  returns server_client_finished_received_decode_suffix_replay_slice server
-  with _.
+  with
   (
     let ordered_rest =
       [

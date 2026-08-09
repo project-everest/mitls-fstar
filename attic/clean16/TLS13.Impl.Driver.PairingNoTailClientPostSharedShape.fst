@@ -690,8 +690,7 @@ let rec lemma_client_late_stuck_replay_not_application_ready
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns ~ (final_model.CS.model_control == CS.ControlApplicationData)
-    with _.
+    with
     (
       lemma_client_late_stuck_step model ev model1;
       lemma_client_late_stuck_replay_not_application_ready
@@ -849,9 +848,7 @@ let lemma_client_post_first_install_next_event_handshake_traffic_install
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns
-    PNI.client_no_tail_handshake_traffic_install_event ev
-  with _.
+  with
   (
     CSL.lemma_step_model_preserves_config model ev model1;
     assert (model1.CS.model_config == model.CS.model_config);
@@ -1686,25 +1683,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean
     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns
-    exists start ch sh client_shared e4 e5 rest.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-        e4 ::
-        e5 ::
-        rest /\
-      PNI.client_no_tail_handshake_traffic_install_event e4 /\
-      PNI.client_no_tail_handshake_traffic_install_event e5
-  with _.
+  with
   (
     PNI.lemma_client_post_derive_next_event_handshake_traffic_install
       model4
@@ -1730,25 +1709,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean
       Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
       Seq.equal tail_received (B.append delta_received tail_received2) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 rest tail_sent2 tail_received2 client.CS.cs_model
-    returns
-      exists start ch sh client_shared e4 e5 rest.
-        client.CS.cs_event_log ==
-          CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Sent;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ServerHello sh);
-          }) ::
-          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-          e4 ::
-          e5 ::
-          rest /\
-        PNI.client_no_tail_handshake_traffic_install_event e4 /\
-        PNI.client_no_tail_handshake_traffic_install_event e5
-    with _.
+    with
     (
       lemma_client_post_first_install_model_shape model4 model5 e4;
       assert (
@@ -1823,24 +1784,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
     model4.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model4 (e4 :: rest) tail_sent tail_received client.CS.cs_model /\
     PNI.client_application_progress_rank client.CS.cs_model == 0
-  returns
-    exists start ch sh client_shared e4 e5 rest.
-      client.CS.cs_event_log ==
-        CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-        e4 ::
-        e5 ::
-        rest /\
-      client_no_tail_two_handshake_install_cover e4 e5
-  with _.
+  with
   (
     PNI.lemma_client_post_derive_next_event_handshake_traffic_install
       model4
@@ -1866,24 +1810,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
       Seq.equal tail_sent (B.append delta_sent tail_sent2) /\
       Seq.equal tail_received (B.append delta_received tail_received2) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model5 rest tail_sent2 tail_received2 client.CS.cs_model
-    returns
-      exists start ch sh client_shared e4 e5 rest.
-        client.CS.cs_event_log ==
-          CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Sent;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ServerHello sh);
-          }) ::
-          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-          e4 ::
-          e5 ::
-          rest /\
-        client_no_tail_two_handshake_install_cover e4 e5
-    with _.
+    with
     (
       lemma_client_post_first_install_model_shape model4 model5 e4;
       lemma_client_post_first_install_direction_shape model4 model5 e4;
@@ -1915,24 +1842,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
           Seq.equal tail_sent2 (B.append delta_sent2 tail_sent3) /\
           Seq.equal tail_received2 (B.append delta_received2 tail_received3) /\
           TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model6 rest2 tail_sent3 tail_received3 client.CS.cs_model
-        returns
-          exists start ch sh client_shared e4 e5 rest.
-            client.CS.cs_event_log ==
-              CS.ConnLocalEvent (CS.LocalStartHandshake start) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Sent;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ServerHello sh);
-              }) ::
-              CS.ConnLocalEvent (CS.LocalDeriveSharedSecret client_shared) ::
-              e4 ::
-              e5 ::
-              rest /\
-            client_no_tail_two_handshake_install_cover e4 e5
-        with _.
+        with
         (
           let e4_write = client_no_tail_handshake_write_install_event e4 in
           let e4_read = client_no_tail_handshake_read_install_event e4 in

@@ -1225,5 +1225,4 @@ let lemma_soh_parsed (input:TCP.bytes)
 =
   eliminate exists (body:ymodem_soh_body) (rest:TCP.bytes).
     ymodem_parse input == Some (Body_soh body, rest)
-  returns input == ymodem_serialize (Body_soh (ymodem_parsed_soh_body input))
-  with _pf. lemma_input_is_serialize_soh input body rest
+  with lemma_input_is_serialize_soh input body rest

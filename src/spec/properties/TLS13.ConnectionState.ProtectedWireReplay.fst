@@ -56,6 +56,7 @@ let lemma_conn_events_raw_replay_head
             tail_received
             final_model)
 =
+  lemma_raw_replay_cons_unfold model ev rest raw_sent raw_received final_model;
   eliminate exists
     (model1:connection_model)
     (delta_sent:B.bytes)
@@ -73,20 +74,7 @@ let lemma_conn_events_raw_replay_head
       tail_sent
       tail_received
       final_model
-  returns
-    exists model1' delta_sent' delta_received' tail_sent' tail_received'.
-      legal_event model ev /\
-      step_model model ev == Some model1' /\
-      event_raw_delta_legal model ev delta_sent' delta_received' /\
-      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
-      Seq.equal raw_received (B.append delta_received' tail_received') /\
-      conn_events_raw_replay
-        model1'
-        rest
-        tail_sent'
-        tail_received'
-        final_model
-  with _.
+  with
   ( introduce exists
       (model1':connection_model)
       (delta_sent':B.bytes)
@@ -137,6 +125,7 @@ let lemma_conn_events_sent_seal_replay_head
             tail_received
             final_model)
 =
+  lemma_sent_seal_replay_cons_unfold model ev rest raw_sent raw_received final_model;
   eliminate exists
     (model1:connection_model)
     (delta_sent:B.bytes)
@@ -155,21 +144,7 @@ let lemma_conn_events_sent_seal_replay_head
       tail_sent
       tail_received
       final_model
-  returns
-    exists model1 delta_sent delta_received tail_sent tail_received.
-      legal_event model ev /\
-      step_model model ev == Some model1 /\
-      event_raw_delta_legal model ev delta_sent delta_received /\
-      sent_event_nonempty_seal_projection model ev delta_sent /\
-      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
-      Seq.equal raw_received (B.append delta_received tail_received) /\
-      conn_events_sent_seal_replay
-        model1
-        rest
-        tail_sent
-        tail_received
-        final_model
-  with _.
+  with
   ( introduce exists
       (model1':connection_model)
       (delta_sent':B.bytes)
@@ -331,6 +306,7 @@ let lemma_conn_events_received_decode_replay_head
             tail_received
             final_model)
 =
+  lemma_received_decode_replay_cons_unfold model ev rest raw_sent raw_received final_model;
   eliminate exists
     (model1:connection_model)
     (delta_sent:B.bytes)
@@ -349,21 +325,7 @@ let lemma_conn_events_received_decode_replay_head
       tail_sent
       tail_received
       final_model
-  returns
-    exists model1 delta_sent delta_received tail_sent tail_received.
-      legal_event model ev /\
-      step_model model ev == Some model1 /\
-      event_raw_delta_legal model ev delta_sent delta_received /\
-      received_event_nonempty_decode_projection model ev delta_received /\
-      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
-      Seq.equal raw_received (B.append delta_received tail_received) /\
-      conn_events_received_decode_replay
-        model1
-        rest
-        tail_sent
-        tail_received
-        final_model
-  with _.
+  with
   ( introduce exists
       (model1':connection_model)
       (delta_sent':B.bytes)
@@ -571,8 +533,7 @@ let rec lemma_conn_events_sent_received_replays_same_events_final_model_equal
         sent_tail_sent
         sent_tail_received
         sent_final
-    returns sent_final == received_final
-    with _.
+    with
     ( lemma_conn_events_received_decode_replay_head
         model
         ev
@@ -609,8 +570,7 @@ let rec lemma_conn_events_sent_received_replays_same_events_final_model_equal
           received_tail_sent
           received_tail_received
           received_final
-      returns sent_final == received_final
-      with _.
+      with
       ( assert (sent_model1 == received_model1);
         lemma_conn_events_sent_received_replays_same_events_final_model_equal
           sent_model1
@@ -697,8 +657,7 @@ let rec lemma_conn_events_raw_sent_seal_replays_same_events_final_model_equal
         raw_tail_sent
         raw_tail_received
         raw_final
-    returns raw_final == sent_final
-    with _.
+    with
     ( lemma_conn_events_sent_seal_replay_head
         model
         ev
@@ -724,8 +683,7 @@ let rec lemma_conn_events_raw_sent_seal_replays_same_events_final_model_equal
           sent_tail_sent
           sent_tail_received
           sent_final
-      returns raw_final == sent_final
-      with _.
+      with
       ( assert (raw_model1 == sent_model1);
         lemma_conn_events_raw_sent_seal_replays_same_events_final_model_equal
           raw_model1
@@ -812,8 +770,7 @@ let rec lemma_conn_events_raw_received_decode_replays_same_events_final_model_eq
         raw_tail_sent
         raw_tail_received
         raw_final
-    returns raw_final == received_final
-    with _.
+    with
     ( lemma_conn_events_received_decode_replay_head
         model
         ev
@@ -850,8 +807,7 @@ let rec lemma_conn_events_raw_received_decode_replays_same_events_final_model_eq
           received_tail_sent
           received_tail_received
           received_final
-      returns raw_final == received_final
-      with _.
+      with
       ( assert (raw_model1 == received_model1);
         lemma_conn_events_raw_received_decode_replays_same_events_final_model_equal
           raw_model1
@@ -896,6 +852,7 @@ let rec lemma_conn_events_sent_seal_replay_implies_raw_replay
       raw_sent
       raw_received
       final_model;
+    lemma_raw_replay_cons_unfold model ev rest raw_sent raw_received final_model;
     eliminate exists
       (model1:connection_model)
       (delta_sent:B.bytes)
@@ -914,14 +871,7 @@ let rec lemma_conn_events_sent_seal_replay_implies_raw_replay
         tail_sent
         tail_received
         final_model
-    returns
-      conn_events_raw_replay
-        model
-        (ev :: rest)
-        raw_sent
-        raw_received
-        final_model
-    with _.
+    with
     (
       lemma_conn_events_sent_seal_replay_implies_raw_replay
         model1
@@ -983,6 +933,7 @@ let rec lemma_conn_events_received_decode_replay_implies_raw_replay
       raw_sent
       raw_received
       final_model;
+    lemma_raw_replay_cons_unfold model ev rest raw_sent raw_received final_model;
     eliminate exists
       (model1:connection_model)
       (delta_sent:B.bytes)
@@ -1001,14 +952,7 @@ let rec lemma_conn_events_received_decode_replay_implies_raw_replay
         tail_sent
         tail_received
         final_model
-    returns
-      conn_events_raw_replay
-        model
-        (ev :: rest)
-        raw_sent
-        raw_received
-        final_model
-    with _.
+    with
     (
       lemma_conn_events_received_decode_replay_implies_raw_replay
         model1
@@ -1119,23 +1063,7 @@ let rec lemma_conn_events_raw_replay_append_split
         tail_sent
         tail_received
         final_model
-    returns
-      exists mid prefix_sent prefix_received suffix_sent suffix_received.
-        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
-        Seq.equal raw_received (B.append prefix_received suffix_received) /\
-        conn_events_raw_replay
-          model
-          (ev :: prefix_tail)
-          prefix_sent
-          prefix_received
-          mid /\
-        conn_events_raw_replay
-          mid
-          suffix
-          suffix_sent
-          suffix_received
-          final_model
-    with _.
+    with
     ( lemma_conn_events_raw_replay_append_split
         model1
         prefix_tail
@@ -1163,23 +1091,7 @@ let rec lemma_conn_events_raw_replay_append_split
           suffix_sent
           suffix_received
           final_model
-      returns
-        exists mid' prefix_sent prefix_received suffix_sent' suffix_received'.
-          Seq.equal raw_sent (B.append prefix_sent suffix_sent') /\
-          Seq.equal raw_received (B.append prefix_received suffix_received') /\
-          conn_events_raw_replay
-            model
-            (ev :: prefix_tail)
-            prefix_sent
-            prefix_received
-            mid' /\
-          conn_events_raw_replay
-            mid'
-            suffix
-            suffix_sent'
-            suffix_received'
-            final_model
-      with _.
+      with
       ( let prefix_sent = B.append delta_sent tail_prefix_sent in
         let prefix_received = B.append delta_received tail_prefix_received in
         Seq.append_assoc delta_sent tail_prefix_sent suffix_sent;
@@ -1354,23 +1266,7 @@ let rec lemma_conn_events_sent_seal_replay_append_split
         tail_sent
         tail_received
         final_model
-    returns
-      exists mid prefix_sent prefix_received suffix_sent suffix_received.
-        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
-        Seq.equal raw_received (B.append prefix_received suffix_received) /\
-        conn_events_sent_seal_replay
-          model
-          (ev :: prefix_tail)
-          prefix_sent
-          prefix_received
-          mid /\
-        conn_events_sent_seal_replay
-          mid
-          suffix
-          suffix_sent
-          suffix_received
-          final_model
-    with _.
+    with
     ( lemma_conn_events_sent_seal_replay_append_split
         model1
         prefix_tail
@@ -1398,23 +1294,7 @@ let rec lemma_conn_events_sent_seal_replay_append_split
           suffix_sent
           suffix_received
           final_model
-      returns
-        exists mid' prefix_sent prefix_received suffix_sent' suffix_received'.
-          Seq.equal raw_sent (B.append prefix_sent suffix_sent') /\
-          Seq.equal raw_received (B.append prefix_received suffix_received') /\
-          conn_events_sent_seal_replay
-            model
-            (ev :: prefix_tail)
-            prefix_sent
-            prefix_received
-            mid' /\
-          conn_events_sent_seal_replay
-            mid'
-            suffix
-            suffix_sent'
-            suffix_received'
-            final_model
-      with _.
+      with
       ( let prefix_sent = B.append delta_sent tail_prefix_sent in
         let prefix_received = B.append delta_received tail_prefix_received in
         Seq.append_assoc delta_sent tail_prefix_sent suffix_sent;
@@ -1591,23 +1471,7 @@ let rec lemma_conn_events_received_decode_replay_append_split
         tail_sent
         tail_received
         final_model
-    returns
-      exists mid prefix_sent prefix_received suffix_sent suffix_received.
-        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
-        Seq.equal raw_received (B.append prefix_received suffix_received) /\
-        conn_events_received_decode_replay
-          model
-          (ev :: prefix_tail)
-          prefix_sent
-          prefix_received
-          mid /\
-        conn_events_received_decode_replay
-          mid
-          suffix
-          suffix_sent
-          suffix_received
-          final_model
-    with _.
+    with
     ( lemma_conn_events_received_decode_replay_append_split
         model1
         prefix_tail
@@ -1635,23 +1499,7 @@ let rec lemma_conn_events_received_decode_replay_append_split
           suffix_sent
           suffix_received
           final_model
-      returns
-        exists mid' prefix_sent prefix_received suffix_sent' suffix_received'.
-          Seq.equal raw_sent (B.append prefix_sent suffix_sent') /\
-          Seq.equal raw_received (B.append prefix_received suffix_received') /\
-          conn_events_received_decode_replay
-            model
-            (ev :: prefix_tail)
-            prefix_sent
-            prefix_received
-            mid' /\
-          conn_events_received_decode_replay
-            mid'
-            suffix
-            suffix_sent'
-            suffix_received'
-            final_model
-      with _.
+      with
       ( let prefix_sent = B.append delta_sent tail_prefix_sent in
         let prefix_received = B.append delta_received tail_prefix_received in
         Seq.append_assoc delta_sent tail_prefix_sent suffix_sent;
@@ -1850,52 +1698,7 @@ let lemma_sent_received_replay_append_split_equal_tails
       sender_suffix_sent
       sender_suffix_received
       sender_final
-  returns
-    exists sender_mid receiver_mid
-      sender_prefix_sent sender_prefix_received
-      sender_suffix_sent sender_suffix_received
-      receiver_prefix_sent receiver_prefix_received
-      receiver_suffix_sent receiver_suffix_received.
-      Seq.equal
-        sender_raw_sent
-        (B.append sender_prefix_sent sender_suffix_sent) /\
-      Seq.equal
-        sender_raw_received
-        (B.append sender_prefix_received sender_suffix_received) /\
-      Seq.equal
-        receiver_raw_sent
-        (B.append receiver_prefix_sent receiver_suffix_sent) /\
-      Seq.equal
-        receiver_raw_received
-        (B.append receiver_prefix_received receiver_suffix_received) /\
-      conn_events_sent_seal_replay
-        sender_model
-        sender_prefix
-        sender_prefix_sent
-        sender_prefix_received
-        sender_mid /\
-      conn_events_sent_seal_replay
-        sender_mid
-        sender_suffix
-        sender_suffix_sent
-        sender_suffix_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_model
-        receiver_prefix
-        receiver_prefix_sent
-        receiver_prefix_received
-        receiver_mid /\
-      conn_events_received_decode_replay
-        receiver_mid
-        receiver_suffix
-        receiver_suffix_sent
-        receiver_suffix_received
-        receiver_final /\
-      (Seq.length sender_prefix_sent ==
-         Seq.length receiver_prefix_received ==>
-       Seq.equal sender_suffix_sent receiver_suffix_received)
-  with _.
+  with
   ( lemma_conn_events_received_decode_replay_append_split
       receiver_model
       receiver_prefix
@@ -1927,52 +1730,7 @@ let lemma_sent_received_replay_append_split_equal_tails
         receiver_suffix_sent
         receiver_suffix_received
         receiver_final
-    returns
-      exists sender_mid' receiver_mid'
-        sender_prefix_sent' sender_prefix_received'
-        sender_suffix_sent' sender_suffix_received'
-        receiver_prefix_sent' receiver_prefix_received'
-        receiver_suffix_sent' receiver_suffix_received'.
-        Seq.equal
-          sender_raw_sent
-          (B.append sender_prefix_sent' sender_suffix_sent') /\
-        Seq.equal
-          sender_raw_received
-          (B.append sender_prefix_received' sender_suffix_received') /\
-        Seq.equal
-          receiver_raw_sent
-          (B.append receiver_prefix_sent' receiver_suffix_sent') /\
-        Seq.equal
-          receiver_raw_received
-          (B.append receiver_prefix_received' receiver_suffix_received') /\
-        conn_events_sent_seal_replay
-          sender_model
-          sender_prefix
-          sender_prefix_sent'
-          sender_prefix_received'
-          sender_mid' /\
-        conn_events_sent_seal_replay
-          sender_mid'
-          sender_suffix
-          sender_suffix_sent'
-          sender_suffix_received'
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver_model
-          receiver_prefix
-          receiver_prefix_sent'
-          receiver_prefix_received'
-          receiver_mid' /\
-        conn_events_received_decode_replay
-          receiver_mid'
-          receiver_suffix
-          receiver_suffix_sent'
-          receiver_suffix_received'
-          receiver_final /\
-        (Seq.length sender_prefix_sent' ==
-           Seq.length receiver_prefix_received' ==>
-         Seq.equal sender_suffix_sent' receiver_suffix_received')
-    with _.
+    with
     ( introduce exists
         (sender_mid':connection_model)
         (receiver_mid':connection_model)
@@ -2043,7 +1801,7 @@ let lemma_sent_received_replay_append_split_equal_tails
           Seq.length sender_prefix_sent ==
             Seq.length receiver_prefix_received ==>
           Seq.equal sender_suffix_sent receiver_suffix_received
-        with _.
+        with
         lemma_append_tails_equal_same_len
           sender_prefix_sent
           sender_suffix_sent
@@ -2236,50 +1994,7 @@ let lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes
     (Seq.length sender_prefix_sent ==
        Seq.length receiver_prefix_received ==>
      Seq.equal sender_suffix_sent receiver_suffix_received)
-  returns
-    exists sender_mid' receiver_mid'
-      sender_prefix_sent' sender_prefix_received'
-      sender_suffix_sent' sender_suffix_received'
-      receiver_prefix_sent' receiver_prefix_received'
-      receiver_suffix_sent' receiver_suffix_received'.
-      Seq.equal
-        sender_raw_sent
-        (B.append sender_prefix_sent' sender_suffix_sent') /\
-      Seq.equal
-        sender_raw_received
-        (B.append sender_prefix_received' sender_suffix_received') /\
-      Seq.equal
-        receiver_raw_sent
-        (B.append receiver_prefix_sent' receiver_suffix_sent') /\
-      Seq.equal
-        receiver_raw_received
-        (B.append receiver_prefix_received' receiver_suffix_received') /\
-      conn_events_sent_seal_replay
-        sender_model
-        sender_prefix
-        sender_prefix_sent'
-        sender_prefix_received'
-        sender_mid' /\
-      conn_events_sent_seal_replay
-        sender_mid'
-        sender_suffix
-        sender_suffix_sent'
-        sender_suffix_received'
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_model
-        receiver_prefix
-        receiver_prefix_sent'
-        receiver_prefix_received'
-        receiver_mid' /\
-      conn_events_received_decode_replay
-        receiver_mid'
-        receiver_suffix
-        receiver_suffix_sent'
-        receiver_suffix_received'
-        receiver_final /\
-      Seq.equal sender_suffix_sent' receiver_suffix_received'
-  with _.
+  with
   ( prefix_lengths_aligned
       sender_mid
       receiver_mid
@@ -2478,35 +2193,7 @@ let lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_eq
       sent_suffix_sent
       sent_suffix_received
       final_model
-  returns
-    exists mid prefix_sent prefix_received suffix_sent suffix_received.
-      Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
-      Seq.equal raw_received (B.append prefix_received suffix_received) /\
-      conn_events_sent_seal_replay
-        model
-        prefix
-        prefix_sent
-        prefix_received
-        mid /\
-      conn_events_sent_seal_replay
-        mid
-        suffix
-        suffix_sent
-        suffix_received
-        final_model /\
-      conn_events_received_decode_replay
-        model
-        prefix
-        prefix_sent
-        prefix_received
-        mid /\
-      conn_events_received_decode_replay
-        mid
-        suffix
-        suffix_sent
-        suffix_received
-        final_model
-  with _.
+  with
   ( lemma_conn_events_received_decode_replay_append_split
       model
       prefix
@@ -2536,35 +2223,7 @@ let lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_eq
         received_suffix_sent
         received_suffix_received
         final_model
-    returns
-      exists mid prefix_sent prefix_received suffix_sent suffix_received.
-        Seq.equal raw_sent (B.append prefix_sent suffix_sent) /\
-        Seq.equal raw_received (B.append prefix_received suffix_received) /\
-        conn_events_sent_seal_replay
-          model
-          prefix
-          prefix_sent
-          prefix_received
-          mid /\
-        conn_events_sent_seal_replay
-          mid
-          suffix
-          suffix_sent
-          suffix_received
-          final_model /\
-        conn_events_received_decode_replay
-          model
-          prefix
-          prefix_sent
-          prefix_received
-          mid /\
-        conn_events_received_decode_replay
-          mid
-          suffix
-          suffix_sent
-          suffix_received
-          final_model
-    with _.
+    with
     ( prefixes_equal
         sent_mid
         received_mid
@@ -3012,37 +2671,7 @@ let lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
       server_suffix_sent
       server_suffix_received
       server_final
-  returns
-    exists server_mid' client_mid'
-      server_suffix_sent' server_suffix_received'
-      client_suffix_sent' client_suffix_received'.
-      Seq.equal server_suffix_sent' client_suffix_received' /\
-      Seq.equal client_suffix_sent' server_suffix_received' /\
-      conn_events_sent_seal_replay
-        server_mid'
-        server_suffix
-        server_suffix_sent'
-        server_suffix_received'
-        server_final /\
-      conn_events_received_decode_replay
-        server_mid'
-        server_suffix
-        server_suffix_sent'
-        server_suffix_received'
-        server_final /\
-      conn_events_sent_seal_replay
-        client_mid'
-        client_suffix
-        client_suffix_sent'
-        client_suffix_received'
-        client_final /\
-      conn_events_received_decode_replay
-        client_mid'
-        client_suffix
-        client_suffix_sent'
-        client_suffix_received'
-        client_final
-  with _.
+  with
   ( lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
       client_model
       client_prefix
@@ -3085,37 +2714,7 @@ let lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
         client_suffix_sent
         client_suffix_received
         client_final
-    returns
-      exists server_mid' client_mid'
-        server_suffix_sent' server_suffix_received'
-        client_suffix_sent' client_suffix_received'.
-        Seq.equal server_suffix_sent' client_suffix_received' /\
-        Seq.equal client_suffix_sent' server_suffix_received' /\
-        conn_events_sent_seal_replay
-          server_mid'
-          server_suffix
-          server_suffix_sent'
-          server_suffix_received'
-          server_final /\
-        conn_events_received_decode_replay
-          server_mid'
-          server_suffix
-          server_suffix_sent'
-          server_suffix_received'
-          server_final /\
-        conn_events_sent_seal_replay
-          client_mid'
-          client_suffix
-          client_suffix_sent'
-          client_suffix_received'
-          client_final /\
-        conn_events_received_decode_replay
-          client_mid'
-          client_suffix
-          client_suffix_sent'
-          client_suffix_received'
-          client_final
-    with _.
+    with
     ( paired_prefixes_equal
         server_mid
         client_mid

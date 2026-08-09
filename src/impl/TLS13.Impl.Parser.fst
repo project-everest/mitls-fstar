@@ -374,7 +374,7 @@ let lemma_alert_wire_success
     L.alert_description_matches b1 alert ==>
     CT.wire_parse_success 0x15uy fragment (M.TlsAlert alert)
   with introduce _ ==> _
-  with _. (
+  with (
     lemma_alert_description_matches_unique b1 a alert
   )
 
@@ -463,10 +463,7 @@ let lemma_client_hello_wire_success_for
       eliminate exists (ct:T.content_type).
         (L.content_type_matches wire ct /\
          WS.parse_tls_message ct fragment == Some (M.TlsHandshake (M.ClientHello ch)))
-      returns CT.parsed_message_wire_success_for wire fragment
-                (L.LTlsHandshake (L.LClientHello lch))
-                (M.TlsHandshake (M.ClientHello ch))
-      with _.
+      with
         WS.lemma_parse_tls_message_round_trip ct fragment
     | _ ->
       assert False

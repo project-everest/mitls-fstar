@@ -75,11 +75,7 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
       raw
       sent_outer
       (sent_tls_inner_plaintext_fragment sent_tls_msg)
-  returns
-    Seq.equal
-      (W.serialize_handshake sent_msg)
-      (W.serialize_handshake received_msg)
-  with _.
+  with
   ( eliminate exists
       (received_outer:B.bytes)
       (opened:B.bytes)
@@ -90,11 +86,7 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
       W.parse_plaintext opened == Some plaintext /\
       W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
         Some (M.TlsHandshake received_msg)
-    returns
-      Seq.equal
-        (W.serialize_handshake sent_msg)
-        (W.serialize_handshake received_msg)
-    with _.
+    with
     ( W.lemma_parse_record_implies_parse_record_wire raw;
       assert (received_outer == sent_outer);
       eliminate exists (sent_read_state':R.direction_state).
@@ -103,22 +95,14 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
           (record_header_aad raw)
           sent_outer ==
           Some (sent_tls_inner_plaintext_fragment sent_tls_msg, sent_read_state')
-      returns
-        Seq.equal
-          (W.serialize_handshake sent_msg)
-          (W.serialize_handshake received_msg)
-      with _.
+      with
       ( eliminate exists (received_read_state':R.direction_state).
           R.open_record
             receiver.model_record.record_read
             (record_header_aad raw)
             received_outer ==
             Some (opened, received_read_state')
-        returns
-          Seq.equal
-            (W.serialize_handshake sent_msg)
-            (W.serialize_handshake received_msg)
-        with _.
+        with
         ( assert (opened == sent_tls_inner_plaintext_fragment sent_tls_msg);
           W.lemma_serialize_tls_message_handshake sent_msg;
           let sent_plaintext = {
@@ -288,10 +272,7 @@ let lemma_single_protected_message_seal_saturates_protected_head
       raw
       sent_outer
       (sent_tls_inner_plaintext_fragment sent_tls_msg)
-  returns (step.protected_handshake_offset == 0 /\
-          step.protected_handshake_consumed ==
-            B.length step.protected_handshake_fragment)
-  with _.
+  with
   ( eliminate exists
       (received_outer:B.bytes)
       (opened:B.bytes)
@@ -312,10 +293,7 @@ let lemma_single_protected_message_seal_saturates_protected_head
         Some
           (step.protected_handshake_message,
            step.protected_handshake_consumed)
-    returns (step.protected_handshake_offset == 0 /\
-          step.protected_handshake_consumed ==
-            B.length step.protected_handshake_fragment)
-    with _.
+    with
     ( W.lemma_parse_record_implies_parse_record_wire raw;
       assert (received_outer == sent_outer);
       eliminate exists (sent_read_state':R.direction_state).
@@ -324,20 +302,14 @@ let lemma_single_protected_message_seal_saturates_protected_head
           (record_header_aad raw)
           sent_outer ==
           Some (sent_tls_inner_plaintext_fragment sent_tls_msg, sent_read_state')
-      returns (step.protected_handshake_offset == 0 /\
-          step.protected_handshake_consumed ==
-            B.length step.protected_handshake_fragment)
-      with _.
+      with
       ( eliminate exists (received_read_state':R.direction_state).
           R.open_record
             receiver.model_record.record_read
             (record_header_aad raw)
             received_outer ==
             Some (opened, received_read_state')
-        returns (step.protected_handshake_offset == 0 /\
-          step.protected_handshake_consumed ==
-            B.length step.protected_handshake_fragment)
-        with _.
+        with
         ( assert (opened == sent_tls_inner_plaintext_fragment sent_tls_msg);
           W.lemma_serialize_tls_message_handshake sent_msg;
           let sent_plaintext = {
@@ -435,9 +407,7 @@ let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
       raw_sent
       sent_outer
       (sent_tls_inner_plaintext_fragment sent_tls_msg)
-  returns
-    False
-  with _.
+  with
   ( eliminate exists
       (received_outer:B.bytes)
       (opened:B.bytes)
@@ -448,9 +418,7 @@ let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
       W.parse_plaintext opened == Some plaintext /\
       W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
         Some (M.TlsHandshake (M.CertificateVerify cv))
-    returns
-      False
-    with _.
+    with
     ( W.lemma_parse_record_implies_parse_record_wire raw_sent;
       assert (received_outer == sent_outer);
       eliminate exists (sent_read_state':R.direction_state).
@@ -459,18 +427,14 @@ let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
           (record_header_aad raw_sent)
           sent_outer ==
           Some (sent_tls_inner_plaintext_fragment sent_tls_msg, sent_read_state')
-      returns
-        False
-      with _.
+      with
       ( eliminate exists (received_read_state':R.direction_state).
           R.open_record
             receiver.model_record.record_read
             (record_header_aad raw_sent)
             received_outer ==
             Some (opened, received_read_state')
-        returns
-          False
-        with _.
+        with
         ( assert (opened == sent_tls_inner_plaintext_fragment sent_tls_msg);
           W.lemma_serialize_tls_message_handshake (M.Finished fin);
           let sent_plaintext = {
@@ -982,33 +946,13 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
       server_finished
       sent_msg3
       received_msg3
-  returns
-    exists server_ee' server_cert' server_cv' server_finished' client_finished'.
-      paired_protected_handshake_event_projection_pairs
-        client
-        server
-        server_ee'
-        server_cert'
-        server_cv'
-        server_finished'
-        client_finished'
-  with _.
+  with
   ( eliminate exists (client_finished:protected_message_replay).
       protected_handshake_event_projection_pair
         client_finished
         sent_msg4
         received_msg4
-    returns
-      exists server_ee' server_cert' server_cv' server_finished' client_finished'.
-        paired_protected_handshake_event_projection_pairs
-          client
-          server
-          server_ee'
-          server_cert'
-          server_cv'
-          server_finished'
-          client_finished'
-    with _.
+    with
     ( lemma_paired_protected_handshake_event_projection_pair_witnesses_intro_from_messages
         client
         server

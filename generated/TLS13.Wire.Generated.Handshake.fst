@@ -35,6 +35,15 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open TLS13.Wire.Generated.HandshakeType
+include TLS13.Wire.Generated.Handshake_body_client_hello
+include TLS13.Wire.Generated.Handshake_body_server_hello
+include TLS13.Wire.Generated.Handshake_body_encrypted_extensions
+include TLS13.Wire.Generated.Handshake_body_certificate
+include TLS13.Wire.Generated.Handshake_body_certificate_verify
+include TLS13.Wire.Generated.Handshake_body_finished
+include TLS13.Wire.Generated.Handshake_body_key_update
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 // Need high Z3 limits for large sum types

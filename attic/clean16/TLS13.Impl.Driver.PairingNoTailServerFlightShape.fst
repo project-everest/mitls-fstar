@@ -82,9 +82,7 @@ let rec lemma_server_window_stuck_without_server_application_traffic
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      ~ (final_model.CS.model_control == CS.ControlApplicationData)
-    with _.
+    with
     (
       CSL.lemma_step_model_preserves_config model ev model1;
       match model1.CS.model_control with
@@ -1699,74 +1697,47 @@ let lemma_conn_event_list_length_9
   lemma_conn_event_list_length_pos_cons rest 8;
   eliminate exists (ev0:CS.conn_event) (rest1:list CS.conn_event).
     rest == ev0 :: rest1 /\ FStar.List.Tot.length rest1 == 8
-  returns
-    exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-      rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-  with _.
+  with
   (
     lemma_conn_event_list_length_pos_cons rest1 7;
     eliminate exists (ev1:CS.conn_event) (rest2:list CS.conn_event).
       rest1 == ev1 :: rest2 /\ FStar.List.Tot.length rest2 == 7
-    returns
-      exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-        rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-    with _.
+    with
     (
       lemma_conn_event_list_length_pos_cons rest2 6;
       eliminate exists (ev2:CS.conn_event) (rest3:list CS.conn_event).
         rest2 == ev2 :: rest3 /\ FStar.List.Tot.length rest3 == 6
-      returns
-        exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-          rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-      with _.
+      with
       (
         lemma_conn_event_list_length_pos_cons rest3 5;
         eliminate exists (ev3:CS.conn_event) (rest4:list CS.conn_event).
           rest3 == ev3 :: rest4 /\ FStar.List.Tot.length rest4 == 5
-        returns
-          exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-            rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-        with _.
+        with
         (
           lemma_conn_event_list_length_pos_cons rest4 4;
           eliminate exists (ev4:CS.conn_event) (rest5:list CS.conn_event).
             rest4 == ev4 :: rest5 /\ FStar.List.Tot.length rest5 == 4
-          returns
-            exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-              rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-          with _.
+          with
           (
             lemma_conn_event_list_length_pos_cons rest5 3;
             eliminate exists (ev5:CS.conn_event) (rest6:list CS.conn_event).
               rest5 == ev5 :: rest6 /\ FStar.List.Tot.length rest6 == 3
-            returns
-              exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-                rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-            with _.
+            with
             (
               lemma_conn_event_list_length_pos_cons rest6 2;
               eliminate exists (ev6:CS.conn_event) (rest7:list CS.conn_event).
                 rest6 == ev6 :: rest7 /\ FStar.List.Tot.length rest7 == 2
-              returns
-                exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-                  rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-              with _.
+              with
               (
                 lemma_conn_event_list_length_pos_cons rest7 1;
                 eliminate exists (ev7:CS.conn_event) (rest8:list CS.conn_event).
                   rest7 == ev7 :: rest8 /\ FStar.List.Tot.length rest8 == 1
-                returns
-                  exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-                    rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-                with _.
+                with
                 (
                   lemma_conn_event_list_length_pos_cons rest8 0;
                   eliminate exists (ev8:CS.conn_event) (rest9:list CS.conn_event).
                     rest8 == ev8 :: rest9 /\ FStar.List.Tot.length rest9 == 0
-                  returns
-                    exists ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8.
-                      rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-                  with _.
+                  with
                   (
                     match rest9 with
                     | [] ->
@@ -1841,8 +1812,7 @@ let lemma_server_post_two_handshake_installs_tail_order_from_replay
     (ev7:CS.conn_event)
     (ev8:CS.conn_event).
     rest == [ev0; ev1; ev2; ev3; ev4; ev5; ev6; ev7; ev8]
-  returns server_post_two_handshake_installs_tail_order rest
-  with _.
+  with
   (
     lemma_flight_core model rest ev0 ev1 ev2 ev3 ev4 ev5 ev6 ev7 ev8 raw_sent raw_received final_model
   )

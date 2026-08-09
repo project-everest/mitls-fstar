@@ -96,6 +96,7 @@ let lemma_recv_replay_cons_cong
       (ensures
         SMReplay.conn_events_received_decode_replay m (ev :: rest2) a b f)
   =
+  SMReplay.lemma_received_decode_replay_cons_unfold m ev rest1 a b f;
   eliminate exists model1 delta_sent delta_received tail_sent tail_received.
     CS.legal_event m ev /\
     CS.step_model m ev == Some model1 /\
@@ -104,8 +105,7 @@ let lemma_recv_replay_cons_cong
     Seq.equal a (B.append delta_sent tail_sent) /\
     Seq.equal b (B.append delta_received tail_received) /\
     SMReplay.conn_events_received_decode_replay model1 rest1 tail_sent tail_received f
-  returns SMReplay.conn_events_received_decode_replay m (ev :: rest2) a b f
-  with _.
+  with
   ( SMReplay.lemma_received_decode_replay_cons
       m ev rest2 a b f
       model1 delta_sent delta_received tail_sent tail_received )
@@ -125,6 +125,7 @@ let lemma_sent_replay_cons_cong
       (ensures
         SMReplay.conn_events_sent_seal_replay m (ev :: rest2) a b f)
   =
+  SMReplay.lemma_sent_seal_replay_cons_unfold m ev rest1 a b f;
   eliminate exists model1 delta_sent delta_received tail_sent tail_received.
     CS.legal_event m ev /\
     CS.step_model m ev == Some model1 /\
@@ -133,8 +134,7 @@ let lemma_sent_replay_cons_cong
     Seq.equal a (B.append delta_sent tail_sent) /\
     Seq.equal b (B.append delta_received tail_received) /\
     SMReplay.conn_events_sent_seal_replay model1 rest1 tail_sent tail_received f
-  returns SMReplay.conn_events_sent_seal_replay m (ev :: rest2) a b f
-  with _.
+  with
   ( SMReplay.lemma_sent_seal_replay_cons
       m ev rest2 a b f
       model1 delta_sent delta_received tail_sent tail_received )
@@ -194,7 +194,7 @@ let lemma_normalize_flight_recv
     SMReplay.conn_events_received_decode_replay m3 (raw_sf :: tail) ta tb f ==>
     SMReplay.conn_events_received_decode_replay m3 (recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _. lemma_normalize_head_recv m3 sf raw_sf tail ta tb f;
+  with lemma_normalize_head_recv m3 sf raw_sf tail ta tb f;
   (* verify :: SF *)
   introduce forall (m3:CS.connection_model) (ta tb:B.bytes).
     SMReplay.conn_events_received_decode_replay m3
@@ -202,7 +202,7 @@ let lemma_normalize_flight_recv
     SMReplay.conn_events_received_decode_replay m3
       (CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
     lemma_recv_replay_cons_cong m3 (CS.ConnLocalEvent verify)
       (raw_sf :: tail) (recv_ev sf :: tail) ta tb f;
   (* CV :: verify :: SF *)
@@ -212,7 +212,7 @@ let lemma_normalize_flight_recv
     SMReplay.conn_events_received_decode_replay m3
       (recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
   ( lemma_normalize_head_recv m3 cv raw_cv
       (CS.ConnLocalEvent verify :: raw_sf :: tail) ta tb f;
     lemma_recv_replay_cons_cong m3 (recv_ev cv)
@@ -225,7 +225,7 @@ let lemma_normalize_flight_recv
     SMReplay.conn_events_received_decode_replay m3
       (CS.ConnLocalEvent validate :: recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
     lemma_recv_replay_cons_cong m3 (CS.ConnLocalEvent validate)
       (raw_cv :: CS.ConnLocalEvent verify :: raw_sf :: tail)
       (recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f;
@@ -236,7 +236,7 @@ let lemma_normalize_flight_recv
     SMReplay.conn_events_received_decode_replay m3
       (recv_ev cert :: CS.ConnLocalEvent validate :: recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
   ( lemma_normalize_head_recv m3 cert raw_cert
       (CS.ConnLocalEvent validate :: raw_cv :: CS.ConnLocalEvent verify :: raw_sf :: tail) ta tb f;
     lemma_recv_replay_cons_cong m3 (recv_ev cert)
@@ -272,14 +272,14 @@ let lemma_normalize_flight_sent
     SMReplay.conn_events_sent_seal_replay m3 (raw_sf :: tail) ta tb f ==>
     SMReplay.conn_events_sent_seal_replay m3 (recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _. lemma_normalize_head_sent m3 sf raw_sf tail ta tb f;
+  with lemma_normalize_head_sent m3 sf raw_sf tail ta tb f;
   introduce forall (m3:CS.connection_model) (ta tb:B.bytes).
     SMReplay.conn_events_sent_seal_replay m3
       (CS.ConnLocalEvent verify :: raw_sf :: tail) ta tb f ==>
     SMReplay.conn_events_sent_seal_replay m3
       (CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
     lemma_sent_replay_cons_cong m3 (CS.ConnLocalEvent verify)
       (raw_sf :: tail) (recv_ev sf :: tail) ta tb f;
   introduce forall (m3:CS.connection_model) (ta tb:B.bytes).
@@ -288,7 +288,7 @@ let lemma_normalize_flight_sent
     SMReplay.conn_events_sent_seal_replay m3
       (recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
   ( lemma_normalize_head_sent m3 cv raw_cv
       (CS.ConnLocalEvent verify :: raw_sf :: tail) ta tb f;
     lemma_sent_replay_cons_cong m3 (recv_ev cv)
@@ -300,7 +300,7 @@ let lemma_normalize_flight_sent
     SMReplay.conn_events_sent_seal_replay m3
       (CS.ConnLocalEvent validate :: recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
     lemma_sent_replay_cons_cong m3 (CS.ConnLocalEvent validate)
       (raw_cv :: CS.ConnLocalEvent verify :: raw_sf :: tail)
       (recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f;
@@ -310,7 +310,7 @@ let lemma_normalize_flight_sent
     SMReplay.conn_events_sent_seal_replay m3
       (recv_ev cert :: CS.ConnLocalEvent validate :: recv_ev cv :: CS.ConnLocalEvent verify :: recv_ev sf :: tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
   ( lemma_normalize_head_sent m3 cert raw_cert
       (CS.ConnLocalEvent validate :: raw_cv :: CS.ConnLocalEvent verify :: raw_sf :: tail) ta tb f;
     lemma_sent_replay_cons_cong m3 (recv_ev cert)
@@ -354,7 +354,7 @@ let lemma_normalize_flight_recv_after
     SMReplay.conn_events_received_decode_replay m3
       (normal_flight ee cert cv sf validate verify tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
     lemma_normalize_flight_recv m3 ee cert cv sf
       raw_ee raw_cert raw_cv raw_sf validate verify tail ta tb f;
   lemma_recv_replay_cons_cong m install
@@ -386,7 +386,7 @@ let lemma_normalize_flight_sent_after
     SMReplay.conn_events_sent_seal_replay m3
       (normal_flight ee cert cv sf validate verify tail) ta tb f
   with introduce _ ==> _
-  with _.
+  with
     lemma_normalize_flight_sent m3 ee cert cv sf
       raw_ee raw_cert raw_cv raw_sf validate verify tail ta tb f;
   lemma_sent_replay_cons_cong m install

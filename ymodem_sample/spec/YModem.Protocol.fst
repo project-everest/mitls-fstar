@@ -512,10 +512,7 @@ let ymodem_server_law_step
     with filename (Seq.slice (ymodem_full st1) 0 (ymodem_clen st1)) and ()
   | SM.LocalEvent Server_send ->
     eliminate exists body. ymodem_server_send st0 st1 body /\ out.SM.so_wire_outputs == [Body_soh body]
-    returns
-      FT.ft_view_step ymodem_block_size (Some 1)
-        (ymodem_server_project st0) (ymodem_server_project st1)
-    with _.
+    with
     (match st0.yss_pending with
      | [] -> ()
      | h :: rest ->
@@ -591,21 +588,7 @@ let ymodem_server_law_data_wire
   match ev with
   | SM.LocalEvent Server_send ->
     eliminate exists body. ymodem_server_send st0 st1 body /\ out.SM.so_wire_outputs == [Body_soh body]
-    returns
-      (match ymodem_classify msg with
-       | FT.FT_Data index payload ->
-         ((match index with
-           | Some i -> i == L.length (ymodem_server_project st0).FT.ftv_blocks + 1
-           | None -> True) /\
-          (ymodem_server_project st1).FT.ftv_blocks ==
-            L.append (ymodem_server_project st0).FT.ftv_blocks [payload])
-         \/
-         ((ymodem_server_project st1).FT.ftv_blocks == (ymodem_server_project st0).FT.ftv_blocks /\
-          (match index with
-           | Some i -> FT.ft_block_at (ymodem_server_project st0).FT.ftv_blocks i == Some payload
-           | None -> L.memP payload (ymodem_server_project st0).FT.ftv_blocks))
-       | _ -> True)
-    with _. ()
+    with ()
   | SM.LocalEvent Server_timeout ->
     (match st0.yss_phase with
      | SP_Data ->

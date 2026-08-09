@@ -2917,7 +2917,7 @@ let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_condit
         client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1)
 =
   introduce client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1
-  with _.
+  with
     lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
       st0 st1 resp step raw_received network_out app_out
 

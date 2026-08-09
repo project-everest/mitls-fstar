@@ -88,18 +88,7 @@ let lemma_sent_replay_skip_empty_head_preserves_peer_stream
       tail_sent
       tail_received
       sender_final
-  returns
-    exists sender1 sender_tail_sent sender_tail_received.
-      legal_event sender ev /\
-      step_model sender ev == Some sender1 /\
-      Seq.equal sender_tail_sent receiver_raw_received /\
-      conn_events_sent_seal_replay
-        sender1
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final
-  with _.
+  with
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_sent B.empty)
@@ -186,18 +175,7 @@ let lemma_received_replay_skip_empty_head_preserves_peer_stream
       tail_sent
       tail_received
       receiver_final
-  returns
-    exists receiver1 receiver_tail_sent receiver_tail_received.
-      legal_event receiver ev /\
-      step_model receiver ev == Some receiver1 /\
-      Seq.equal sender_raw_sent receiver_tail_received /\
-      conn_events_received_decode_replay
-        receiver1
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_received B.empty)
@@ -284,18 +262,7 @@ let lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
       tail_sent
       tail_received
       sender_final
-  returns
-    exists sender1 sender_tail_sent sender_tail_received.
-      legal_event sender ev /\
-      step_model sender ev == Some sender1 /\
-      Seq.equal receiver_raw_sent sender_tail_received /\
-      conn_events_sent_seal_replay
-        sender1
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final
-  with _.
+  with
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_received B.empty)
@@ -382,18 +349,7 @@ let lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
       tail_sent
       tail_received
       receiver_final
-  returns
-    exists receiver1 receiver_tail_sent receiver_tail_received.
-      legal_event receiver ev /\
-      step_model receiver ev == Some receiver1 /\
-      Seq.equal receiver_tail_sent sender_raw_received /\
-      conn_events_received_decode_replay
-        receiver1
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( match ev with
     | ConnLocalEvent _ ->
       assert (Seq.equal delta_sent B.empty)
@@ -501,28 +457,7 @@ let lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
       sender_tail_sent
       sender_tail_received
       sender_final
-  returns
-    exists sender1' receiver1
-      sender_tail_sent' sender_tail_received'
-      receiver_tail_sent receiver_tail_received.
-      legal_event sender sender_ev /\
-      step_model sender sender_ev == Some sender1' /\
-      legal_event receiver receiver_ev /\
-      step_model receiver receiver_ev == Some receiver1 /\
-      Seq.equal receiver_tail_sent sender_tail_received' /\
-      conn_events_sent_seal_replay
-        sender1'
-        sender_rest
-        sender_tail_sent'
-        sender_tail_received'
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver1
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
       receiver
       receiver_ev
@@ -544,28 +479,7 @@ let lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      exists sender1' receiver1'
-        sender_tail_sent' sender_tail_received'
-        receiver_tail_sent' receiver_tail_received'.
-        legal_event sender sender_ev /\
-        step_model sender sender_ev == Some sender1' /\
-        legal_event receiver receiver_ev /\
-        step_model receiver receiver_ev == Some receiver1' /\
-        Seq.equal receiver_tail_sent' sender_tail_received' /\
-        conn_events_sent_seal_replay
-          sender1'
-          sender_rest
-          sender_tail_sent'
-          sender_tail_received'
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver1'
-          receiver_rest
-          receiver_tail_sent'
-          receiver_tail_received'
-          receiver_final
-    with _.
+    with
     ( introduce exists
         (sender1':connection_model)
         (receiver1':connection_model)
@@ -678,28 +592,7 @@ let lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
       sender_tail_sent
       sender_tail_received
       sender_final
-  returns
-    exists sender1' receiver1
-      sender_tail_sent' sender_tail_received'
-      receiver_tail_sent receiver_tail_received.
-      legal_event sender sender_ev /\
-      step_model sender sender_ev == Some sender1' /\
-      legal_event receiver receiver_ev /\
-      step_model receiver receiver_ev == Some receiver1 /\
-      Seq.equal sender_tail_sent' receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender1'
-        sender_rest
-        sender_tail_sent'
-        sender_tail_received'
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver1
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( lemma_received_replay_skip_empty_head_preserves_peer_stream
       sender_tail_sent
       receiver
@@ -721,28 +614,7 @@ let lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      exists sender1' receiver1'
-        sender_tail_sent' sender_tail_received'
-        receiver_tail_sent' receiver_tail_received'.
-        legal_event sender sender_ev /\
-        step_model sender sender_ev == Some sender1' /\
-        legal_event receiver receiver_ev /\
-        step_model receiver receiver_ev == Some receiver1' /\
-        Seq.equal sender_tail_sent' receiver_tail_received' /\
-        conn_events_sent_seal_replay
-          sender1'
-          sender_rest
-          sender_tail_sent'
-          sender_tail_received'
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver1'
-          receiver_rest
-          receiver_tail_sent'
-          receiver_tail_received'
-          receiver_final
-    with _.
+    with
     ( introduce exists
         (sender1':connection_model)
         (receiver1':connection_model)
@@ -817,15 +689,7 @@ let lemma_sent_event_nonempty_seal_projection_protected
       eliminate exists (fragment:B.bytes).
         W.parse_record delta_sent ==
           Some (T.Application_data, fragment, B.length delta_sent)
-      returns
-        sent_event_seal_projection
-          model
-          (ConnNetworkEvent {
-            CL.message_direction = CL.Sent;
-            CL.message_value = msg;
-          })
-          delta_sent
-      with _.
+      with
       ( W.lemma_parse_record_implies_parse_record_wire delta_sent;
         W.lemma_parse_record_wire_some_consumed_positive
           delta_sent
@@ -884,15 +748,7 @@ let lemma_received_event_nonempty_decode_projection_protected
       eliminate exists (fragment:B.bytes).
         W.parse_record delta_received ==
           Some (T.Application_data, fragment, B.length delta_received)
-      returns
-        received_event_decode_projection
-          model
-          (ConnNetworkEvent {
-            CL.message_direction = CL.Received;
-            CL.message_value = msg;
-          })
-          delta_received
-      with _.
+      with
       ( W.lemma_parse_record_implies_parse_record_wire delta_received;
         W.lemma_parse_record_wire_some_consumed_positive
           delta_received
@@ -1013,16 +869,7 @@ let lemma_single_message_sender_normalizes_received_handshake_head
       sender_tail_sent
       sender_tail_received
       sender_final
-  returns
-    received_handshake_head_normal_form received_msg receiver_head /\
-    normalized_received_handshake_replay
-      receiver
-      received_msg
-      receiver_rest
-      receiver_raw_sent
-      receiver_raw_received
-      receiver_final
-  with _.
+  with
   ( lemma_conn_events_received_decode_replay_head
       receiver
       receiver_head
@@ -1059,16 +906,7 @@ let lemma_single_message_sender_normalizes_received_handshake_head
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      received_handshake_head_normal_form received_msg receiver_head /\
-      normalized_received_handshake_replay
-        receiver
-        received_msg
-        receiver_rest
-        receiver_raw_sent
-        receiver_raw_received
-        receiver_final
-    with _.
+    with
     ( match receiver_head with
       | ConnNetworkEvent directed ->
         assert (directed == {
@@ -1124,16 +962,7 @@ let lemma_single_message_sender_normalizes_received_handshake_head
                 Some
                   (sender_outer,
                    R.next_seq sender.model_record.record_write)
-            returns
-              received_handshake_head_normal_form received_msg receiver_head /\
-              normalized_received_handshake_replay
-                receiver
-                received_msg
-                receiver_rest
-                receiver_raw_sent
-                receiver_raw_received
-                receiver_final
-            with _.
+            with
             ( W.lemma_parse_record_implies_parse_record_wire sender_delta_sent;
               eliminate exists
                 (receiver_outer:B.bytes)
@@ -1164,16 +993,7 @@ let lemma_single_message_sender_normalizes_received_handshake_head
                   Some
                     (step.protected_handshake_message,
                      step.protected_handshake_consumed)
-              returns
-                received_handshake_head_normal_form received_msg receiver_head /\
-                normalized_received_handshake_replay
-                  receiver
-                  received_msg
-                  receiver_rest
-                  receiver_raw_sent
-                  receiver_raw_received
-                  receiver_final
-              with _.
+              with
               ( lemma_equal_stream_record_head_lengths
                   sender_raw_sent
                   receiver_raw_received
@@ -1386,17 +1206,7 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
             R.fragment = sent_tls_inner_plaintext_fragment (M.TlsHandshake sent_msg);
           } ==
           Some (sender_ciphertext, R.next_seq sender.model_record.record_write)
-      returns
-        protected_handshake_event_projection_pair
-          {
-            pm_sender = sender;
-            pm_receiver = receiver;
-            pm_raw_sent = sender_delta;
-            pm_raw_received = receiver_delta;
-          }
-          sent_msg
-          received_msg
-      with _.
+      with
       ( W.lemma_parse_record_implies_parse_record_wire sender_delta;
         assert (W.parse_record_wire sender_delta ==
           Some (T.Application_data, sender_ciphertext, B.length sender_delta));
@@ -1410,17 +1220,7 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
           W.parse_plaintext opened == Some plaintext /\
           W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
             Some (M.TlsHandshake received_msg)
-        returns
-          protected_handshake_event_projection_pair
-            {
-              pm_sender = sender;
-              pm_receiver = receiver;
-              pm_raw_sent = sender_delta;
-              pm_raw_received = receiver_delta;
-            }
-            sent_msg
-            received_msg
-        with _.
+        with
         ( lemma_equal_stream_record_head_lengths
             sender_stream
             receiver_stream
@@ -1518,8 +1318,7 @@ let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
             R.fragment = sent_tls_inner_plaintext_fragment (M.TlsHandshake sent_msg);
           } ==
           Some (sender_ciphertext, R.next_seq sender.model_record.record_write)
-      returns Seq.equal sender_tail receiver_tail
-      with _.
+      with
       ( W.lemma_parse_record_implies_parse_record_wire sender_delta;
         assert (W.parse_record_wire sender_delta ==
           Some (T.Application_data, sender_ciphertext, B.length sender_delta));
@@ -1533,8 +1332,7 @@ let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
           W.parse_plaintext opened == Some plaintext /\
           W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
             Some (M.TlsHandshake received_msg)
-        returns Seq.equal sender_tail receiver_tail
-        with _.
+        with
         ( lemma_equal_stream_record_head_lengths
             sender_stream
             receiver_stream
@@ -1662,15 +1460,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays
           sender_tail_sent
           sender_tail_received
           sender_final
-      returns
-        exists pair.
-          pair.pm_sender == sender /\
-          pair.pm_receiver == receiver /\
-          protected_handshake_event_projection_pair
-            pair
-            sent_msg
-            received_msg
-      with _.
+      with
       ( lemma_conn_events_received_decode_replay_head
           receiver
           received_ev
@@ -1696,15 +1486,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays
             receiver_tail_sent
             receiver_tail_received
             receiver_final
-        returns
-          exists pair.
-            pair.pm_sender == sender /\
-            pair.pm_receiver == receiver /\
-            protected_handshake_event_projection_pair
-              pair
-              sent_msg
-              received_msg
-        with _.
+        with
         ( assert (network_message_is_cleartext CL.Sent (M.TlsHandshake sent_msg) == false);
           assert (network_message_is_cleartext CL.Received (M.TlsHandshake received_msg) == false);
           assert (protected_record_count CL.Sent (M.TlsHandshake sent_msg) == 1);
@@ -1870,34 +1652,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
           sender_tail_sent
           sender_tail_received
           sender_final
-      returns
-        exists sender_after receiver_after pair
-          sender_tail_sent' sender_tail_received'
-          receiver_tail_sent receiver_tail_received.
-          step_model sender sent_ev == Some sender_after /\
-          step_model receiver received_ev == Some receiver_after /\
-          pair.pm_sender == sender /\
-          pair.pm_receiver == receiver /\
-          protected_handshake_event_projection_pair
-            pair
-            sent_msg
-            received_msg /\
-          Seq.equal sender_raw_sent (B.append pair.pm_raw_sent sender_tail_sent') /\
-          Seq.equal receiver_raw_received (B.append pair.pm_raw_received receiver_tail_received) /\
-          Seq.equal sender_tail_sent' receiver_tail_received /\
-          conn_events_sent_seal_replay
-            sender_after
-            sender_rest
-            sender_tail_sent'
-            sender_tail_received'
-            sender_final /\
-          conn_events_received_decode_replay
-            receiver_after
-            receiver_rest
-            receiver_tail_sent
-            receiver_tail_received
-            receiver_final
-      with _.
+      with
       ( lemma_conn_events_received_decode_replay_head
           receiver
           received_ev
@@ -1923,34 +1678,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
             receiver_tail_sent
             receiver_tail_received
             receiver_final
-        returns
-          exists sender_after receiver_after pair
-            sender_tail_sent' sender_tail_received'
-            receiver_tail_sent' receiver_tail_received'.
-            step_model sender sent_ev == Some sender_after /\
-            step_model receiver received_ev == Some receiver_after /\
-            pair.pm_sender == sender /\
-            pair.pm_receiver == receiver /\
-            protected_handshake_event_projection_pair
-              pair
-              sent_msg
-              received_msg /\
-            Seq.equal sender_raw_sent (B.append pair.pm_raw_sent sender_tail_sent') /\
-            Seq.equal receiver_raw_received (B.append pair.pm_raw_received receiver_tail_received') /\
-            Seq.equal sender_tail_sent' receiver_tail_received' /\
-            conn_events_sent_seal_replay
-              sender_after
-              sender_rest
-              sender_tail_sent'
-              sender_tail_received'
-              sender_final /\
-            conn_events_received_decode_replay
-              receiver_after
-              receiver_rest
-              receiver_tail_sent'
-              receiver_tail_received'
-              receiver_final
-        with _.
+        with
         ( assert (network_message_is_cleartext CL.Sent (M.TlsHandshake sent_msg) == false);
           assert (network_message_is_cleartext CL.Received (M.TlsHandshake received_msg) == false);
           assert (protected_record_count CL.Sent (M.TlsHandshake sent_msg) == 1);
@@ -2137,16 +1865,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_
       sender_tail_sent
       sender_tail_received
       sender_final
-  returns
-    exists pair.
-      pair.pm_sender == sender /\
-      pair.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      write_read_record_material_aligned sender_after receiver_after
-  with _.
+  with
   ( lemma_conn_events_received_decode_replay_head
       receiver
       received_ev
@@ -2172,16 +1891,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      exists pair.
-        pair.pm_sender == sender /\
-        pair.pm_receiver == receiver /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg /\
-        write_read_record_material_aligned sender_after receiver_after
-    with _.
+    with
     ( assert (sender_after0 == sender_after);
       assert (receiver_after0 == receiver_after);
       assert (sender_after.model_record.record_write ==
@@ -2213,16 +1923,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_
           pair
           sent_msg
           received_msg
-      returns
-        exists pair.
-          pair.pm_sender == sender /\
-          pair.pm_receiver == receiver /\
-          protected_handshake_event_projection_pair
-            pair
-            sent_msg
-            received_msg /\
-          write_read_record_material_aligned sender_after receiver_after
-      with _.
+      with
       ( introduce exists
           (pair':protected_message_replay).
           pair'.pm_sender == sender /\
@@ -2368,32 +2069,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_
       receiver_tail_sent
       receiver_tail_received
       receiver_final
-  returns
-    exists pair sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      pair.pm_sender == sender /\
-      pair.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      write_read_record_material_aligned sender_after receiver_after /\
-      Seq.equal sender_raw_sent (B.append pair.pm_raw_sent sender_tail_sent) /\
-      Seq.equal receiver_raw_received (B.append pair.pm_raw_received receiver_tail_received) /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (sender_after0 == sender_after);
     assert (receiver_after0 == receiver_after);
     lemma_next_seq_models_preserve_write_read_record_material_alignment
@@ -2597,37 +2273,7 @@ let lemma_protected_handshake_event_projection_pairs_from_two_head_replays_with_
       receiver_tail_sent0
       receiver_tail_received0
       receiver_final
-  returns
-    exists pair0' pair1 sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      pair0'.pm_sender == sender /\
-      pair0'.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair0'
-        sent_msg0
-        received_msg0 /\
-      pair1.pm_sender == sender_after0 /\
-      pair1.pm_receiver == receiver_after0 /\
-      protected_handshake_event_projection_pair
-        pair1
-        sent_msg1
-        received_msg1 /\
-      write_read_record_material_aligned sender_after0 receiver_after0 /\
-      write_read_record_material_aligned sender_after1 receiver_after1 /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after1
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after1
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_alignment_and_tails
       sender_after0
       receiver_after0
@@ -2671,37 +2317,7 @@ let lemma_protected_handshake_event_projection_pairs_from_two_head_replays_with_
         receiver_tail_sent1
         receiver_tail_received1
         receiver_final
-    returns
-      exists pair0' pair1' sender_tail_sent sender_tail_received
-        receiver_tail_sent receiver_tail_received.
-        pair0'.pm_sender == sender /\
-        pair0'.pm_receiver == receiver /\
-        protected_handshake_event_projection_pair
-          pair0'
-          sent_msg0
-          received_msg0 /\
-        pair1'.pm_sender == sender_after0 /\
-        pair1'.pm_receiver == receiver_after0 /\
-        protected_handshake_event_projection_pair
-          pair1'
-          sent_msg1
-          received_msg1 /\
-        write_read_record_material_aligned sender_after0 receiver_after0 /\
-        write_read_record_material_aligned sender_after1 receiver_after1 /\
-        Seq.equal sender_tail_sent receiver_tail_received /\
-        conn_events_sent_seal_replay
-          sender_after1
-          sender_rest
-          sender_tail_sent
-          sender_tail_received
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver_after1
-          receiver_rest
-          receiver_tail_sent
-          receiver_tail_received
-          receiver_final
-    with _.
+    with
     ( introduce exists
         (pair0':protected_message_replay)
         (pair1':protected_message_replay)
@@ -2837,15 +2453,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
       sender_tail_sent
       sender_tail_received
       sender_final
-  returns
-    exists pair.
-      pair.pm_sender == sender_after /\
-      pair.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg
-  with _.
+  with
   ( assert (sender1 == sender_after);
     assert (
       conn_events_sent_seal_replay
@@ -2977,32 +2585,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
       sender_tail_sent0
       sender_tail_received0
       sender_final
-  returns
-    exists sender_after_head receiver_after_head pair
-      sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      step_model sender_after sent_ev == Some sender_after_head /\
-      step_model receiver received_ev == Some receiver_after_head /\
-      pair.pm_sender == sender_after /\
-      pair.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after_head
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after_head
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (sender1 == sender_after);
     lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
       sender_after
@@ -3048,32 +2631,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      exists sender_after_head receiver_after_head pair
-        sender_tail_sent' sender_tail_received'
-        receiver_tail_sent' receiver_tail_received'.
-        step_model sender_after sent_ev == Some sender_after_head /\
-        step_model receiver received_ev == Some receiver_after_head /\
-        pair.pm_sender == sender_after /\
-        pair.pm_receiver == receiver /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg /\
-        Seq.equal sender_tail_sent' receiver_tail_received' /\
-        conn_events_sent_seal_replay
-          sender_after_head
-          sender_rest
-          sender_tail_sent'
-          sender_tail_received'
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver_after_head
-          receiver_rest
-          receiver_tail_sent'
-          receiver_tail_received'
-          receiver_final
-    with _.
+    with
     ( introduce exists
         (sender_after_head:connection_model)
         (receiver_after_head:connection_model)
@@ -3251,30 +2809,7 @@ let lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
       receiver_tail_sent
       receiver_tail_received
       receiver_final
-  returns
-    exists pair sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      pair.pm_sender == sender_after /\
-      pair.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      write_read_record_material_aligned sender_after_head receiver_after_head /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after_head
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after_head
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (sender_after_head0 == sender_after_head);
     assert (receiver_after_head0 == receiver_after_head);
     lemma_next_seq_models_preserve_write_read_record_material_alignment
@@ -3407,15 +2942,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
       receiver_tail_sent
       receiver_tail_received
       receiver_final
-  returns
-    exists pair.
-      pair.pm_sender == sender /\
-      pair.pm_receiver == receiver_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg
-  with _.
+  with
   ( assert (receiver1 == receiver_after);
     assert (
       conn_events_received_decode_replay
@@ -3547,32 +3074,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
       receiver_tail_sent0
       receiver_tail_received0
       receiver_final
-  returns
-    exists sender_after_head receiver_after_head pair
-      sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      step_model sender sent_ev == Some sender_after_head /\
-      step_model receiver_after received_ev == Some receiver_after_head /\
-      pair.pm_sender == sender /\
-      pair.pm_receiver == receiver_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after_head
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after_head
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (receiver1 == receiver_after);
     lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
       sender
@@ -3618,32 +3120,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      exists sender_after_head receiver_after_head pair
-        sender_tail_sent' sender_tail_received'
-        receiver_tail_sent' receiver_tail_received'.
-        step_model sender sent_ev == Some sender_after_head /\
-        step_model receiver_after received_ev == Some receiver_after_head /\
-        pair.pm_sender == sender /\
-        pair.pm_receiver == receiver_after /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg /\
-        Seq.equal sender_tail_sent' receiver_tail_received' /\
-        conn_events_sent_seal_replay
-          sender_after_head
-          sender_rest
-          sender_tail_sent'
-          sender_tail_received'
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver_after_head
-          receiver_rest
-          receiver_tail_sent'
-          receiver_tail_received'
-          receiver_final
-    with _.
+    with
     ( introduce exists
         (sender_after_head:connection_model)
         (receiver_after_head:connection_model)
@@ -3822,30 +3299,7 @@ let lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
       receiver_tail_sent
       receiver_tail_received
       receiver_final
-  returns
-    exists pair sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      pair.pm_sender == sender /\
-      pair.pm_receiver == receiver_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      write_read_record_material_aligned sender_after_head receiver_after_head /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after_head
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after_head
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (sender_after_head0 == sender_after_head);
     assert (receiver_after_head0 == receiver_after_head);
     lemma_next_seq_models_preserve_write_read_record_material_alignment
@@ -3985,15 +3439,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads
       sender_tail_sent
       sender_tail_received
       sender_final
-  returns
-    exists pair.
-      pair.pm_sender == sender_after /\
-      pair.pm_receiver == receiver_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg
-  with _.
+  with
   ( assert (sender1 == sender_after);
     lemma_received_replay_skip_empty_head_preserves_peer_stream
       sender_tail_sent
@@ -4016,15 +3462,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads
         receiver_tail_sent
         receiver_tail_received
         receiver_final
-    returns
-      exists pair.
-        pair.pm_sender == sender_after /\
-        pair.pm_receiver == receiver_after /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg
-    with _.
+    with
     ( assert (receiver1 == receiver_after);
       assert (
         conn_events_sent_seal_replay
@@ -4170,32 +3608,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
       sender_tail_sent0
       sender_tail_received0
       sender_final
-  returns
-    exists sender_after_head receiver_after_head pair
-      sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      step_model sender_after sent_ev == Some sender_after_head /\
-      step_model receiver_after received_ev == Some receiver_after_head /\
-      pair.pm_sender == sender_after /\
-      pair.pm_receiver == receiver_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after_head
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after_head
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (sender1 == sender_after);
     lemma_received_replay_skip_empty_head_preserves_peer_stream
       sender_tail_sent0
@@ -4218,32 +3631,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
         receiver_tail_sent0
         receiver_tail_received0
         receiver_final
-    returns
-      exists sender_after_head receiver_after_head pair
-        sender_tail_sent sender_tail_received
-        receiver_tail_sent receiver_tail_received.
-        step_model sender_after sent_ev == Some sender_after_head /\
-        step_model receiver_after received_ev == Some receiver_after_head /\
-        pair.pm_sender == sender_after /\
-        pair.pm_receiver == receiver_after /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg /\
-        Seq.equal sender_tail_sent receiver_tail_received /\
-        conn_events_sent_seal_replay
-          sender_after_head
-          sender_rest
-          sender_tail_sent
-          sender_tail_received
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver_after_head
-          receiver_rest
-          receiver_tail_sent
-          receiver_tail_received
-          receiver_final
-    with _.
+    with
     ( assert (receiver1 == receiver_after);
       lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
         sender_after
@@ -4289,32 +3677,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
           receiver_tail_sent
           receiver_tail_received
           receiver_final
-      returns
-        exists sender_after_head receiver_after_head pair
-          sender_tail_sent' sender_tail_received'
-          receiver_tail_sent' receiver_tail_received'.
-          step_model sender_after sent_ev == Some sender_after_head /\
-          step_model receiver_after received_ev == Some receiver_after_head /\
-          pair.pm_sender == sender_after /\
-          pair.pm_receiver == receiver_after /\
-          protected_handshake_event_projection_pair
-            pair
-            sent_msg
-            received_msg /\
-          Seq.equal sender_tail_sent' receiver_tail_received' /\
-          conn_events_sent_seal_replay
-            sender_after_head
-            sender_rest
-            sender_tail_sent'
-            sender_tail_received'
-            sender_final /\
-          conn_events_received_decode_replay
-            receiver_after_head
-            receiver_rest
-            receiver_tail_sent'
-            receiver_tail_received'
-            receiver_final
-      with _.
+      with
       ( introduce exists
           (sender_after_head:connection_model)
           (receiver_after_head:connection_model)
@@ -4501,30 +3864,7 @@ let lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
       receiver_tail_sent
       receiver_tail_received
       receiver_final
-  returns
-    exists pair sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      pair.pm_sender == sender_after /\
-      pair.pm_receiver == receiver_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      write_read_record_material_aligned sender_after_head receiver_after_head /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after_head
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after_head
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( assert (sender_after_head0 == sender_after_head);
     assert (receiver_after_head0 == receiver_after_head);
     lemma_next_seq_models_preserve_write_read_record_material_alignment
@@ -4790,43 +4130,7 @@ let lemma_protected_handshake_event_projection_pairs_from_two_heads_then_both_no
       receiver_tail_sent0
       receiver_tail_received0
       receiver_final
-  returns
-    exists pair0' pair1' pair2 sender_tail_sent sender_tail_received
-      receiver_tail_sent receiver_tail_received.
-      pair0'.pm_sender == sender /\
-      pair0'.pm_receiver == receiver /\
-      protected_handshake_event_projection_pair
-        pair0'
-        sent_msg0
-        received_msg0 /\
-      pair1'.pm_sender == sender_after0 /\
-      pair1'.pm_receiver == receiver_after0 /\
-      protected_handshake_event_projection_pair
-        pair1'
-        sent_msg1
-        received_msg1 /\
-      pair2.pm_sender == sender_after_skip /\
-      pair2.pm_receiver == receiver_after_skip /\
-      protected_handshake_event_projection_pair
-        pair2
-        sent_msg2
-        received_msg2 /\
-      write_read_record_material_aligned sender_after1 receiver_after1 /\
-      write_read_record_material_aligned sender_after2 receiver_after2 /\
-      Seq.equal sender_tail_sent receiver_tail_received /\
-      conn_events_sent_seal_replay
-        sender_after2
-        sender_rest
-        sender_tail_sent
-        sender_tail_received
-        sender_final /\
-      conn_events_received_decode_replay
-        receiver_after2
-        receiver_rest
-        receiver_tail_sent
-        receiver_tail_received
-        receiver_final
-  with _.
+  with
   ( lemma_step_sender_non_install_local_event_preserves_write_read_record_material_alignment
       sender_after1
       sender_skip
@@ -4882,43 +4186,7 @@ let lemma_protected_handshake_event_projection_pairs_from_two_heads_then_both_no
         receiver_tail_sent2
         receiver_tail_received2
         receiver_final
-    returns
-      exists pair0' pair1' pair2' sender_tail_sent sender_tail_received
-        receiver_tail_sent receiver_tail_received.
-        pair0'.pm_sender == sender /\
-        pair0'.pm_receiver == receiver /\
-        protected_handshake_event_projection_pair
-          pair0'
-          sent_msg0
-          received_msg0 /\
-        pair1'.pm_sender == sender_after0 /\
-        pair1'.pm_receiver == receiver_after0 /\
-        protected_handshake_event_projection_pair
-          pair1'
-          sent_msg1
-          received_msg1 /\
-        pair2'.pm_sender == sender_after_skip /\
-        pair2'.pm_receiver == receiver_after_skip /\
-        protected_handshake_event_projection_pair
-          pair2'
-          sent_msg2
-          received_msg2 /\
-        write_read_record_material_aligned sender_after1 receiver_after1 /\
-        write_read_record_material_aligned sender_after2 receiver_after2 /\
-        Seq.equal sender_tail_sent receiver_tail_received /\
-        conn_events_sent_seal_replay
-          sender_after2
-          sender_rest
-          sender_tail_sent
-          sender_tail_received
-          sender_final /\
-        conn_events_received_decode_replay
-          receiver_after2
-          receiver_rest
-          receiver_tail_sent
-          receiver_tail_received
-          receiver_final
-    with _.
+    with
     ( introduce exists
         (pair0':protected_message_replay)
         (pair1':protected_message_replay)

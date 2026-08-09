@@ -61,9 +61,7 @@ let rec lemma_conn_events_raw_replay_from_failed_results_failed
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      CS.ControlFailed? final_model.CS.model_control
-    with _.
+    with
     (
       CSL.lemma_step_model_from_failed_results_failed model ev model1;
       lemma_conn_events_raw_replay_from_failed_results_failed
@@ -981,9 +979,7 @@ let rec lemma_server_application_progress_rank_replay_lower_bound
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      server_application_progress_rank model <= FStar.List.Tot.length (ev :: rest)
-    with _.
+    with
     (
       lemma_server_application_progress_rank_step model ev model1;
       match model1.CS.model_control with
@@ -1025,16 +1021,12 @@ let lemma_server_no_tail_start_spine
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
-  returns
-    server_no_tail_start_spine server
-  with _.
+  with
   (
     eliminate exists rest.
       server.CS.cs_event_log ==
         CS.ConnLocalEvent CS.LocalStartServer :: rest
-    returns
-      server_no_tail_start_spine server
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
@@ -1153,16 +1145,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
-  returns
-    exists ch rest.
-      server.CS.cs_event_log ==
-        CS.ConnLocalEvent CS.LocalStartServer ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        rest
-  with _.
+  with
   (
     eliminate exists e1' rest'.
       server.CS.cs_event_log ==
@@ -1170,16 +1153,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs
       ~ (exists m.
           e1' == CS.ConnNetworkEvent m /\
           m.CL.message_value == M.TlsChangeCipherSpec)
-    returns
-      exists ch rest.
-        server.CS.cs_event_log ==
-          CS.ConnLocalEvent CS.LocalStartServer ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          rest
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
@@ -1240,16 +1214,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs
           tail_sent0
           tail_received0
           server.CS.cs_model
-      returns
-        exists ch rest.
-          server.CS.cs_event_log ==
-            CS.ConnLocalEvent CS.LocalStartServer ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.ClientHello ch);
-            }) ::
-            rest
-      with _.
+      with
       (
         assert (initial.CS.model_control == CS.ControlNew);
         assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -1313,16 +1278,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs
             tail_sent1
             tail_received1
             server.CS.cs_model
-        returns
-          exists ch rest.
-            server.CS.cs_event_log ==
-              CS.ConnLocalEvent CS.LocalStartServer ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              rest
-        with _.
+        with
         (
           match e1 with
           | CS.ConnLocalEvent local ->
@@ -1503,16 +1459,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs16
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
-  returns
-    exists ch rest.
-      server.CS.cs_event_log ==
-        CS.ConnLocalEvent CS.LocalStartServer ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        rest
-  with _.
+  with
   (
     eliminate exists e1' rest'.
       server.CS.cs_event_log ==
@@ -1520,16 +1467,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs16
       ~ (exists m.
           e1' == CS.ConnNetworkEvent m /\
           m.CL.message_value == M.TlsChangeCipherSpec)
-    returns
-      exists ch rest.
-        server.CS.cs_event_log ==
-          CS.ConnLocalEvent CS.LocalStartServer ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          rest
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
@@ -1590,16 +1528,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs16
           tail_sent0
           tail_received0
           server.CS.cs_model
-      returns
-        exists ch rest.
-          server.CS.cs_event_log ==
-            CS.ConnLocalEvent CS.LocalStartServer ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.ClientHello ch);
-            }) ::
-            rest
-      with _.
+      with
       (
         assert (initial.CS.model_control == CS.ControlNew);
         assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -1663,16 +1592,7 @@ let lemma_server_no_tail_second_event_client_hello_if_not_ccs16
             tail_sent1
             tail_received1
             server.CS.cs_model
-        returns
-          exists ch rest.
-            server.CS.cs_event_log ==
-              CS.ConnLocalEvent CS.LocalStartServer ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              rest
-        with _.
+        with
         (
           match e1 with
           | CS.ConnLocalEvent local ->
@@ -1846,26 +1766,12 @@ let lemma_server_no_tail_second_event_not_ccs
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
-  returns
-    exists e1 rest.
-      server.CS.cs_event_log ==
-        CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
-      ~ (exists m.
-          e1 == CS.ConnNetworkEvent m /\
-          m.CL.message_value == M.TlsChangeCipherSpec)
-  with _.
+  with
   (
     eliminate exists rest0.
       server.CS.cs_event_log ==
         CS.ConnLocalEvent CS.LocalStartServer :: rest0
-    returns
-      exists e1 rest.
-        server.CS.cs_event_log ==
-          CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
-        ~ (exists m.
-            e1 == CS.ConnNetworkEvent m /\
-            m.CL.message_value == M.TlsChangeCipherSpec)
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
@@ -1929,14 +1835,7 @@ let lemma_server_no_tail_second_event_not_ccs
               tail_sent0
               tail_received0
               server.CS.cs_model
-          returns
-            exists e1 rest.
-              server.CS.cs_event_log ==
-                CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
-              ~ (exists m.
-                  e1 == CS.ConnNetworkEvent m /\
-                  m.CL.message_value == M.TlsChangeCipherSpec)
-          with _.
+          with
           (
             assert (initial.CS.model_control == CS.ControlNew);
             assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -2006,14 +1905,7 @@ let lemma_server_no_tail_second_event_not_ccs
                 tail_sent1
                 tail_received1
                 server.CS.cs_model
-            returns
-              exists e1 rest.
-                server.CS.cs_event_log ==
-                  CS.ConnLocalEvent CS.LocalStartServer :: e1 :: rest /\
-                ~ (exists m.
-                    e1 == CS.ConnNetworkEvent m /\
-                    m.CL.message_value == M.TlsChangeCipherSpec)
-            with _.
+            with
             (
               assert (e1 == CS.ConnNetworkEvent msg);
               assert (msg.CL.message_value == M.TlsChangeCipherSpec);
@@ -2087,17 +1979,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
-  returns
-    exists ch selection rest.
-      server.CS.cs_event_log ==
-        CS.ConnLocalEvent CS.LocalStartServer ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-        rest
-  with _.
+  with
   (
     eliminate exists ch rest_after_ch.
       server.CS.cs_event_log ==
@@ -2107,17 +1989,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
           CL.message_value = M.TlsHandshake (M.ClientHello ch);
         }) ::
         rest_after_ch
-    returns
-      exists ch selection rest.
-        server.CS.cs_event_log ==
-          CS.ConnLocalEvent CS.LocalStartServer ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-          rest
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
@@ -2186,17 +2058,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
           tail_sent0
           tail_received0
           server.CS.cs_model
-      returns
-        exists ch selection rest.
-          server.CS.cs_event_log ==
-            CS.ConnLocalEvent CS.LocalStartServer ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.ClientHello ch);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-            rest
-      with _.
+      with
       (
         assert (initial.CS.model_control == CS.ControlNew);
         assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -2260,17 +2122,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
             tail_sent1
             tail_received1
             server.CS.cs_model
-        returns
-          exists ch selection rest.
-            server.CS.cs_event_log ==
-              CS.ConnLocalEvent CS.LocalStartServer ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-              rest
-        with _.
+        with
         (
           assert (
             CS.step_model
@@ -2383,17 +2235,7 @@ let lemma_server_no_tail_third_event_select_parameters_clean
               tail_sent2
               tail_received2
               server.CS.cs_model
-          returns
-            exists ch selection rest.
-              server.CS.cs_event_log ==
-                CS.ConnLocalEvent CS.LocalStartServer ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-                rest
-          with _.
+          with
           (
             match e2 with
             | CS.ConnLocalEvent local ->
@@ -2539,18 +2381,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
-  returns
-    exists ch selection server_shared rest.
-      server.CS.cs_event_log ==
-        CS.ConnLocalEvent CS.LocalStartServer ::
-        CS.ConnNetworkEvent ({
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ClientHello ch);
-        }) ::
-        CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-        rest
-  with _.
+  with
   (
     eliminate exists ch selection rest_after_selection.
       server.CS.cs_event_log ==
@@ -2561,18 +2392,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
         }) ::
         CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
         rest_after_selection
-    returns
-      exists ch selection server_shared rest.
-        server.CS.cs_event_log ==
-          CS.ConnLocalEvent CS.LocalStartServer ::
-          CS.ConnNetworkEvent ({
-            CL.message_direction = CL.Received;
-            CL.message_value = M.TlsHandshake (M.ClientHello ch);
-          }) ::
-          CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-          CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-          rest
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
@@ -2644,18 +2464,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
           tail_sent0
           tail_received0
           server.CS.cs_model
-      returns
-        exists ch selection server_shared rest.
-          server.CS.cs_event_log ==
-            CS.ConnLocalEvent CS.LocalStartServer ::
-            CS.ConnNetworkEvent ({
-              CL.message_direction = CL.Received;
-              CL.message_value = M.TlsHandshake (M.ClientHello ch);
-            }) ::
-            CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-            CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-            rest
-      with _.
+      with
       (
         assert (initial.CS.model_control == CS.ControlNew);
         assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -2719,18 +2528,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
             tail_sent1
             tail_received1
             server.CS.cs_model
-        returns
-          exists ch selection server_shared rest.
-            server.CS.cs_event_log ==
-              CS.ConnLocalEvent CS.LocalStartServer ::
-              CS.ConnNetworkEvent ({
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.ClientHello ch);
-              }) ::
-              CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-              CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-              rest
-        with _.
+        with
         (
           assert (
             CS.step_model
@@ -2836,18 +2634,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
               tail_sent2
               tail_received2
               server.CS.cs_model
-          returns
-            exists ch selection server_shared rest.
-              server.CS.cs_event_log ==
-                CS.ConnLocalEvent CS.LocalStartServer ::
-                CS.ConnNetworkEvent ({
-                  CL.message_direction = CL.Received;
-                  CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                }) ::
-                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-                CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-                rest
-          with _.
+          with
           (
             assert_norm (
               CS.step_model
@@ -2942,18 +2729,7 @@ let lemma_server_no_tail_fourth_event_derive_shared_secret_clean
                 tail_sent3
                 tail_received3
                 server.CS.cs_model
-            returns
-              exists ch selection server_shared rest.
-                server.CS.cs_event_log ==
-                  CS.ConnLocalEvent CS.LocalStartServer ::
-                  CS.ConnNetworkEvent ({
-                    CL.message_direction = CL.Received;
-                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                  }) ::
-                  CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-                  CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-                  rest
-            with _.
+            with
             (
               match e3 with
               | CS.ConnLocalEvent local ->
@@ -3177,22 +2953,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14.
     server.CS.cs_event_log ==
      [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]
-  returns
-    exists ch selection server_shared sh rest.
-     server.CS.cs_event_log ==
-       CS.ConnLocalEvent CS.LocalStartServer ::
-       CS.ConnNetworkEvent ({
-         CL.message_direction = CL.Received;
-         CL.message_value = M.TlsHandshake (M.ClientHello ch);
-       }) ::
-       CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-       CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-       CS.ConnNetworkEvent ({
-         CL.message_direction = CL.Sent;
-         CL.message_value = M.TlsHandshake (M.ServerHello sh);
-       }) ::
-       rest
-  with _.
+  with
   (
     eliminate exists ch selection server_shared rest_after_shared.
      server.CS.cs_event_log ==
@@ -3204,22 +2965,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
        CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
        CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
        rest_after_shared
-    returns
-     exists ch selection server_shared sh rest.
-       server.CS.cs_event_log ==
-         CS.ConnLocalEvent CS.LocalStartServer ::
-         CS.ConnNetworkEvent ({
-           CL.message_direction = CL.Received;
-           CL.message_value = M.TlsHandshake (M.ClientHello ch);
-         }) ::
-         CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-         CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-         CS.ConnNetworkEvent ({
-           CL.message_direction = CL.Sent;
-           CL.message_value = M.TlsHandshake (M.ServerHello sh);
-         }) ::
-         rest
-    with _.
+    with
     (
      assert (server.CS.cs_event_log ==
        e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14]);
@@ -3284,22 +3030,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
          tail_sent0
          tail_received0
          server.CS.cs_model
-     returns
-       exists ch selection server_shared sh rest.
-         server.CS.cs_event_log ==
-           CS.ConnLocalEvent CS.LocalStartServer ::
-           CS.ConnNetworkEvent ({
-             CL.message_direction = CL.Received;
-             CL.message_value = M.TlsHandshake (M.ClientHello ch);
-           }) ::
-           CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-           CS.ConnNetworkEvent ({
-             CL.message_direction = CL.Sent;
-             CL.message_value = M.TlsHandshake (M.ServerHello sh);
-           }) ::
-           rest
-     with _.
+     with
      (
        assert (initial.CS.model_control == CS.ControlNew);
        assert (initial.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -3338,22 +3069,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
            tail_sent1
            tail_received1
            server.CS.cs_model
-       returns
-         exists ch selection server_shared sh rest.
-           server.CS.cs_event_log ==
-             CS.ConnLocalEvent CS.LocalStartServer ::
-             CS.ConnNetworkEvent ({
-               CL.message_direction = CL.Received;
-               CL.message_value = M.TlsHandshake (M.ClientHello ch);
-             }) ::
-             CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-             CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-             CS.ConnNetworkEvent ({
-               CL.message_direction = CL.Sent;
-               CL.message_value = M.TlsHandshake (M.ServerHello sh);
-             }) ::
-             rest
-       with _.
+       with
        (
          assert (
            CS.step_model
@@ -3439,22 +3155,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
              tail_sent2
              tail_received2
              server.CS.cs_model
-         returns
-           exists ch selection server_shared sh rest.
-             server.CS.cs_event_log ==
-               CS.ConnLocalEvent CS.LocalStartServer ::
-               CS.ConnNetworkEvent ({
-                 CL.message_direction = CL.Received;
-                 CL.message_value = M.TlsHandshake (M.ClientHello ch);
-               }) ::
-               CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-               CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-               CS.ConnNetworkEvent ({
-                 CL.message_direction = CL.Sent;
-                 CL.message_value = M.TlsHandshake (M.ServerHello sh);
-               }) ::
-               rest
-         with _.
+         with
          (
            assert_norm (
              CS.step_model
@@ -3521,22 +3222,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
                tail_sent3
                tail_received3
                server.CS.cs_model
-           returns
-             exists ch selection server_shared sh rest.
-               server.CS.cs_event_log ==
-                 CS.ConnLocalEvent CS.LocalStartServer ::
-                 CS.ConnNetworkEvent ({
-                   CL.message_direction = CL.Received;
-                   CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                 }) ::
-                 CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-                 CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-                 CS.ConnNetworkEvent ({
-                   CL.message_direction = CL.Sent;
-                   CL.message_value = M.TlsHandshake (M.ServerHello sh);
-                 }) ::
-                 rest
-           with _.
+           with
            (
              lemma_server_hs_client_hello_received_derive_shared_secret_step
                model3
@@ -3593,22 +3279,7 @@ let lemma_server_no_tail_fifth_event_server_hello_clean
                  tail_sent4
                  tail_received4
                  server.CS.cs_model
-             returns
-               exists ch selection server_shared sh rest.
-                 server.CS.cs_event_log ==
-                   CS.ConnLocalEvent CS.LocalStartServer ::
-                   CS.ConnNetworkEvent ({
-                     CL.message_direction = CL.Received;
-                     CL.message_value = M.TlsHandshake (M.ClientHello ch);
-                   }) ::
-                   CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) ::
-                   CS.ConnLocalEvent (CS.LocalDeriveSharedSecret server_shared) ::
-                   CS.ConnNetworkEvent ({
-                     CL.message_direction = CL.Sent;
-                     CL.message_value = M.TlsHandshake (M.ServerHello sh);
-                   }) ::
-                   rest
-             with _.
+             with
              (
                match e4 with
                | CS.ConnLocalEvent local ->
@@ -3830,9 +3501,7 @@ let lemma_server_no_tail_desired_shape_start_spine
             CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
           ])
 
-  returns
-    server_no_tail_start_spine server
-  with _.
+  with
   (
     let e1 =
       CS.ConnNetworkEvent {
@@ -3988,9 +3657,7 @@ let lemma_server_no_tail_desired_shape_length
               });
             CS.ConnLocalEvent (CS.LocalVerifyClientFinished cf)
           ])
-  returns
-    FStar.List.Tot.length server.CS.cs_event_log == 15
-  with _.
+  with
   (
     assert_norm
       (FStar.List.Tot.length
@@ -4043,16 +3710,12 @@ let lemma_server_no_tail_start_spine16
   eliminate exists e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15.
     server.CS.cs_event_log ==
       [e0; e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]
-  returns
-    server_no_tail_start_spine16 server
-  with _.
+  with
   (
     eliminate exists rest.
       server.CS.cs_event_log ==
         CS.ConnLocalEvent CS.LocalStartServer :: rest
-    returns
-      server_no_tail_start_spine16 server
-    with _.
+    with
     (
       assert (server.CS.cs_event_log ==
         e0 :: [e1; e2; e3; e4; e5; e6; e7; e8; e9; e10; e11; e12; e13; e14; e15]);
