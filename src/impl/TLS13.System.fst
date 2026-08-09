@@ -126,9 +126,9 @@ let tls_quiescent (s:tls_system_state) : prop = MP.Quiet? s.channel
     Per endpoint this is the driver's readiness predicate, which carries the
     end-to-end invariant, `ControlApplicationData`, and the application record
     keys.  On the client it additionally carries
-    `CS.protected_handshake_buffer_empty`, which is what makes readiness imply
-    `TLS13.System.Internal.tls_settled`; see `lemma_application_ready_settled`
-    for why the state machine's `Sent Finished` guard was needed as well.
+    `CS.protected_handshake_buffer_empty`, which is what makes readiness mean
+    that no internal drain step is still enabled; the state machine's `Sent
+    Finished` guard (see `legal_handshake_message`) is what makes that true.
 
     NOTE: this predicate does *not* pin the event log to any particular length.
     An earlier version of this comment claimed it pinned each side to exactly 16
@@ -693,7 +693,7 @@ let lemma_appdata_implies_client_ready
 = CSL.lemma_connection_appdata_keys_installed_for_role CS.ClientEndpoint s.client;
   (* Since the internal-event work landed, `client_driver_application_ready`
      also carries `CS.protected_handshake_buffer_empty` (it is what makes
-     readiness imply `TLS13.System.Internal.tls_settled`).  Reachability
+     readiness mean no drain step is still enabled).  Reachability
      supplies it: the client can only reach `ControlApplicationData` by sending
      its own Finished, whose legality guard demands an empty pending buffer,
      and no legal step at `ControlApplicationData` can refill it. *)

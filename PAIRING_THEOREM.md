@@ -72,27 +72,27 @@ semantic state has not yet absorbed the messages that record carried, so
 `client_received` and the connection state can disagree until the pending
 plaintext is drained.
 
-`TLS13.System.Internal` therefore states the theorem in a **settled** form:
+The theorem is therefore stated at **readiness**, which subsumes the scheduling
+side condition: `client_driver_application_ready` carries
+`CS.protected_handshake_buffer_empty`, so a ready client has no internal step
+still enabled and has already absorbed every message its accepted records were
+carrying. The flagship is
 
 ```fstar
-val lemma_flagship_settled_record_material_agreement : ...
-  (requires ... /\ ~(tls_internal_pending s) /\ ...)
+val lemma_flagship_record_material_agreement_ungated : ...
 ```
 
-`tls_settled` says no internal step is enabled. `lemma_drain_to_settled` shows
-every reachable state reaches a settled one by a finite chain of internal steps
-that preserves `combined_inv` (via `RTC.stable_on_closure`), so the settled form
-is not a weakening in practice — it is a scheduling side condition that the
-drivers discharge.
-
-The original `lemma_flagship_record_material_agreement` is retained unchanged
-alongside it: adding `~(tls_internal_pending s)` to the antecedent weakens the
-lemma, so keeping both costs nothing and preserves every existing caller.
+in `TLS13.System.StreamTemporal`, over
+`TLS13.System.Temporal.record_material_agrees_when_ready_scoped`.
 
 At the C boundary the side condition is observable: `TLS13.Impl.Client.Engine.poll`
-returns `EngineReady` only when `~(D.internal_pending st1)`, which is literally
-the settled antecedent. A caller that has been told the connection is ready is
-entitled to the agreement conclusion.
+returns `EngineReady` only when `~(D.internal_pending st1)`. A caller that has
+been told the connection is ready is entitled to the agreement conclusion.
+
+(An earlier `TLS13.System.Internal` stated a separate *settled* form with an
+explicit `~(tls_internal_pending s)` antecedent. It was never wired into
+`ROOT_FILES`, so it was never machine-checked; it has been deleted rather than
+left as an unverified claim. The readiness form above is the live theorem.)
 
 ## Main statement, fully expanded
 

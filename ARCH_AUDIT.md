@@ -350,7 +350,7 @@ Audit surface:
 | Client receive primitive | `TLS13.Impl.Client.process_coalesced_network_bytes` — the **only** receive `fn` exported by `TLS13.Impl.Client.fsti` |
 | Client internal primitive | `TLS13.Impl.Client.process_pending_protected_handshake` |
 | Drain theory | `TLS13.Impl.Client.Drain` (`drain_step`, `drained`, `lemma_drained_facts`), `TLS13.Impl.Client.DrainProgress`, `TLS13.Impl.Client.DrainLoop` |
-| System level | `TLS13.System.Internal` — `tls_settled`, `lemma_drain_to_settled`, `lemma_flagship_settled_record_material_agreement` |
+| System level | `TLS13.System.Temporal` — `record_material_agrees_when_ready_scoped`; `TLS13.System.StreamTemporal` — `lemma_flagship_record_material_agreement_ungated` |
 
 The interface itself is now the audit artefact for "one receive path": the
 record-transition primitive `process_network_bytes` is private to
@@ -359,15 +359,15 @@ that bypasses the pipeline. The three production callers
 (`Client.Driver.BufferedNetwork`, `Client.Engine`, `Client.CanonicalProtocol`)
 all go through the same pair of primitives and differ only in *drain schedule*:
 the driver owns the socket and drains to completion; the Engine is
-transport-neutral and takes one drain step per `poll`. `TLS13.System.Internal`
+transport-neutral and takes one drain step per `poll`; `TLS13.Impl.Client.Drain`
 proves both realise the same relation.
 
 The C boundary is unchanged in responsibility: `runtime/` plus `c_stubs/` remain
 at their pre-refactor size, `runtime/tls13_client_engine.c` still only marshals
 into `TLS13_Impl_Client_Engine_poll` / `_feed_network`, and there is no C-side
 record loop, handshake sequencing or scheduling decision. `EngineReady` now
-additionally means `~(internal_pending st)` — the antecedent of the settled
-pairing theorem.
+additionally means `~(internal_pending st)` — the client half of the antecedent
+of the flagship pairing theorem.
 
 ## Architectural gaps and audit risks
 

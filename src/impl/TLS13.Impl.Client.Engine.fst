@@ -360,9 +360,10 @@ fn poll
       None -> {
         assert (pure (st_pending == 'st0));
         // `EngineReady` is produced only here, and only after the internal
-        // primitive has reported that nothing is pending.  That is exactly the
-        // client half of `TLS13.System.Internal.tls_settled`, so the C API's
-        // Ready signal is the antecedent of the Phase-7 flagship theorem.
+        // primitive has reported that nothing is pending, i.e. no drain step is
+        // still enabled.  So the C API's Ready signal is the client half of the
+        // antecedent of the flagship pairing theorem
+        // (`TLS13.System.StreamTemporal.lemma_flagship_record_material_agreement_ungated`).
         D.lemma_pending_none_quiescent 'st0 st_pending;
         rewrite
           (CR.connection_exactly e.engine_client st_pending)

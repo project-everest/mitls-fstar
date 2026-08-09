@@ -1699,7 +1699,7 @@ let legal_handshake_message
     // reaches ControlApplicationData with a non-empty pending buffer, and
     // because legal_handshake_message admits no message at all in
     // ControlApplicationData that plaintext can never be drained: the endpoint
-    // is wedged permanently unsettled.  See TLS13.System.Internal.
+    // is wedged, holding bytes no legal step can ever consume.
     protected_handshake_buffer_empty model /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
