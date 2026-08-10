@@ -230,7 +230,7 @@ Two facts keep the change bounded:
 
 What is *not* free is the public-key type.  `C.x25519_public` is
 `bytes_of_len 32`; a P-256 share is 65 bytes.  Widening it is the bulk of the
-work.  Carry the group **explicitly** as a runtime value:
+work.  Carry the group **explicitly**:
 
 ```fstar
 type kex_group = | KEX_X25519 | KEX_SECP256R1
@@ -238,15 +238,29 @@ let kex_public_len (g:kex_group) : n:nat{n == 32 \/ n == 65} = ...
 ```
 
 An earlier draft of this note suggested recovering the group from the
-public-key length instead (`kex_group_of_public_len`).  **Do not.**  That is the
-same length-indexed dispatch that was removed from the AEAD layer in
-`62a648293`, for the same reasons: it puts a length rather than the negotiated
-parameter in charge, it silently breaks the moment two groups share a share
-size (P-256 and P-384 do not, but X448 at 56 bytes and Curve448 variants make
-this a live hazard), and it pushes an unverifiable case split into whatever
-code happens to hold a buffer.  A `kex_group` field costs one byte of state and
-makes "the peer installed the same share" imply "the peer uses the same group"
-by construction rather than by lemma.
+public-key length (`kex_group_of_public_len`) instead.  That was wrong, and it
+is worth being precise about why, because the group tag **is already on the
+wire**: every `KeyShareEntry` is a `NamedGroup` paired with an opaque share,
+and the server echoes the group it chose in its own `KeyShareEntry`.  Nothing
+needs to be recovered.  The only reason length-inference looked attractive is
+that the current accessors throw the tag away --
+
+```fstar
+let client_hello_key_share (ch:GCH.clientHello) : option C.x25519_public =
+  match Sem.clientHello_key_share_x25519 ch with ...
+```
+
+`clientHello_key_share_x25519` filters for one group and returns bare bytes.
+That is an artefact of a single-group implementation, not a constraint.  The
+fix is to stop discarding the `NamedGroup`, returning `option (kex_group &
+bytes)`, which makes "the peer installed the same share" imply "the peer uses
+the same group" by construction.
+
+Inferring the group from a length would instead reintroduce exactly the
+coupling removed from the AEAD layer in `62a648293`: it puts a buffer size
+rather than a negotiated parameter in charge, it is silently wrong the moment
+two groups share a share size, and it pushes an unverifiable case split into
+every piece of code that happens to hold a buffer.
 
 Private keys are 32 bytes for both groups, so only the public type widens.
 
@@ -371,3 +385,36 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 99 | intuit.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 100 | forms.gle | OK | HTTP/1.1 400 Bad Request | OK |
 | 101 | nytimes.com | OK | HTTP/1.1 200 OK | OK |
+
+### The one remaining length-inference site
+
+`TLS13.Record.Spec` still recovers the AEAD algorithm from the key:
+
+```fstar
+Some (C.aead_seal (C.aead_alg_of_key key) key nonce aad pt.fragment, next_seq st)
+```
+
+`R.direction_state` carries `key`, `static_iv`, `epoch` and `seq` but no
+algorithm, so `seal` and `open_record` infer it from `B.length key`.  This is
+the same anti-pattern as above and should go.  It survived the AEAD refactor
+for one specific reason: `lemma_open_record_after_seal_peer` proves that what
+one peer seals the other opens, and its only hypothesis about keys is that the
+two byte strings are equal.  Same bytes implies same length implies same
+algorithm, so agreement is currently free.
+
+The fix is to put the negotiated suite in `direction_state`, installed
+alongside the key.  Cost, measured:
+
+* `seal` / `open_record` read the tag from the state, so their ~105 call sites
+  across 21 files are **unchanged**.
+* `R.install_keys` gains an argument: ~134 sites, the majority inside
+  `TLS13.ConnectionState.Lemmas.fst`.
+* `lemma_open_record_after_seal_peer` needs same-tag as an added hypothesis.
+  This is already available: suite agreement between the two endpoints is a
+  threaded property (`CS.negotiated_aead_alg client == CS.negotiated_aead_alg
+  server` in `ProtectedWireClientFinished.fsti`).
+
+Prefer carrying the whole `GCS.cipherSuite` rather than just `C.aead_alg`.  It
+is the actual negotiated object, it is what the ServerHello echoes, and it
+brings the hash with it -- so if a SHA-384 suite is ever needed the key
+schedule can index on the same tag instead of growing a second one.
