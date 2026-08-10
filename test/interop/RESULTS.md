@@ -33,13 +33,19 @@ real-world signature schemes are RSA-PSS and ECDSA P-256.
 | ATLAS OK, after AES-128-GCM negotiation | **88 / 101** |
 | Oracle ceiling (ATLAS's offer, best case) | 88 / 101 |
 | Remaining ATLAS gap (oracle OK, ATLAS fails) | **0** |
-| Beyond ATLAS's offer, or genuinely unservable | 13 |
+| Oracle ceiling with `secp256r1` added | 96 / 101 |
+| Structurally unreachable (bad hostname / self-signed) | 5 |
 
 **ATLAS reaches its crypto ceiling.**  Every one of the 101 sites that a
 client with ATLAS's offer can reach at all, ATLAS reaches.  The remaining 13
 are refused by the OpenSSL oracle under the same offer, so they are not ATLAS
 defects; lifting them is a matter of widening the offer (see "Beyond ATLAS's
 offer" below), not of fixing the implementation.
+
+Of those 13, exactly **8 are recoverable** and all 8 need the same single
+capability, `secp256r1`.  The other 5 present a certificate that no correct
+client would accept, at any offer.  So 96 / 101 is the true ceiling for this
+catalog and one feature reaches it.
 
 ## Bugs found and fixed
 
@@ -134,35 +140,71 @@ in scope, as part of a three-way mutual induction
 restates the record-material flagship with that gate discharged, so no
 top-level theorem is weakened.
 
-### Beyond ATLAS's offer (10 sites)
+### Beyond ATLAS's offer (8 sites)
 
 | Missing capability | Sites |
 |---|---|
 | `secp256r1` key exchange | bing.com, live.com, msn.com, office.com, outlook.com, sharepoint.com, microsoft.com, office365.com |
-| `secp384r1` **and** `TLS_AES_256_GCM_SHA384` | trbcdn.net |
-| unreachable over TLS 1.3 under any offer | edgekey.net |
 
 The oracle fails on all of these too.  Adding `secp256r1` is the single
-highest-value follow-up: it would lift the ceiling from 88 to ~96.  The eight
+highest-value follow-up, and the only remaining one: it lifts the ceiling from
+88 to 96 (see the per-capability matrix below).  The eight
 Microsoft properties fail with `workflow exhausted fuel` rather than a clean
 alert because the server RSTs the connection when the offered group list has
 no acceptable entry, which ATLAS reports as "no data yet" (see "Diagnostic-only
 issue" below).
 
-### Genuinely unservable at the apex (3 sites)
+### Genuinely unservable at the apex (5 sites)
 
-googlevideo.com and windows.net present certificates that do not match the
-apex hostname (`www.google.com` and `reroute443.microsoft.com` respectively);
-domaincontrol.com serves a self-signed certificate.  ATLAS correctly rejects
-all three, as does the oracle.  `www.google.com` and `www.microsoft.com` both
+googlevideo.com, windows.net, www.edgekey.net and trbcdn.net present
+certificates that do not match the apex hostname (`www.google.com` and
+`reroute443.microsoft.com` for the first two); domaincontrol.com serves a
+self-signed certificate.  ATLAS correctly rejects all five, as does OpenSSL
+with a maximal modern offer -- these are not capability gaps and no offer
+change reaches them.  `www.google.com` and `www.microsoft.com` both
 complete a full 1-RTT handshake and return `HTTP/1.1 200 OK`.
 
 ### Next capability: `secp256r1` (NIST P-256)
 
 `secp256r1` is the NIST P-256 elliptic curve, TLS named group `0x0017`.  It is
 the *other* universally deployed TLS 1.3 key-exchange group besides X25519, and
-it is the only one the eight remaining Microsoft properties accept.  Adding it
-is worth ~8 sites (88 -> ~96).
+it is the only one the eight remaining Microsoft properties accept.
+
+**It is the last blocker.**  Running OpenSSL over the 13 non-OK hosts with
+ATLAS's offer plus one capability at a time isolates the cause exactly:
+
+| host | base | +P-256 | +AES-256-GCM | +SHA-384 sigalgs | +P-384 | everything |
+|---|---|---|---|---|---|---|
+| microsoft.com | -- | **OK** | -- | -- | OK | OK |
+| office.com | -- | **OK** | -- | -- | OK | OK |
+| live.com | -- | **OK** | -- | -- | OK | OK |
+| bing.com | -- | **OK** | -- | -- | OK | OK |
+| sharepoint.com | -- | **OK** | -- | -- | OK | OK |
+| outlook.com | -- | **OK** | -- | -- | OK | OK |
+| msn.com | -- | **OK** | -- | -- | OK | OK |
+| office365.com | -- | **OK** | -- | -- | OK | OK |
+| googlevideo.com | -- | -- | -- | -- | -- | -- |
+| windows.net | -- | -- | -- | -- | -- | -- |
+| www.edgekey.net | -- | -- | -- | -- | -- | -- |
+| trbcdn.net | -- | -- | -- | -- | -- | -- |
+| domaincontrol.com | -- | -- | -- | -- | -- | -- |
+
+Two conclusions:
+
+* **A NIST curve is the only missing capability.**  Neither AES-256-GCM/SHA-384
+  nor the SHA-384 signature algorithms unblock a single host on their own.
+  These servers simply do not offer X25519; with P-256 (or P-384) in the offer
+  they complete under ChaCha20-Poly1305 or AES-128-GCM and `rsa_pss_rsae_sha256`.
+  So neither a 384-bit hash in the key schedule nor a third AEAD is needed.
+* **The remaining 5 are unreachable by any correct client.**  Four
+  (googlevideo.com, windows.net, www.edgekey.net, trbcdn.net) return
+  `hostname mismatch` at the apex and one (domaincontrol.com) serves a
+  self-signed certificate; OpenSSL with a maximal modern offer fails on all
+  five.  ATLAS already diagnoses domaincontrol.com correctly as `NOANCHOR`.
+
+Re-running the oracle with `-groups X25519:P-256` and everything else unchanged
+scores **96 OK / 5 FAIL**.  That is the ceiling for this catalog, and P-256 is
+the single change that reaches it (88 -> 96).
 
 **HACL\* has everything required**, in `Hacl_P256` (already listed in
 `HACL_ACCEL_C_MODULES`, alongside its `Hacl_Bignum` dependency):
@@ -188,19 +230,25 @@ Two facts keep the change bounded:
 
 What is *not* free is the public-key type.  `C.x25519_public` is
 `bytes_of_len 32`; a P-256 share is 65 bytes.  Widening it is the bulk of the
-work.  The recommended design mirrors what this commit did for the AEAD
-algorithm: **recover the group from the public-key length** --
+work.  Carry the group **explicitly** as a runtime value:
 
 ```fstar
 type kex_group = | KEX_X25519 | KEX_SECP256R1
 let kex_public_len (g:kex_group) : n:nat{n == 32 \/ n == 65} = ...
-let kex_group_of_public_len (n:nat) : kex_group = if n = 65 then KEX_SECP256R1 else KEX_X25519
 ```
 
-with a roundtrip lemma carried as an `SMTPat`, so no separate group field has
-to be threaded and "the peer installed the same share" keeps implying "the peer
-uses the same group".  Private keys are 32 bytes for both groups, so only the
-public type widens.
+An earlier draft of this note suggested recovering the group from the
+public-key length instead (`kex_group_of_public_len`).  **Do not.**  That is the
+same length-indexed dispatch that was removed from the AEAD layer in
+`62a648293`, for the same reasons: it puts a length rather than the negotiated
+parameter in charge, it silently breaks the moment two groups share a share
+size (P-256 and P-384 do not, but X448 at 56 bytes and Curve448 variants make
+this a live hazard), and it pushes an unverifiable case split into whatever
+code happens to hold a buffer.  A `kex_group` field costs one byte of state and
+makes "the peer installed the same share" imply "the peer uses the same group"
+by construction rather than by lemma.
+
+Private keys are 32 bytes for both groups, so only the public type widens.
 
 The ~800 `x25519` mentions in `src/` overstate the cost: 400+ are *names* of
 predicates and lemmas (`x25519_key_share_projection`, `x25519_reachable_shape`)
