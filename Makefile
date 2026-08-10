@@ -491,6 +491,7 @@ BUNDLE_IMPL_MODULES = \
   $(SERIALIZER_MODULES) \
   $(PARSER_MODULES) \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
   TLS13.KeySchedule \
   TLS13.Record
 
@@ -508,7 +509,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
   TLS13.Impl.Handle.Local,$(SERIALIZER_INTERNAL_MODULES),$(PARSER_INTERNAL_MODULES),\
   TLS13.Impl.Messages,\
-  TLS13.KeySchedule,TLS13.Record
+  TLS13.AEAD,TLS13.KeySchedule,TLS13.Record
 
 # Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
 # models remain under src/spec/assumptions.
@@ -551,6 +552,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Handle.Handshake \
   TLS13.Impl.Handle.Local \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client \
@@ -609,6 +611,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.ConnectionState.LocalSend \
   TLS13.Impl.ConnectionState.LocalApp \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Server.Types \
@@ -1168,6 +1171,8 @@ test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
 	  $(HACL_TEST_OBJECTS) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Record.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_AEAD.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_ArrayCopy.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \

@@ -96,6 +96,18 @@ let lemma_unpad_pad_key_32 (k:aead_key_any)
     then Seq.lemma_eq_intro (Seq.slice (pad_key_32 k) 0 (B.length k)) k
     else Seq.lemma_eq_intro (pad_key_32 k) k
 
+(** The logical AEAD key held by a 32-byte padded traffic-key buffer, given the
+    negotiated algorithm.  Every layer that stores a padded key buffer alongside
+    its algorithm projects it with this. **)
+let logical_key (a:aead_alg) (k:B.bytes) : B.bytes =
+  unpad_key_32 k (aead_key_len a)
+
+let lemma_logical_key_length (a:aead_alg) (k:B.bytes)
+  : Lemma (requires B.length k == 32)
+          (ensures B.length (logical_key a k) == aead_key_len a)
+          [SMTPat (logical_key a k)]
+  = ()
+
 (** `pad_key_32` is injective: the key length is recoverable, so no two
     distinct keys share a padded image. **)
 let lemma_pad_key_32_injective (k1 k2:aead_key_any)

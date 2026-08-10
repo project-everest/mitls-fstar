@@ -110,8 +110,10 @@ static int test_traffic_key_iv_against_hacl(void) {
     return 1;
   }
 
-  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret, (size_t)32, got_key);
-  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret, (size_t)16, got_key16);
+  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret,
+                                      TLS13_Crypto_Spec_AEAD_CHACHA20_POLY1305, got_key);
+  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret,
+                                      TLS13_Crypto_Spec_AEAD_AES128_GCM, got_key16);
   TLS13_KeySchedule_derive_traffic_iv((uint8_t *)traffic_secret, got_iv);
   return expect_bytes("extracted traffic key", got_key, expected_key, sizeof got_key) ||
          expect_bytes("extracted traffic key (aes128)", got_key16, expected_key16,

@@ -63,7 +63,7 @@ fn store_optional_secret
 fn store_traffic_key_material
   (slot:traffic_key_material_storage)
   (traffic_secret_src:array U8.t)
-  (key_len:SZ.t)
+  (alg:CryptoSpec.aead_alg)
   (traffic_key_src:array U8.t)
   (traffic_iv_src:array U8.t)
   (#material:erased CS.traffic_key_material)
@@ -71,17 +71,15 @@ fn store_traffic_key_material
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
            ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
-           pure (SZ.v key_len == B.length material.CS.traffic_key /\
-                 (B.length material.CS.traffic_key == 16 \/
-                  B.length material.CS.traffic_key == 32))
+           pure (CryptoSpec.aead_key_len alg == B.length material.CS.traffic_key)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
 {
   with prev. unfold (traffic_key_material_exactly slot prev);
-  with old_present old_secret old_key_len old_key old_iv. _;
-  slot.key_len := key_len;
+  with old_present old_secret old_alg old_key old_iv. _;
+  slot.alg := alg;
   ArrPts.pts_to_len traffic_secret_src;
   ArrPts.pts_to_len traffic_key_src;
   ArrPts.pts_to_len traffic_iv_src;
@@ -221,9 +219,9 @@ fn free_traffic_key_material_exactly (slot:traffic_key_material_storage)
   ensures emp
 {
   with spec. unfold (traffic_key_material_exactly slot spec);
-  with present secret key_len key iv. _;
+  with present secret alg key iv. _;
   Box.free slot.present;
-  Box.free slot.key_len;
+  Box.free slot.alg;
   V.free slot.traffic_secret;
   V.free slot.traffic_key;
   V.free slot.traffic_iv;
@@ -897,12 +895,13 @@ fn alloc_empty_traffic_key_material ()
 {
   let present = Box.alloc false;
   let traffic_secret = V.alloc 0uy 32sz;
-  let key_len = Box.alloc 32sz;
+  let alg = Box.alloc CryptoSpec.AEAD_CHACHA20_POLY1305;
   let traffic_key = V.alloc 0uy 32sz;
   let traffic_iv = V.alloc 0uy 12sz;
-  let slot = { present; traffic_secret; key_len; traffic_key; traffic_iv };
+  let slot = { present; traffic_secret; alg; traffic_key; traffic_iv };
   rewrite (Box.pts_to present false) as (Box.pts_to slot.present false);
-  rewrite (Box.pts_to key_len 32sz) as (Box.pts_to slot.key_len 32sz);
+  rewrite (Box.pts_to alg CryptoSpec.AEAD_CHACHA20_POLY1305) as
+    (Box.pts_to slot.alg CryptoSpec.AEAD_CHACHA20_POLY1305);
   rewrite (V.pts_to traffic_secret (Seq.create 32 0uy)) as
     (V.pts_to slot.traffic_secret (Seq.create 32 0uy));
   rewrite (V.pts_to traffic_key (Seq.create 32 0uy)) as

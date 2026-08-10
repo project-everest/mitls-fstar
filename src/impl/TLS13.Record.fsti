@@ -38,19 +38,18 @@ fn seq_eq (st: record_state) (expected: U64.t)
   ensures is_record_state st 's **
           pure (ok ==> 's.R.seq == U64.v expected)
 
-fn application_keys_match (st: record_state) (key: array U8.t) (key_len: SZ.t)
+fn application_keys_match (st: record_state) (key: array U8.t) (alg: C.aead_alg)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
-                 (SZ.v key_len == 16 \/ SZ.v key_len == 32))
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
   returns ok: bool
   ensures is_record_state st 's **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **
           pure (ok ==>
-            's.R.key == Some (C.unpad_key_32 'key_bytes (SZ.v key_len)) /\
+            's.R.key == Some (C.logical_key alg 'key_bytes) /\
             's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
 
 fn has_seal_keys (st: record_state)
@@ -74,14 +73,14 @@ fn install_keys
   (st: record_state)
   (#epoch: R.epoch)
   (key: array U8.t)
-  (key_len: SZ.t)
+  (alg: C.aead_alg)
   (key_spec: erased C.aead_key_any)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
-                 SZ.v key_len == B.length key_spec /\
+                 C.aead_key_len alg == B.length key_spec /\
                  Seq.equal 'key_bytes (C.pad_key_32 key_spec))
   ensures is_record_state st (R.install_keys 's epoch (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
@@ -90,14 +89,14 @@ fn install_keys
 fn install_handshake_keys_runtime
   (st: record_state)
   (key: array U8.t)
-  (key_len: SZ.t)
+  (alg: C.aead_alg)
   (key_spec: erased C.aead_key_any)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
-                 SZ.v key_len == B.length key_spec /\
+                 C.aead_key_len alg == B.length key_spec /\
                  Seq.equal 'key_bytes (C.pad_key_32 key_spec))
   ensures is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
@@ -106,14 +105,14 @@ fn install_handshake_keys_runtime
 fn install_application_keys_runtime
   (st: record_state)
   (key: array U8.t)
-  (key_len: SZ.t)
+  (alg: C.aead_alg)
   (key_spec: erased C.aead_key_any)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
-                 SZ.v key_len == B.length key_spec /\
+                 C.aead_key_len alg == B.length key_spec /\
                  Seq.equal 'key_bytes (C.pad_key_32 key_spec))
   ensures is_record_state st (R.install_keys 's R.Application (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
