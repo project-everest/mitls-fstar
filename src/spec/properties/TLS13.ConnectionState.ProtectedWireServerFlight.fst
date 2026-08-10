@@ -60,6 +60,8 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
         Seq.equal
           server.model_handshake.hs_transcript
           client.model_handshake.hs_transcript /\
+        negotiated_aead_alg server.model_handshake ==
+          negotiated_aead_alg client.model_handshake /\
         protected_handshake_buffer_empty client /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
@@ -291,6 +293,8 @@ let lemma_protected_handshake_event_projection_pair_after_server_write_client_re
         Seq.equal
           server.model_handshake.hs_transcript
           client.model_handshake.hs_transcript /\
+        negotiated_aead_alg server.model_handshake ==
+          negotiated_aead_alg client.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -1220,6 +1224,8 @@ let lemma_protected_handshake_event_projection_pair_after_sender_preserve_write_
         Seq.equal
           server_after_skip.model_handshake.hs_transcript
           client.model_handshake.hs_transcript /\
+        negotiated_aead_alg server_after_skip.model_handshake ==
+          negotiated_aead_alg client.model_handshake /\
         local_event_preserves_record_write sender_skip /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
@@ -1748,6 +1754,8 @@ let lemma_protected_handshake_event_projection_pair_after_server_write_client_re
         Seq.equal
           server.model_handshake.hs_transcript
           client.model_handshake.hs_transcript /\
+        negotiated_aead_alg server.model_handshake ==
+          negotiated_aead_alg client.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -1990,6 +1998,8 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
           Seq.equal
             server.model_handshake.hs_transcript
             client.model_handshake.hs_transcript /\
+          negotiated_aead_alg server.model_handshake ==
+            negotiated_aead_alg client.model_handshake /\
           Seq.equal server_raw_sent client_raw_received /\
           protected_handshake_wire_round_trip_message sent_msg0 /\
           protected_handshake_wire_round_trip_message received_msg0 /\
@@ -2297,6 +2307,8 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
           Seq.equal
             server.model_handshake.hs_transcript
             client.model_handshake.hs_transcript /\
+          negotiated_aead_alg server.model_handshake ==
+            negotiated_aead_alg client.model_handshake /\
           local_event_does_not_install_record_keys server_skip /\
           local_event_does_not_install_record_keys client_skip /\
           Seq.equal server_raw_sent client_raw_received /\
@@ -2680,6 +2692,8 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
           Seq.equal
             server.model_handshake.hs_transcript
             client.model_handshake.hs_transcript /\
+          negotiated_aead_alg server.model_handshake ==
+            negotiated_aead_alg client.model_handshake /\
           local_event_does_not_install_record_keys server_auth_skip /\
           local_event_does_not_install_record_keys client_auth_skip /\
           local_event_does_not_install_record_keys client_verify_skip /\

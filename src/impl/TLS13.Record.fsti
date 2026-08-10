@@ -39,19 +39,18 @@ fn seq_eq (st: record_state) (expected: U64.t)
           pure (ok ==> 's.R.seq == U64.v expected)
 
 fn application_keys_match (st: record_state) (key: array U8.t) (key_len: SZ.t)
-  (key_spec: erased C.aead_key_any) (iv: array U8.t)
+  (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
-                 SZ.v key_len == B.length key_spec /\
-                 Seq.equal 'key_bytes (C.pad_key_32 key_spec))
+                 (SZ.v key_len == 16 \/ SZ.v key_len == 32))
   returns ok: bool
   ensures is_record_state st 's **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **
           pure (ok ==>
-            's.R.key == Some (Ghost.reveal key_spec) /\
+            's.R.key == Some (C.unpad_key_32 'key_bytes (SZ.v key_len)) /\
             's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
 
 fn has_seal_keys (st: record_state)

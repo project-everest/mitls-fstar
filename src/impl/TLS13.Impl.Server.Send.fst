@@ -2998,10 +2998,11 @@ fn process_send_server_finished_serialized
   unfold (CR.traffic_key_material_exactly
     s.handshake.keys.server_handshake_traffic
     'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
-  with sh_present sh_secret sh_key sh_iv. _;
+  with sh_present sh_secret sh_key_len sh_key sh_iv. _;
   CR.lemma_traffic_key_material_match_present_of_some
     sh_present
     sh_secret
+    (SZ.v sh_key_len)
     sh_key
     sh_iv
     'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic;
@@ -3009,7 +3010,7 @@ fn process_send_server_finished_serialized
   assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic ==
     Some {
       CS.traffic_secret = sh_secret;
-      CS.traffic_key = sh_key;
+      CS.traffic_key = CryptoSpec.unpad_key_32 sh_key (SZ.v sh_key_len);
       CS.traffic_iv = sh_iv;
     }));
 

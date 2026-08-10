@@ -408,17 +408,6 @@ let lemma_consistent_server_hello_wire_bound (st:CS.connection_state)
   assert (p st)
 #pop-options
 
-(** A cipher suite offered by the singleton chacha list IS chacha. **)
-#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
-let lemma_cipher_suite_offered_singleton_chacha (suite:T.cipher_suite)
-  : Lemma
-      (requires
-        CS.cipher_suite_offered [T.TLS_CHACHA20_POLY1305_SHA256] suite)
-      (ensures suite == T.TLS_CHACHA20_POLY1305_SHA256)
-=
-  ()
-#pop-options
-
 (** ─────────────────────────────────────────────────────────────────────────
     Byte-trace reachability: the maintained System invariant is that each
     endpoint's connection state is reachable, via the OFFICIAL canonical step

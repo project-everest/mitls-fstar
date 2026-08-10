@@ -822,7 +822,7 @@ let step_handshake_message
     (match hs_v.hs_keys.ks_master_secret with
      | Some master ->
        let secret = K.server_application_traffic_secret master (Tr.hash hs_v.hs_transcript) in
-       let material = traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret in
+       let material = traffic_key_material_for_secret (negotiated_aead_alg hs) secret in
        Some (with_handshake_stage
          { model with
              model_record =
@@ -852,7 +852,7 @@ let step_handshake_message
     (match hs.hs_keys.ks_master_secret with
      | Some master ->
        let secret = K.client_application_traffic_secret master (Tr.hash hs.hs_transcript) in
-       let material = traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret in
+       let material = traffic_key_material_for_secret (negotiated_aead_alg hs) secret in
        let hs_v =
          append_handshake_to_transcript
            { hs with hs_client_finished = Some fin }
@@ -1412,7 +1412,7 @@ let traffic_install_matches_key_schedule
   : GTot prop =
   match expected_traffic_secret hs install.install_epoch install.install_direction with
   | Some secret ->
-    install.install_material == traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret
+    install.install_material == traffic_key_material_for_secret (negotiated_aead_alg hs) secret
   | None -> False
 let traffic_install_matches_key_schedule_for_role
   (role:endpoint_role)
@@ -1425,7 +1425,7 @@ let traffic_install_matches_key_schedule_for_role
           install.install_epoch
           install.install_direction with
   | Some secret ->
-    install.install_material == traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret
+    install.install_material == traffic_key_material_for_secret (negotiated_aead_alg hs) secret
   | None -> False
 let application_traffic_available_for_role
   (role:endpoint_role)

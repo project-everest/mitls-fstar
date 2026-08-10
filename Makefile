@@ -1140,6 +1140,7 @@ check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
 	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
 	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+	  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
 	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \

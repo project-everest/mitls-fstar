@@ -23,6 +23,7 @@ module Trace = TLS13.Trace
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 module Sem = TLS13.Wire.Semantics
+module H = TLS13.Handshake.Spec
 
 inline_for_extraction
 let tls_handshake_message_tag (l:L.tls_message) : FStar.UInt64.t =
@@ -316,7 +317,9 @@ fn handle_handshake_message
           assert (pure (mhs == M.ServerHello sh));
           assert (pure (m == M.TlsHandshake (M.ServerHello sh)));
           unfold (L.is_valid_server_hello lsh sh);
-          with sh_random sh_key_share. assert (pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256));
+          with sh_random sh_key_share. assert (pure (exists (cs:T.cipher_suite).
+            Sem.serverHello_cipher_suite sh == Some cs /\
+            H.is_supported_cipher_suite cs));
           fold (L.is_valid_server_hello lsh sh);
           assert (pure (CT.parsed_message_wire_success_for
             content_type

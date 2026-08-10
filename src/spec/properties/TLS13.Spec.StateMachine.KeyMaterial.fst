@@ -516,7 +516,10 @@ let expected_derived_key_material
      | None -> None)
   | TrafficKey traffic_id ->
     (match expected_traffic_secret_for_state traffic_id st with
-     | Some secret -> Some (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 secret)
+     | Some secret ->
+       Some (K.derive_aead_key
+               (negotiated_aead_alg st.cs_model.model_handshake)
+               secret)
      | None -> None)
   | TrafficIV traffic_id ->
     (match expected_traffic_secret_for_state traffic_id st with
@@ -592,7 +595,8 @@ let traffic_material_matches_expected_at_count
   | Some material, Some secret ->
     let expected = application_traffic_secret_after secret n in
     Seq.equal material.traffic_secret expected /\
-    Seq.equal material.traffic_key (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 expected) /\
+    Seq.equal material.traffic_key
+      (K.derive_aead_key (negotiated_aead_alg st.cs_model.model_handshake) expected) /\
     Seq.equal material.traffic_iv (K.derive_aead_iv expected)
   | _, _ ->
     False
@@ -629,8 +633,7 @@ let lemma_updated_traffic_key_material_advances_count
   (material:traffic_key_material)
   : Lemma
       (requires
-        Seq.equal material.traffic_secret (application_traffic_secret_after secret n) /\
-        B.length material.traffic_key == 32)
+        Seq.equal material.traffic_secret (application_traffic_secret_after secret n))
       (ensures
         (let rotated = updated_traffic_key_material material in
          Seq.equal
@@ -638,7 +641,9 @@ let lemma_updated_traffic_key_material_advances_count
            (application_traffic_secret_after secret (n + 1)) /\
          Seq.equal
            rotated.traffic_key
-           (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 (application_traffic_secret_after secret (n + 1))) /\
+           (K.derive_aead_key
+              (C.aead_alg_of_key material.traffic_key)
+              (application_traffic_secret_after secret (n + 1))) /\
          Seq.equal
            rotated.traffic_iv
            (K.derive_aead_iv (application_traffic_secret_after secret (n + 1)))))
@@ -841,7 +846,9 @@ let lemma_traffic_material_matches_expected_at_count_transfer
           traffic_id.traffic_id_epoch
           traffic_id.traffic_id_label /\
         expected_traffic_secret_for_state traffic_id st1 ==
-        expected_traffic_secret_for_state traffic_id st0)
+        expected_traffic_secret_for_state traffic_id st0 /\
+        negotiated_aead_alg st1.cs_model.model_handshake ==
+          negotiated_aead_alg st0.cs_model.model_handshake)
       (ensures traffic_material_matches_expected_at_count traffic_id st1 n)
 = ()
 
@@ -866,7 +873,9 @@ let lemma_traffic_material_matches_expected_at_count_rotate
              traffic_id.traffic_id_label
          with
          | Some m0, Some m1 -> m1 == updated_traffic_key_material m0
-         | _, _ -> False))
+         | _, _ -> False) /\
+        negotiated_aead_alg st1.cs_model.model_handshake ==
+          negotiated_aead_alg st0.cs_model.model_handshake)
       (ensures traffic_material_matches_expected_at_count traffic_id st1 (n + 1))
 =
   match
@@ -905,7 +914,12 @@ let traffic_secret_inputs_agree
   same_key_derivation_checkpoint
     (key_checkpoint_for_epoch traffic_id.traffic_id_epoch)
     client
-    server
+    server /\
+  // The traffic *key* length is fixed by the negotiated AEAD algorithm, so
+  // key agreement additionally requires the two endpoints to have negotiated
+  // the same cipher suite.
+  negotiated_aead_alg client.cs_model.model_handshake ==
+    negotiated_aead_alg server.cs_model.model_handshake
 let derivation_inputs_agree
   (key_id:derived_key_id)
   (client:connection_state)

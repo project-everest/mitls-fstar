@@ -58,6 +58,8 @@ let lemma_protected_handshake_event_projection_pair_after_client_write_server_re
         Seq.equal
           client.model_handshake.hs_transcript
           server.model_handshake.hs_transcript /\
+        negotiated_aead_alg client.model_handshake ==
+          negotiated_aead_alg server.model_handshake /\
         Seq.equal client_raw_sent server_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\

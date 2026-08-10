@@ -11,6 +11,7 @@ module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module CSL = TLS13.ConnectionState.Lemmas
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
@@ -266,28 +267,31 @@ fn mark_sent_client_finished
   unfold (traffic_key_material_exactly
     c.handshake.keys.client_application_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
-  with ca_present ca_secret ca_key ca_iv. _;
+  with ca_present ca_secret ca_key_len ca_key ca_iv. _;
   lemma_traffic_key_material_match_present_of_some
     ca_present
     ca_secret
+    (SZ.v ca_key_len)
     ca_key
     ca_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic ==
     Some {
       CS.traffic_secret = ca_secret;
-      CS.traffic_key = ca_key;
+      CS.traffic_key = CryptoSpec.unpad_key_32 ca_key (SZ.v ca_key_len);
       CS.traffic_iv = ca_iv;
     }));
 
+  let ca_key_len_runtime = !c.handshake.keys.client_application_traffic.key_len;
+  assert (pure (ca_key_len_runtime == ca_key_len));
   Rec.advance_seq c.records.write;
   V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_key;
   V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   Rec.install_application_keys_runtime
     c.records.write
     (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
-    32sz
-    (Ghost.hide ca_key)
+    ca_key_len_runtime
+    (Ghost.hide (CryptoSpec.unpad_key_32 ca_key (SZ.v ca_key_len)))
     (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
@@ -304,7 +308,7 @@ fn mark_sent_client_finished
     R.install_keys
       (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
       R.Application
-      ca_key
+      (CryptoSpec.unpad_key_32 ca_key (SZ.v ca_key_len))
       ca_iv));
   rewrite (Rec.is_record_state
     c.records.read
@@ -317,7 +321,7 @@ fn mark_sent_client_finished
     (R.install_keys
       (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
       R.Application
-      ca_key
+      (CryptoSpec.unpad_key_32 ca_key (SZ.v ca_key_len))
       ca_iv))
     as (Rec.is_record_state
       c.records.write
@@ -535,17 +539,18 @@ fn try_send_client_finished
     unfold (traffic_key_material_exactly
       c.handshake.keys.client_handshake_traffic
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
-    with ch_present ch_secret ch_key ch_iv. _;
+    with ch_present ch_secret ch_key_len ch_key ch_iv. _;
     lemma_traffic_key_material_match_present_of_some
       ch_present
       ch_secret
+      (SZ.v ch_key_len)
       ch_key
       ch_iv
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic;
     assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ==
       Some {
         CS.traffic_secret = ch_secret;
-        CS.traffic_key = ch_key;
+        CS.traffic_key = CryptoSpec.unpad_key_32 ch_key (SZ.v ch_key_len);
         CS.traffic_iv = ch_iv;
       }));
 
@@ -1821,10 +1826,11 @@ fn try_send_key_update
       unfold (traffic_key_material_exactly
         c.handshake.keys.client_application_traffic
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
-      with old_present old_secret old_key old_iv. _;
+      with old_present old_secret old_key_len old_key old_iv. _;
       lemma_traffic_key_material_match_present_of_some
         old_present
         old_secret
+        (SZ.v old_key_len)
         old_key
         old_iv
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
@@ -1832,12 +1838,15 @@ fn try_send_key_update
       assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic ==
         Some {
           CS.traffic_secret = old_secret;
-          CS.traffic_key = old_key;
+          CS.traffic_key = CryptoSpec.unpad_key_32 old_key (SZ.v old_key_len);
           CS.traffic_iv = old_iv;
         }));
       let old_material = Ghost.hide (Some?.v
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
       assert (pure ((Ghost.reveal old_material).CS.traffic_secret == old_secret));
+      let rotate_key_len = !c.handshake.keys.client_application_traffic.key_len;
+      assert (pure (rotate_key_len == old_key_len));
+      assert (pure (SZ.v rotate_key_len == B.length (Ghost.reveal old_material).CS.traffic_key));
 
       V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_secret;
       let mut traffic_secret_out = [| 0uy; 32sz |];
@@ -1854,22 +1863,23 @@ fn try_send_key_update
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
 
       let mut traffic_key_out = [| 0uy; 32sz |];
-      KS.derive_traffic_key traffic_secret_out 32sz traffic_key_out;
+      KS.derive_traffic_key traffic_secret_out rotate_key_len traffic_key_out;
       let mut traffic_iv_out = [| 0uy; 12sz |];
       KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
       with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
       with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
       let traffic_secret = Ghost.hide traffic_secret_bytes;
-      let material = Ghost.hide (CS.traffic_key_material_for_secret TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305 (Ghost.reveal traffic_secret));
+      let material = Ghost.hide (CS.traffic_key_material_for_secret (TLS13.Crypto.Spec.aead_alg_of_key_len (SZ.v rotate_key_len)) (Ghost.reveal traffic_secret));
       assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-      assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+      assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
       assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
       assert (pure (Ghost.reveal material == CS.updated_traffic_key_material (Ghost.reveal old_material)));
 
       store_traffic_key_material
         c.handshake.keys.client_application_traffic
         traffic_secret_out
+        rotate_key_len
         traffic_key_out
         traffic_iv_out
         #material;
@@ -1967,7 +1977,7 @@ fn try_send_key_update
         c.handshake
         (sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
 
-      Rec.install_application_keys_runtime c.records.write traffic_key_out 32sz (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
+      Rec.install_application_keys_runtime c.records.write traffic_key_out rotate_key_len (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
       assert (pure (R.install_keys
         (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
         R.Application
@@ -2337,10 +2347,11 @@ fn server_try_send_key_update
       unfold (traffic_key_material_exactly
         c.handshake.keys.server_application_traffic
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
-      with old_present old_secret old_key old_iv. _;
+      with old_present old_secret old_key_len old_key old_iv. _;
       lemma_traffic_key_material_match_present_of_some
         old_present
         old_secret
+        (SZ.v old_key_len)
         old_key
         old_iv
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;
@@ -2348,12 +2359,15 @@ fn server_try_send_key_update
       assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic ==
         Some {
           CS.traffic_secret = old_secret;
-          CS.traffic_key = old_key;
+          CS.traffic_key = CryptoSpec.unpad_key_32 old_key (SZ.v old_key_len);
           CS.traffic_iv = old_iv;
         }));
       let old_material = Ghost.hide (Some?.v
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
       assert (pure ((Ghost.reveal old_material).CS.traffic_secret == old_secret));
+      let rotate_key_len = !c.handshake.keys.server_application_traffic.key_len;
+      assert (pure (rotate_key_len == old_key_len));
+      assert (pure (SZ.v rotate_key_len == B.length (Ghost.reveal old_material).CS.traffic_key));
 
       V.to_array_pts_to c.handshake.keys.server_application_traffic.traffic_secret;
       let mut traffic_secret_out = [| 0uy; 32sz |];
@@ -2370,22 +2384,23 @@ fn server_try_send_key_update
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
 
       let mut traffic_key_out = [| 0uy; 32sz |];
-      KS.derive_traffic_key traffic_secret_out 32sz traffic_key_out;
+      KS.derive_traffic_key traffic_secret_out rotate_key_len traffic_key_out;
       let mut traffic_iv_out = [| 0uy; 12sz |];
       KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
       with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
       with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
       let traffic_secret = Ghost.hide traffic_secret_bytes;
-      let material = Ghost.hide (CS.traffic_key_material_for_secret TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305 (Ghost.reveal traffic_secret));
+      let material = Ghost.hide (CS.traffic_key_material_for_secret (TLS13.Crypto.Spec.aead_alg_of_key_len (SZ.v rotate_key_len)) (Ghost.reveal traffic_secret));
       assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-      assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+      assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
       assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
       assert (pure (Ghost.reveal material == CS.updated_traffic_key_material (Ghost.reveal old_material)));
 
       store_traffic_key_material
         c.handshake.keys.server_application_traffic
         traffic_secret_out
+        rotate_key_len
         traffic_key_out
         traffic_iv_out
         #material;
@@ -2483,7 +2498,7 @@ fn server_try_send_key_update
         c.handshake
         (server_sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
 
-      Rec.install_application_keys_runtime c.records.write traffic_key_out 32sz (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
+      Rec.install_application_keys_runtime c.records.write traffic_key_out rotate_key_len (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
       assert (pure (R.install_keys
         (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
         R.Application

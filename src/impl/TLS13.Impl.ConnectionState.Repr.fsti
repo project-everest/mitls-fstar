@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -97,6 +98,11 @@ noeq
 type traffic_key_material_storage = {
   present: box bool;
   traffic_secret: V.vec U8.t;
+  // The traffic key buffer is always 32 bytes wide; [key_len] records how many
+  // of those bytes are the logical AEAD key (16 for AES-128-GCM, 32 for
+  // ChaCha20-Poly1305).  Pulse vecs cannot report their length at runtime and
+  // the buffer is not reallocated per suite, so the length is tracked here.
+  key_len: box SZ.t;
   traffic_key: V.vec U8.t;
   traffic_iv: V.vec U8.t;
 }
@@ -666,12 +672,14 @@ let traffic_key_material_exactly
   ([@@@mkey] slot:traffic_key_material_storage)
   (spec:option CS.traffic_key_material)
   : slprop =
-  exists* present secret key iv.
+  exists* present secret key_len key iv.
     Box.pts_to slot.present present **
     V.pts_to slot.traffic_secret secret **
+    Box.pts_to slot.key_len key_len **
     V.pts_to slot.traffic_key key **
     V.pts_to slot.traffic_iv iv **
-    pure (V.is_full_vec slot.traffic_secret /\
+    pure ((SZ.v key_len == 16 \/ SZ.v key_len == 32) /\
+          V.is_full_vec slot.traffic_secret /\
           V.is_full_vec slot.traffic_key /\
           V.is_full_vec slot.traffic_iv /\
           V.length slot.traffic_secret == 32 /\
@@ -684,7 +692,10 @@ let traffic_key_material_exactly
             match spec with
             | Some m ->
               Seq.equal secret m.CS.traffic_secret /\
-              Seq.equal key m.CS.traffic_key /\
+              // The runtime key buffer is always 32 bytes; a 16-byte
+              // AES-128-GCM key is stored zero-padded (see [CryptoSpec.pad_key_32]).
+              SZ.v key_len == B.length m.CS.traffic_key /\
+              Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
               Seq.equal iv m.CS.traffic_iv
             | None -> False
           else
@@ -693,6 +704,7 @@ let traffic_key_material_exactly
 let lemma_traffic_key_material_match_present_of_some
   (present:bool)
   (secret:B.bytes)
+  (key_len:nat)
   (key:B.bytes)
   (iv:B.bytes)
   (spec:option CS.traffic_key_material)
@@ -701,30 +713,35 @@ let lemma_traffic_key_material_match_present_of_some
                  match spec with
                  | Some m ->
                    Seq.equal secret m.CS.traffic_secret /\
-                   Seq.equal key m.CS.traffic_key /\
+                   key_len == B.length m.CS.traffic_key /\
+                   Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
                    Seq.equal iv m.CS.traffic_iv
                  | None -> False
                else
                  spec == None) /\
-               Some? spec)
+               Some? spec /\
+               B.length key == 32)
       (ensures present /\
+              (key_len == 16 \/ key_len == 32) /\
               spec == Some {
                 CS.traffic_secret = secret;
-                CS.traffic_key = key;
+                CS.traffic_key = CryptoSpec.unpad_key_32 key key_len;
                 CS.traffic_iv = iv;
               })
 =
   match spec with
   | Some m ->
     Seq.lemma_eq_intro secret m.CS.traffic_secret;
-    Seq.lemma_eq_intro key m.CS.traffic_key;
+    Seq.lemma_eq_intro key (CryptoSpec.pad_key_32 m.CS.traffic_key);
     Seq.lemma_eq_intro iv m.CS.traffic_iv;
     assert (secret == m.CS.traffic_secret);
-    assert (key == m.CS.traffic_key);
+    assert (key == CryptoSpec.pad_key_32 m.CS.traffic_key);
     assert (iv == m.CS.traffic_iv);
+    CryptoSpec.lemma_unpad_pad_key_32 m.CS.traffic_key;
+    assert (CryptoSpec.unpad_key_32 key key_len == m.CS.traffic_key);
     assert (m == {
       CS.traffic_secret = secret;
-      CS.traffic_key = key;
+      CS.traffic_key = CryptoSpec.unpad_key_32 key key_len;
       CS.traffic_iv = iv;
     })
   | None -> ()
@@ -732,6 +749,7 @@ let lemma_traffic_key_material_match_present_of_some
 let lemma_traffic_key_material_match_present_iff
   (present:bool)
   (secret:B.bytes)
+  (key_len:nat)
   (key:B.bytes)
   (iv:B.bytes)
   (spec:option CS.traffic_key_material)
@@ -740,7 +758,8 @@ let lemma_traffic_key_material_match_present_iff
                  match spec with
                  | Some m ->
                    Seq.equal secret m.CS.traffic_secret /\
-                   Seq.equal key m.CS.traffic_key /\
+                   key_len == B.length m.CS.traffic_key /\
+                   Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
                    Seq.equal iv m.CS.traffic_iv
                  | None -> False
                else
@@ -780,17 +799,20 @@ fn store_optional_secret
 fn store_traffic_key_material
   (slot:traffic_key_material_storage)
   (traffic_secret_src:array U8.t)
+  (key_len:SZ.t)
   (traffic_key_src:array U8.t)
   (traffic_iv_src:array U8.t)
   (#material:erased CS.traffic_key_material)
   requires (exists* prev. traffic_key_material_exactly slot prev) **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
-           pure (B.length material.CS.traffic_key == 32)
+           pure (SZ.v key_len == B.length material.CS.traffic_key /\
+                 (B.length material.CS.traffic_key == 16 \/
+                  B.length material.CS.traffic_key == 32))
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
 
 let handshake_start_fields_allocated
@@ -1244,7 +1266,7 @@ let default_connection_config : CS.connection_config = {
   CS.config_server_name = B.empty;
   CS.config_trust_store = { X.anchors = B.empty };
   CS.config_validation_time = { X.seconds_since_epoch = 0 };
-  CS.config_cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256];
+  CS.config_cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256; T.TLS_AES_128_GCM_SHA256];
   CS.config_signature_schemes = [T.Rsa_pss_rsae_sha256; T.Ecdsa_secp256r1_sha256];
   CS.config_server = None;
 }

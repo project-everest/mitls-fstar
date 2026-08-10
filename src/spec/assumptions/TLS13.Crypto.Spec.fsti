@@ -46,6 +46,14 @@ let aead_alg_of_key_len (n:nat) : aead_alg =
 let aead_alg_of_key (k:B.bytes) : aead_alg =
   aead_alg_of_key_len (B.length k)
 
+(** `aead_alg_of_key_len` inverts `aead_key_len`.  Carried as an SMT pattern so
+    that code which only has a runtime key length in hand recovers the
+    algorithm without an explicit case split. **)
+let lemma_aead_alg_of_key_len_roundtrip (a:aead_alg)
+  : Lemma (aead_alg_of_key_len (aead_key_len a) == a)
+          [SMTPat (aead_alg_of_key_len (aead_key_len a))]
+  = ()
+
 type aead_key (a:aead_alg) = bytes_of_len (aead_key_len a)
 type aead_key_any = k:B.bytes{B.length k == 16 \/ B.length k == 32}
 
@@ -80,6 +88,13 @@ let lemma_pad_key_32_prefix (k:aead_key_any)
   : Lemma (ensures Seq.equal (Seq.slice (pad_key_32 k) 0 (B.length k)) k)
           [SMTPat (pad_key_32 k)]
   = ()
+
+(** Round trip: unpadding a padded key at its own length recovers it. **)
+let lemma_unpad_pad_key_32 (k:aead_key_any)
+  : Lemma (ensures unpad_key_32 (pad_key_32 k) (B.length k) == k)
+  = if B.length k < 32
+    then Seq.lemma_eq_intro (Seq.slice (pad_key_32 k) 0 (B.length k)) k
+    else Seq.lemma_eq_intro (pad_key_32 k) k
 
 (** `pad_key_32` is injective: the key length is recoverable, so no two
     distinct keys share a padded image. **)

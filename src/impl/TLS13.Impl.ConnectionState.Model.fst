@@ -222,6 +222,52 @@ let rec lemma_cipher_suites_match_index_chacha_offer
       lemma_cipher_suites_match_length wire len suites;
       assert False
 
+let lemma_cipher_suites_match_first_aes_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x1301)
+      (ensures CS.cipher_suite_offered suites T.TLS_AES_128_GCM_SHA256)
+=
+  match suites with
+  | suite :: _ ->
+    assert (IM.cipher_suite_matches (Seq.index wire 0) suite);
+    (match suite with
+    | T.TLS_AES_128_GCM_SHA256 -> ()
+    | T.Unknown_cipherSuite _ -> assert False)
+  | [] ->
+    lemma_cipher_suites_match_length wire len suites;
+    assert False
+
+let rec lemma_cipher_suites_match_index_aes_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1301)
+      (ensures CS.cipher_suite_offered suites T.TLS_AES_128_GCM_SHA256)
+      (decreases i)
+=
+  if i = 0
+  then lemma_cipher_suites_match_first_aes_offer wire len suites
+  else
+    match suites with
+    | suite :: rest ->
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (Seq.index wire' (i - 1) == Seq.index wire i);
+      lemma_cipher_suites_match_index_aes_offer wire' (len - 1) rest (i - 1)
+    | [] ->
+      lemma_cipher_suites_match_length wire len suites;
+      assert False
+
 let lemma_signature_schemes_match_exists_rsa_offer
   (wire:Seq.seq U16.t)
   (len:nat)
@@ -834,7 +880,7 @@ let lemma_client_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
-                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.client_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -859,7 +905,7 @@ let lemma_server_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
-                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.server_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -886,7 +932,7 @@ let lemma_server_role_server_handshake_write_traffic_install_legal
               CS.install_direction = CS.TrafficWrite;
               CS.install_material =
                 CS.traffic_key_material_for_secret
-                  (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                  (CS.negotiated_aead_alg model.CS.model_handshake)
                   (K.server_handshake_traffic_secret
                     handshake_secret
                     (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -914,7 +960,7 @@ let lemma_server_role_client_handshake_read_traffic_install_legal
               CS.install_direction = CS.TrafficRead;
               CS.install_material =
                 CS.traffic_key_material_for_secret
-                  (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                  (CS.negotiated_aead_alg model.CS.model_handshake)
                   (K.client_handshake_traffic_secret
                     handshake_secret
                     (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -940,7 +986,7 @@ let lemma_client_application_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
-                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.client_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -965,7 +1011,7 @@ let lemma_server_application_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
-                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.server_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -992,7 +1038,7 @@ let lemma_server_role_server_application_write_traffic_install_legal
               CS.install_direction = CS.TrafficWrite;
               CS.install_material =
                 CS.traffic_key_material_for_secret
-                  (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                  (CS.negotiated_aead_alg model.CS.model_handshake)
                   (K.server_application_traffic_secret
                     master_secret
                     (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -1020,7 +1066,7 @@ let lemma_server_role_client_application_read_traffic_install_legal
               CS.install_direction = CS.TrafficRead;
               CS.install_material =
                 CS.traffic_key_material_for_secret
-                  (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
+                  (CS.negotiated_aead_alg model.CS.model_handshake)
                   (K.client_application_traffic_secret
                     master_secret
                     (Tr.hash model.CS.model_handshake.CS.hs_transcript));

@@ -5,6 +5,7 @@ module TLS13.Impl.Messages
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module H = TLS13.Handshake.Spec
 module L = FStar.List.Tot
 module M = TLS13.Messages
 module Seq = FStar.Seq
@@ -514,7 +515,7 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slpro
       (match Sem.serverHello_cipher_suite m with
        | Some cs ->
          cipher_suite_matches l.server_hello_cipher_suite cs /\
-         cs == T.TLS_CHACHA20_POLY1305_SHA256
+         H.is_supported_cipher_suite cs
        | None -> False))
 
 let is_valid_encrypted_extensions

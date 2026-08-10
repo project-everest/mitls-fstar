@@ -41,6 +41,8 @@ val lemma_single_message_sender_after_server_write_client_read_install_normalize
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         CS.protected_handshake_buffer_empty client /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
@@ -132,6 +134,8 @@ val lemma_protected_handshake_event_projection_pair_after_server_write_client_re
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -479,6 +483,8 @@ val lemma_protected_handshake_event_projection_pair_after_sender_preserve_write_
         Seq.equal
           server_after_skip.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_after_skip.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         local_event_preserves_record_write sender_skip /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
@@ -724,6 +730,8 @@ val lemma_protected_handshake_event_projection_pair_after_server_write_client_re
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -853,6 +861,8 @@ val lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg0 /\
         protected_handshake_wire_round_trip_message received_msg0 /\
@@ -1020,6 +1030,8 @@ val lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         local_event_does_not_install_record_keys server_skip /\
         local_event_does_not_install_record_keys client_skip /\
         Seq.equal server_raw_sent client_raw_received /\
@@ -1229,6 +1241,8 @@ val lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\

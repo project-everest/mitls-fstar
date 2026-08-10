@@ -259,6 +259,21 @@ fn get_certificate_verify_signature_snapshot
                   SZ.v snapshot.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
+(** The negotiated AEAD key length, read off the accepted ServerHello.  Both
+    endpoints use this to size the traffic-key derivation: 16 bytes for
+    TLS_AES_128_GCM_SHA256, 32 for TLS_CHACHA20_POLY1305_SHA256.  Before a
+    ServerHello is stored the connection has no negotiated suite, and the
+    ghost [CS.negotiated_aead_alg] defaults to ChaCha, so this returns 32. *)
+fn read_negotiated_aead_key_len
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns key_len: SZ.t
+  ensures connection_exactly c st0 **
+          pure (SZ.v key_len ==
+            CryptoSpec.aead_key_len
+              (CS.negotiated_aead_alg st0.CS.cs_model.CS.model_handshake))
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -323,7 +338,9 @@ fn can_receive_server_hello
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256 /\
+           pure ((exists (cs:T.cipher_suite).
+               Sem.serverHello_cipher_suite sh == Some cs /\
+               H.is_supported_cipher_suite cs) /\
              // Parse-success equation supplied by the caller (see
              // TLS13.Impl.Handle.Handshake): the decoded ServerHello serializes
              // back to the on-the-wire fragment, so its serialized-handshake

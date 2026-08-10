@@ -295,19 +295,18 @@ fn seq_eq (st: record_state) (expected: U64.t)
 }
 
 fn application_keys_match (st: record_state) (key: array U8.t) (key_len: SZ.t)
-  (key_spec: erased C.aead_key_any) (iv: array U8.t)
+  (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
-                 SZ.v key_len == B.length key_spec /\
-                 Seq.equal 'key_bytes (C.pad_key_32 key_spec))
+                 (SZ.v key_len == 16 \/ SZ.v key_len == 32))
   returns ok: bool
   ensures is_record_state st 's **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **
           pure (ok ==>
-            's.R.key == Some (Ghost.reveal key_spec) /\
+            's.R.key == Some (C.unpad_key_32 'key_bytes (SZ.v key_len)) /\
             's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
 {
   unfold (is_record_state st 's);
@@ -341,8 +340,8 @@ fn application_keys_match (st: record_state) (key: array U8.t) (key_len: SZ.t)
   assert (pure (ok ==> stored_key == Ghost.reveal 'key_bytes));
   assert (pure (ok ==> stored_iv == Ghost.reveal 'iv_bytes));
   assert (pure (ok ==> Seq.equal (C.unpad_key_32 stored_key (SZ.v stored_key_len))
-                                 (Ghost.reveal key_spec)));
-  assert (pure (ok ==> 's.R.key == Some (Ghost.reveal key_spec)));
+                                 (C.unpad_key_32 'key_bytes (SZ.v key_len))));
+  assert (pure (ok ==> 's.R.key == Some (C.unpad_key_32 'key_bytes (SZ.v key_len))));
   assert (pure (ok ==> 's.R.static_iv == Some (Ghost.reveal 'iv_bytes)));
   fold (is_record_state st 's);
   ok
