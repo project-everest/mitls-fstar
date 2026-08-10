@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CI = Common.ChannelImplementation
+module CPI = Common.ProtocolImplementation
 module DS = TLS13.Impl.Server.Driver.State
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -22,6 +23,19 @@ noeq type receive_result = {
   receive_status: receive_status;
   receive_len: SZ.t;
 }
+
+(* The channel's view of received bytes is the bytes themselves. *)
+noextract
+let channel_message_of_bytes (bytes:B.bytes) : B.bytes = bytes
+
+(* Only [BufferedReceiveOk] delivers application data; every other status
+   leaves the application log where it was. *)
+noextract
+let receive_succeeded (result:receive_result) : bool =
+  BufferedReceiveOk? result.receive_status
+
+noextract
+let receive_result_length (result:receive_result) : SZ.t = result.receive_len
 
 fn await_peer_close
   (d:DS.top_server_driver)
@@ -72,9 +86,35 @@ fn run
        | BufferedReceiveOutputBufferTooSmall ->
          exists* wire_received1 wire_sent1 pending1 app_log1.
            DS.top_server_channel_inv
-             d wire_received1 wire_sent1 pending1 app_log1
+             d wire_received1 wire_sent1 pending1 app_log1 **
+           pure (
+             CI.receive_transition
+               channel_message_of_bytes
+               receive_succeeded
+               receive_result_length
+               result
+               output
+               (Ghost.reveal wire_received0)
+               (Ghost.reveal wire_sent0)
+               (Ghost.reveal app_log0)
+               wire_received1
+               wire_sent1
+               app_log1)
        | BufferedReceiveClosed
        | BufferedReceiveFailed ->
          exists* wire_received1 wire_sent1 app_log1.
            DS.top_server_channel_terminal
-             d wire_received1 wire_sent1 app_log1)
+             d wire_received1 wire_sent1 app_log1 **
+           pure (
+             CI.receive_transition
+               channel_message_of_bytes
+               receive_succeeded
+               receive_result_length
+               result
+               output
+               (Ghost.reveal wire_received0)
+               (Ghost.reveal wire_sent0)
+               (Ghost.reveal app_log0)
+               wire_received1
+               wire_sent1
+               app_log1))

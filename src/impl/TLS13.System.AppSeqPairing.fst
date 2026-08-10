@@ -65,6 +65,7 @@ module HANR = TLS13.ConnectionState.HandshakeAgreementNonReady
 module WFL  = TLS13.Spec.WireFormatLemmas
 module SLM  = TLS13.System.SlotMono
 module RKE  = TLS13.ConnectionState.RecordKeyEpoch
+module CCShape = TLS13.ConnectionState.ClientCanonicalShape
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -2221,14 +2222,36 @@ let lemma_protected_step_read_not_application
         SMR.connection_state_consistent st /\
         CS.legal_event st.CS.cs_model (CS.ConnProtectedHandshake step))
       (ensures (rd st).R.epoch =!= R.Application)
-  = assert (CS.legal_handshake_message st.CS.cs_model CL.Received
-              step.CS.protected_handshake_message);
-    assert (CS.ControlHandshaking? st.CS.cs_model.CS.model_control);
-    assert (st.CS.cs_model.CS.model_control
-              =!= CS.ControlHandshaking CS.HsServerFinishedVerified);
-    assert (st.CS.cs_model.CS.model_control
-              =!= CS.ControlHandshaking CS.HsClientFinishedReceived);
-    CSL.lemma_handshaking_nonfinal_read_not_application st
+  = if step.CS.protected_handshake_buffering
+    then
+      (* A BUFFERING step carries no message -- it sets a record's plaintext
+         aside so a handshake message spanning several records can be
+         reassembled -- so [legal_handshake_message] says nothing about it and
+         its [protected_handshake_message] field is inert.  Legality instead
+         pins the control to one of the four [protected_handshake_buffering_stage]
+         stages (HsServerHelloReceived, HsEncryptedExtensionsReceived,
+         HsCertificateValidated, HsCertificateVerifyVerified).  None of those
+         is HsServerFinishedVerified or HsClientFinishedReceived, so the same
+         placement argument still gives a non-Application read epoch. *)
+      begin
+        assert (CS.ControlHandshaking? st.CS.cs_model.CS.model_control);
+        assert (st.CS.cs_model.CS.model_control
+                  =!= CS.ControlHandshaking CS.HsServerFinishedVerified);
+        assert (st.CS.cs_model.CS.model_control
+                  =!= CS.ControlHandshaking CS.HsClientFinishedReceived);
+        CSL.lemma_handshaking_nonfinal_read_not_application st
+      end
+    else
+      begin
+        assert (CS.legal_handshake_message st.CS.cs_model CL.Received
+                  step.CS.protected_handshake_message);
+        assert (CS.ControlHandshaking? st.CS.cs_model.CS.model_control);
+        assert (st.CS.cs_model.CS.model_control
+                  =!= CS.ControlHandshaking CS.HsServerFinishedVerified);
+        assert (st.CS.cs_model.CS.model_control
+                  =!= CS.ControlHandshaking CS.HsClientFinishedReceived);
+        CSL.lemma_handshaking_nonfinal_read_not_application st
+      end
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
@@ -2597,7 +2620,15 @@ let lemma_ama_deliver_to_server
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
         SY.tls_system_inv ({ a with server = s'; channel = MP.Quiet }) /\
-        SY.server_config_valid_e2e s')
+        SY.server_config_valid_e2e s' /\
+        (* CROSS-RECORD REASSEMBLY GATE, threaded from the caller: the readiness
+           agreement tool `SY.lemma_ready_quiescent_agrees` is gated on the client
+           taking no BUFFERING protected-handshake step.  We cannot prove that here
+           (the cross-endpoint record seal is not in scope at this layer); it is
+           discharged one layer up in `TLS13.System.AppExtrasInv` (a conjunct of
+           `stream2_extras`), which supplies it at this call.  This step does not
+           touch the client (`b.client == a.client`), so the fact is stated on `a`. *)
+        CCShape.no_buffering_steps a.client.CS.cs_event_log)
       (ensures app_material_agreement ({ a with server = s'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in

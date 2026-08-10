@@ -54,6 +54,11 @@ module CS  = TLS13.Spec.StateMachine
 module WFL = TLS13.Spec.WireFormatLemmas
 module SY  = TLS13.System
 module ASI = TLS13.System.AppStreamInv
+module AEI = TLS13.System.AppExtrasInv
+module CCShape = TLS13.ConnectionState.ClientCanonicalShape
+module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
+module SMKM = TLS13.Spec.StateMachine.KeyMaterial
+module TT  = TLS13.System.Temporal
 
 (** The flagship state predicate (scoped): at any non-rekeyed state, each
     endpoint's received application stream is a prefix of its peer's sent
@@ -107,3 +112,88 @@ let lemma_flagship_stream_integrity cfg_c cfg_s =
     end
   end;
   T.lemma_ag_of_invariant SY.tls_sys_step stream_integrity_scoped s0
+
+(** ─────────────────────────────────────────────────────────────────────────
+    THE RECORD-MATERIAL FLAGSHIP, UNGATED.
+
+    `TT.record_material_agrees_when_ready_scoped` carries a fourth antecedent,
+    `CCShape.no_buffering_steps s.client.CS.cs_event_log`, introduced with
+    cross-record handshake reassembly: establishing the protected-handshake
+    projection witnesses runs through the client's exact event spine, and a
+    BUFFERING protected-handshake step has no slot in that spine.  In the paired
+    system the client provably never buffers -- the ATLAS server emits exactly
+    one record per handshake message, so `legal_protected_handshake_step`'s
+    STEP-1 guard makes buffering illegal -- but that argument needs the
+    cross-endpoint protected-record seal, which is NOT a conjunct of
+    `SY.tls_system_inv` and is not derivable from it.  It lives at THIS layer,
+    inside `AEI.stream2_extras` (whose `HSP.hs_seq_pairing` /
+    `HSP.hs_channel_seal_ok` conjuncts supply it).
+
+    So the gate is DISCHARGED here, and the flagship below is stated with the
+    ORIGINAL three antecedents.  The only price is the same
+    `SY.server_config_valid_e2e` entry hypothesis the stream-integrity flagship
+    already pays (see the module header) -- a deployment well-formedness side
+    condition, discharged for the concrete configuration in
+    `TLS13.System.StreamTemporal.Realized`.
+    ───────────────────────────────────────────────────────────────────────── **)
+
+(** The record-material flagship state predicate, with NO buffering gate. **)
+let record_material_agrees_when_ready : T.sprop SY.tls_system_state = fun s ->
+  (SY.tls_no_rekeying s /\ SY.tls_quiescent s /\ SY.tls_application_ready s) ==>
+    (SMKM.peer_record_material_agrees
+       (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s.client s.server /\
+     SMKM.peer_record_material_agrees
+       (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s.client s.server)
+
+(**
+  FLAGSHIP THEOREM (record-key material), UNGATED.  On every run of the system
+  from the initial state it is ALWAYS the case that, absent rekeying, at a
+  quiescent state where the handshake has completed on both endpoints, the two
+  endpoints agree on the application record-key material in both directions.
+
+  This is `TT.lemma_flagship_record_material_agreement` with its buffering gate
+  discharged from `AEI.stream2_extras`, which the byte-level reachability payoff
+  `ASI.lemma_reachable_app_stream_inv` establishes at every reachable
+  non-rekeyed state.
+**)
+val lemma_flagship_record_material_agreement_ungated
+  (cfg_c cfg_s:CS.connection_config)
+  : Lemma
+      (requires
+        cfg_c.CS.config_role == CS.ClientEndpoint /\
+        cfg_s.CS.config_role == CS.ServerEndpoint /\
+        WFL.supported_client_config_wire_profile cfg_c /\
+        SY.server_config_valid_e2e (CS.initial cfg_s))
+      (ensures
+        T.ag SY.tls_sys_step
+          record_material_agrees_when_ready
+          (SY.initial_tls_system cfg_c cfg_s))
+let lemma_flagship_record_material_agreement_ungated cfg_c cfg_s =
+  let s0 = SY.initial_tls_system cfg_c cfg_s in
+  introduce
+    forall (s':SY.tls_system_state).
+      T.reachable SY.tls_sys_step s0 s' ==> record_material_agrees_when_ready s'
+  with begin
+    introduce
+      T.reachable SY.tls_sys_step s0 s' ==> record_material_agrees_when_ready s'
+    with begin
+      introduce
+        (SY.tls_no_rekeying s' /\ SY.tls_quiescent s' /\ SY.tls_application_ready s') ==>
+          (SMKM.peer_record_material_agrees
+             (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s'.client s'.server /\
+           SMKM.peer_record_material_agrees
+             (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s'.client s'.server)
+      with begin
+        // `tls_no_rekeying s'` unlocks BOTH reachability payoffs.
+        // (1) The stream-2 invariant DISCHARGES the buffering gate.
+        ASI.lemma_reachable_app_stream_inv cfg_c cfg_s s';
+        assert (AEI.stream2_extras s');
+        assert (CCShape.no_buffering_steps s'.client.CS.cs_event_log);
+        // (2) The structural invariant then yields the gated predicate, whose
+        //     antecedent is now fully satisfied.
+        SY.lemma_reachable_inv cfg_c cfg_s s';
+        TT.lemma_inv_implies_agreement s'
+      end
+    end
+  end;
+  T.lemma_ag_of_invariant SY.tls_sys_step record_material_agrees_when_ready s0

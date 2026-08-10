@@ -43,9 +43,9 @@ noextract
 (** The client has finished the handshake and can carry application data.
 
     The buffer-emptiness conjunct is what makes this mean *finished* rather than
-    merely *at ControlApplicationData*, and it is the conjunct
-    `TLS13.System.Internal.lemma_application_ready_settled` consumes to derive
-    `tls_settled` from readiness.
+    merely *at ControlApplicationData*: readiness implies that no internal drain
+    step is still enabled, so a ready client has already absorbed every message
+    the records it accepted were carrying.
 
     The state machine now also forbids the client from sending its Finished
     while protected-handshake plaintext is pending (see `legal_handshake_message`),
@@ -174,6 +174,73 @@ let client_driver_send_correct
   Seq.equal
     st1.CS.cs_wire_log.CL.raw_received
     st0.CS.cs_wire_log.CL.raw_received
+
+(* Client-initiated KeyUpdate (RFC 8446 4.6.3).  The payload is empty and there
+   is no length bound to test, so unlike [client_driver_send_correct] there is
+   no payload-too-large case; [kind] selects the request form. *)
+noextract
+let client_driver_key_update_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (status:driver_workflow_status)
+  (kind:CT.local_event_kind)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : prop =
+  (exists resp.
+     client_driver_local_write_correct
+       st0
+       st1
+       resp
+       kind
+       B.empty
+       sent
+       sent' /\
+     client_driver_send_status_correct status resp) /\
+  Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    st0.CS.cs_wire_log.CL.raw_received
+
+(* A KeyUpdate send -- successful or not -- leaves the application log alone.
+   Lifted from [CT.lemma_local_send_key_update_preserves_app_log] through the
+   driver-level correctness predicate so that a receive path can insert an
+   auto-response without disturbing [CI.receive_transition]'s log equation. *)
+let lemma_client_driver_key_update_preserves_app_log
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (status:driver_workflow_status)
+  (kind:CT.local_event_kind)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires
+        (kind == CT.LocalSendKeyUpdate \/ kind == CT.LocalSendKeyUpdateRequested) /\
+        client_driver_key_update_correct st0 st1 status kind sent sent')
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  let resp =
+    ID.indefinite_description_ghost
+      CT.client_response
+      (fun resp ->
+        client_driver_local_write_correct
+          st0 st1 resp kind B.empty sent sent' /\
+        client_driver_send_status_correct status resp) in
+  let network_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out -> exists app_out.
+        CT.local_event_end_to_end_correct
+          st0 st1 resp kind B.empty network_out app_out /\
+        Seq.equal sent' (B.append sent (CT.response_network_out resp network_out))) in
+  let app_out =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out ->
+        CT.local_event_end_to_end_correct
+          st0 st1 resp kind B.empty network_out app_out /\
+        Seq.equal sent' (B.append sent (CT.response_network_out resp network_out))) in
+  CT.lemma_local_send_key_update_preserves_app_log
+    st0 st1 resp kind B.empty network_out app_out
 
 noextract
 let client_driver_close_status_correct
@@ -314,7 +381,7 @@ let client_driver_receive_correct
 let driver_network_out_capacity : SZ.t = 20000sz
 let driver_app_out_capacity : SZ.t = 16640sz
 let driver_rx_capacity : SZ.t = 65535sz
-let driver_public_key_payload_capacity : SZ.t = 4096sz
+let driver_public_key_payload_capacity : SZ.t = 16384sz
 let driver_auth_leaf_der_capacity : SZ.t = 32768sz
 let driver_certificate_verify_input_capacity : SZ.t = 256sz
 let driver_signature_capacity : SZ.t = 4096sz
@@ -1679,7 +1746,8 @@ let lemma_local_event_wire_lengths
            | CT.LocalSendClientHello
            | CT.LocalSendClientFinished
            | CT.LocalSendCloseNotify
-           | CT.LocalSendKeyUpdate ->
+           | CT.LocalSendKeyUpdate
+           | CT.LocalSendKeyUpdateRequested ->
              assert (msg.CL.message_direction == CL.Sent);
              assert False
            | _ ->

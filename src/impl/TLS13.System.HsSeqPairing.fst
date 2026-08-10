@@ -248,15 +248,35 @@ let cs_hs_seq_ok (s:SY.tls_system_state) : prop =
     freezes both seqs in lock-step, so the arm still reads `k == k`.)  Once a
     genuine handshake record then blocks (handshake into the failed client ->
     `:822` None -> no successor), the channel stays `ToClient` forever (locals
-    require Quiet), so all downstream Quiet `_` clauses are vacuous thereafter. **)
+    require Quiet), so all downstream Quiet `_` clauses are vacuous thereafter.
+
+    WEAKENED FROM AN EXACT EQUALITY TO AN INEQUALITY (cross-record reassembly).
+    `traffic_install_allowed_at_stage` legality is a pure function of the
+    CONTROL stage, with no "not already installed" side condition, so a second
+    `LocalInstallTrafficKeys(TrafficHandshake, TrafficRead)` at the SAME stage
+    is legal whenever the first one was, and `R.install_keys` unconditionally
+    resets the target direction's seq to `0` on every firing, redundant or not.
+    Before buffering this redundant install was harmless: while the client sits
+    at one control its received-record count is exactly `0` (every record
+    consumed by the pre-buffering receive path advances control), so a
+    redundant install could only ever fire while `hs_rseq client` was ALREADY
+    `0`.  A BUFFERING step consumes exactly one record while leaving control
+    unchanged, so the client can accumulate a positive `hs_rseq client` (one
+    unit per buffered record, paired 1:1 with records the server has already
+    written) and then legally take a redundant install that resets its read
+    seq to `0` while the server's write seq stays positive — the exact
+    equality is then false.  The reset can only ever DECREASE `hs_rseq client`,
+    never push it past what the server has written, so the fact that survives
+    is the inequality below, in the same direction as the weakened
+    `SCB.pread_ok` (client receiver) this mirrors. **)
 let sc_hs_seq_ok (s:SY.tls_system_state) : prop =
   match s.channel with
   | MP.ToClient p ->
       (R.Handshake? (ASP.snap_wr p).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch) ==>
-         snap_hs_wseq p == hs_rseq s.client
+         hs_rseq s.client <= snap_hs_wseq p
   | _ ->
       (R.Handshake? (ASP.wr s.server).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch) ==>
-         hs_wseq s.server == hs_rseq s.client
+         hs_rseq s.client <= hs_wseq s.server
 
 (** The handshake-epoch record-seq pairing invariant. **)
 let hs_seq_pairing (s:SY.tls_system_state) : prop =
@@ -770,7 +790,20 @@ let lemma_step_ss_shape (model:CS.connection_model) (ev:CS.conn_event) (model':C
               assert (Some? model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
           | CS.TrafficApplication -> ())
        | _ -> ())
-    | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnNetworkEvent trace_msg ->
+      (* Split on the message kind.  Every network step is trivial for
+         `ss_shape` -- none installs a `R.Handshake` record epoch and none
+         clears `ks_handshake_secret` -- but after the merge widened the
+         KeyUpdate arms of the network step relation, exploring the whole
+         relation in one query no longer fits the rlimit.  The split is what
+         makes each case cheap; the arms themselves need no proof. *)
+      (match trace_msg.CL.message_value with
+       | M.TlsHandshake _ -> ()
+       | M.TlsApplicationData _ -> ()
+       | M.TlsAlert _ -> ()
+       | M.TlsChangeCipherSpec -> ()
+       | M.TlsIgnoredPostHandshake _ -> ()
+       | M.TlsKeyUpdate _ -> ())
     | CS.ConnProtectedHandshake _ ->
       (* NEW ARM.  `CS.step_protected_handshake` routes through
          `CS.step_handshake_message _ CL.Received _` and then
@@ -1564,11 +1597,23 @@ let lemma_client_reachable_pread_ok (st:CS.connection_state)
 
     At a Quiet state where BOTH the server's write and the client's read are at
     the Handshake record epoch AND both endpoints are still in the honest
-    pre-application-data region, the server's handshake-write seq equals the
-    client's handshake-read seq.  This is exactly `SCB.lemma_hseq_from_counts`
+    pre-application-data region, the client's handshake-read seq is bounded by
+    the server's handshake-write seq.  This is exactly `SCB.lemma_hseq_from_counts`
     fed by the two reachable counting invariants and the Quiet `byte_pairing`
     byte-equality `ss == cr`.
-    ───────────────────────────────────────────────────────────────────────── **)
+
+    The bound is an INEQUALITY, not the exact equality one would expect from
+    two endpoints counting the same physical byte stream.  Cross-record
+    reassembly lets the client take a `LocalInstallTrafficKeys(TrafficHandshake,
+    TrafficRead)` install a second time at the very control
+    (`HsServerHelloReceived`) where the first one fired, once buffering has
+    made its received-record count positive; `R.install_keys` resets the read
+    seq to 0 on every such install regardless of the count.  So the client's
+    read seq can lag strictly behind the paired byte count while the server's
+    write seq — never subject to a redundant re-install racing a nonzero count,
+    since the server never buffers — stays the exact count.  The seq can only
+    ever fall behind, never overtake, so `<=` is what survives; see
+    `SCB.pread_ok` for the full argument. **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
 let lemma_sc_quiet_align (a:SY.tls_system_state)
   : Lemma
@@ -1579,7 +1624,7 @@ let lemma_sc_quiet_align (a:SY.tls_system_state)
         R.Handshake? (ASP.rd a.client).R.epoch /\
         PC.pre_appdata_control a.server.CS.cs_model.CS.model_control /\
         PC.pre_appdata_control a.client.CS.cs_model.CS.model_control)
-      (ensures hs_wseq a.server == hs_rseq a.client)
+      (ensures hs_rseq a.client <= hs_wseq a.server)
   = lemma_server_reachable_pwrite_ok a.server;
     lemma_client_reachable_pread_ok a.client;
     SCB.lemma_hseq_from_counts a.server a.client
@@ -2609,9 +2654,50 @@ let lemma_step_control_failed_absorbing
   = ()
 #pop-options
 
+(** CS-direction half of the establishment bundle below: at a Quiet state where
+    the CLIENT has SENT zero ApplicationData records, `hs_wseq c == 0` and, via
+    the Quiet byte pairing, `hs_rseq s == 0` — so `cs_hs_seq_ok`'s Quiet arm
+    (`hs_wseq c == hs_rseq s`) reads `0 == 0`.
+
+    Split out of `lemma_hsp_quiet_both_zero` because that bundle's OTHER half
+    (`hs_rseq c == 0 /\ hs_wseq s == 0`) needs the client's RECEIVED count to be
+    exactly `0`, which a buffering step can falsify while control stays fixed
+    (see `sc_hs_seq_ok`'s doc comment for the counterexample shape) — this CS
+    half has no such dependency and stays provable unconditionally, since the
+    client's send side is never touched by buffering. **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_hsp_quiet_cs_zero (c s:CS.connection_state)
+  : Lemma
+      (requires
+        WStep.client_reachable (CS.initial c.CS.cs_model.CS.model_config) c /\
+        WFL.supported_client_config_wire_profile c.CS.cs_model.CS.model_config /\
+        c.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        WStep.server_reachable (CS.initial s.CS.cs_model.CS.model_config) s /\
+        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        WStep.raw_appdata_count c.CS.cs_wire_log.CL.raw_sent == 0 /\
+        Seq.equal c.CS.cs_wire_log.CL.raw_sent s.CS.cs_wire_log.CL.raw_received)
+      (ensures hs_wseq c == 0 /\ hs_rseq s == 0)
+  = WStep.lemma_raw_appdata_count_seq_equal
+      c.CS.cs_wire_log.CL.raw_sent s.CS.cs_wire_log.CL.raw_received;
+    lemma_client_reachable_writehs_seq_le_count c;
+    lemma_server_reachable_readhs_seq_le_count s;
+    lemma_hwseq_zero_of_bound c;
+    lemma_hrseq_zero_of_bound s
+#pop-options
+
 (** Establishment bundle: at a Quiet state where the CLIENT has sent AND received
     zero ApplicationData records, all four handshake projections (of both
-    endpoints) are 0.  Proven in isolation so its VC localizes. **)
+    endpoints) are 0.  Proven in isolation so its VC localizes.
+
+    STILL USED, AND STILL FULLY EXACT, at the SERVER-local establishment site
+    (`HsServerHelloSent`): at that point the server has sent nothing beyond the
+    cleartext ServerHello, so no protected handshake record exists for the
+    client to buffer, and the client's received-appdata count is genuinely `0`
+    regardless of the buffering feature.  The CLIENT-local establishment site
+    (`HsServerHelloReceived`) can no longer discharge this bundle's hypothesis
+    (the client MAY already have buffered records there) and uses the
+    `lemma_hsp_quiet_cs_zero` half plus a direct case split instead — see
+    `lemma_hsp_client_local`. **)
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_hsp_quiet_both_zero (c s:CS.connection_state)
   : Lemma
@@ -2642,6 +2728,38 @@ let lemma_hsp_quiet_both_zero (c s:CS.connection_state)
     lemma_hrseq_zero_of_bound c;
     lemma_hwseq_zero_of_bound s;
     lemma_hrseq_zero_of_bound s
+#pop-options
+
+(** For a client LOCAL step at fixed control `HsServerHelloReceived` whose read
+    slot actually changes, the change can only be the (TrafficHandshake,
+    TrafficRead) install — `LocalDeriveSharedSecret` and a TrafficWrite install
+    leave `record_read` untouched, and a `ConnProtectedHandshake`/
+    `ConnNetworkEvent` step under an EMPTY raw delta cannot fire a HEAD (it
+    needs one `Application_data` record) nor a control-preserving TAIL that
+    also disturbs `record_read` (a non-`Finished` TAIL restores it; `Finished`
+    leaves this control).  `R.install_keys` sets the target direction's seq to
+    `0` UNCONDITIONALLY, redundant install or not — precisely the fact used to
+    make the `sc` inequality trivial in that case. **)
+#push-options "--fuel 3 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_client_local_read_change_resets_seq
+  (m m':CS.connection_model) (ce:CS.conn_event)
+  : Lemma
+      (requires
+        CS.legal_event m ce /\
+        CS.step_model m ce == Some m' /\
+        CS.event_raw_delta_legal m ce B.empty B.empty /\
+        m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        m'.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        m'.CS.model_record.CS.record_read =!= m.CS.model_record.CS.record_read)
+      (ensures m'.CS.model_record.CS.record_read.R.seq == 0)
+  = match ce with
+    | CS.ConnLocalEvent lev -> ()
+    | CS.ConnNetworkEvent dm ->
+      ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
+    | CS.ConnProtectedHandshake step ->
+      (if step.CS.protected_handshake_head
+       then (WStep.lemma_protected_raw_count_one B.empty;
+             WStep.lemma_raw_appdata_count_empty ()))
 #pop-options
 
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
@@ -2675,16 +2793,41 @@ let lemma_hsp_client_local (a b:SY.tls_system_state)
         ()
       else if c'.CS.cs_model.CS.model_control
               = CS.ControlHandshaking CS.HsServerHelloReceived then begin
-        // client-side counts are zero at HsServerHelloReceived
+        // client-side SENT count is zero at HsServerHelloReceived — unaffected
+        // by buffering, since the client never seals a protected
+        // handshake-write record before its Finished.
         WStep.lemma_client_preappdata_sent_no_appdata cfg c';
-        WStep.lemma_client_hsserverhelloreceived_recv_zero cfg c';
         // Quiet byte pairing (from tls_system_inv a) + wire-log unchanged (from
         // the local step) — chain to the c'/server alignments the bundle wants.
         assert (Seq.equal c'.CS.cs_wire_log.CL.raw_sent
                           a.server.CS.cs_wire_log.CL.raw_received);
         assert (Seq.equal a.server.CS.cs_wire_log.CL.raw_sent
                           c'.CS.cs_wire_log.CL.raw_received);
-        lemma_hsp_quiet_both_zero c' a.server
+        // cs direction (`hs_wseq c' == hs_rseq a.server`): both project to `0`
+        // from the client's zero SENT count alone — this half does not depend
+        // on the client's received count, so it survives buffering unchanged.
+        lemma_hsp_quiet_cs_zero c' a.server;
+        // sc direction (`hs_rseq c' <= hs_wseq a.server`): a key-install local
+        // step either leaves the client's READ slot untouched, in which case
+        // `hs_rseq c' == hs_rseq a.client` and the pre-state Quiet `sc` arm
+        // (from the `hs_seq_pairing a` hypothesis, `a.server` being `b.server`
+        // here since only the client stepped) already bounds it — or it is
+        // itself a READ install, which unconditionally resets the read seq to
+        // `0` (`R.install_keys`), making the inequality trivial against any
+        // `nat`.  Either way no exact "received count is zero" fact is needed,
+        // which is exactly the fact a buffering step can make unavailable.
+        if c'.CS.cs_model.CS.model_record.CS.record_read
+           = a.client.CS.cs_model.CS.model_record.CS.record_read
+        then begin
+          assert (ASP.rd c' == ASP.rd a.client);
+          assert (hs_rseq c' == hs_rseq a.client);
+          assert (sc_hs_seq_ok a)
+        end
+        else begin
+          lemma_client_local_read_change_resets_seq
+            a.client.CS.cs_model c'.CS.cs_model ce;
+          assert (hs_rseq c' == 0)
+        end
       end else
         ()
       )
@@ -3452,6 +3595,29 @@ let lemma_hs_recv_plus_one_gated
     | _ -> ()
 #pop-options
 
+(** UPPER-BOUND +1 receive helper, ALERT-INCLUSIVE.  A non-cleartext `Received`
+    step that keeps the Handshake read epoch on both sides advances the read seq
+    by AT MOST one: `+1` for an EE / Cert / CV receive (`R.next_seq`), or `+0` for
+    an alert (`fail_model` only overwrites `model_control`/`model_failure`, so
+    `record_read` — hence its seq — survives unchanged even though the resulting
+    control is terminal).  Unlike `lemma_hs_recv_plus_one_gated`'s EXACT `+1`, this
+    bound does not need to exclude the alert/terminal case, so it needs neither a
+    consistency hypothesis nor a `~terminal` gate. **)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+let lemma_hs_recv_read_seq_le_plus_one
+  (m m':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+      (requires
+        CS.step_tls_message m CL.Received msg == Some m' /\
+        CS.network_message_is_cleartext CL.Received msg == false /\
+        R.Handshake? m.CS.model_record.CS.record_read.R.epoch /\
+        R.Handshake? m'.CS.model_record.CS.record_read.R.epoch)
+      (ensures
+        m'.CS.model_record.CS.record_read.R.seq <=
+          m.CS.model_record.CS.record_read.R.seq + 1)
+  = ()
+#pop-options
+
 (** ═══════════════════════════════════════════════════════════════════════════
     DELIVERY preservation — the two standalone `deliver` lemmas.
 
@@ -3532,7 +3698,15 @@ let lemma_step_model_ctrl_not_hscfv
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_hscfv m lev m'
     | CS.ConnProtectedHandshake step ->
-      (* NEW ARM.  `CS.step_protected_handshake` routes through
+      if step.CS.protected_handshake_buffering then
+        (* A BUFFERING step never touches `model_control` — it only advances
+           `model_record.record_read` and grows the pending handshake buffer
+           (`step_protected_handshake_buffer` writes `model_record` and
+           `model_handshake.hs_buffers` only) — so the control-only predicate
+           `ctrl_not_hscfv_m` transfers verbatim from the pre-state. *)
+        ()
+      else
+      (* NEW ARM.  A non-buffering `CS.step_protected_handshake` routes through
          `CS.step_handshake_message m CL.Received step.protected_handshake_message`
          and then only rewrites `model_record` / the `hb_*` buffers, so the CONTROL
          of the post-state is exactly the control of that handshake step.  Route to
@@ -4276,14 +4450,23 @@ let lemma_hsp_deliver_to_client
                - READ side: helper (B) gives `hs_rseq c' == hs_rseq a.client + 1`
                  and re-establishes `R.Handshake? (rd a.client)` (the `Finished`
                  install lands on `R.Application` and is killed by the gate);
-               - PRE alignment: `sc_hs_seq_ok a` on `MP.ToClient p` then fires and
-                 gives `snap_hs_wseq p == hs_rseq a.client`;
+               - PRE alignment: `sc_hs_seq_ok a` on `MP.ToClient p` gives only
+                 `hs_rseq a.client <= snap_hs_wseq p`, NOT the exact match a naive
+                 reading of the record-seq telescoping would suggest — a redundant
+                 `LocalInstallTrafficKeys` install is legal at every one of the four
+                 `protected_handshake_buffering_stage` controls (buffering never
+                 advances `model_control` out of them) and unconditionally resets
+                 the client's read seq to 0 (`R.install_keys`), so the client's PRE
+                 seq can be strictly BELOW the sealing snapshot's write seq;
                - WRITE side: the head step's decode projection types `raw` as an
                  `Application_data` record, so the in-flight send was NOT cleartext
                  (`lemma_cleartext_sent_raw_not_appdata`), and helper (C) gives
                  `hs_wseq a.server == snap_hs_wseq p + 1`.
-             Composing: `hs_wseq a.server == snap_hs_wseq p + 1
-                          == hs_rseq a.client + 1 == hs_rseq c'`. *)
+             Composing: `hs_rseq c' == hs_rseq a.client + 1
+                          <= snap_hs_wseq p + 1 == hs_wseq a.server`.  The `<=` is
+             exactly the Quiet-arm shape of (the already-weakened) `sc_hs_seq_ok`,
+             so no message identity / faithful-decode argument is needed to close
+             this branch. *)
         Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
         assert (step.CS.protected_handshake_head);
         assert (CS.step_model a.client.CS.cs_model conn_ev0 == Some c'.CS.cs_model);
@@ -4291,7 +4474,7 @@ let lemma_hsp_deliver_to_client
         assert (cs_hs_seq_ok b);
         introduce (R.Handshake? (ASP.wr a.server).R.epoch /\
                    R.Handshake? (ASP.rd c').R.epoch)
-                  ==> hs_wseq a.server == hs_rseq c'
+                  ==> hs_rseq c' <= hs_wseq a.server
         with
         (
           lemma_protected_head_read_plus_one a.client.CS.cs_model c'.CS.cs_model step;
@@ -4313,15 +4496,15 @@ let lemma_hsp_deliver_to_client
                       ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
             assert (CS.cleartext_tls_message_raw sent raw);
             lemma_cleartext_sent_raw_not_appdata sent raw;
-            assert (hs_wseq a.server == hs_rseq c')
+            assert (hs_rseq c' <= hs_wseq a.server)
           )
           else
           (
             assert (ASP.inflight_single_record a);
             assert (CS.protected_record_count CL.Sent sent == 1);
             lemma_hs_send_plus_one_protected snap a.server.CS.cs_model sent;
-            assert (snap_hs_wseq p == hs_rseq a.client);
-            assert (hs_wseq a.server == hs_rseq c')
+            assert (hs_rseq a.client <= snap_hs_wseq p);
+            assert (hs_rseq c' <= hs_wseq a.server)
           )
         );
         assert (sc_hs_seq_ok b)
@@ -4338,18 +4521,19 @@ let lemma_hsp_deliver_to_client
       // the frozen client write transfers the pre-state Quiet-analog `cs` clause.
       assert (cs_hs_seq_ok b);
       // SC arm (SUBSTANTIVE): server writes EE/Cert/CV at Handshake write seq 1..4,
-      // the client receives `+1` each.  Closed via FAITHFUL DECODE of the in-flight
-      // server handshake record (`msg == sent`), obtained from the added
-      // `inflight_bridge_ready` precondition (key/iv agreement + single-record seal +
-      // roundtrip) plus the cross-endpoint seq alignment carried by `sc_hs_seq_ok a`.
-      // This is the Handshake analogue of `ASP.lemma_asp_deliver_to_client`'s App
-      // branch; the bridge is Handshake-write-gated on the sealing SNAPSHOT so that
-      // the alert-inflation window (snapshot NOT on handshake write) does not assert
-      // it — protocol-faithful, since a handshake-keyed record is undecodable to a
-      // peer that has left the handshake read epoch.
+      // the client receives at most `+1` (an alert leaves the read seq unchanged,
+      // landing terminal control while the read epoch survives).  This composes
+      // the pre-state IN-FLIGHT bound of `sc_hs_seq_ok a` — `hs_rseq a.client <=
+      // snap_hs_wseq p`, not an exact match, because a redundant
+      // `LocalInstallTrafficKeys` install is legal throughout every
+      // `protected_handshake_buffering_stage` control and unconditionally resets
+      // the client's read seq to 0 — with the SEND `+1` delta (helper (C)) and the
+      // RECEIVE `<=+1` delta (`lemma_hs_recv_read_seq_le_plus_one`).  No
+      // message-identity / faithful-decode argument is needed: the goal is the
+      // `<=` half of `sc_hs_seq_ok b`, which pure seq arithmetic already gives.
       introduce (R.Handshake? (ASP.wr a.server).R.epoch /\
                  R.Handshake? (ASP.rd c').R.epoch)
-                ==> hs_wseq a.server == hs_rseq c'
+                ==> hs_rseq c' <= hs_wseq a.server
       with
       (
         // Expose the carried in-flight facts from `app_extras`.
@@ -4382,7 +4566,7 @@ let lemma_hsp_deliver_to_client
             assert (SMCan.sent_single_protected_message_seal snap sent raw);
             W.lemma_parse_record_implies_parse_record_wire raw;
             // parse_record_wire raw == Some (Application_data, ...) — contradiction.
-            assert (hs_wseq a.server == hs_rseq c')
+            assert (hs_rseq c' <= hs_wseq a.server)
           )
           else
           (
@@ -4391,7 +4575,7 @@ let lemma_hsp_deliver_to_client
             // contradicting the gate `R.Handshake? (ASP.rd c')`.
             lemma_recv_preserves_read_epoch_handshake
               a.client.CS.cs_model c'.CS.cs_model msg;
-            assert (hs_wseq a.server == hs_rseq c')
+            assert (hs_rseq c' <= hs_wseq a.server)
           )
         )
         else
@@ -4406,52 +4590,28 @@ let lemma_hsp_deliver_to_client
           assert (B.length raw > 0);
           CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
           W.lemma_parse_record_implies_parse_record_wire raw;
-          // (3) The received message is NOT cleartext (raw is Application_data-typed).
+          // The RECEIVED record is likewise typed Application_data, so the receive
+          // itself is not cleartext.
           assert (CS.network_message_raw_delta_legal a.client.CS.cs_model
                     ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
           lemma_hsp_client_recv_not_cleartext a.client msg c'.CS.cs_model raw;
           assert (CS.network_message_is_cleartext CL.Received msg == false);
-          // (4) The client is at a Handshake read epoch (receive preserves it), so the
-          //     pre-state in-flight `sc` clause fires: snap handshake write == client read.
+          // (2) The RECEIVE grows the client's Handshake read seq by AT MOST 1.  An
+          //     alert lands terminal control with the read seq UNCHANGED (`fail_model`
+          //     only overwrites control/failure); every other non-cleartext
+          //     Handshake-read-preserving receive is EE / Cert / CV, advancing it by
+          //     exactly 1.  Either way this composes with the pre-state IN-FLIGHT
+          //     bound of `sc_hs_seq_ok a` and the SEND `+1` delta (helper (C)):
+          //       hs_rseq c' <= hs_rseq a.client + 1
+          //                  <= snap_hs_wseq p + 1 == hs_wseq a.server.
           lemma_recv_preserves_read_epoch_handshake a.client.CS.cs_model c'.CS.cs_model msg;
           assert (R.Handshake? (ASP.rd a.client).R.epoch);
-          assert (SMR.connection_state_consistent a.client);
-          // (5) With snap_wr Handshake + rd a.client Handshake, `hs_channel_seal_ok a`
-          //     fires: the faithful-decode bridge holds.
-          assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
-          assert (SMCan.sent_single_protected_message_seal snap sent raw);
-          // (6) Fire the pre-state in-flight `sc` clause (now ~terminal-free).
-          assert (snap_hs_wseq p == hs_rseq a.client);
-          // (7) FAITHFUL DECODE: the client decodes raw to `sent`, so `msg == sent`.
-          CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
-            snap a.client.CS.cs_model sent raw;
-          assert (SMCan.received_single_protected_message_decode a.client.CS.cs_model sent raw);
-          assert (SMCan.received_single_protected_message_decode a.client.CS.cs_model msg raw);
-          ASP.lemma_decode_functional a.client.CS.cs_model msg sent raw;
-          assert (msg == sent);
-          assert (CS.step_tls_message a.client.CS.cs_model CL.Received sent == Some c'.CS.cs_model);
-          // (8) THE COUPLING subsumes both the terminal and non-terminal `c'` cases.
-          //     Establish consistency of the sender and receiver post-states.
-          assert (SMR.connection_state_consistent a.server);
-          let cfg = a.client.CS.cs_model.CS.model_config in
-          WStep.lemma_client_reachable_step
-            (CS.initial cfg) a.client c' (SM.WireEvent wire) out;
-          lemma_client_step_single_step a.client (SM.WireEvent wire) c' out;
-          lemma_step_preserves_consistent a.client c';
-          assert (SMR.connection_state_consistent c');
-          lemma_hs_send_recv_seq_couple snap a.server a.client c' sent;
-          // coupling:  (m_wr a.server).seq + m_hrseq a.client
-          //              == m_hwseq snap + (m_rd c').seq
-          //   i.e.  hs_wseq a.server + hs_rseq a.client == snap_hs_wseq p + hs_rseq c'
-          //   compose with (6)  snap_hs_wseq p == hs_rseq a.client:
-          //         hs_wseq a.server == hs_rseq c'.
-          assert (m_hwseq snap == snap_hs_wseq p);
-          assert (m_hrseq a.client.CS.cs_model == hs_rseq a.client);
-          assert (R.Handshake? (ASP.m_wr a.server.CS.cs_model).R.epoch);
-          assert (R.Handshake? (ASP.m_rd c'.CS.cs_model).R.epoch);
-          assert (hs_wseq a.server == (ASP.m_wr a.server.CS.cs_model).R.seq);
-          assert (hs_rseq c' == (ASP.m_rd c'.CS.cs_model).R.seq);
-          assert (hs_wseq a.server == hs_rseq c')
+          assert (hs_rseq a.client <= snap_hs_wseq p);
+          lemma_hs_send_plus_one_protected snap a.server.CS.cs_model sent;
+          assert (hs_wseq a.server == snap_hs_wseq p + 1);
+          lemma_hs_recv_read_seq_le_plus_one
+            a.client.CS.cs_model c'.CS.cs_model msg;
+          assert (hs_rseq c' <= hs_wseq a.server)
         )
       );
       assert (sc_hs_seq_ok b)

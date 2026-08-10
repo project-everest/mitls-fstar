@@ -14,6 +14,7 @@ typedef struct tls13_server_credentials_s tls13_server_credentials;
 typedef struct tls13_trust_store_s tls13_trust_store;
 
 #define TLS13_SIG_RSA_PSS_RSAE_SHA256 ((uint16_t)0x0804u)
+#define TLS13_SIG_ECDSA_SECP256R1_SHA256 ((uint16_t)0x0403u)
 
 bool tls13_openssl_validate_leaf_der(
     const char *hostname,
@@ -33,6 +34,31 @@ bool tls13_openssl_validate_leaf_der_with_store(
     size_t validation_time_seconds,
     const uint8_t *leaf_der,
     size_t leaf_der_len,
+    tls13_peer_identity **out_peer);
+
+/* As above, but additionally supplies the certificates the peer sent alongside
+   the leaf.  Public certificate authorities issue end-entity certificates from
+   intermediate CAs, so the leaf is essentially never signed directly by a
+   configured trust anchor: without the intermediates OpenSSL cannot build a
+   chain and validation fails with "unable to get local issuer certificate".
+   The extra certificates are *untrusted* chain-building material only; trust
+   decisions still come exclusively from `trust_store`.
+
+   `chain_der` holds the DER encoding of every certificate the peer sent, with
+   entry `i` occupying `chain_der[chain_offsets[i] .. chain_offsets[i] +
+   chain_lens[i])`.  Entry 0 is the leaf and is skipped here, since it is passed
+   separately as `leaf_der`. */
+bool tls13_openssl_validate_leaf_der_with_store_and_chain(
+    const char *hostname,
+    const tls13_trust_store *trust_store,
+    size_t validation_time_seconds,
+    const uint8_t *leaf_der,
+    size_t leaf_der_len,
+    const uint8_t *chain_der,
+    size_t chain_der_len,
+    const size_t *chain_offsets,
+    const size_t *chain_lens,
+    size_t chain_count,
     tls13_peer_identity **out_peer);
 
 bool tls13_openssl_peer_verify_signature(

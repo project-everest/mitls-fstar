@@ -787,6 +787,29 @@ val lemma_serialize_tls_message_key_update_not_requested:
   Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==
     (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]))
 
+(* The KeyUpdate body is a single byte carrying the request form; the two
+   encodings differ only in that byte.  [key_update_request_byte] names it so
+   that the serialisation lemma can be stated once, for both forms. *)
+(* [inline_for_extraction] matters here: as a standalone extracted function this
+   would put a TLS13.Messages dependency inside the Wire.Spec bundle, which
+   already depends on TLS13.Messages the other way round, and KaRaMeL rejects
+   the resulting bundle cycle.  Inlining leaves no declaration behind. *)
+inline_for_extraction
+let key_update_request_byte (req:M.key_update_request) : B.byte =
+  match req with
+  | M.UpdateNotRequested -> 0uy
+  | M.UpdateRequested -> 1uy
+
+val lemma_serialize_tls_message_key_update_requested:
+  unit ->
+  Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateRequested) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 1uy]))
+
+val lemma_serialize_tls_message_key_update:
+  req:M.key_update_request ->
+  Lemma (serialize_tls_message (M.TlsKeyUpdate req) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; key_update_request_byte req]))
+
 val parse_tls_record:
   input:B.bytes ->
   GTot (option (M.tls_record & nat))

@@ -230,6 +230,35 @@ let client_driver_is_closed
   : slprop =
   exists* st. client_driver_closed d st
 
+(* The driver's terminal state, in the indexed form the channel class asks for.
+
+   The class requires a [ci_terminal_inv i wire_received wire_sent app_log] but
+   places no constraint whatsoever on it: it is mentioned only in the failure
+   branch of [ci_send]/[ci_receive] and nowhere else.  It is simply "you still
+   own the endpoint, but no protocol claim is made about it".
+
+   We take that state to be the *closed* driver rather than the intermediate
+   [DS.client_channel_terminal].  A failed send or receive means the connection
+   control has already failed, so there is nothing graceful left to do with the
+   endpoint and disposing the transport immediately is the only policy this
+   driver ever wants.  Choosing it here is what lets the public API and the
+   class instance be the same functions: see [client_channel_implementation].
+
+   The wire and log indices are ignored, since a closed driver no longer indexes
+   them.  The corresponding transition facts are not lost -- they are still
+   asserted in the [pure] conjunct of [send]/[receive] on every branch. *)
+noextract
+let client_channel_closed
+  (d:client_driver)
+  (_wire_received _wire_sent:B.bytes)
+  (_app_log:CI.application_log B.bytes)
+  : slprop =
+  client_driver_is_closed d
+
+(* The channel state after a [send]/[receive].  This is definitionally the shape
+   [CI.ci_send]/[CI.ci_receive] demand of their postconditions, with
+   [ci_channel_inv := DS.client_channel_inv] and
+   [ci_terminal_inv := client_channel_closed]. *)
 noextract
 let client_channel_after_operation
   (d:client_driver)
@@ -239,7 +268,7 @@ let client_channel_after_operation
   : slprop =
   if reusable
   then DS.client_channel_inv d wire_received wire_sent pending app_log
-  else client_driver_is_closed d
+  else client_channel_closed d wire_received wire_sent app_log
 
 fn connect
   (d:client_driver)
@@ -349,6 +378,34 @@ fn receive
               wire_sent1
               app_log1)
 
+(* Client-initiated KeyUpdate (RFC 8446 4.6.3).  [request] selects the request
+   form: [true] sends [update_requested], asking the peer to rotate its own
+   sending key in reply; [false] sends [update_not_requested], rotating only our
+   write key.  A KeyUpdate carries no application message, so there is no
+   application-log transition to state. *)
+fn send_key_update
+  (d:client_driver)
+  (wire_received0:Ghost.erased B.bytes)
+  (wire_sent0:Ghost.erased B.bytes)
+  (pending0:Ghost.erased B.bytes)
+  (app_log0:Ghost.erased (CI.application_log B.bytes))
+  (request:bool)
+  requires DS.client_channel_inv
+             d
+             (Ghost.reveal wire_received0)
+             (Ghost.reveal wire_sent0)
+             (Ghost.reveal pending0)
+             (Ghost.reveal app_log0)
+  returns status:driver_workflow_status
+  ensures exists* wire_received1 wire_sent1 pending1 app_log1.
+          client_channel_after_operation
+            d
+            (channel_send_reusable status)
+            wire_received1
+            wire_sent1
+            pending1
+            app_log1
+
 fn close
   (d:client_driver)
   (wire_received:Ghost.erased B.bytes)
@@ -397,6 +454,14 @@ fn free (d:client_driver)
   requires client_driver_closed d 'st
   ensures client_driver_released d 'st
 
+(** The production client driver as a [Common.ChannelImplementation] instance.
+
+    There is deliberately no separate "channel" API: [ci_send] and [ci_receive]
+    are literally [send] and [receive] above, and [ci_send_usable] /
+    [ci_receive_usable] are literally [channel_send_reusable] /
+    [channel_receive_reusable].  Everything this interface exposes is exactly
+    what is verified against the class, and there is exactly one way to send and
+    one way to receive on a client channel. **)
 noextract
 val client_channel_implementation
   : CI.channel_implementation

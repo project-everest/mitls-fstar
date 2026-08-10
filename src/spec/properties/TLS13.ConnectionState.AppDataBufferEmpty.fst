@@ -151,6 +151,12 @@ let lemma_step_protected_buffer
         m'.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         ~(m'.CS.model_control == CS.ControlApplicationData))
   =
+    if step.CS.protected_handshake_buffering
+    then
+      (* A buffering step touches neither the role nor the control state, and
+         its legality confines it to a handshaking stage. *)
+      ()
+    else
     let hm = step.CS.protected_handshake_message in
     match CS.step_handshake_message m CL.Received hm with
     | Some stepped -> lemma_step_handshake_buffer m CL.Received hm stepped

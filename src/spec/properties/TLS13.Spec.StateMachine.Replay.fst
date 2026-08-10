@@ -424,6 +424,11 @@ let connection_state_full_log_consistent
 
 let single_message_head_step_shape (step:protected_handshake_step) : prop =
   step.protected_handshake_head /\
+  (* A BUFFERING step delivers no message, so it is never one of these.
+     Given legality this is already forced -- a buffering step has
+     [consumed == 0] and a non-empty fragment -- but stating it here keeps
+     the normal form usable without unfolding the legality relation. *)
+  step.protected_handshake_buffering == false /\
   step.protected_handshake_offset == 0 /\
   step.protected_handshake_consumed ==
     B.length step.protected_handshake_fragment
@@ -438,7 +443,9 @@ let lemma_single_message_head_step_legal
   (model:connection_model)
   (step:protected_handshake_step)
   : Lemma
-      (requires legal_protected_handshake_step model step)
+      (requires
+        legal_protected_handshake_step model step /\
+        step.protected_handshake_buffering == false)
       (ensures legal_event model (head_step_network_event step))
   = ()
 

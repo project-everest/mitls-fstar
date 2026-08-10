@@ -593,3 +593,282 @@ fn process_send_close_notify_local_event
     resp
   }
 }
+
+#restart-solver
+fn process_send_key_update_local_event
+  (s:server)
+  (kind:ST.local_event_kind)
+  (req:M.key_update_request)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 ((kind == ST.LocalSendKeyUpdate /\ req == M.UpdateNotRequested) \/
+                  (kind == ST.LocalSendKeyUpdateRequested /\ req == M.UpdateRequested)) /\
+                 server_app_local_event_input_ready
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                (resp.status == ST.StepOk ==>
+                  exists raw_sent.
+                    st1 ==
+                      CM.server_sent_key_update_state
+                        'st0
+                        req
+                        raw_sent /\
+                    Seq.equal
+                      raw_sent
+                      (ST.response_network_out resp network_out_bytes)) /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  lemma_server_app_key_update_ready 'st0 kind (Ghost.reveal 'payload_bytes);
+  assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
+    CS.ServerEndpoint
+    'st0));
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
+    CS.ServerEndpoint
+    'st0.CS.cs_model));
+  assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
+    CS.ServerEndpoint
+    'st0.CS.cs_model));
+  ST.lemma_key_update_kind_facts
+    kind
+    req
+    (Ghost.reveal 'payload_bytes)
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate req;
+    });
+  unfold (connection_exactly s 'st0);
+  let ok =
+    CLS.server_try_send_key_update
+      s
+      network_out
+      network_out_len
+      req;
+  if ok {
+    with raw_sent network_out_bytes.
+      assert (pts_to network_out network_out_bytes);
+    assert (CR.connection_exactly
+      s
+      (CM.server_sent_key_update_state 'st0 req raw_sent));
+    fold (connection_exactly
+      s
+      (CM.server_sent_key_update_state 'st0 req raw_sent));
+    assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+    assert (pure (27 <= B.length network_out_bytes));
+    assert (pure (CM.server_can_send_key_update 'st0 req raw_sent));
+    assert (pure (Seq.equal raw_sent (Seq.slice network_out_bytes 0 27)));
+    let resp = {
+      ST.network_out_len = 27sz;
+      ST.app_out_len = 0sz;
+      ST.status = ST.StepOk;
+    };
+    Seq.lemma_len_slice network_out_bytes 0 27;
+    assert (pure (Seq.equal raw_sent (ST.response_network_out resp network_out_bytes)));
+    Seq.lemma_len_slice 'old_app_out 0 0;
+    Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+    CM.lemma_server_sent_key_update_state_evolves 'st0 req raw_sent;
+
+    let ev = Ghost.hide (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate req;
+    });
+    let delta = Ghost.hide {
+      CS.delta_event = Ghost.reveal ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = B.empty;
+    };
+    assert (pure (CS.legal_connection_delta
+      'st0
+      (Ghost.reveal delta)
+      (CM.server_sent_key_update_state 'st0 req raw_sent)));
+    CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+      CS.ServerEndpoint
+      'st0
+      (Ghost.reveal delta)
+      (CM.server_sent_key_update_state 'st0 req raw_sent);
+    CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+      'st0
+      (Ghost.reveal delta)
+      (CM.server_sent_key_update_state 'st0 req raw_sent);
+    CSL.lemma_connection_state_protected_raw_segmented_replay
+      (CM.server_sent_key_update_state 'st0 req raw_sent);
+    CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+      'st0
+      (Ghost.reveal delta)
+      (CM.server_sent_key_update_state 'st0 req raw_sent);
+    CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+      'st0
+      (Ghost.reveal delta)
+      (CM.server_sent_key_update_state 'st0 req raw_sent);
+    CSL.lemma_event_raw_delta_legal_protected_segmented
+      'st0.CS.cs_model
+      (Ghost.reveal ev)
+      raw_sent
+      B.empty;
+    assert (pure (TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
+      (Ghost.reveal ev)
+      raw_sent
+      B.empty));
+    assert (pure (TLS13.Spec.StateMachine.Log.connection_state_record_keys_consistent_for_role
+      CS.ServerEndpoint
+      'st0));
+    assert (pure (TLS13.Spec.StateMachine.KeyMaterial.model_record_keys_consistent_for_role
+      CS.ServerEndpoint
+      'st0.CS.cs_model));
+    assert (pure (TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
+      CS.ServerEndpoint
+      'st0.CS.cs_model));
+
+    assert (pure ((CM.server_sent_key_update_state 'st0 req raw_sent).CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
+    assert (pure ((CM.server_sent_key_update_state 'st0 req raw_sent).CS.cs_model.CS.model_config.CS.config_role ==
+      CS.ServerEndpoint));
+    assert (pure (Some?
+      (CM.server_sent_key_update_state 'st0 req raw_sent).CS.cs_model.CS.model_config.CS.config_server));
+    assert (pure (ST.server_state_correct
+      (CM.server_sent_key_update_state 'st0 req raw_sent)));
+    assert (pure (ST.server_raw_to_message_replay_consistent
+      (CM.server_sent_key_update_state 'st0 req raw_sent)));
+    assert (pure (ST.server_end_to_end_invariant
+      (CM.server_sent_key_update_state 'st0 req raw_sent)));
+
+    assert (pure (ST.legal_response_for_event
+      'st0
+      (CM.server_sent_key_update_state 'st0 req raw_sent)
+      resp
+      (Ghost.reveal ev)
+      raw_sent
+      B.empty
+      network_out_bytes
+      'old_app_out));
+    assert (pure (ST.legal_local_response
+      'st0
+      (CM.server_sent_key_update_state 'st0 req raw_sent)
+      resp
+      kind
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal ev)
+      raw_sent
+      B.empty
+      network_out_bytes
+      'old_app_out));
+    assert (pure (ST.legal_handled_local_response
+      'st0
+      (CM.server_sent_key_update_state 'st0 req raw_sent)
+      resp
+      kind
+      (Ghost.reveal 'payload_bytes)
+      network_out_bytes
+      'old_app_out));
+    assert (pure (ST.server_local_event_end_to_end_correct
+      'st0
+      (CM.server_sent_key_update_state 'st0 req raw_sent)
+      resp
+      kind
+      (Ghost.reveal 'payload_bytes)
+      network_out_bytes
+      'old_app_out));
+    resp
+  } else {
+    CF.mark_unexpected_message s;
+    fold (connection_exactly s (CM.local_fail_state 'st0 CM.tls_unexpected_message_error));
+    let resp = {
+      ST.network_out_len = 0sz;
+      ST.app_out_len = 0sz;
+      ST.status = ST.IllegalTransition;
+    };
+    Seq.lemma_len_slice 'old_network_out 0 0;
+    Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+    Seq.lemma_len_slice 'old_app_out 0 0;
+    Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+    CM.lemma_local_fail_state_evolves 'st0 CM.tls_unexpected_message_error;
+    let delta = Ghost.hide {
+      CS.delta_event =
+        CS.ConnLocalEvent (CS.LocalFail CM.tls_unexpected_message_error);
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    };
+    CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+      CS.ServerEndpoint
+      'st0
+      (Ghost.reveal delta)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+    CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+      'st0
+      (Ghost.reveal delta)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+    CSL.lemma_connection_state_protected_raw_segmented_replay
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+    CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+      'st0
+      (Ghost.reveal delta)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+    CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+      'st0
+      (Ghost.reveal delta)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+    assert (pure ((CM.local_fail_state 'st0 CM.tls_unexpected_message_error).CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
+    assert (pure ((CM.local_fail_state 'st0 CM.tls_unexpected_message_error).CS.cs_model.CS.model_config.CS.config_role ==
+      CS.ServerEndpoint));
+    assert (pure (Some?
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error).CS.cs_model.CS.model_config.CS.config_server));
+    assert (pure (ST.server_state_correct
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)));
+    assert (pure (ST.server_raw_to_message_replay_consistent
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)));
+    assert (pure (ST.server_end_to_end_invariant
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)));
+    assert (pure (ST.unexpected_message_response
+      'st0
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+      resp
+      'old_network_out
+      'old_app_out));
+    assert (pure (ST.legal_handled_local_response
+      'st0
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+      resp
+      kind
+      (Ghost.reveal 'payload_bytes)
+      'old_network_out
+      'old_app_out));
+    assert (pure (ST.server_local_event_end_to_end_correct
+      'st0
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+      resp
+      kind
+      (Ghost.reveal 'payload_bytes)
+      'old_network_out
+      'old_app_out));
+    resp
+  }
+}

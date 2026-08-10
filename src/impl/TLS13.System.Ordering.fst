@@ -21,9 +21,12 @@ module TLS13.System.Ordering
         ApplicationData-typed records (`lemma_server_reachable_sent_ge_marker`).
       * byte-pairing + the sender-facing snapshot reachability give
         snap.raw_sent == client.raw_received (append right-cancellation).
-      * a client in its handshake receive region has RECEIVED ≤ 3 ApplicationData
-        records (`lemma_client_reachable_recv_region_le3`).
-      * 4 ≤ count(snap.raw_sent) == count(client.raw_received) ≤ 3 — contradiction.
+      * a client in its handshake receive region has RECEIVED ≤ `client_recv_charge`
+        ApplicationData records (`lemma_client_reachable_recv_le_charge`); the
+        client-direction lemma below takes `client_recv_charge < 4` as an EXPLICIT
+        hypothesis (see its own header for why `client_recv_region_ctrl` alone no
+        longer bounds the count).
+      * 4 ≤ count(snap.raw_sent) == count(client.raw_received) < 4 — contradiction.
     ═══════════════════════════════════════════════════════════════════════════ **)
 
 module CS = TLS13.Spec.StateMachine
@@ -141,6 +144,24 @@ let lemma_server_write_app_marker4 (st:CS.connection_state)
     existing `byte_pairing` conjunct + the recipient reachability supply at a
     delivery; they are taken explicitly here so the count argument can be
     validated before it is wired into `tls_system_inv`.
+
+    WEAKENED HYPOTHESIS (`WStep.client_recv_charge client.model < 4`, ADDED).
+    Before cross-record reassembly, `client_recv_region_ctrl` alone forced the
+    client's received-record count to at most 3 (`lemma_client_reachable_recv_
+    region_le3`, the OLD unconditional `<= 3`): every region-internal protected
+    receive consumed exactly one record and advanced `client_recv_potential` by
+    exactly one, so region membership and record count were in lockstep.  A
+    BUFFERING step breaks that lockstep — it consumes a record while leaving
+    `model_control` (hence the potential) untouched, so `client_recv_region_ctrl`
+    on its own no longer bounds the count at all (a client can buffer up to
+    `max_pending_protected_handshake` bytes' worth of extra records while
+    reassembling one message and never leave the region).  The genuinely
+    dominating quantity is `client_recv_charge` (potential, weighted so it
+    swamps any buffering movement, plus the pending-buffer residual); this
+    lemma now takes the caller's responsibility to establish `charge < 4`
+    explicitly, which the eventual `tls_system_inv` integration must supply
+    from its own inductive tracking of the buffer (this lemma currently has NO
+    caller in the tree, so no consumer is broken by shifting the burden here).
     ───────────────────────────────────────────────────────────────────────── **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 let lemma_inflight_sender_write_epoch_not_application_client
@@ -151,6 +172,10 @@ let lemma_inflight_sender_write_epoch_not_application_client
         WStep.client_reachable (CS.initial client.CS.cs_model.CS.model_config) client /\
         client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         WStep.client_recv_region_ctrl client.CS.cs_model.CS.model_control /\
+        // dominates the received-record count (see header); no longer implied
+        // by `client_recv_region_ctrl` alone once buffering can move records
+        // without moving control.
+        WStep.client_recv_charge client.CS.cs_model < 4 /\
         // sender snapshot is byte-reachable + consistent (the `inflight_snap_reachable`
         // existential witness `pred`) and is a server
         WStep.server_reachable (CS.initial snap_st.CS.cs_model.CS.model_config) snap_st /\
@@ -165,7 +190,7 @@ let lemma_inflight_sender_write_epoch_not_application_client
   = // Suppose the snapshot has installed its application write keys.
     // Then the whole server flight is sent: count(snap.raw_sent) >= 4.
     // But snap.raw_sent == client.raw_received (append right-cancellation),
-    // and a client in its receive region has received <= 3.  Contradiction.
+    // and a client whose charge is < 4 has received < 4.  Contradiction.
     Seq.lemma_append_inj
       snap_st.CS.cs_wire_log.CL.raw_sent raw
       client.CS.cs_wire_log.CL.raw_received raw;
@@ -175,7 +200,7 @@ let lemma_inflight_sender_write_epoch_not_application_client
     WStep.lemma_raw_appdata_count_seq_equal
       snap_st.CS.cs_wire_log.CL.raw_sent
       client.CS.cs_wire_log.CL.raw_received;
-    WStep.lemma_client_reachable_recv_region_le3
+    WStep.lemma_client_reachable_recv_le_charge
       client.CS.cs_model.CS.model_config client;
     if snap_st.CS.cs_model.CS.model_record.CS.record_write.R.epoch = R.Application
     then begin

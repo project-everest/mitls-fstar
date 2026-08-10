@@ -1052,6 +1052,131 @@ fn read
       model'))
 }
 
+(** Run the pending protected-handshake drain, outside the record path.
+
+    A protected record can carry a whole coalesced flight, and a drain step is
+    only legal once the messages before it have been fully processed --
+    `CertificateVerify` in particular is illegal until `LocalValidateCertificate`
+    has run.  So a drain launched when the record arrives necessarily stops
+    partway through the flight, and the remaining messages can only be applied
+    after the intervening local events.  Draining here, between local events,
+    is what lets that happen: without it the driver would wait for a socket read
+    that the peer has no reason to satisfy, since it has already sent
+    everything.
+
+    Draining is application-invisible -- it neither reads nor writes the wire --
+    so the buffered bytes, the TCP history and the wire-log witness all carry
+    over unchanged. *)
+fn drain_pending_internal
+  (d:top_buffered_driver)
+  requires
+    top_buffered_driver_exactly d 'st0 'buffered 'buffered_len
+  returns _:unit
+  ensures
+    exists* st1.
+      top_buffered_driver_exactly d st1 'buffered 'buffered_len **
+      pure (D.drained (Ghost.reveal 'st0) st1)
+{
+  unfold (top_buffered_driver_exactly
+    d
+    'st0
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'buffered_len));
+  unfold (buffered_driver_exactly
+    d.top_buffered_driver_core
+    'st0
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'buffered_len));
+  with model received committed sent.
+    assert (buffered_driver_indexed
+      d.top_buffered_driver_core
+      'st0
+      (Ghost.reveal 'buffered)
+      (Ghost.reveal 'buffered_len)
+      model
+      received
+      committed
+      sent);
+  unfold (buffered_driver_indexed
+    d.top_buffered_driver_core
+    'st0
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'buffered_len)
+    model
+    received
+    committed
+    sent);
+  unfold (buffered_driver_canonical_progress
+    d.top_buffered_driver_core
+    'st0);
+  // As at the in-record drain site, the empty payload is heap-allocated: a
+  // zero-length stack array extracts to a GNU-only `uint8_t p[0U]`.
+  let empty_payload = V.alloc 0uy 0sz;
+  V.to_array_pts_to empty_payload;
+  rewrite
+    (C.connection_exactly
+      d.top_buffered_driver_core.buffered_driver_client
+      'st0)
+    as
+    (CR.connection_exactly
+      d.top_buffered_driver_core.buffered_driver_client
+      'st0);
+  let quiet =
+    DL.drain_pending
+      d.top_buffered_driver_core.buffered_driver_client
+      (V.vec_to_array empty_payload);
+  with st1. assert (
+    CR.connection_exactly
+      d.top_buffered_driver_core.buffered_driver_client
+      st1);
+  rewrite
+    (CR.connection_exactly
+      d.top_buffered_driver_core.buffered_driver_client
+      st1)
+    as
+    (C.connection_exactly
+      d.top_buffered_driver_core.buffered_driver_client
+      st1);
+  V.to_vec_pts_to empty_payload;
+  V.free empty_payload;
+  D.lemma_drained_facts (Ghost.reveal 'st0) st1;
+  DP.lemma_drained_progress (Ghost.reveal 'st0) st1;
+  D.lemma_drained_nonfailed_previous_imp (Ghost.reveal 'st0) st1;
+  MR.update
+    d.top_buffered_driver_core.buffered_driver_progress
+    st1;
+  assert (pure (client_driver_wire_logs_match_witness
+    st1
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Ghost.reveal committed)
+    (BT.pending (Ghost.reveal model))
+    (Ghost.reveal 'buffered_len)));
+  fold (buffered_driver_canonical_progress
+    d.top_buffered_driver_core
+    st1);
+  fold (buffered_driver_indexed
+    d.top_buffered_driver_core
+    st1
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'buffered_len)
+    model
+    received
+    committed
+    sent);
+  fold (buffered_driver_exactly
+    d.top_buffered_driver_core
+    st1
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'buffered_len));
+  fold (top_buffered_driver_exactly
+    d
+    st1
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'buffered_len));
+  ()
+}
+
 fn process_local_event
   (d:top_buffered_driver)
   (kind:CT.local_event_kind)

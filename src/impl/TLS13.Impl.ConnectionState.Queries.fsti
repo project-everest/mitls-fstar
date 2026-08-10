@@ -610,6 +610,27 @@ fn can_receive_encrypted_extensions
                 CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
               }))
 
+(* The runtime gate for setting a protected record's plaintext aside instead
+   of interpreting it.  It is exactly the buffering guard of
+   [CS.legal_protected_handshake_step] that a caller cannot already discharge
+   from the message it has parsed: the role, the read-sequence room, and the
+   current handshake stage being one of the four at which a client can
+   receive a protected handshake message
+   ([CS.protected_handshake_buffering_stage]). *)
+fn can_buffer_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            (match st0.CS.cs_model.CS.model_control with
+             | CS.ControlHandshaking stage ->
+               CS.protected_handshake_buffering_stage stage
+             | _ -> False))
+
 fn can_send_encrypted_extensions_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -1052,6 +1073,56 @@ fn can_send_endpoint_close_notify_runtime
               CL.Sent /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             24 <= SZ.v network_out_len)
+
+(* [need_pending] distinguishes the two ways an endpoint reaches a KeyUpdate:
+   responding to a peer [update_requested], which requires the obligation to be
+   outstanding, and initiating spontaneously, which does not. *)
+fn can_send_key_update_runtime_gen
+  (c:connection_state)
+  (network_out_len:SZ.t)
+  (need_pending:bool)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            (need_pending ==> st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending) /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            27 <= SZ.v network_out_len)
+
+fn server_can_send_key_update_runtime
+  (c:connection_state)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            27 <= SZ.v network_out_len)
+
+(* Server counterpart of the client's response obligation query.  Unlike
+   [server_can_send_key_update_runtime] this checks
+   [app_key_update_response_pending] and imposes *no* output-buffer or
+   sequence-number requirement, so the scheduler (which has no output buffer in
+   hand) can use it to decide whether a mandated KeyUpdate reply is due. *)
+fn server_key_update_response_ready_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
 
 fn can_send_key_update_runtime
   (c:connection_state)

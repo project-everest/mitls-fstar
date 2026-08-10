@@ -946,20 +946,33 @@ fn alloc_default_signature_schemes ()
             default_connection_config.CS.config_signature_schemes
 {
   let items = V.alloc 0x0804us (max_signature_schemes_sz);
-  let len = Box.alloc 1sz;
+  V.op_Array_Assignment items 1sz 0x0403us;
+  let contents = Ghost.hide (Seq.upd (Seq.create max_signature_schemes 0x0804us) 1 0x0403us);
+  let len = Box.alloc 2sz;
   let slot = { items; len };
-  rewrite (V.pts_to items (Seq.create max_signature_schemes 0x0804us)) as
-    (V.pts_to slot.items (Seq.create max_signature_schemes 0x0804us));
-  rewrite (Box.pts_to len 1sz) as (Box.pts_to slot.len 1sz);
-  assert (pure (Seq.length (Seq.create max_signature_schemes 0x0804us) == max_signature_schemes));
+  rewrite (V.pts_to items (Ghost.reveal contents)) as
+    (V.pts_to slot.items (Ghost.reveal contents));
+  rewrite (Box.pts_to len 2sz) as (Box.pts_to slot.len 2sz);
   Seq.lemma_index_create max_signature_schemes 0x0804us 0;
-  assert (pure (Seq.index (Seq.create max_signature_schemes 0x0804us) 0 == 0x0804us));
+  assert (pure (Seq.length (Ghost.reveal contents) == max_signature_schemes));
+  assert (pure (Seq.index (Ghost.reveal contents) 0 == 0x0804us));
+  assert (pure (Seq.index (Ghost.reveal contents) 1 == 0x0403us));
+  // The tail sequence after dropping the first entry: its head is the ECDSA
+  // offer, and the recursive `signature_schemes_match` on the empty remainder
+  // is discharged by its `len == 0` base case.
+  let tail = Ghost.hide (Seq.slice (Ghost.reveal contents) 1 (Seq.length (Ghost.reveal contents)));
+  assert (pure (Seq.index (Ghost.reveal tail) 0 == 0x0403us));
   assert_norm (IM.signature_scheme_matches 0x0804us T.Rsa_pss_rsae_sha256);
+  assert_norm (IM.signature_scheme_matches 0x0403us T.Ecdsa_secp256r1_sha256);
   assert_norm (default_connection_config.CS.config_signature_schemes ==
-    [T.Rsa_pss_rsae_sha256]);
+    [T.Rsa_pss_rsae_sha256; T.Ecdsa_secp256r1_sha256]);
   assert (pure (IM.signature_schemes_match
-    (Seq.create max_signature_schemes 0x0804us)
+    (Ghost.reveal tail)
     1
+    [T.Ecdsa_secp256r1_sha256]));
+  assert (pure (IM.signature_schemes_match
+    (Ghost.reveal contents)
+    2
     default_connection_config.CS.config_signature_schemes));
   fold (signature_scheme_list_exactly
     slot

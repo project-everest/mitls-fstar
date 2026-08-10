@@ -830,6 +830,43 @@ let top_server_channel_io_frame
       d ch wire_received wire_sent pending app_log
       st certificate_chain credential_identity channel model committed buffered_len
 
+(**
+  Duplicable snapshot recording that the buffered driver's TCP histories had
+  reached at least the given receive/send histories.  The underlying witness is
+  monotonic, so recalling it against a later full-permission
+  [MR.pts_to] yields a prefix relation -- which is exactly the
+  [CPI.histories_ahead] conjunct of [CI.send_transition] and
+  [CI.receive_transition].
+**)
+noextract
+let top_server_driver_io_history_snapshot
+  (d:top_server_driver)
+  (received sent:B.bytes)
+  : slprop =
+  MR.snapshot
+    d.top_server_driver_tcp_history
+    (server_driver_history received sent)
+
+(**
+  The channel-level snapshot: a duplicable record of a past channel state,
+  making no ownership claim.  This is the [CI.ci_snapshot] of the server's
+  [CI.channel_implementation] instance.
+**)
+noextract
+let top_server_channel_snapshot
+  (d:top_server_driver)
+  (wire_received wire_sent:B.bytes)
+  (app_log:CI.application_log B.bytes)
+  : slprop =
+  exists* st.
+    SP.server_snapshot
+      (top_server_driver_canonical d)
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
+      st **
+    top_server_driver_io_history_snapshot d wire_received wire_sent **
+    pure (app_log == TChannel.application_log st)
+
 noextract
 let top_server_driver_closed
   (d:top_server_driver)

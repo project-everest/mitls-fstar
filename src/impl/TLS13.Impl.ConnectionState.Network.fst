@@ -1067,7 +1067,6 @@ fn store_pending_protected_handshake
   requires connection_model_exactly c model **
            ArrPts.pts_to fragment 'fragment_bytes **
            pure (
-             CS.protected_handshake_buffer_empty (Ghost.reveal model) /\
              B.length (Ghost.reveal 'fragment_bytes) == SZ.v fragment_len /\
              SZ.v fragment_len <= max_handshake_flight_len /\
              SZ.v parsed <= SZ.v fragment_len)
@@ -1496,6 +1495,125 @@ fn finish_protected_handshake_head
       (Ghost.reveal 'raw_bytes)))
 }
 
+(* Take delivery of a protected handshake record WITHOUT interpreting it:
+   append its plaintext to whatever the previous record left unparsed and
+   advance the read sequence.  This is what makes a handshake message that
+   spans three or more records deliverable -- with only message-bearing steps
+   reassembly stalls as soon as the accumulated bytes still do not contain a
+   whole message, and the record cannot simply be left alone because opening
+   it has already advanced the AEAD sequence number irreversibly.
+
+   [stream] must already hold `leftover ++ this record's plaintext`; the
+   caller builds it, since only it has the decrypted plaintext to hand. *)
+fn buffer_protected_handshake_record
+  (c:connection_state)
+  (raw:array U8.t)
+  (stream:array U8.t)
+  (stream_len:SZ.t)
+  (#step:erased CS.protected_handshake_step)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to stream 'stream_bytes **
+           pure (
+             B.length (Ghost.reveal 'stream_bytes) == SZ.v stream_len /\
+             SZ.v stream_len <= max_handshake_flight_len /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == true /\
+             Seq.equal
+               (Ghost.reveal 'stream_bytes)
+               (CS.protected_handshake_stream
+                 st0.CS.cs_model
+                 (Ghost.reveal step)) /\
+             U64.fits
+               (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnProtectedHandshake (Ghost.reveal step)) /\
+             CS.event_raw_delta_legal
+               st0.CS.cs_model
+               (CS.ConnProtectedHandshake (Ghost.reveal step))
+               B.empty
+               (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (protected_handshake_state
+              st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to stream 'stream_bytes
+{
+  let advanced = Ghost.hide (
+    { st0.CS.cs_model with
+        CS.model_record =
+          { st0.CS.cs_model.CS.model_record with
+              CS.record_read =
+                R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read;
+          };
+    });
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read =
+          R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+  rewrite (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read =
+          R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read })
+    as (record_layer_exactly
+      c.records
+      (Ghost.reveal advanced).CS.model_record);
+  fold (connection_model_exactly c (Ghost.reveal advanced));
+  store_pending_protected_handshake
+    c
+    stream
+    stream_len
+    0sz
+    #advanced;
+  assert (pure (
+    (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes)).CS.cs_model ==
+      CS.set_pending_protected_handshake
+        (Ghost.reveal advanced)
+        (Ghost.reveal 'stream_bytes)
+        0));
+  lemma_protected_handshake_state_evolves
+    st0
+    (Ghost.reveal step)
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes));
+  rewrite (connection_model_exactly
+    c
+    (CS.set_pending_protected_handshake
+      (Ghost.reveal advanced)
+      (Ghost.reveal 'stream_bytes)
+      0))
+    as (connection_model_exactly
+      c
+      (protected_handshake_state
+        st0
+        (Ghost.reveal step)
+        (Ghost.reveal 'raw_bytes)).CS.cs_model);
+  fold (connection_exactly
+    c
+    (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes)))
+}
+
 fn finish_protected_handshake_drain
   (c:connection_state)
   (parsed:SZ.t)
@@ -1815,6 +1933,7 @@ fn mark_received_protected_encrypted_extensions
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_encrypted_extensions lee ee **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.EncryptedExtensions (Ghost.reveal ee) /\
              Seq.equal
@@ -2233,6 +2352,7 @@ fn mark_received_protected_certificate_head
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_certificate_msg lcert cert **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Certificate (Ghost.reveal cert) /\
              Seq.equal
@@ -2344,6 +2464,7 @@ fn mark_received_protected_certificate_drain
            IM.is_valid_certificate_msg lcert cert **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Certificate (Ghost.reveal cert) /\
              Seq.equal
@@ -2779,6 +2900,7 @@ fn mark_received_protected_certificate_verify_head
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_certificate_verify lcv cv **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.CertificateVerify (Ghost.reveal cv) /\
              Seq.equal
@@ -2893,6 +3015,7 @@ fn mark_received_protected_certificate_verify_drain
            IM.is_valid_certificate_verify lcv cv **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.CertificateVerify (Ghost.reveal cv) /\
              Seq.equal
@@ -3478,6 +3601,7 @@ fn mark_received_protected_server_finished_drain
            IM.is_valid_finished lfin fin **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Finished (Ghost.reveal fin) /\
              Seq.equal
@@ -4431,4 +4555,279 @@ fn mark_received_key_update
   fold (connection_exactly
     c
     (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_server_received_key_update
+  (c:connection_state)
+  (raw:array U8.t)
+  (requested:bool)
+  (#req:erased M.key_update_request)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+                 (requested ==> req == M.UpdateRequested) /\
+                 (requested == false ==> req == M.UpdateNotRequested) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsKeyUpdate req;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+  assert (pure (requested ==> req == M.UpdateRequested));
+  assert (pure (requested == false ==> req == M.UpdateNotRequested));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsKeyUpdate req;
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  with old_present old_secret old_key old_iv. _;
+  lemma_traffic_key_material_match_present_of_some
+    old_present
+    old_secret
+    old_key
+    old_iv
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
+  assert (pure (old_present));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic ==
+    Some {
+      CS.traffic_secret = old_secret;
+      CS.traffic_key = old_key;
+      CS.traffic_iv = old_iv;
+    }));
+  let old_material = Ghost.hide (Some?.v
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  assert (pure ((Ghost.reveal old_material).CS.traffic_secret == old_secret));
+
+  V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_secret;
+  let mut traffic_secret_out = [| 0uy; 32sz |];
+  KS.application_traffic_secret_update
+    (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_secret)
+    traffic_secret_out;
+  V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_secret;
+  with traffic_secret_bytes. assert (ArrPts.pts_to traffic_secret_out traffic_secret_bytes);
+  assert (pure (traffic_secret_bytes ==
+    K.application_traffic_secret_update old_secret));
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+
+  let mut traffic_key_out = [| 0uy; 32sz |];
+  KS.derive_traffic_key traffic_secret_out traffic_key_out;
+  let mut traffic_iv_out = [| 0uy; 12sz |];
+  KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
+  with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
+  with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
+
+  let traffic_secret = Ghost.hide traffic_secret_bytes;
+  let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+  assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
+  assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+  assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
+  assert (pure (Ghost.reveal material == CS.updated_traffic_key_material (Ghost.reveal old_material)));
+
+  store_traffic_key_material
+    c.handshake.keys.client_application_traffic
+    traffic_secret_out
+    traffic_key_out
+    traffic_iv_out
+    #material;
+
+  fold (key_schedule_exactly
+    c.handshake.keys
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+  Rec.install_application_keys_runtime c.records.read traffic_key_out traffic_iv_out;
+  assert (pure (R.install_keys
+    st0.CS.cs_model.CS.model_record.CS.record_read
+    R.Application
+    (Ghost.reveal material).CS.traffic_key
+    (Ghost.reveal material).CS.traffic_iv ==
+    R.install_keys
+      (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read)
+      R.Application
+      (Ghost.reveal material).CS.traffic_key
+      (Ghost.reveal material).CS.traffic_iv));
+  rewrite (Rec.is_record_state
+    c.records.read
+    (R.install_keys
+      st0.CS.cs_model.CS.model_record.CS.record_read
+      R.Application
+      (Ghost.reveal material).CS.traffic_key
+      (Ghost.reveal material).CS.traffic_iv))
+    as (Rec.is_record_state
+      c.records.read
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_record.CS.record_read);
+  rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
+    as (Rec.is_record_state
+      c.records.write
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_record.CS.record_write);
+  fold (record_layer_exactly
+    c.records
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_record);
+
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config ==
+                st0.CS.cs_model.CS.model_config));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_control ==
+                st0.CS.cs_model.CS.model_control));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application ==
+                CS.received_key_update_pending
+                  st0.CS.cs_model.CS.model_application
+                  req));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+
+  rewrite (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+    as (handshake_start_exactly
+      c.handshake.start
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_start);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  rewrite (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
+    (client_hello_metadata_exactly
+      c.handshake.messages.client_hello_has_server_name
+      c.handshake.messages.client_hello_server_name_len
+      c.handshake.messages.client_hello_cipher_suites_len
+      c.handshake.messages.client_hello_signature_schemes_len
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  rewrite (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer)
+    as (peer_exactly
+      c.handshake.validated_peer
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  rewrite (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+    as (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  rewrite (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers)
+    as (handshake_buffers_exactly
+      c.handshake.buffers
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  assert (pure (cv_verified ==
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure (server_finished_verified ==
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  fold (handshake_exactly
+    c.handshake
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+
+  rewrite (connection_config_exactly c.config st0.CS.cs_model.CS.model_config)
+    as (connection_config_exactly
+      c.config
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config);
+  rewrite (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure)
+    as (control_exactly
+      c.control
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_control
+      (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_failure);
+  unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  with source_offset pending_response. _;
+  if requested {
+    assert (pure (req == M.UpdateRequested));
+    c.application.key_update_response_pending := true;
+    assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application.CS.app_key_update_response_pending == true));
+  } else {
+    assert (pure (requested == false));
+    assert (pure (req == M.UpdateNotRequested));
+    assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application.CS.app_key_update_response_pending ==
+                  st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending));
+  };
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application.CS.app_pending_source_record ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_source_record));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application.CS.app_pending_source_offset ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_source_offset));
+  assert (pure ((server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application.CS.app_pending_received_raw ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_received_raw));
+  assert (pure (TLS13.Spec.StateMachine.Correspondence.pending_application_consistent
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application));
+  fold (application_exactly
+    c.application
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application);
+  fold (connection_model_exactly
+    c
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_server_received_key_update_state_evolves
+    st0
+    req
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly
+    c
+    (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)))
 }

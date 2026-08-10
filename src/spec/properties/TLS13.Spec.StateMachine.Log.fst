@@ -38,7 +38,11 @@ let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
      | CL.Sent -> []
      | CL.Received -> [msg.CL.message_value])
   | ConnProtectedHandshake step ->
-    [M.TlsHandshake step.protected_handshake_message]
+    (* A buffering step delivers no message, so it contributes nothing to the
+       received-message log; its message field is inert. *)
+    if step.protected_handshake_buffering
+    then []
+    else [M.TlsHandshake step.protected_handshake_message]
   | ConnLocalEvent _ -> []
 let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -78,6 +82,9 @@ let state_event_of_conn_event (ev:conn_event) : GTot (option S.event) =
      | _, M.TlsChangeCipherSpec -> None
      | _, _ -> None)
   | ConnProtectedHandshake step ->
+    if step.protected_handshake_buffering
+    then None
+    else
     (match step.protected_handshake_message with
      | M.ServerHello sh -> Some (S.RecvServerHello sh)
      | M.EncryptedExtensions ee -> Some (S.RecvEncryptedExtensions ee)
@@ -147,7 +154,11 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
       W.serialize_handshake (M.Finished fin)
      | _, _ -> B.empty)
   | ConnProtectedHandshake step ->
-    W.serialize_handshake step.protected_handshake_message
+    (* Buffering appends nothing to the transcript: the transcript records
+       delivered handshake messages, and a buffering step delivers none. *)
+    if step.protected_handshake_buffering
+    then B.empty
+    else W.serialize_handshake step.protected_handshake_message
   | ConnLocalEvent local ->
     (match local with
      | LocalVerifyFinished fin -> W.serialize_handshake (M.Finished fin)
@@ -330,13 +341,23 @@ let projected_record_layer_step_for_role
                (S.application_data_record_count bytes) }
      | CL.Received, M.TlsKeyUpdate _ ->
        { record with projected_read = projected_install_keys R.Application }
-     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
+     | CL.Sent, M.TlsKeyUpdate _ ->
+       (* Both request forms rotate the sender's write key: a spontaneous
+          [update_requested] installs new Application write keys just as the
+          [update_not_requested] response does (RFC 8446 §4.6.3). *)
        { record with projected_write = projected_install_keys R.Application }
      | CL.Sent, M.TlsAlert T.Close_notify ->
        { record with projected_write = projected_next_seq record.projected_write }
      | _, _ ->
        record)
   | ConnProtectedHandshake step ->
+    (* A buffering step carries no message -- its message field is inert -- so
+       the dispatch below must not be reached for one, or a buffering step
+       whose field happened to hold [Finished] would appear to install the
+       application read keys.  Buffering only bumps the read sequence. *)
+    if step.protected_handshake_buffering
+    then { record with projected_read = projected_next_seq record.projected_read }
+    else
     (match step.protected_handshake_message with
      | M.Finished _ ->
       { record with projected_read = projected_install_keys R.Application }
@@ -527,11 +548,14 @@ let connection_log_event_of_conn_event (ev:conn_event) : option CL.host_event =
   match ev with
   | ConnNetworkEvent msg -> Some (CL.NetworkEvent msg)
   | ConnProtectedHandshake step ->
-    Some
-      (CL.NetworkEvent {
-        CL.message_direction = CL.Received;
-        CL.message_value = M.TlsHandshake step.protected_handshake_message;
-      })
+    if step.protected_handshake_buffering
+    then None
+    else
+      Some
+        (CL.NetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake step.protected_handshake_message;
+        })
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (CL.LocalEvent (CL.LocalValidateCertificate peer))

@@ -4017,19 +4017,31 @@ let lemma_server_hsserverhellosent_recv_zero
 #pop-options
 
 (** ═══════════════════════════════════════════════════════════════════════════
-    CLIENT RECV ≤ 3 : upper bound in the server-flight-receiving region.
+    CLIENT RECV : upper bound in the server-flight-receiving region.
 
     A reachable client whose control is still in the handshake-receiving region
     (New / HsStarted / HsClientHelloSent / HsServerHelloReceived /
     HsEncryptedExtensionsReceived / HsCertificateReceived / HsCertificateValidated
     / HsCertificateVerifyReceived / HsCertificateVerifyVerified — every control at
     which the client has NOT yet delivered the server Finished, i.e. its read epoch
-    is still Handshake) has RECEIVED at most three ApplicationData-typed records
-    (EncryptedExtensions, Certificate, CertificateVerify).  The fourth protected
-    record — the server Finished — is delivered ATOMICALLY into
-    HsServerFinishedVerified (Model-Fix-1), leaving the region.  We reuse
-    `client_recv_potential` (which equals the exact received-record count on this
-    region) as an UPPER charge.
+    is still Handshake) has RECEIVED at most a BOUNDED number of ApplicationData-
+    typed records.
+
+    Before cross-record reassembly, `client_recv_potential` (control-keyed) WAS
+    the exact received-record count on this region: each of the three protected
+    messages a client can receive while still in-region (EncryptedExtensions,
+    Certificate, CertificateVerify) corresponds to exactly one record, and the
+    fourth protected record — the server Finished — is delivered ATOMICALLY into
+    HsServerFinishedVerified (Model-Fix-1), leaving the region.  A BUFFERING step
+    (see cross-record reassembly in `TLS13.Spec.StateMachine`) breaks that
+    correspondence: it consumes one record while leaving `model_control`
+    untouched, so a client can now accept many records — up to
+    `max_pending_protected_handshake` bytes' worth — while reassembling a single
+    message, all without its control moving.  `client_recv_charge` repairs the
+    UPPER charge by adding the pending, not-yet-parsed byte count
+    (`client_recv_residual`) to the control potential: a buffering step's record
+    is witnessed by the residual growing (by at least the one byte its legality
+    requires), not by the potential.
     ═══════════════════════════════════════════════════════════════════════════ **)
 
 (** The handshake-receiving region: client controls with read epoch Handshake,
@@ -4046,6 +4058,60 @@ let client_recv_region_ctrl (c:CS.connection_control_state) : bool =
   | CS.ControlHandshaking CS.HsCertificateVerifyReceived
   | CS.ControlHandshaking CS.HsCertificateVerifyVerified -> true
   | _ -> false
+
+(** Bytes of pending protected-handshake plaintext not yet parsed, CAPPED at
+    `max_pending_protected_handshake`.
+
+    The cap is what makes the residual a reliable addend to an UPPER charge
+    across EVERY kind of step, not just a buffering one: legality bounds a
+    TAIL step's drain (`consumed`) only by however much is already pending,
+    and nothing in `legal_protected_handshake_step` bounds an ORDINARY
+    (single-record, non-buffering) HEAD step's fragment length — so the raw
+    residual such a step can leave behind is not itself bounded by
+    `max_pending_protected_handshake`.  Capping means the residual can never
+    swing by more than the cap in a SINGLE step regardless of how large an
+    individual fragment or drained message happens to be, which is exactly
+    what lets one control-potential unit's weight dominate it below. **)
+let client_recv_residual (m:CS.connection_model) : nat =
+  let bufs = m.CS.model_handshake.CS.hs_buffers in
+  let n = B.length bufs.CS.hb_encrypted_server_handshake_bytes in
+  let p = bufs.CS.hb_encrypted_server_handshake_parsed in
+  let raw = if p <= n then n - p else 0 in
+  if raw <= CS.max_pending_protected_handshake
+  then raw
+  else CS.max_pending_protected_handshake
+
+(** `client_recv_residual` never exceeds its cap, by construction. **)
+let lemma_client_recv_residual_le_cap (m:CS.connection_model)
+  : Lemma (client_recv_residual m <= CS.max_pending_protected_handshake)
+  = ()
+
+(** `client_recv_residual` reads off the pending LEFTOVER's length whenever that
+    length is within the cap — in particular right before or after a legal
+    BUFFERING step, whose `protected_handshake_stream` bound (the leftover is a
+    prefix of the stream) puts both endpoints there.  This is the bridge that
+    lets a buffering step's exact residual growth (by its fragment's length) be
+    read off the definitions rather than merely bounded. **)
+let lemma_client_recv_residual_uncapped (m:CS.connection_model)
+  : Lemma
+      (requires
+        B.length (CS.pending_protected_handshake_leftover m) <=
+          CS.max_pending_protected_handshake)
+      (ensures
+        client_recv_residual m ==
+          B.length (CS.pending_protected_handshake_leftover m))
+  = ()
+
+(** One unit per protected message DELIVERED (`client_recv_potential`), weighted
+    so that a single potential unit always dominates the residual's maximal
+    per-step swing (the cap), plus the residual itself.  A BUFFERING step
+    consumes a record without moving `client_recv_potential` at all; the
+    residual term is what accounts for it instead — the record it consumed
+    grew the residual by at least one byte. **)
+let client_recv_charge (m:CS.connection_model) : nat =
+  client_recv_potential m.CS.model_control *
+    (CS.max_pending_protected_handshake + 1)
+  + client_recv_residual m
 
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
 (** FORWARD-CLOSURE (model level): once out of the receiving region, a legal step
@@ -4088,12 +4154,98 @@ let rec lemma_client_trace_notregion_forward
       lemma_client_trace_notregion_forward init s' st1 rest
 #pop-options
 
+(** A HEAD, non-buffering step's fragment IS the record it takes delivery of,
+    with nothing pending beforehand (`protected_handshake_buffer_empty`), so
+    the residual it contributes is 0 no matter how the message it decodes (or
+    a packed second message left in its tail) is later drained: the residual
+    term can only ever ADD to the post-step charge from here, so any
+    control-potential increase at all — and `step_protected_handshake`'s
+    non-buffering arm is exactly the pre-reassembly per-message transition —
+    already dominates the one record this step consumes. **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_client_recv_charge_head_nonbuffering
+  (m:CS.connection_model) (step:CS.protected_handshake_step)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_protected_handshake_step m step /\
+        CS.step_protected_handshake m step == Some m' /\
+        step.CS.protected_handshake_head == true /\
+        step.CS.protected_handshake_buffering == false)
+      (ensures
+        1 + client_recv_charge m <= client_recv_charge m')
+  = lemma_client_recv_residual_le_cap m'
+#pop-options
+
+(** A BUFFERING step leaves `model_control` untouched (it only advances
+    `record_read` and grows the pending buffer), so the potential term of the
+    charge does not move; the residual term picks up the slack because it
+    grows by exactly the freshly-delivered fragment's length, which legality
+    (`0 < B.length step.protected_handshake_fragment`) guarantees is at least
+    the one record this step consumes. **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_client_recv_charge_buffering
+  (m:CS.connection_model) (step:CS.protected_handshake_step)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_protected_handshake_step m step /\
+        CS.step_protected_handshake m step == Some m' /\
+        step.CS.protected_handshake_head == true /\
+        step.CS.protected_handshake_buffering == true)
+      (ensures
+        1 + client_recv_charge m <= client_recv_charge m')
+  = assert (m' == CS.step_protected_handshake_buffer m step);
+    assert (m'.CS.model_control == m.CS.model_control);
+    let stream = CS.protected_handshake_stream m step in
+    assert (B.length stream <= CS.max_pending_protected_handshake);
+    assert (m'.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes
+              == stream);
+    assert (m'.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed
+              == 0);
+    lemma_client_recv_residual_uncapped m';
+    assert (client_recv_residual m' == B.length stream);
+    let leftover = CS.pending_protected_handshake_leftover m in
+    assert (Seq.equal stream (B.append leftover step.CS.protected_handshake_fragment));
+    Seq.lemma_len_append leftover step.CS.protected_handshake_fragment;
+    assert (B.length leftover <= B.length stream);
+    lemma_client_recv_residual_uncapped m;
+    assert (client_recv_residual m == B.length leftover);
+    assert (client_recv_residual m' ==
+              client_recv_residual m + B.length step.CS.protected_handshake_fragment)
+#pop-options
+
+(** A TAIL step never consumes a new record (`raw_appdata_count == 0`); it
+    advances the control by exactly one `client_recv_potential` unit (the
+    same per-message table the pre-buffering design used) while draining
+    (at most) the CAPPED residual, so the potential's weight — chosen to
+    exceed the cap — dominates whatever the residual gives up. **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_client_recv_charge_tail
+  (m:CS.connection_model) (step:CS.protected_handshake_step)
+  (m':CS.connection_model)
+  : Lemma
+      (requires
+        CS.legal_protected_handshake_step m step /\
+        CS.step_protected_handshake m step == Some m' /\
+        step.CS.protected_handshake_head == false /\
+        client_recv_region_ctrl m.CS.model_control /\
+        client_recv_region_ctrl m'.CS.model_control)
+      (ensures
+        client_recv_charge m <= client_recv_charge m')
+  = lemma_client_recv_residual_le_cap m;
+    lemma_client_recv_residual_le_cap m'
+#pop-options
+
 #push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
 (** Per-step client RECV UPPER charge: within the receiving region, a legal client
-    step's appdata RECV-delta count plus the pre-step control potential is at most
-    the post-step control potential.  (Each region-internal protected receive
-    advances the control by exactly one `client_recv_potential` unit; local/send
-    and cleartext receives leave both unchanged.) **)
+    step's appdata RECV-delta count plus the pre-step charge is at most the
+    post-step charge.  `client_recv_charge` -- control potential weighted to
+    dominate a capped pending-bytes residual -- replaces bare
+    `client_recv_potential` because a BUFFERING step consumes a record
+    (`raw_appdata_count == 1`) while leaving `model_control`, and hence the
+    potential, untouched; local/send and cleartext receives leave the charge
+    unchanged. **)
 let lemma_client_recv_upper_step
   (m:CS.connection_model) (conn_ev:CS.conn_event)
   (m':CS.connection_model) (raw_sent raw_received:B.bytes)
@@ -4106,8 +4258,8 @@ let lemma_client_recv_upper_step
         client_recv_region_ctrl m'.CS.model_control /\
         CS.event_raw_delta_legal m conn_ev raw_sent raw_received)
       (ensures
-        raw_appdata_count raw_received + client_recv_potential m.CS.model_control
-          <= client_recv_potential m'.CS.model_control)
+        raw_appdata_count raw_received + client_recv_charge m
+          <= client_recv_charge m')
   = match conn_ev with
     | CS.ConnLocalEvent _ ->
       Seq.lemma_eq_elim raw_received B.empty;
@@ -4115,12 +4267,18 @@ let lemma_client_recv_upper_step
       lemma_raw_appdata_count_seq_equal raw_received B.empty
     | CS.ConnProtectedHandshake step ->
       if step.CS.protected_handshake_head
-      then lemma_protected_raw_count_one raw_received
-      else (
+      then begin
+        lemma_protected_raw_count_one raw_received;
+        if step.CS.protected_handshake_buffering
+        then lemma_client_recv_charge_buffering m step m'
+        else lemma_client_recv_charge_head_nonbuffering m step m'
+      end
+      else begin
         Seq.lemma_eq_elim raw_received B.empty;
         lemma_raw_appdata_count_empty ();
-        lemma_raw_appdata_count_seq_equal raw_received B.empty
-      )
+        lemma_raw_appdata_count_seq_equal raw_received B.empty;
+        lemma_client_recv_charge_tail m step m'
+      end
     | CS.ConnNetworkEvent dm ->
       (match dm.CL.message_direction with
        | CL.Sent ->
@@ -4150,8 +4308,8 @@ let lemma_client_step_recv_upper
         client_recv_region_ctrl st1.CS.cs_model.CS.model_control)
       (ensures
         list_appdata_count (WFSM.event_input_messages ev)
-          + client_recv_potential st0.CS.cs_model.CS.model_control
-          <= client_recv_potential st1.CS.cs_model.CS.model_control)
+          + client_recv_charge st0.CS.cs_model
+          <= client_recv_charge st1.CS.cs_model)
   = match ev with
     | SM.WireEvent wire ->
       eliminate exists (conn_ev:CS.conn_event).
@@ -4192,8 +4350,8 @@ let lemma_client_step_recv_upper
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
 (** Trace-level client RECV UPPER telescoping: along any reachable client trace
     whose endpoint is still in the receiving region, the total appdata RECV-input
-    count plus the initial control potential is at most the final control
-    potential.  (All intermediate states are in the region by forward closure.) **)
+    count plus the initial charge is at most the final charge.  (All intermediate
+    states are in the region by forward closure.) **)
 let rec lemma_client_trace_recv_upper
   (init st0 st1:CS.connection_state)
   (trace:list (SM.transition CS.connection_state CW.wire_message
@@ -4204,8 +4362,8 @@ let rec lemma_client_trace_recv_upper
             client_recv_region_ctrl st1.CS.cs_model.CS.model_control)
           (ensures
             list_appdata_count (WFSM.trace_input_messages trace)
-              + client_recv_potential st0.CS.cs_model.CS.model_control
-              <= client_recv_potential st1.CS.cs_model.CS.model_control)
+              + client_recv_charge st0.CS.cs_model
+              <= client_recv_charge st1.CS.cs_model)
           (decreases trace)
   = match trace with
     | [] -> ()
@@ -4229,17 +4387,26 @@ let rec lemma_client_trace_recv_upper
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-(** ═══ TARGET LEMMA : CLIENT RECV ≤ 3 in the receiving region. ═══
+(** ═══ CLIENT RECV bound, in CHARGE form. ═══
     A reachable client still in the handshake-receiving region has RECEIVED at
-    most three ApplicationData-typed records. **)
-let lemma_client_reachable_recv_region_le3
+    most `client_recv_charge` (evaluated at ITS OWN model) ApplicationData-typed
+    records.  This is the trace-independent form of the RECV UPPER telescoping
+    (`lemma_client_trace_recv_upper`, discharged at the connection's own
+    initial state, where the charge is 0): callers that can bound
+    `client_recv_charge` MORE TIGHTLY than the region's own worst case (e.g. by
+    tracking it as part of a larger cross-endpoint invariant) get a
+    correspondingly tighter received-record bound without redoing the trace
+    argument. **)
+let lemma_client_reachable_recv_le_charge
   (cfg:CS.connection_config)
   (client:CS.connection_state)
   : Lemma (requires
             client_reachable (CS.initial cfg) client /\
             client_recv_region_ctrl client.CS.cs_model.CS.model_control /\
             cfg.CS.config_role == CS.ClientEndpoint)
-          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_received <= 3)
+          (ensures
+            raw_appdata_count client.CS.cs_wire_log.CL.raw_received
+              <= client_recv_charge client.CS.cs_model)
   = let init : EC.client_initial_state = CS.initial cfg in
     let sm = client_sm init in
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
@@ -4252,7 +4419,7 @@ let lemma_client_reachable_recv_region_le3
       let in_msgs = WFSM.trace_input_messages trace in
       let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
       assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
-      assert (client_recv_potential init.CS.cs_model.CS.model_control == 0);
+      assert (client_recv_charge init.CS.cs_model == 0);
       assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
       assert (Seq.equal client.CS.cs_wire_log.CL.raw_received sm_bytes);
       lemma_raw_appdata_count_serialize_all in_msgs;
@@ -4261,15 +4428,54 @@ let lemma_client_reachable_recv_region_le3
 #pop-options
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-(** ═══ CLIENT RECV == 0 at HsServerHelloReceived. ═══
+(** ═══ TARGET LEMMA : CLIENT RECV bound in the receiving region. ═══
+    A reachable client still in the handshake-receiving region has RECEIVED at
+    most `4 * max_pending_protected_handshake + 3` ApplicationData-typed records.
+
+    WEAKENED FROM `<= 3`.  Before cross-record reassembly, `client_recv_potential`
+    (at most 3 anywhere in this region) was the EXACT received-record count, since
+    every region-internal protected receive was exactly one record.  A BUFFERING
+    step breaks that correspondence: it consumes a record while leaving
+    `model_control`, and hence `client_recv_potential`, untouched, so a client can
+    accept up to `max_pending_protected_handshake` bytes' worth of extra records
+    while reassembling a message and never leave the region.  The bound below is
+    `client_recv_charge`'s own worst case in-region: potential at most 3
+    (`HsCertificateVerifyReceived` / `HsCertificateVerifyVerified`) weighted by
+    `max_pending_protected_handshake + 1`, plus the residual's cap of
+    `max_pending_protected_handshake`. **)
+let lemma_client_reachable_recv_region_le3
+  (cfg:CS.connection_config)
+  (client:CS.connection_state)
+  : Lemma (requires
+            client_reachable (CS.initial cfg) client /\
+            client_recv_region_ctrl client.CS.cs_model.CS.model_control /\
+            cfg.CS.config_role == CS.ClientEndpoint)
+          (ensures
+            raw_appdata_count client.CS.cs_wire_log.CL.raw_received
+              <= 4 * CS.max_pending_protected_handshake + 3)
+  = lemma_client_reachable_recv_le_charge cfg client;
+    lemma_client_recv_residual_le_cap client.CS.cs_model;
+    assert (client_recv_potential client.CS.cs_model.CS.model_control <= 3)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+(** ═══ CLIENT RECV bound at HsServerHelloReceived. ═══
     A reachable client whose control is exactly `HsServerHelloReceived` has
-    RECEIVED ZERO ApplicationData-typed records: it has only received the cleartext
-    ServerHello.  The first protected record the client receives is
-    EncryptedExtensions, whose receipt advances the control OUT of
-    `HsServerHelloReceived`.  `HsServerHelloReceived` is inside the
-    `client_recv_region_ctrl` region where `client_recv_potential` is the EXACT
-    received-record count; there it equals 0, so the RECV UPPER telescoping bounds
-    the received count by 0. **)
+    RECEIVED at most `max_pending_protected_handshake` ApplicationData-typed
+    records.
+
+    WEAKENED FROM `== 0`.  Before cross-record reassembly this was exact: the
+    client's only receive so far was the cleartext ServerHello, and the first
+    PROTECTED record it takes delivery of is EncryptedExtensions, whose receipt
+    advances the control OUT of `HsServerHelloReceived`.  But
+    `HsServerHelloReceived` is one of the four stages at which a BUFFERING step
+    is legal (`protected_handshake_buffering_stage`): a client can sit at this
+    exact control while buffering however many records it takes to assemble the
+    message that follows, up to the `max_pending_protected_handshake` cap, all
+    without moving `model_control`.  `client_recv_potential` is 0 at this control,
+    so `client_recv_charge` here is exactly the (capped) residual — at most
+    `max_pending_protected_handshake` — and the RECV UPPER telescoping bounds the
+    received count by that charge. **)
 let lemma_client_hsserverhelloreceived_recv_zero
   (cfg:CS.connection_config)
   (client:CS.connection_state)
@@ -4278,7 +4484,9 @@ let lemma_client_hsserverhelloreceived_recv_zero
             client.CS.cs_model.CS.model_control
               == CS.ControlHandshaking CS.HsServerHelloReceived /\
             cfg.CS.config_role == CS.ClientEndpoint)
-          (ensures raw_appdata_count client.CS.cs_wire_log.CL.raw_received == 0)
+          (ensures
+            raw_appdata_count client.CS.cs_wire_log.CL.raw_received
+              <= CS.max_pending_protected_handshake)
   = let init : EC.client_initial_state = CS.initial cfg in
     let sm = client_sm init in
     eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
@@ -4292,8 +4500,11 @@ let lemma_client_hsserverhelloreceived_recv_zero
       let in_msgs = WFSM.trace_input_messages trace in
       let sm_bytes = WF.serialize_all CW.tls_record_wire_format in_msgs in
       assert (init.CS.cs_wire_log.CL.raw_received == B.empty);
-      assert (client_recv_potential init.CS.cs_model.CS.model_control == 0);
+      assert (client_recv_charge init.CS.cs_model == 0);
       assert (client_recv_potential client.CS.cs_model.CS.model_control == 0);
+      lemma_client_recv_residual_le_cap client.CS.cs_model;
+      assert (client_recv_charge client.CS.cs_model
+                == client_recv_residual client.CS.cs_model);
       assert (Seq.equal (B.append init.CS.cs_wire_log.CL.raw_received sm_bytes) sm_bytes);
       assert (Seq.equal client.CS.cs_wire_log.CL.raw_received sm_bytes);
       lemma_raw_appdata_count_serialize_all in_msgs;

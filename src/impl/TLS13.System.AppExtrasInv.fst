@@ -53,6 +53,7 @@ module GFin = TLS13.Wire.Generated.Finished
 module ID   = FStar.IndefiniteDescription
 module RTC  = FStar.ReflexiveTransitiveClosure
 module ADBE = TLS13.ConnectionState.AppDataBufferEmpty
+module CCS  = TLS13.ConnectionState.ClientCanonicalShape
 
 (** ─────────────────────────────────────────────────────────────────────────
     COMPANION to `finished_delivered_appread_coupling` (fdac).  NOT a replacement:
@@ -554,6 +555,242 @@ let lemma_parse_tls_handshake_inv
   = W.lemma_parse_tls_message_handshake_some f hm0
 #pop-options
 
+(** ═══════════════════════════════════════════════════════════════════════
+    CROSS-RECORD REASSEMBLY: `client_hs_buffer_empty` helper lemmas.
+
+    These support the `client_hs_buffer_empty` conjunct of `stream2_extras`
+    (defined below, next to `stream2_extras`).  The GENERAL (non-Finished-
+    specific) argument that a `ConnProtectedHandshake` HEAD delivery cannot be
+    a BUFFERING step needs: (a) the record/message bridge for an ARBITRARY
+    sent message (not just Finished), (b) that the buffer being empty plus a
+    complete parse makes the STEP-1 guard fail, (c) that a full-consumption
+    head step re-clears the buffer, and (d) that the only two "no send at all"
+    families (client local events, since the client cannot itself originate a
+    `ConnProtectedHandshake`) cannot instantiate the event under an empty
+    buffer.
+    ═══════════════════════════════════════════════════════════════════════ **)
+
+(* IgnoredPostHandshake is never legally SENT (only received). *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+let lemma_sent_not_ignored_post_handshake
+  (model:CS.connection_model) (msg:M.tls_message) (model':CS.connection_model)
+  : Lemma (requires CS.step_tls_message model CL.Sent msg == Some model')
+          (ensures ~(M.TlsIgnoredPostHandshake? msg))
+  = ()
+#pop-options
+
+(* Common prefix of received_protected_handshake_head_decode, regardless of
+   the buffering bit. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_received_protected_handshake_head_decode_plaintext
+  (model:CS.connection_model) (step:CS.protected_handshake_step) (raw:B.bytes)
+  : Lemma
+    (requires SMCan.received_protected_handshake_head_decode model step raw)
+    (ensures
+      exists (of2:B.bytes) (op2:B.bytes) (pl2:M.plaintext).
+        W.parse_record_wire raw == Some (T.Application_data, of2, B.length raw) /\
+        SMCan.received_record_opened model raw of2 op2 /\
+        W.parse_plaintext op2 == Some pl2 /\
+        pl2.M.content_type == T.Handshake /\
+        Seq.equal pl2.M.fragment step.CS.protected_handshake_fragment)
+  = if step.CS.protected_handshake_buffering then () else ()
+#pop-options
+
+(* The record -> message shape, for ANY head step (buffering or not), given
+   sent is not TlsKeyUpdate/TlsIgnoredPostHandshake -- the only two
+   candidates besides TlsHandshake that parse_tls_message can produce from
+   T.Handshake content_type. *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 200 --split_queries always"
+let lemma_protected_handshake_head_decode_message_shape
+  (model:CS.connection_model) (step:CS.protected_handshake_step)
+  (sent:M.tls_message) (raw:B.bytes)
+  : Lemma
+    (requires
+      SMCan.received_single_protected_message_decode model sent raw /\
+      SMCan.received_protected_handshake_head_decode model step raw /\
+      ~(M.TlsKeyUpdate? sent) /\
+      ~(M.TlsIgnoredPostHandshake? sent))
+    (ensures
+      M.TlsHandshake? sent /\
+      W.parse_handshake step.CS.protected_handshake_fragment ==
+        Some (M.TlsHandshake?._0 sent, B.length step.CS.protected_handshake_fragment))
+  = lemma_received_protected_handshake_head_decode_plaintext model step raw;
+    eliminate exists (of1:B.bytes) (op1:B.bytes) (pl1:M.plaintext).
+      (W.parse_record_wire raw == Some (T.Application_data, of1, B.length raw) /\
+       SMCan.received_record_opened model raw of1 op1 /\
+       W.parse_plaintext op1 == Some pl1 /\
+       W.parse_tls_message pl1.M.content_type pl1.M.fragment == Some sent)
+    with
+    (
+      eliminate exists (of2:B.bytes) (op2:B.bytes) (pl2:M.plaintext).
+        (W.parse_record_wire raw == Some (T.Application_data, of2, B.length raw) /\
+         SMCan.received_record_opened model raw of2 op2 /\
+         W.parse_plaintext op2 == Some pl2 /\
+         pl2.M.content_type == T.Handshake /\
+         Seq.equal pl2.M.fragment step.CS.protected_handshake_fragment)
+      with
+      (
+        assert (of1 == of2);
+        eliminate exists (rs1:R.direction_state).
+          (R.open_record model.CS.model_record.CS.record_read
+             (SMCan.record_header_aad raw) of1 == Some (op1, rs1))
+        with
+        (
+          eliminate exists (rs2:R.direction_state).
+            (R.open_record model.CS.model_record.CS.record_read
+               (SMCan.record_header_aad raw) of1 == Some (op2, rs2))
+          with ()
+        );
+        assert (pl1 == pl2);
+        Seq.lemma_eq_elim pl2.M.fragment step.CS.protected_handshake_fragment;
+        assert (W.parse_tls_message T.Handshake
+                  step.CS.protected_handshake_fragment == Some sent);
+        (* parse_tls_message's body is hidden by the .fsti (only the val is
+           exported), so we cannot unfold it directly; instead we ground the
+           same case structure via the two EXPOSED bridging lemmas
+           `lemma_parse_handshake_stream_def` / `lemma_parse_handshake_stream_whole`,
+           which together give the identical 3-way match as explicit equalities. *)
+        W.lemma_parse_handshake_stream_def step.CS.protected_handshake_fragment;
+        W.lemma_parse_handshake_stream_whole step.CS.protected_handshake_fragment;
+        (match W.parse_handshake step.CS.protected_handshake_fragment with
+         | Some (msg, consumed) ->
+           if consumed = B.length step.CS.protected_handshake_fragment
+           then assert (Some sent == Some (M.TlsHandshake msg))
+           else assert (Some sent == None)
+         | None ->
+           (match W.parse_key_update step.CS.protected_handshake_fragment with
+            | Some req -> assert (Some sent == Some (M.TlsKeyUpdate req))
+            | None ->
+              (match W.parse_ignored_post_handshake
+                       step.CS.protected_handshake_fragment with
+               | Some body ->
+                 assert (Some sent == Some (M.TlsIgnoredPostHandshake body))
+               | None -> assert (Some sent == None))));
+        assert (M.TlsHandshake? sent);
+        W.lemma_parse_tls_message_handshake_some
+          step.CS.protected_handshake_fragment (M.TlsHandshake?._0 sent)
+      )
+    )
+#pop-options
+
+(* Given the buffer is empty and the fragment parses as a complete handshake
+   message, the STEP-1 guard's two disjuncts are both false, so a legal
+   protected-handshake step at this model cannot be a buffering step. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_protected_handshake_buffer_empty_not_buffering
+  (model:CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+    (requires
+      CS.legal_event model (CS.ConnProtectedHandshake step) /\
+      CS.protected_handshake_buffer_empty model /\
+      W.parse_handshake step.CS.protected_handshake_fragment =!= None)
+    (ensures step.CS.protected_handshake_buffering == false)
+  = ()
+#pop-options
+
+(* A full-consumption HEAD (non-buffering) step clears the reassembly buffer:
+   `set_pending_protected_handshake`'s `parsed < length` branch is false when
+   `consumed_to == length(fragment)`, so it takes the `else` branch and resets
+   to `(B.empty, 0)`. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_protected_handshake_head_full_consumption_clears_buffer
+  (model model':CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+    (requires
+      CS.legal_event model (CS.ConnProtectedHandshake step) /\
+      CS.step_model model (CS.ConnProtectedHandshake step) == Some model' /\
+      step.CS.protected_handshake_buffering == false /\
+      step.CS.protected_handshake_head == true /\
+      step.CS.protected_handshake_offset == 0 /\
+      step.CS.protected_handshake_consumed ==
+        B.length step.CS.protected_handshake_fragment)
+    (ensures CS.protected_handshake_buffer_empty model')
+  = ()
+#pop-options
+
+(* A ConnProtectedHandshake event cannot arise from a client LOCAL event
+   (raw_sent == raw_received == B.empty): a HEAD step would need
+   raw_records_exactly B.empty _ 1, impossible since that forces
+   B.length B.empty > 0; a TAIL step, under an empty reassembly buffer,
+   needs offset < B.length B.empty == 0, impossible for a nat. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_client_local_protected_handshake_impossible
+  (model:CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+    (requires
+      CS.legal_event model (CS.ConnProtectedHandshake step) /\
+      CS.event_raw_delta_legal model (CS.ConnProtectedHandshake step) B.empty B.empty /\
+      CS.protected_handshake_buffer_empty model)
+    (ensures False)
+  = if step.CS.protected_handshake_head
+    then HSP.lemma_rre_nonempty B.empty
+    else ()
+#pop-options
+
+(* Any legal protected-handshake step (buffering or not) leaves the model at a
+   ControlHandshaking stage distinct from the two "final" stages -- these are
+   exactly protected_handshake_buffering_stage's four stages (buffering branch)
+   or the received-message control stages of legal_handshake_message's EE /
+   Cert / CV / Finished arms (non-buffering branch), none of which is
+   HsServerFinishedVerified / HsClientFinishedReceived. *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 200 --split_queries always"
+let lemma_legal_protected_handshake_step_not_application_data
+  (model:CS.connection_model) (step:CS.protected_handshake_step)
+  : Lemma
+    (requires CS.legal_event model (CS.ConnProtectedHandshake step))
+    (ensures
+      CS.ControlHandshaking? model.CS.model_control /\
+      model.CS.model_control =!= CS.ControlHandshaking CS.HsServerFinishedVerified /\
+      model.CS.model_control =!= CS.ControlHandshaking CS.HsClientFinishedReceived)
+  = ()
+#pop-options
+
+(* record_write's epoch is unchanged across a Sent step, for any message that
+   is neither TlsKeyUpdate (rotates keys) nor TlsHandshake (the client-Finished
+   send at HsServerFinishedVerified installs Application write keys). *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_sent_non_handshake_preserves_write_epoch
+  (model model':CS.connection_model) (msg:M.tls_message)
+  : Lemma
+    (requires
+      CS.step_tls_message model CL.Sent msg == Some model' /\
+      ~(M.TlsKeyUpdate? msg) /\ ~(M.TlsHandshake? msg))
+    (ensures
+      model'.CS.model_record.CS.record_write.R.epoch ==
+      model.CS.model_record.CS.record_write.R.epoch)
+  = ()
+#pop-options
+
+(* If the message a legal Sent step just delivered is TlsApplicationData or
+   TlsAlert, the PRE-state (snap) write epoch was already Application: for
+   AppData the step's only live arm is at ControlApplicationData and does not
+   change control; for Alert the step's only live Sent arm is
+   Close_notify/ControlApplicationData (every other control/ControlFailed arm
+   is None), landing the POST-state at ControlClosing.  Either way a reachable
+   endpoint at that (pre- or post-) control has BOTH record epochs installed
+   at Application, and record_write's epoch does not change across the step
+   (previous lemma), so snap's write epoch was Application too. *)
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 150 --split_queries always"
+let lemma_sent_appdata_or_alert_snap_write_application
+  (snap:CS.connection_model) (post:CS.connection_state) (sent:M.tls_message)
+  : Lemma
+    (requires
+      CS.step_tls_message snap CL.Sent sent == Some post.CS.cs_model /\
+      SMR.connection_state_consistent post /\
+      post.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      (M.TlsApplicationData? sent \/ M.TlsAlert? sent))
+    (ensures R.Application? snap.CS.model_record.CS.record_write.R.epoch)
+  = lemma_sent_non_handshake_preserves_write_epoch snap post.CS.cs_model sent;
+    match sent with
+    | M.TlsApplicationData _ ->
+      assert (post.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+      CSL.lemma_connection_appdata_keys_installed_for_role CS.ServerEndpoint post;
+      CSL.lemma_connection_application_ready_record_epochs_installed CS.ServerEndpoint post
+    | M.TlsAlert _ ->
+      assert (post.CS.cs_model.CS.model_control == CS.ControlClosing);
+      CSL.lemma_connection_closing_closed_record_epochs_installed CS.ServerEndpoint post
+#pop-options
+
 (** (H2) THE RECORD -> MESSAGE BRIDGE for a HEAD step.  If the SAME record `raw`
     both single-protected-message-decodes to `sent` and head-decodes to `step`, then
     `sent` IS the step's handshake message.
@@ -567,7 +804,18 @@ let lemma_parse_tls_handshake_inv
     `step.protected_handshake_message`; the single-message decode says
     `W.parse_tls_message T.Handshake plaintext.fragment == Some sent`, which unfolds
     to the SAME `W.parse_handshake` call with full consumption.  Injectivity of
-    `Some` closes it. **)
+    `Some` closes it.
+
+    THIS IS A MESSAGE-IDENTIFICATION LEMMA, so per the governing principle for
+    cross-record reassembly it must be restricted to NON-buffering head steps:
+    a buffering step's `protected_handshake_message` field is INERT/ARBITRARY (it
+    delivers no message at all -- `received_protected_handshake_head_decode`
+    dispatches to `received_protected_handshake_buffer_decode` for it, which has NO
+    `parse_handshake`/message conjunct to pin that field against `sent`).
+    Dispatching on `protected_handshake_message` for a buffering step would be
+    reasoning about an arbitrary placeholder value, i.e. a SOUNDNESS BUG, not merely
+    a proof gap -- hence the explicit `protected_handshake_buffering == false`
+    hypothesis below, which callers must discharge before invoking this lemma. **)
 #push-options "--fuel 4 --ifuel 8 --z3rlimit 300 --split_queries always"
 let lemma_protected_head_decode_functional
   (model:CS.connection_model) (step:CS.protected_handshake_step)
@@ -577,6 +825,7 @@ let lemma_protected_head_decode_functional
         SMCan.received_single_protected_message_decode model sent raw /\
         SMCan.received_protected_handshake_head_decode model step raw /\
         step.CS.protected_handshake_offset == 0 /\
+        step.CS.protected_handshake_buffering == false /\
         M.TlsHandshake? sent)
       (ensures M.TlsHandshake?._0 sent == step.CS.protected_handshake_message)
   = lemma_slice_all step.CS.protected_handshake_fragment;
@@ -640,7 +889,16 @@ let lemma_protected_head_decode_functional
 (** (H3) A protected-handshake step carrying a `Finished` installs the APPLICATION
     read epoch -- `CS.step_protected_handshake` does NOT restore `record_read` on the
     `Finished` arm (head or tail), so the install from
-    `CS.step_handshake_message _ CL.Received (M.Finished _)` survives. **)
+    `CS.step_handshake_message _ CL.Received (M.Finished _)` survives.
+
+    Like (H2), this dispatches on `protected_handshake_message`, so it too must be
+    restricted to NON-buffering steps: for a BUFFERING step `step_protected_handshake`
+    routes through `step_protected_handshake_buffer`, which never touches
+    `record_read`'s epoch at all (it only advances the read sequence and appends to
+    the pending buffer) -- REGARDLESS of what the step's inert `protected_handshake_message`
+    field happens to hold.  Concluding `Application?` epoch from a buffering step
+    whose placeholder field happens to equal `M.Finished _` would be reasoning about
+    an arbitrary value, i.e. the SAME soundness bug as (H2). **)
 #push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
 let lemma_protected_finished_installs_app_read
   (m m':CS.connection_model) (step:CS.protected_handshake_step)
@@ -648,6 +906,7 @@ let lemma_protected_finished_installs_app_read
       (requires
         CS.legal_event m (CS.ConnProtectedHandshake step) /\
         CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+        step.CS.protected_handshake_buffering == false /\
         M.Finished? step.CS.protected_handshake_message)
       (ensures R.Application? m'.CS.model_record.CS.record_read.R.epoch)
   = ()
@@ -686,12 +945,1023 @@ let lemma_protected_preserves_client_finished
   = ()
 #pop-options
 
+
+(** ═══════════════════════════════════════════════════════════════════════
+    CROSS-RECORD REASSEMBLY, PART 2: the missing buffer-empty case lemmas
+    (`lemma_s2_client_send` / `lemma_s2_client_local` below call these by
+    name), plus the THREE-INVARIANT MUTUAL INDUCTION.
+
+    `client_hs_seq_exact` restores, UNDER THE EXTRA `client_hs_buffer_empty` /
+    `CCS.no_buffering_steps` HYPOTHESES, the EXACT handshake-epoch seq
+    alignment that `HSP.sc_hs_seq_ok`'s `==` -> `<=` weakening (made elsewhere
+    in this same feature effort, to accommodate buffering) lost for the
+    `ToClient` direction.  All three conjuncts are carried and preserved
+    TOGETHER, by ONE six-case mutual induction: `no_buffering_steps` at the
+    PRE-state is what makes the `client_local` redundant-install case for
+    `client_hs_seq_exact` a 0->0 no-op, and `client_hs_seq_exact` at the
+    PRE-state is what the `deliver_to_client` case needs to identify the
+    delivered message and hence re-derive `no_buffering_steps` /
+    `client_hs_buffer_empty` at the POST-state.
+    ═══════════════════════════════════════════════════════════════════════ **)
+
+(* A step_model transition that is NOT a `ConnProtectedHandshake` leaves the
+   reassembly buffer untouched: `ConnLocalEvent` by the existing spec lemma
+   `CS.lemma_local_event_preserves_protected_handshake_buffer`; `ConnNetworkEvent`
+   trivially (`step_tls_message` never touches `hs_buffers`). *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 200 --split_queries always"
+let lemma_conn_network_or_local_preserves_hs_reassembly
+  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
+  : Lemma
+    (requires
+      CS.step_model m ev == Some m' /\
+      ~(CS.ConnProtectedHandshake? ev))
+    (ensures
+      m'.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes ==
+      m.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+      m'.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed ==
+      m.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed)
+  = match ev with
+    | CS.ConnLocalEvent local ->
+      CS.lemma_local_event_preserves_protected_handshake_buffer m local m'
+    | CS.ConnNetworkEvent tm -> ()
+#pop-options
+
+(* CLIENT SEND preserves protected_handshake_buffer_empty: client_send is by
+   construction a ConnNetworkEvent Sent step (never ConnProtectedHandshake). *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_client_send_preserves_hs_buffer_empty
+  (model model':CS.connection_model) (sent:M.tls_message)
+  : Lemma
+    (requires
+      CS.step_tls_message model CL.Sent sent == Some model' /\
+      CS.protected_handshake_buffer_empty model)
+    (ensures CS.protected_handshake_buffer_empty model')
+  = lemma_conn_network_or_local_preserves_hs_reassembly
+      model
+      (CS.ConnNetworkEvent ({ CL.message_direction = CL.Sent; CL.message_value = sent }))
+      model'
+#pop-options
+
+(* CLIENT LOCAL preserves protected_handshake_buffer_empty: the underlying
+   conn_ev from `ASP.lemma_client_local_extract` is either ConnNetworkEvent /
+   ConnLocalEvent (buffer untouched) or a TAIL ConnProtectedHandshake, which
+   is impossible under the empty-buffer IH. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_client_local_step_preserves_hs_buffer_empty
+  (model model':CS.connection_model) (ce:CS.conn_event)
+  : Lemma
+    (requires
+      CS.legal_event model ce /\
+      CS.step_model model ce == Some model' /\
+      CS.event_raw_delta_legal model ce B.empty B.empty /\
+      CS.protected_handshake_buffer_empty model)
+    (ensures CS.protected_handshake_buffer_empty model')
+  = match ce with
+    | CS.ConnProtectedHandshake step ->
+      lemma_client_local_protected_handshake_impossible model step
+    | CS.ConnNetworkEvent _ ->
+      lemma_conn_network_or_local_preserves_hs_reassembly model ce model'
+    | CS.ConnLocalEvent _ ->
+      lemma_conn_network_or_local_preserves_hs_reassembly model ce model'
+#pop-options
+
+(* Packaged as a direct negation: the CLIENT's own `received_protected_handshake_head_decode`
+   hypothesis ALREADY gives `parse_record_wire raw == Some (Application_data, ...)`
+   UNCONDITIONALLY on `step.protected_handshake_buffering` (both disjuncts of that
+   `if` share the conjunct) via `lemma_received_protected_handshake_head_decode_plaintext`.
+   That, together with `lemma_cleartext_sent_raw_not_appdata` (a cleartext-framed
+   message's raw is NEVER `Application_data`-typed), is a direct contradiction. *)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+let lemma_sent_not_cleartext_from_appdata_record
+  (model:CS.connection_model) (step:CS.protected_handshake_step)
+  (snap:CS.connection_model) (sent:M.tls_message) (raw:B.bytes)
+  : Lemma
+    (requires
+      SMCan.received_protected_handshake_head_decode model step raw /\
+      CS.network_message_raw_delta_legal snap
+        ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw)
+    (ensures ~(CS.network_message_is_cleartext CL.Sent sent))
+  = lemma_received_protected_handshake_head_decode_plaintext model step raw;
+    if CS.network_message_is_cleartext CL.Sent sent then
+    begin
+      assert (CS.cleartext_tls_message_raw sent raw);
+      HSP.lemma_cleartext_sent_raw_not_appdata sent raw;
+      eliminate exists (of2:B.bytes) (op2:B.bytes) (pl2:M.plaintext).
+        (W.parse_record_wire raw == Some (T.Application_data, of2, B.length raw) /\
+         SMCan.received_record_opened model raw of2 op2 /\
+         W.parse_plaintext op2 == Some pl2 /\
+         pl2.M.content_type == T.Handshake /\
+         Seq.equal pl2.M.fragment step.CS.protected_handshake_fragment)
+      with ()
+    end
+#pop-options
+
+(* Same packaging for the AppData/Alert exclusion: either would force
+   `Application?(snap_wr p)` (`lemma_sent_appdata_or_alert_snap_write_application`),
+   contradicting `channel_seal_ok`'s forward conjunct at `~Application?(rd client)`. *)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 100 --split_queries always"
+let lemma_sent_not_appdata_or_alert
+  (a:SY.tls_system_state) (snap:CS.connection_model) (sent:M.tls_message)
+  (p:SY.tls_payload)
+  : Lemma
+    (requires
+      a.channel == MP.ToClient p /\
+      p.SY.pl_snap == snap /\ p.SY.pl_sent == sent /\
+      ASP.channel_seal_ok a /\
+      ASP.inflight_sender_stepped a /\
+      SMR.connection_state_consistent a.server /\
+      a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      ~(R.Application? (ASP.rd a.client).R.epoch))
+    (ensures ~(M.TlsApplicationData? sent) /\ ~(M.TlsAlert? sent))
+  = if M.TlsApplicationData? sent || M.TlsAlert? sent then
+    begin
+      assert (CS.step_tls_message snap CL.Sent sent == Some a.server.CS.cs_model);
+      lemma_sent_appdata_or_alert_snap_write_application snap a.server sent;
+      assert (R.Application? (ASP.snap_wr p).R.epoch);
+      assert (ASP.channel_seal_ok a)
+    end
+#pop-options
+
+(* Local events: `HsServerHelloReceived` is a control value that only a network
+   receive of ServerHello (never a local event) can *newly enter* -- every
+   `step_local_event` arm either preserves `model_control` outright (the key-install
+   arms) or moves to some OTHER named stage.  So if a local step's output control is
+   `HsServerHelloReceived`, the input control already was. *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 150 --split_queries always"
+let lemma_local_event_preserves_hs_server_hello_received_gate
+  (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
+  : Lemma
+    (requires
+      CS.legal_event m (CS.ConnLocalEvent lev) /\
+      CS.step_model m (CS.ConnLocalEvent lev) == Some m' /\
+      m'.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived)
+    (ensures m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived)
+  = ()
+#pop-options
+
+(* A `ConnProtectedHandshake` step (HEAD or TAIL) never lands control ON
+   `HsServerHelloReceived`: the underlying `step_handshake_message` dispatch for
+   EE / Cert / CV / Finished always advances PAST the first buffering stage,
+   never landing back on it (that stage is entered ONLY by a cleartext
+   `Received ServerHello`, which is a `ConnNetworkEvent`, not a protected-handshake
+   step at all). *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 150 --split_queries always"
+let lemma_protected_handshake_step_never_lands_hs_server_hello_received
+  (m:CS.connection_model) (step:CS.protected_handshake_step) (m':CS.connection_model)
+  : Lemma
+    (requires
+      CS.legal_event m (CS.ConnProtectedHandshake step) /\
+      CS.step_model m (CS.ConnProtectedHandshake step) == Some m' /\
+      step.CS.protected_handshake_buffering == false)
+    (ensures ~(m'.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived))
+  = if CS.protected_handshake_message_supported step.CS.protected_handshake_message
+    then
+      (match step.CS.protected_handshake_message with
+       | M.EncryptedExtensions _ -> ()
+       | M.Certificate _ -> ()
+       | M.CertificateVerify _ -> ()
+       | M.Finished _ -> ())
+    else ()
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════
+    `client_hs_seq_exact`: the third conjunct of the mutual induction.
+    ═══════════════════════════════════════════════════════════════════════ **)
+let client_hs_seq_exact (s:SY.tls_system_state) : prop =
+  (s.client.CS.cs_model.CS.model_control ==
+     CS.ControlHandshaking CS.HsServerHelloReceived ==>
+     HSP.hs_rseq s.client == 0) /\
+  (match s.channel with
+   | MP.ToClient p ->
+       (R.Handshake? (ASP.snap_wr p).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch) ==>
+          HSP.hs_rseq s.client == HSP.snap_hs_wseq p
+   | _ ->
+       (R.Handshake? (ASP.wr s.server).R.epoch /\ R.Handshake? (ASP.rd s.client).R.epoch) ==>
+          HSP.hs_rseq s.client == HSP.hs_wseq s.server)
+
+(* THE HARD CASE, standalone: given the pre-state facts available at the client
+   delivery of a ConnProtectedHandshake HEAD step (any message, EE/Cert/CV/
+   Finished), the empty-buffer IH forces `buffering == false` and the POST buffer
+   is empty too; the EXACT alignment carries the +1/+1 telescoping through to
+   an EXACT post-state cross-arm equality. *)
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 300 --split_queries always"
+let lemma_deliver_to_client_protected_handshake_buffer_preserved
+  (a:SY.tls_system_state) (step:CS.protected_handshake_step)
+  (c':CS.connection_state) (raw:B.bytes) (snap:CS.connection_model) (sent:M.tls_message)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\
+      ASP.app_extras a /\
+      a.channel == MP.ToClient ({ SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent }) /\
+      HSP.hs_seq_pairing a /\
+      HSP.hs_channel_seal_ok a /\
+      CS.legal_event a.client.CS.cs_model (CS.ConnProtectedHandshake step) /\
+      CS.step_model a.client.CS.cs_model (CS.ConnProtectedHandshake step) == Some c'.CS.cs_model /\
+      step.CS.protected_handshake_head == true /\
+      SMCan.received_protected_handshake_head_decode a.client.CS.cs_model step raw /\
+      CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+      client_hs_seq_exact a)
+    (ensures
+      step.CS.protected_handshake_buffering == false /\
+      CS.protected_handshake_buffer_empty c'.CS.cs_model /\
+      (c'.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived ==>
+         HSP.hs_rseq c' == 0) /\
+      ((R.Handshake? a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+        R.Handshake? c'.CS.cs_model.CS.model_record.CS.record_read.R.epoch) ==>
+         HSP.hs_rseq c' == HSP.hs_wseq a.server))
+  = let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+    // ~Application?(rd client) at the pre-state, unconditionally, from legality.
+    lemma_legal_protected_handshake_step_not_application_data a.client.CS.cs_model step;
+    CSL.lemma_handshaking_nonfinal_read_not_application a.client;
+    assert (~(R.Application? (ASP.rd a.client).R.epoch));
+    // Handshake?(rd client): read-key-present (unconditional from decode) + ~App + ~Initial.
+    lemma_protected_head_decode_read_key_present a.client.CS.cs_model step raw;
+    RKE.lemma_connection_consistent_read_key_present_not_initial a.client;
+    assert (R.Handshake? (ASP.rd a.client).R.epoch);
+    // exclude TlsKeyUpdate
+    assert (ASP.inflight_sender_stepped a);
+    assert (CS.step_tls_message snap CL.Sent sent == Some a.server.CS.cs_model);
+    assert (~(M.TlsKeyUpdate? sent));
+    // exclude TlsIgnoredPostHandshake
+    lemma_sent_not_ignored_post_handshake snap sent a.server.CS.cs_model;
+    // exclude cleartext (ClientHello/ServerHello/HRR/CCS)
+    assert (ASP.inflight_raw_delta_legal a);
+    assert (CS.network_message_raw_delta_legal snap
+              ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+    lemma_sent_not_cleartext_from_appdata_record a.client.CS.cs_model step snap sent raw;
+    assert (~(CS.network_message_is_cleartext CL.Sent sent));
+    // exclude TlsApplicationData / TlsAlert
+    lemma_sent_not_appdata_or_alert a snap sent p;
+    assert (~(M.TlsApplicationData? sent) /\ ~(M.TlsAlert? sent));
+    assert (M.TlsHandshake? sent);
+    // Handshake?(snap_wr p) via the EXISTING inflight_snap_handshake_write gate.
+    assert (ASP.inflight_snap_handshake_write a);
+    assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+    // fire the seal bridge, then the faithful-decode peer lemma.  The EXACT
+    // seq alignment `snap_hs_wseq p == hs_rseq a.client` comes from the new
+    // `client_hs_seq_exact a` invariant's `ToClient` arm (no longer available
+    // from `sc_hs_seq_ok a`, weakened to `<=` for buffering).
+    assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
+    assert (a.channel == MP.ToClient p);
+    assert (client_hs_seq_exact a);
+    assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.client);
+    assert (snap.CS.model_record.CS.record_write.R.seq ==
+            a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+    CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+      snap a.client.CS.cs_model sent raw;
+    // the record -> message shape, then STEP-1 guard rules out buffering.
+    lemma_protected_handshake_head_decode_message_shape
+      a.client.CS.cs_model step sent raw;
+    lemma_protected_handshake_buffer_empty_not_buffering
+      a.client.CS.cs_model step;
+    // full consumption: combine the two Some-equalities for parse_handshake(fragment).
+    assert (step.CS.protected_handshake_offset == 0);
+    Seq.lemma_eq_elim
+      (Seq.slice step.CS.protected_handshake_fragment 0
+         (B.length step.CS.protected_handshake_fragment))
+      step.CS.protected_handshake_fragment;
+    assert (step.CS.protected_handshake_consumed ==
+              B.length step.CS.protected_handshake_fragment);
+    lemma_protected_handshake_head_full_consumption_clears_buffer
+      a.client.CS.cs_model c'.CS.cs_model step;
+    // POST client_hs_seq_exact: zero-fact is vacuous (a HEAD protected-handshake
+    // step advances OFF `HsServerHelloReceived`, never lands ON it).
+    lemma_protected_handshake_step_never_lands_hs_server_hello_received
+      a.client.CS.cs_model step c'.CS.cs_model;
+    // POST cross-arm: +1 / +1 telescoping, now EXACT (not `<=`) thanks to the
+    // pre-state alignment just established.
+    HSP.lemma_protected_preserves_wr_full a.client.CS.cs_model c'.CS.cs_model step;
+    introduce
+      (R.Handshake? a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+       R.Handshake? c'.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
+      ==> HSP.hs_rseq c' == HSP.hs_wseq a.server
+    with
+    (
+      HSP.lemma_protected_head_read_plus_one a.client.CS.cs_model c'.CS.cs_model step;
+      assert (CS.raw_records_exactly raw T.Application_data 1);
+      HSP.lemma_rre_nonempty raw;
+      CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+      W.lemma_parse_record_implies_parse_record_wire raw;
+      assert (ASP.inflight_sender_stepped a /\ ASP.inflight_raw_delta_legal a);
+      assert (CS.step_tls_message snap CL.Sent sent == Some a.server.CS.cs_model);
+      assert (~(M.TlsKeyUpdate? sent));
+      HSP.lemma_hs_send_preserves_hs_write snap a.server.CS.cs_model sent;
+      assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+      if CS.network_message_is_cleartext CL.Sent sent then
+      (
+        assert (CS.network_message_raw_delta_legal snap
+                  ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+        assert (CS.cleartext_tls_message_raw sent raw);
+        HSP.lemma_cleartext_sent_raw_not_appdata sent raw
+        // contradiction with `raw` typed `Application_data` above.
+      )
+      else
+      (
+        assert (ASP.inflight_single_record a);
+        assert (CS.protected_record_count CL.Sent sent == 1);
+        HSP.lemma_hs_send_plus_one_protected snap a.server.CS.cs_model sent
+        // `hs_wseq a.server == snap_hs_wseq p + 1`; combined with
+        // `hs_rseq c' == hs_rseq a.client + 1` and `hs_rseq a.client ==
+        // snap_hs_wseq p` (established above), gives `hs_rseq c' == hs_wseq a.server`.
+      )
+    )
+#pop-options
+
+(* ============================================================
+   CLIENT_LOCAL cross-arm helper: under `client_hs_buffer_empty`, a reachable
+   client AT `HsServerHelloReceived` has received EXACTLY ZERO ApplicationData
+   records (not merely `<= max_pending_protected_handshake`), via the EXISTING
+   public charge machinery in `TLS13.System.WireStep` -- no edits there needed.
+   ============================================================ *)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+let lemma_client_hsserverhelloreceived_recv_zero_exact
+  (cfg:CS.connection_config) (client:CS.connection_state)
+  : Lemma
+      (requires
+        WStep.client_reachable (CS.initial cfg) client /\
+        client.CS.cs_model.CS.model_control
+          == CS.ControlHandshaking CS.HsServerHelloReceived /\
+        cfg.CS.config_role == CS.ClientEndpoint /\
+        CS.protected_handshake_buffer_empty client.CS.cs_model)
+      (ensures
+        WStep.raw_appdata_count client.CS.cs_wire_log.CL.raw_received == 0)
+  = assert (WStep.client_recv_potential client.CS.cs_model.CS.model_control == 0);
+    assert (WStep.client_recv_residual client.CS.cs_model == 0);
+    assert (WStep.client_recv_charge client.CS.cs_model == 0);
+    WStep.lemma_client_reachable_recv_le_charge cfg client
+#pop-options
+
+(* ============================================================
+   CLIENT_LOCAL case of the mutual induction for `client_hs_seq_exact`
+   (Quiet channel only -- matches `lemma_s2_client_local`'s existing
+   `MP.Quiet? a.channel` hypothesis).
+   ============================================================ *)
+#push-options "--fuel 3 --ifuel 6 --z3rlimit 200 --split_queries always"
+let lemma_client_local_hs_seq_exact_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_client_local a b /\
+      CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+      client_hs_seq_exact a)
+    (ensures client_hs_seq_exact b)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with client = c' }
+    with
+    (
+      let cfg = a.client.CS.cs_model.CS.model_config in
+      WStep.lemma_client_reachable_step
+        (CS.initial cfg) a.client c' (SM.LocalEvent local) out;
+      HSP.lemma_client_local_wire_unchanged a.client c' local out;
+      ASP.lemma_client_local_extract a.client c' local out;
+      eliminate exists (ce:CS.conn_event).
+        CS.legal_event a.client.CS.cs_model ce /\
+        CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
+      with
+      (
+        (match ce with
+         | CS.ConnProtectedHandshake step ->
+           lemma_client_local_protected_handshake_impossible
+             a.client.CS.cs_model step
+         | _ -> ());
+        HSP.lemma_client_local_record_effect a.client.CS.cs_model c'.CS.cs_model ce;
+        WStep.lemma_step_model_preserves_config
+          a.client.CS.cs_model ce c'.CS.cs_model;
+        if c'.CS.cs_model.CS.model_record = a.client.CS.cs_model.CS.model_record then
+          ()
+        else if c'.CS.cs_model.CS.model_control
+                = CS.ControlHandshaking CS.HsServerHelloReceived then begin
+          (match ce with
+           | CS.ConnLocalEvent lev ->
+             lemma_local_event_preserves_hs_server_hello_received_gate
+               a.client.CS.cs_model lev c'.CS.cs_model
+           | _ -> ());
+          assert (client_hs_seq_exact a);
+          assert (HSP.hs_rseq a.client == 0);
+          if c'.CS.cs_model.CS.model_record.CS.record_read
+             = a.client.CS.cs_model.CS.model_record.CS.record_read
+          then assert (HSP.hs_rseq c' == 0)
+          else begin
+            HSP.lemma_client_local_read_change_resets_seq
+              a.client.CS.cs_model c'.CS.cs_model ce;
+            assert (HSP.hs_rseq c' == 0)
+          end;
+          if R.Handshake? (ASP.rd c').R.epoch then begin
+            lemma_client_hsserverhelloreceived_recv_zero_exact cfg c';
+            assert (Seq.equal c'.CS.cs_wire_log.CL.raw_sent
+                              a.server.CS.cs_wire_log.CL.raw_received);
+            assert (Seq.equal a.server.CS.cs_wire_log.CL.raw_sent
+                              c'.CS.cs_wire_log.CL.raw_received);
+            WStep.lemma_client_preappdata_sent_no_appdata cfg c';
+            HSP.lemma_hsp_quiet_both_zero c' a.server;
+            assert (HSP.hs_wseq a.server == 0)
+          end
+        end else ()
+      )
+    )
+#pop-options
+
+(* Generic append helper for `CCS.no_buffering_steps`. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
+let rec lemma_no_buffering_steps_append
+  (log:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma
+    (requires CCS.no_buffering_steps log /\ CCS.is_protected_buffering_step ev == false)
+    (ensures CCS.no_buffering_steps (log @ [ev]))
+    (decreases log)
+  = match log with
+    | [] -> ()
+    | _hd :: tl -> lemma_no_buffering_steps_append tl ev
+#pop-options
+
+(* CLIENT_LOCAL case for `no_buffering_steps`: the appended event is either a
+   `ConnLocalEvent` (structurally not a buffering step) or an impossible TAIL
+   `ConnProtectedHandshake` under the empty-buffer IH. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_client_local_no_buffering_steps_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\
+      SY.tls_step_client_local a b /\
+      CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+      CCS.no_buffering_steps a.client.CS.cs_event_log)
+    (ensures CCS.no_buffering_steps b.client.CS.cs_event_log)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with client = c' }
+    with
+    (
+      CCS.lemma_client_local_step_event_log_append a.client c' local out;
+      eliminate exists (ce:CS.conn_event).
+        CS.legal_event a.client.CS.cs_model ce /\
+        CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty /\
+        c'.CS.cs_event_log == a.client.CS.cs_event_log @ [ce]
+      with
+      (
+        (match ce with
+         | CS.ConnProtectedHandshake step ->
+           lemma_client_local_protected_handshake_impossible
+             a.client.CS.cs_model step
+         | _ -> ());
+        assert (CCS.is_protected_buffering_step ce == false);
+        lemma_no_buffering_steps_append a.client.CS.cs_event_log ce
+      )
+    )
+#pop-options
+
+(* ============================================================
+   TRIVIAL cases: CLIENT_SEND, SERVER_SEND, DELIVER_TO_SERVER, SERVER_LOCAL
+   for `client_hs_seq_exact` / `CCS.no_buffering_steps`.
+   ============================================================ *)
+
+(* A `Sent` network event can land `model_control` ON `HsServerHelloReceived`
+   only by having ALREADY been there (see the note on `TlsChangeCipherSpec`
+   above `lemma_recv_lands_hs_server_hello_received_freezes_record` below). *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 150 --split_queries always"
+let lemma_sent_preserves_hs_server_hello_received_control
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma
+    (requires CS.step_tls_message m CL.Sent msg == Some m')
+    (ensures
+      (m'.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived) ==>
+      (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived))
+  = match msg with
+    | M.TlsHandshake hmsg ->
+      (match hmsg with
+       | M.ClientHello _ -> ()
+       | M.ServerHello _ -> ()
+       | M.EncryptedExtensions _ -> ()
+       | M.Certificate _ -> ()
+       | M.CertificateVerify _ -> ()
+       | M.Finished _ -> ()
+       | _ -> ())
+    | M.TlsApplicationData _ -> ()
+    | M.TlsAlert _ -> ()
+    | M.TlsChangeCipherSpec -> ()
+    | M.TlsKeyUpdate _ -> ()
+    | M.TlsIgnoredPostHandshake _ -> ()
+#pop-options
+
+(* CLIENT_SEND: `a.client` sends; `a.client`'s own `record_read` is FULLY
+   frozen by a `Sent` step, so `hs_rseq` and the zero-fact control gate both
+   transfer verbatim; `a.server == b.server` trivially, and the event log
+   gains exactly one `ConnNetworkEvent Sent` entry (structurally not a
+   buffering step). *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_client_send_hs_seq_exact_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_client_send a b /\
+      client_hs_seq_exact a)
+    (ensures client_hs_seq_exact b)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output)
+                     (w:CW.wire_message) (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    with
+    (
+      ASP.lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      HSP.lemma_sent_preserves_rd_full a.client.CS.cs_model c'.CS.cs_model sent;
+      lemma_sent_preserves_hs_server_hello_received_control
+        a.client.CS.cs_model sent c'.CS.cs_model
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_client_send_no_buffering_steps_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_client_send a b /\
+      CCS.no_buffering_steps a.client.CS.cs_event_log)
+    (ensures CCS.no_buffering_steps b.client.CS.cs_event_log)
+  = SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output)
+                     (w:CW.wire_message) (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    with
+    (
+      assert (CCS.is_protected_buffering_step (SMKM.sent_tls_event sent) == false);
+      lemma_no_buffering_steps_append a.client.CS.cs_event_log (SMKM.sent_tls_event sent)
+    )
+#pop-options
+
+(* SERVER_SEND: `a.server` sends, `a.client` untouched. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_server_send_hs_seq_exact_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_server_send a b /\
+      client_hs_seq_exact a)
+    (ensures client_hs_seq_exact b)
+  = SY.lemma_server_send_shape a b;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output)
+                     (w:CW.wire_message) (sent:M.tls_message).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
+    with
+    ()
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_server_send_no_buffering_steps_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_server_send a b /\
+      CCS.no_buffering_steps a.client.CS.cs_event_log)
+    (ensures CCS.no_buffering_steps b.client.CS.cs_event_log)
+  = SY.lemma_server_send_shape a b;
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output)
+                     (w:CW.wire_message) (sent:M.tls_message).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [w] /\
+      s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with server = s'; channel = SY.tls_to_client (SY.emitted_raw out) a.server.CS.cs_model sent }
+    with
+    ()
+#pop-options
+
+(* DELIVER_TO_SERVER: `a.server` receives, `a.client` untouched. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_deliver_to_server_hs_seq_exact_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\
+      SY.tls_step_deliver_to_server a b /\
+      client_hs_seq_exact a)
+    (ensures client_hs_seq_exact b)
+  = SY.lemma_deliver_to_server_shape a b;
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      b == { a with server = s'; channel = MP.Quiet }
+    with
+    (
+      eliminate exists (msg:M.tls_message).
+        SMCan.canonical_wire_step a.server s'
+          (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = msg })
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+          (CW.wire_serialize wire) /\
+        ES.server_local_outputs_match
+          (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = msg })
+          out.SM.so_local_outputs
+      with
+      (
+        assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
+        HSP.lemma_recv_preserves_wr_full a.server.CS.cs_model s'.CS.cs_model msg
+      )
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_deliver_to_server_no_buffering_steps_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\
+      SY.tls_step_deliver_to_server a b /\
+      CCS.no_buffering_steps a.client.CS.cs_event_log)
+    (ensures CCS.no_buffering_steps b.client.CS.cs_event_log)
+  = SY.lemma_deliver_to_server_shape a b;
+    eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_server raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      b == { a with server = s'; channel = MP.Quiet }
+    with
+    ()
+#pop-options
+
+(* SERVER_LOCAL: `a.client`/`a.channel` are entirely untouched (`b.client ==
+   a.client`), so the control-gate conjunct transfers verbatim.  For the
+   cross-arm, if the server's `model_record` is unchanged the write-count is
+   unchanged too, reducing directly to `a`'s fact; the ONE case that changes
+   it lands at `HsServerHelloSent`, where `lemma_hsp_quiet_both_zero` gives
+   ALL FOUR projections (both directions, both endpoints) zero -- in
+   particular `hs_rseq(a.client) == 0 == hs_wseq(s')`, exactly the needed
+   equality. *)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+let lemma_server_local_hs_seq_exact_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_server_local a b /\
+      client_hs_seq_exact a)
+    (ensures client_hs_seq_exact b)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with server = s' }
+    with
+    (
+      let cfg = a.server.CS.cs_model.CS.model_config in
+      WStep.lemma_server_reachable_step
+        (CS.initial cfg) a.server s' (SM.LocalEvent local) out;
+      HSP.lemma_server_local_wire_unchanged a.server s' local out;
+      ASP.lemma_server_local_extract a.server s' local out;
+      eliminate exists (ce:CS.conn_event).
+        CS.legal_event a.server.CS.cs_model ce /\
+        CS.step_model a.server.CS.cs_model ce == Some s'.CS.cs_model /\
+        CS.event_raw_delta_legal a.server.CS.cs_model ce B.empty B.empty
+      with
+      (
+        HSP.lemma_server_local_record_effect a.server.CS.cs_model s'.CS.cs_model ce;
+        WStep.lemma_step_model_preserves_config a.server.CS.cs_model ce s'.CS.cs_model;
+        if s'.CS.cs_model.CS.model_record = a.server.CS.cs_model.CS.model_record then
+          ()
+        else if s'.CS.cs_model.CS.model_control
+                = CS.ControlHandshaking CS.HsServerHelloSent then begin
+          WStep.lemma_server_hsserverhellosent_sent_zero cfg s';
+          WStep.lemma_server_hsserverhellosent_recv_zero cfg s';
+          assert (Seq.equal a.client.CS.cs_wire_log.CL.raw_sent
+                            s'.CS.cs_wire_log.CL.raw_received);
+          assert (Seq.equal s'.CS.cs_wire_log.CL.raw_sent
+                            a.client.CS.cs_wire_log.CL.raw_received);
+          WStep.lemma_raw_appdata_count_seq_equal
+            a.client.CS.cs_wire_log.CL.raw_sent s'.CS.cs_wire_log.CL.raw_received;
+          WStep.lemma_raw_appdata_count_seq_equal
+            s'.CS.cs_wire_log.CL.raw_sent a.client.CS.cs_wire_log.CL.raw_received;
+          HSP.lemma_hsp_quiet_both_zero a.client s'
+        end else
+          ()
+      )
+    )
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+let lemma_server_local_no_buffering_steps_preserved
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ MP.Quiet? a.channel /\
+      SY.tls_step_server_local a b /\
+      CCS.no_buffering_steps a.client.CS.cs_event_log)
+    (ensures CCS.no_buffering_steps b.client.CS.cs_event_log)
+  = eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with server = s' }
+    with
+    ()
+#pop-options
+
+(* A `Received` network event lands `model_control` on `HsServerHelloReceived`
+   via EITHER (a) `CL.Received, M.ServerHello, ControlHandshaking
+   HsClientHelloSent` -- the UNIQUE arm that FRESHLY enters this stage, whose
+   `with_handshake_stage` touches only `model_control`/`model_handshake`,
+   leaving `model_record` UNCHANGED -- or (b) a `TlsChangeCipherSpec` no-op
+   (`Some model` UNCHANGED, for ANY `ControlHandshaking` pre-control including
+   this one, on BOTH `Sent` and `Received`).  Either way `model_record` is
+   frozen, and the PRE-control is one of these two named stages. *)
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 150 --split_queries always"
+let lemma_recv_lands_hs_server_hello_received_freezes_record
+  (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
+  : Lemma
+    (requires CS.step_tls_message m CL.Received msg == Some m')
+    (ensures
+      (m'.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived) ==>
+      (m'.CS.model_record == m.CS.model_record /\
+       (m.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived \/
+        m.CS.model_control == CS.ControlHandshaking CS.HsClientHelloSent)))
+  = match msg with
+    | M.TlsHandshake hmsg ->
+      (match hmsg with
+       | M.ClientHello _ -> ()
+       | M.ServerHello _ -> ()
+       | M.HelloRetryRequest -> ()
+       | M.EncryptedExtensions _ -> ()
+       | M.Certificate _ -> ()
+       | M.CertificateVerify _ -> ()
+       | M.Finished _ -> ())
+    | M.TlsApplicationData _ -> ()
+    | M.TlsAlert _ -> ()
+    | M.TlsChangeCipherSpec -> ()
+    | M.TlsKeyUpdate _ -> ()
+    | M.TlsIgnoredPostHandshake _ -> ()
+#pop-options
+
+(* At a consistent client, `R.Handshake?(rd st).epoch` forces the control into
+   one of the six `client_read_hs_control` stages (`HSP.cr_ctrl_shape`), which
+   does NOT include `HsClientHelloSent`.  So at `HsClientHelloSent` the read
+   epoch is NOT `Handshake`, and `hs_rseq` is 0 by its own `if`-definition. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+let lemma_client_hsclienthellosent_hs_rseq_zero
+  (client:CS.connection_state)
+  : Lemma
+      (requires
+        SMR.connection_state_consistent client /\
+        client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        client.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloSent)
+      (ensures HSP.hs_rseq client == 0)
+  = HSP.lemma_consistent_cr_ctrl_shape client
+#pop-options
+
+(* `received_single_protected_message_decode` is a DETERMINISTIC partial
+   function of `(model, raw)`: the record opening and plaintext parse are
+   both deterministic, so if TWO messages both satisfy the decode relation
+   against the SAME `(model, raw)`, they must be the same message.  This
+   generalises the "two openings coincide" argument already used inside
+   `lemma_protected_handshake_head_decode_message_shape`. *)
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+let lemma_received_single_protected_message_decode_functional
+  (model:CS.connection_model) (msg1 msg2:M.tls_message) (raw:B.bytes)
+  : Lemma
+    (requires
+      SMCan.received_single_protected_message_decode model msg1 raw /\
+      SMCan.received_single_protected_message_decode model msg2 raw)
+    (ensures msg1 == msg2)
+  = eliminate exists (of1:B.bytes) (op1:B.bytes) (pl1:M.plaintext).
+      (W.parse_record_wire raw == Some (T.Application_data, of1, B.length raw) /\
+       SMCan.received_record_opened model raw of1 op1 /\
+       W.parse_plaintext op1 == Some pl1 /\
+       W.parse_tls_message pl1.M.content_type pl1.M.fragment == Some msg1)
+    with
+    (
+      eliminate exists (of2:B.bytes) (op2:B.bytes) (pl2:M.plaintext).
+        (W.parse_record_wire raw == Some (T.Application_data, of2, B.length raw) /\
+         SMCan.received_record_opened model raw of2 op2 /\
+         W.parse_plaintext op2 == Some pl2 /\
+         W.parse_tls_message pl2.M.content_type pl2.M.fragment == Some msg2)
+      with
+      (
+        assert (of1 == of2);
+        eliminate exists (rs1:R.direction_state).
+          (R.open_record model.CS.model_record.CS.record_read
+             (SMCan.record_header_aad raw) of1 == Some (op1, rs1))
+        with
+        (
+          eliminate exists (rs2:R.direction_state).
+            (R.open_record model.CS.model_record.CS.record_read
+               (SMCan.record_header_aad raw) of1 == Some (op2, rs2))
+          with ()
+        );
+        assert (pl1 == pl2);
+        assert (Some msg1 == Some msg2)
+      )
+    )
+#pop-options
+
+(** ═══════════════════════════════════════════════════════════════════════
+    DELIVER_TO_CLIENT: the aggregate three-conjunct lemma.  The
+    `ConnProtectedHandshake` sub-arm reuses the hard-case lemma above wholesale
+    (the SHARED argument the user asked to factor out, rather than duplicate,
+    between `client_hs_buffer_empty` and `CCS.no_buffering_steps`); the
+    `ConnNetworkEvent` sub-arm establishes the SAME `M.TlsHandshake? sent`
+    non-cleartext shape via the identical send-side exclusion chain, then
+    identifies `msg == sent` via the deterministic decode-functional lemma,
+    and closes with the EXACT `+1` receive helper `HSP.lemma_hs_recv_plus_one_gated`.
+    ═══════════════════════════════════════════════════════════════════════ **)
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 300 --split_queries always"
+let lemma_deliver_to_client_all3
+  (a b:SY.tls_system_state)
+  : Lemma
+    (requires
+      SY.tls_system_inv a /\ ASP.app_extras a /\
+      HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+      SY.tls_step_deliver_to_client a b /\
+      CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+      CCS.no_buffering_steps a.client.CS.cs_event_log /\
+      client_hs_seq_exact a)
+    (ensures
+      CS.protected_handshake_buffer_empty b.client.CS.cs_model /\
+      CCS.no_buffering_steps b.client.CS.cs_event_log /\
+      client_hs_seq_exact b)
+  = SY.lemma_deliver_to_client_shape a b;
+    eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
+                     (snap:CS.connection_model) (sent:M.tls_message).
+      a.channel == SY.tls_to_client raw snap sent /\
+      Seq.equal (CW.wire_serialize wire) raw /\
+      EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      b == { a with client = c'; channel = MP.Quiet }
+    with
+    (
+      let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
+      EC.lemma_client_wire_step_inversion #CTy.client_local_event a.client c' wire out;
+      eliminate exists (conn_ev0:CS.conn_event).
+        (EC.client_wire_received_event a.client wire conn_ev0 /\
+         SMCan.canonical_wire_step a.client c' conn_ev0
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (CW.wire_serialize wire) /\
+         EC.client_local_outputs_match conn_ev0 out.SM.so_local_outputs)
+      with
+      (
+        assert (c'.CS.cs_event_log == a.client.CS.cs_event_log @ [conn_ev0]);
+        match conn_ev0 with
+        | CS.ConnLocalEvent _ -> ()   (* client_wire_received_event is False here *)
+        | CS.ConnProtectedHandshake step ->
+          Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+          assert (step.CS.protected_handshake_head);
+          assert (CS.legal_event a.client.CS.cs_model conn_ev0);
+          assert (CS.step_model a.client.CS.cs_model conn_ev0 == Some c'.CS.cs_model);
+          assert (CS.event_raw_delta_legal a.client.CS.cs_model conn_ev0 B.empty raw);
+          assert (CS.raw_records_exactly raw T.Application_data 1);
+          HSP.lemma_rre_nonempty raw;
+          assert (B.length raw > 0);
+          assert (SMCan.received_protected_handshake_head_decode a.client.CS.cs_model step raw);
+          lemma_deliver_to_client_protected_handshake_buffer_preserved
+            a step c' raw snap sent;
+          assert (step.CS.protected_handshake_buffering == false);
+          assert (CCS.is_protected_buffering_step conn_ev0 == false);
+          lemma_no_buffering_steps_append a.client.CS.cs_event_log conn_ev0
+        | CS.ConnNetworkEvent tm ->
+          let msg : M.tls_message = tm.CL.message_value in
+          Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
+          assert (CS.step_tls_message a.client.CS.cs_model CL.Received msg == Some c'.CS.cs_model);
+          assert (CCS.is_protected_buffering_step conn_ev0 == false);
+          lemma_no_buffering_steps_append a.client.CS.cs_event_log conn_ev0;
+          HSP.lemma_recv_preserves_wr_full a.client.CS.cs_model c'.CS.cs_model msg;
+          lemma_recv_lands_hs_server_hello_received_freezes_record
+            a.client.CS.cs_model msg c'.CS.cs_model;
+          (if c'.CS.cs_model.CS.model_control
+              = CS.ControlHandshaking CS.HsServerHelloReceived then begin
+             assert (c'.CS.cs_model.CS.model_record == a.client.CS.cs_model.CS.model_record);
+             if a.client.CS.cs_model.CS.model_control
+                = CS.ControlHandshaking CS.HsServerHelloReceived then begin
+               assert (client_hs_seq_exact a);
+               assert (HSP.hs_rseq a.client == 0)
+             end else begin
+               assert (a.client.CS.cs_model.CS.model_control
+                       == CS.ControlHandshaking CS.HsClientHelloSent);
+               lemma_client_hsclienthellosent_hs_rseq_zero a.client
+             end;
+             assert (HSP.hs_rseq c' == 0)
+           end);
+          introduce
+            (R.Handshake? a.server.CS.cs_model.CS.model_record.CS.record_write.R.epoch /\
+             R.Handshake? c'.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
+            ==> HSP.hs_rseq c' == HSP.hs_wseq a.server
+          with
+          (
+            HSP.lemma_recv_preserves_read_epoch_handshake
+              a.client.CS.cs_model c'.CS.cs_model msg;
+            assert (R.Handshake? (ASP.rd a.client).R.epoch);
+            assert (~(R.Application? (ASP.rd a.client).R.epoch));
+            assert (ASP.inflight_sender_stepped a /\ ASP.inflight_raw_delta_legal a);
+            assert (CS.step_tls_message snap CL.Sent sent == Some a.server.CS.cs_model);
+            assert (~(M.TlsKeyUpdate? sent));
+            lemma_sent_not_appdata_or_alert a snap sent p;
+            assert (~(M.TlsApplicationData? sent) /\ ~(M.TlsAlert? sent));
+            HSP.lemma_hs_send_preserves_hs_write snap a.server.CS.cs_model sent;
+            assert (R.Handshake? (ASP.snap_wr p).R.epoch);
+            if CS.network_message_is_cleartext CL.Sent sent then
+            (
+              assert (CS.network_message_raw_delta_legal snap
+                        ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+              assert (CS.cleartext_tls_message_raw sent raw);
+              HSP.lemma_cleartext_sent_raw_not_appdata sent raw;
+              (if CS.network_message_is_cleartext CL.Received msg then ()
+               else begin
+                 assert (CS.network_message_raw_delta_legal a.client.CS.cs_model
+                           ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
+                 assert (CS.raw_records_exactly raw T.Application_data 1);
+                 HSP.lemma_rre_nonempty raw;
+                 CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+                 W.lemma_parse_record_implies_parse_record_wire raw
+                 (* contradiction with `raw` being cleartext-typed above *)
+               end)
+            )
+            else
+            (
+              assert (CS.protected_record_count CL.Sent sent == 1);
+              assert (CS.network_message_raw_delta_legal snap
+                        ({ CL.message_direction = CL.Sent; CL.message_value = sent }) raw);
+              assert (CS.raw_records_exactly raw T.Application_data 1);
+              HSP.lemma_rre_nonempty raw;
+              assert (B.length raw > 0);
+              CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+              W.lemma_parse_record_implies_parse_record_wire raw;
+              assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
+              assert (a.channel == MP.ToClient p);
+              assert (client_hs_seq_exact a);
+              assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.client);
+              assert (snap.CS.model_record.CS.record_write.R.seq ==
+                      a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
+              CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
+                snap a.client.CS.cs_model sent raw;
+              assert (SMCan.received_single_protected_message_decode
+                        a.client.CS.cs_model sent raw);
+              assert (CS.network_message_raw_delta_legal a.client.CS.cs_model
+                        ({ CL.message_direction = CL.Received; CL.message_value = msg }) raw);
+              HSP.lemma_hsp_client_recv_not_cleartext a.client msg c'.CS.cs_model raw;
+              assert (CS.network_message_is_cleartext CL.Received msg == false);
+              assert (SMCan.received_single_protected_message_decode
+                        a.client.CS.cs_model msg raw);
+              lemma_received_single_protected_message_decode_functional
+                a.client.CS.cs_model sent msg raw;
+              assert (msg == sent);
+              HSP.lemma_hs_recv_plus_one_gated a.client c' msg;
+              assert (HSP.hs_rseq c' == HSP.hs_rseq a.client + 1);
+              HSP.lemma_hs_send_plus_one_protected snap a.server.CS.cs_model sent;
+              assert (HSP.hs_wseq a.server == HSP.snap_hs_wseq p + 1);
+              assert (HSP.hs_rseq c' == HSP.hs_wseq a.server)
+            )
+          );
+          lemma_conn_network_or_local_preserves_hs_reassembly
+            a.client.CS.cs_model conn_ev0 c'.CS.cs_model
+      )
+    )
+#pop-options
+
+
 #push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
 let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
   : Lemma
       (requires
         SY.tls_system_inv a /\ ASP.app_extras a /\ sf_inflight_finished a /\
         HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        (* Cross-record reassembly: the client's pending-buffer is empty
+           (`CS.protected_handshake_buffer_empty`), needed to rule out a
+           BUFFERING head step at the `ConnProtectedHandshake` delivery arm
+           below (a buffering step delivers no message, so its `message`
+           field is inert and cannot be identified with the sealed
+           `Finished`). *)
+        CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+        (* Cross-record reassembly, PART 2: the EXACT handshake-epoch seq
+           alignment (`sc_hs_seq_ok`'s ToClient arm was weakened `==` -> `<=`
+           to accommodate buffering).  Needed to fire the seal-peer bridge
+           below in BOTH the `ConnProtectedHandshake` and `ConnNetworkEvent`
+           arms. *)
+        client_hs_seq_exact a /\
         SY.tls_step_deliver_to_client a b /\
         SY.tls_no_rekeying b /\ SY.tls_system_inv b)
       (ensures ASP.finished_delivered_appread_coupling b)
@@ -766,9 +2036,29 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
               RKE.lemma_connection_consistent_read_key_present_not_initial a.client;
               assert (R.Handshake? (ASP.rd a.client).R.epoch);
               assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
+              // EXACT seq alignment: no longer automatic from `sc_hs_seq_ok`
+              // (weakened to `<=` for buffering) -- comes from the new
+              // `client_hs_seq_exact a` invariant's `ToClient` arm instead.
+              assert (a.channel == MP.ToClient p);
+              assert (client_hs_seq_exact a);
+              assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.client);
+              assert (snap.CS.model_record.CS.record_write.R.seq ==
+                      a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
               CSL.lemma_received_single_protected_message_decode_from_sent_single_protected_message_seal_peer
                 snap a.client.CS.cs_model sent raw;
               assert (step.CS.protected_handshake_offset == 0);
+              // `step.protected_handshake_buffering == false`: `sent` is already
+              // pinned to a `Finished` above, so the general Alert/AppData
+              // elimination is not needed here — combine the two decode facts
+              // (`received_single_protected_message_decode` just derived, and
+              // `received_protected_handshake_head_decode` from the HEAD wire
+              // step) to get `parse_handshake(fragment) =!= None`, then the
+              // STEP-1 guard of `legal_protected_handshake_step`, under the
+              // empty-buffer hypothesis, rules out a BUFFERING step.
+              lemma_protected_handshake_head_decode_message_shape
+                a.client.CS.cs_model step sent raw;
+              lemma_protected_handshake_buffer_empty_not_buffering
+                a.client.CS.cs_model step;
               lemma_protected_head_decode_functional
                 a.client.CS.cs_model step sent raw;
               assert (M.TlsHandshake? sent);
@@ -830,8 +2120,12 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
             lemma_protected_decode_read_key_present a.client.CS.cs_model msg raw;
             RKE.lemma_connection_consistent_read_key_present_not_initial a.client;
             assert (R.Handshake? (ASP.rd a.client).R.epoch);
-            // Fire the bridge (hs_channel_seal_ok a) and the seq alignment (sc_hs_seq_ok a).
+            // Fire the bridge (hs_channel_seal_ok a) and the seq alignment
+            // (`client_hs_seq_exact a`'s `ToClient` arm -- no longer automatic
+            // from `sc_hs_seq_ok a`, weakened to `<=` for buffering).
             assert (ASP.inflight_bridge_ready snap a.client.CS.cs_model sent raw);
+            assert (a.channel == MP.ToClient p);
+            assert (client_hs_seq_exact a);
             assert (HSP.snap_hs_wseq p == HSP.hs_rseq a.client);
             assert (snap.CS.model_record.CS.record_write.R.seq ==
                     a.client.CS.cs_model.CS.model_record.CS.record_read.R.seq);
@@ -2519,6 +3813,11 @@ let lemma_ae_client_local (a b:SY.tls_system_state)
         SY.tls_system_inv a /\ ASP.app_extras a /\
         sf_inflight_finished a /\ cf_inflight_finished a /\
         HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        (* Cross-record reassembly: needed to establish `CCS.no_buffering_steps b...`
+           BEFORE the `HMF.lemma_hma_client_local` call below, which now
+           requires it at the POST-state. *)
+        CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+        CCS.no_buffering_steps a.client.CS.cs_event_log /\
         MP.Quiet? a.channel /\ SY.tls_step_client_local a b /\
         SY.tls_no_rekeying b /\ SY.tls_system_inv b)
       (ensures ASP.app_extras b)
@@ -2530,6 +3829,9 @@ let lemma_ae_client_local (a b:SY.tls_system_state)
     lemma_ishw_quiet b;
     ASP.lemma_rwc_not_to_server b;
     lemma_awc_client_local a b;
+    // Establish `no_buffering_steps b` BEFORE the HMF call, which now demands
+    // it at the POST-state.
+    lemma_client_local_no_buffering_steps_preserved a b;
     HMF.lemma_hma_client_local a b;
     AMF.lemma_chwsl_client_local a b;
     lemma_fdac_client_local a b
@@ -2571,10 +3873,18 @@ let lemma_ae_deliver_to_client (a b:SY.tls_system_state)
         SY.tls_system_inv a /\ ASP.app_extras a /\
         sf_inflight_finished a /\ cf_inflight_finished a /\
         HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        (* Cross-record reassembly: threaded through to `lemma_fdac_deliver_to_client`,
+           and used here to establish `CCS.no_buffering_steps b...` BEFORE the
+           `HMF.lemma_hma_deliver_to_client_flip` call below, which now
+           requires it at the POST-state. *)
+        CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+        CCS.no_buffering_steps a.client.CS.cs_event_log /\
+        client_hs_seq_exact a /\
         SY.tls_step_deliver_to_client a b /\
         SY.tls_no_rekeying b /\ SY.tls_system_inv b)
       (ensures ASP.app_extras b)
   = SY.lemma_deliver_to_client_shape a b;
+    lemma_deliver_to_client_all3 a b;
     eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
                      (snap:CS.connection_model) (sent:M.tls_message).
@@ -2609,6 +3919,14 @@ let lemma_ae_deliver_to_server (a b:SY.tls_system_state)
         sf_inflight_finished a /\ cf_inflight_finished a /\
         HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
         SY.server_config_valid_e2e a.server /\
+        (* `ASP.lemma_ama_deliver_to_server` (in the read-only `AppSeqPairing.fst`)
+           is gated on `CCShape.no_buffering_steps a.client.CS.cs_event_log`: it
+           feeds `SY.lemma_ready_quiescent_agrees`, which cannot rule out a
+           BUFFERING client step at this layer (the cross-endpoint record seal is
+           out of scope here).  `a.client` is untouched by a server delivery, so
+           the fact is stated on `a` and is supplied by the caller from
+           `stream2_extras a`. *)
+        CCS.no_buffering_steps a.client.CS.cs_event_log /\
         SY.tls_step_deliver_to_server a b /\
         SY.tls_no_rekeying b /\ SY.tls_system_inv b)
       (ensures ASP.app_extras b)
@@ -2655,6 +3973,13 @@ let lemma_app_extras_preserved (a b:SY.tls_system_state)
         SY.tls_system_inv a /\ ASP.app_extras a /\
         sf_inflight_finished a /\ cf_inflight_finished a /\
         HSP.hs_seq_pairing a /\ HSP.hs_channel_seal_ok a /\
+        (* Cross-record reassembly: needed to call `lemma_ae_deliver_to_client` /
+           `lemma_ae_client_local` below, both of which now require the full
+           three-conjunct bundle (threaded to `lemma_fdac_deliver_to_client`
+           and to the `HMF.lemma_hma_*` POST-state obligations). *)
+        CS.protected_handshake_buffer_empty a.client.CS.cs_model /\
+        CCS.no_buffering_steps a.client.CS.cs_event_log /\
+        client_hs_seq_exact a /\
         SY.server_config_valid_e2e a.server /\
         SY.tls_sys_step a b /\
         SY.tls_no_rekeying b /\ SY.tls_system_inv b)
@@ -2691,12 +4016,24 @@ let lemma_app_extras_preserved (a b:SY.tls_system_state)
     the gate recovered backwards by `SY.lemma_no_key_update_backward`.
     ═══════════════════════════════════════════════════════════════════════════ **)
 
+(** In the paired system the peer is the verified ATLAS server, which emits exactly one
+    record per handshake message, so every record the client receives carries a COMPLETE
+    handshake message and the STEP-1 guard of `CS.legal_protected_handshake_step` makes a
+    BUFFERING step illegal.  The client's cross-record reassembly buffer is therefore
+    always empty here; cross-record buffering is exercised only against a FOREIGN server,
+    which this system model does not describe. *)
+let client_hs_buffer_empty (s:SY.tls_system_state) : prop =
+  CS.protected_handshake_buffer_empty s.client.CS.cs_model
+
 let stream2_extras (s:SY.tls_system_state) : prop =
   ASP.app_extras s /\
   sf_inflight_finished s /\
   cf_inflight_finished s /\
   HSP.hs_seq_pairing s /\
-  HSP.hs_channel_seal_ok s
+  HSP.hs_channel_seal_ok s /\
+  client_hs_buffer_empty s /\
+  CCS.no_buffering_steps s.client.CS.cs_event_log /\
+  client_hs_seq_exact s
 
 (** CLIENT SEND. **)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
@@ -2711,7 +4048,28 @@ let lemma_s2_client_send (a b:SY.tls_system_state)
     lemma_sfif_client_send a b;
     lemma_cfif_client_send a b;
     HSP.lemma_hsp_client_send a b;
-    HSP.lemma_hscs_client_send a b
+    HSP.lemma_hscs_client_send a b;
+    // `client_hs_buffer_empty b`: client_send is, by construction, a
+    // `ConnNetworkEvent Sent` step (never `ConnProtectedHandshake` — that
+    // event has empty wire output, so it can only be `client_local`), so the
+    // reassembly buffer is untouched.
+    SY.lemma_client_send_shape a b;
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output)
+                     (w:CW.wire_message) (sent:M.tls_message).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [w] /\
+      c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
+      b == { a with client = c'; channel = SY.tls_to_server (SY.emitted_raw out) a.client.CS.cs_model sent }
+    with
+    (
+      ASP.lemma_client_send_pins_model a.client c' local out sent;
+      assert (CS.step_tls_message a.client.CS.cs_model CL.Sent sent == Some c'.CS.cs_model);
+      lemma_client_send_preserves_hs_buffer_empty
+        a.client.CS.cs_model c'.CS.cs_model sent
+    );
+    lemma_client_send_no_buffering_steps_preserved a b;
+    lemma_client_send_hs_seq_exact_preserved a b
 #pop-options
 
 (** SERVER SEND. **)
@@ -2727,7 +4085,12 @@ let lemma_s2_server_send (a b:SY.tls_system_state)
     lemma_sfif_server_send a b;
     lemma_cfif_server_send a b;
     HSP.lemma_hsp_server_send a b;
-    HSP.lemma_hscs_server_send a b
+    HSP.lemma_hscs_server_send a b;
+    // `client_hs_buffer_empty b`: a server-send touches only `.server`.
+    SY.lemma_server_send_shape a b;
+    assert (b.client == a.client);
+    lemma_server_send_no_buffering_steps_preserved a b;
+    lemma_server_send_hs_seq_exact_preserved a b
 #pop-options
 
 (** CLIENT LOCAL. **)
@@ -2743,7 +4106,29 @@ let lemma_s2_client_local (a b:SY.tls_system_state)
     lemma_sfif_client_local a b;
     lemma_cfif_client_local a b;
     HSP.lemma_hsp_client_local a b;
-    HSP.lemma_hscs_client_local a b
+    HSP.lemma_hscs_client_local a b;
+    // `client_hs_buffer_empty b`: the underlying `conn_ev` (`ASP.lemma_client_local_extract`)
+    // is either `ConnNetworkEvent`/`ConnLocalEvent` (buffer untouched) or a TAIL
+    // `ConnProtectedHandshake` step, which is impossible under the empty-buffer IH
+    // (a tail step needs `offset < B.length fragment`, with `fragment == B.empty`).
+    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      EC.client_step a.client (SM.LocalEvent local) c' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with client = c' }
+    with
+    (
+      ASP.lemma_client_local_extract a.client c' local out;
+      eliminate exists (ce:CS.conn_event).
+        CS.legal_event a.client.CS.cs_model ce /\
+        CS.step_model a.client.CS.cs_model ce == Some c'.CS.cs_model /\
+        CS.event_raw_delta_legal a.client.CS.cs_model ce B.empty B.empty
+      with
+      lemma_client_local_step_preserves_hs_buffer_empty
+        a.client.CS.cs_model c'.CS.cs_model ce
+    );
+    lemma_client_local_no_buffering_steps_preserved a b;
+    lemma_client_local_hs_seq_exact_preserved a b
 #pop-options
 
 (** SERVER LOCAL. **)
@@ -2759,7 +4144,16 @@ let lemma_s2_server_local (a b:SY.tls_system_state)
     lemma_sfif_server_local a b;
     lemma_cfif_server_local a b;
     HSP.lemma_hsp_server_local a b;
-    HSP.lemma_hscs_server_local a b
+    HSP.lemma_hscs_server_local a b;
+    // `client_hs_buffer_empty b`: a server-local step touches only `.server`.
+    eliminate exists (local:CTy.server_local_event) (s':CS.connection_state)
+                     (out:SM.step_output CW.wire_message EAPI.local_output).
+      ES.server_step a.server (SM.LocalEvent local) s' out /\
+      out.SM.so_wire_outputs == [] /\
+      b == { a with server = s' }
+    with ();
+    lemma_server_local_no_buffering_steps_preserved a b;
+    lemma_server_local_hs_seq_exact_preserved a b
 #pop-options
 
 (** DELIVER TO CLIENT.  `HSP`'s two families are UNBUNDLED, so the shape is opened
@@ -2789,7 +4183,11 @@ let lemma_s2_deliver_to_client (a b:SY.tls_system_state)
     (
       HSP.lemma_hsp_deliver_to_client a wire c' out raw snap sent;
       HSP.lemma_hscs_deliver_to_client a wire c' out raw snap sent
-    )
+    );
+    // The THREE cross-record-reassembly conjuncts, all at once (same
+    // mutual-induction argument that both this lemma's HMF dependency inside
+    // `lemma_ae_deliver_to_client` and `lemma_fdac_deliver_to_client` rely on).
+    lemma_deliver_to_client_all3 a b
 #pop-options
 
 (** DELIVER TO SERVER.  Mirror. **)
@@ -2822,7 +4220,9 @@ let lemma_s2_deliver_to_server (a b:SY.tls_system_state)
       // producer discharges `hs_channel_seal_ok b`, so that if that conjunct ever
       // stops being vacuous at a `Quiet` post-state the obligation is already wired.
       HSP.lemma_hscs_deliver_to_server a wire s' out raw snap sent
-    )
+    );
+    lemma_deliver_to_server_no_buffering_steps_preserved a b;
+    lemma_deliver_to_server_hs_seq_exact_preserved a b
 #pop-options
 
 (** THE FIVE-CONJUNCT ROLL-UP. **)
@@ -2850,10 +4250,19 @@ let lemma_stream2_extras_preserved (a b:SY.tls_system_state)
     sequence numbers and `Initial` record epochs, and every `Some?`-marker
     antecedent (`hs_client_finished`, `hs_server_finished`, `cf_delivered`) is
     `None`. **)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_initial_stream2_extras (cfg_c cfg_s:CS.connection_config)
   : Lemma (stream2_extras (SY.initial_tls_system cfg_c cfg_s))
-  = ASP.lemma_initial_app_extras cfg_c cfg_s
+  = ASP.lemma_initial_app_extras cfg_c cfg_s;
+    // The three cross-record-reassembly conjuncts are all trivial at the
+    // initial state: the buffer is `(B.empty, 0)` by construction, the event
+    // log is `[]` (vacuously no buffering entries), and the initial control
+    // is `ControlNew` (`<> HsServerHelloReceived`) with `Initial` epochs
+    // (`<> Handshake`), so `client_hs_seq_exact`'s two implications are
+    // vacuous.
+    assert (client_hs_buffer_empty (SY.initial_tls_system cfg_c cfg_s));
+    assert (CCS.no_buffering_steps (SY.initial_tls_system cfg_c cfg_s).client.CS.cs_event_log);
+    assert (client_hs_seq_exact (SY.initial_tls_system cfg_c cfg_s))
 #pop-options
 
 (** The combined predicate carried through the RTC induction.  Same shape as

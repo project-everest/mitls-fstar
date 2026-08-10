@@ -792,6 +792,14 @@ let lemma_single_message_sender_normalizes_received_handshake_head
            directed.CL.message_direction == CL.Received /\
            directed.CL.message_value == M.TlsHandshake received_msg
          | ConnProtectedHandshake step ->
+           (* A BUFFERING step delivers no message -- it sets a record's
+              plaintext aside so that a handshake message spanning several
+              records can be reassembled -- and its
+              [protected_handshake_message] field is inert.  Pinning that
+              inert field to [received_msg] would be meaningless, so a
+              caller reasoning about a step that DELIVERS [received_msg]
+              must say the step is not a buffering one. *)
+           step.protected_handshake_buffering == false /\
            step.protected_handshake_message == received_msg
          | ConnLocalEvent _ ->
            False) /\

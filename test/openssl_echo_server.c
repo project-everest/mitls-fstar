@@ -11,6 +11,47 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+/* Number of server-initiated KeyUpdates to drive during the echo exchange. */
+#define REKEY_ROUNDS 4u
+
+/* KeyUpdate (RFC 8446 4.6.3, handshake type 24) messages received from the
+   peer, split by request form.  Every KeyUpdate we send carries
+   [update_requested], and a conforming peer MUST answer each one with a
+   KeyUpdate carrying [update_not_requested]; the peer's own spontaneous
+   rekeys in this test carry [update_requested], so the two counters separate
+   mandated replies from initiations and keep the client-side rekey assertion
+   from passing vacuously.
+
+   Wire shape: handshake header [type, len24] followed by the one-byte
+   request_update field, so byte 4 is the request form. */
+static unsigned key_updates_received_requested = 0u;
+static unsigned key_updates_received_not_requested = 0u;
+
+static void trace_tls_msg(
+    int write_p,
+    int version,
+    int content_type,
+    const void *buf,
+    size_t len,
+    SSL *ssl,
+    void *arg) {
+  (void)version;
+  (void)ssl;
+  (void)arg;
+  if (write_p || buf == NULL || len < 5u || content_type != SSL3_RT_HANDSHAKE) {
+    return;
+  }
+  const uint8_t *bytes = (const uint8_t *)buf;
+  if (bytes[0] != SSL3_MT_KEY_UPDATE) {
+    return;
+  }
+  if (bytes[4] == 0u) {
+    key_updates_received_not_requested += 1u;
+  } else {
+    key_updates_received_requested += 1u;
+  }
+}
+
 static int make_listener(uint16_t requested_port, uint16_t *actual_port) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
@@ -110,7 +151,12 @@ int main(int argc, char **argv) {
   }
 
   ssl = SSL_new(ctx);
-  if (ssl == NULL || SSL_set_fd(ssl, client_fd) != 1 || SSL_accept(ssl) != 1) {
+  if (ssl == NULL || SSL_set_fd(ssl, client_fd) != 1) {
+    ERR_print_errors_fp(stderr);
+    goto done;
+  }
+  SSL_set_msg_callback(ssl, trace_tls_msg);
+  if (SSL_accept(ssl) != 1) {
     ERR_print_errors_fp(stderr);
     goto done;
   }
@@ -123,7 +169,13 @@ int main(int argc, char **argv) {
 
   uint8_t buf[4096];
   bool saw_data = false;
-  bool requested_key_update = false;
+  /* Drive several rekeys, not just one: a single KeyUpdate only exercises the
+     transition out of epoch 0, whereas the interesting failure mode is an
+     epoch counter that stops advancing (or a traffic secret that is re-derived
+     from the base secret instead of iterated).  Requesting an update on each
+     of the first REKEY_ROUNDS records puts the peer through that many epochs
+     in both directions. */
+  unsigned key_updates_requested = 0u;
   for (;;) {
     int n = SSL_read(ssl, buf, sizeof buf);
     if (n <= 0) {
@@ -140,13 +192,13 @@ int main(int argc, char **argv) {
       goto done;
     }
     saw_data = true;
-    if (!requested_key_update) {
+    if (key_updates_requested < REKEY_ROUNDS) {
       if (SSL_key_update(ssl, SSL_KEY_UPDATE_REQUESTED) != 1 ||
           SSL_do_handshake(ssl) != 1) {
         ERR_print_errors_fp(stderr);
         goto done;
       }
-      requested_key_update = true;
+      key_updates_requested += 1u;
     }
     int written = 0;
     while (written < n) {
@@ -159,6 +211,19 @@ int main(int argc, char **argv) {
     }
   }
 
+  fprintf(stderr,
+          "openssl_echo_server: %u key update(s) requested, "
+          "%u peer reply/replies, %u peer initiation(s)\n",
+          key_updates_requested,
+          key_updates_received_not_requested,
+          key_updates_received_requested);
+  if (key_updates_received_not_requested < key_updates_requested) {
+    fprintf(stderr,
+            "openssl_echo_server: peer answered only %u of %u KeyUpdate(update_requested)\n",
+            key_updates_received_not_requested,
+            key_updates_requested);
+    goto done;
+  }
   SSL_shutdown(ssl);
   rc = 0;
 

@@ -68,6 +68,12 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
            directed.CL.message_direction == CL.Received /\
            directed.CL.message_value == M.TlsHandshake received_msg
          | ConnProtectedHandshake step ->
+           (* A BUFFERING step delivers no message and its
+              [protected_handshake_message] field is inert, so a caller
+              reasoning about the client step that DELIVERS [received_msg]
+              must say the step is not a buffering one.  Buffering steps are
+              skipped, not paired, by the flight inversion. *)
+           step.protected_handshake_buffering == false /\
            step.protected_handshake_message == received_msg
          | ConnLocalEvent _ ->
            False) /\

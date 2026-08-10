@@ -37,7 +37,7 @@ module TLS13.ConnectionState.AppDataBufferEmpty
   CONSUMER.  [TLS13.System.lemma_appdata_implies_client_ready].  Since the merge
   of the internal-event work, [client_driver_application_ready] carries
   [CS.protected_handshake_buffer_empty] as a conjunct (it is what makes readiness
-  imply [TLS13.System.Internal.tls_settled]); the Pulse driver discharges it by a
+  mean that no internal drain step is still enabled); the Pulse driver discharges it by a
   runtime check, but the SPEC-level bridge from "consistent and at application
   data" to "ready" needs it as a reachability fact.  That is this module.
 **)

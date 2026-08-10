@@ -68,6 +68,7 @@ module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
 module HANR = TLS13.ConnectionState.HandshakeAgreementNonReady
 module WFL  = TLS13.Spec.WireFormatLemmas
 module SLM  = TLS13.System.SlotMono
+module WSpec = TLS13.Wire.Spec
 module CCS  = TLS13.ConnectionState.ClientCanonicalShape
 module SCS  = TLS13.ConnectionState.ServerCanonicalShape
 
@@ -328,6 +329,28 @@ let lemma_ama_client_local (a b:SY.tls_system_state)
                   `ASP.cf_delivered b`, whose first conjunct is
                   `R.Application? (wr b.client)`.  VACUOUS -- and note this is a
                   CONTROL/epoch exclusion, not an appeal to a vacuous hypothesis. *)
+             (* A BUFFERING step (one that merely sets a record's plaintext
+                aside so a handshake message spanning several records can be
+                reassembled) is a HEAD step, and `CS.event_raw_delta_legal`
+                charges a head step exactly one `Application_data` record --
+                impossible against the EMPTY byte-delta here.  So this arm is
+                a TAIL step, as it always was, and is never a buffering step;
+                in particular `protected_handshake_message` below is a real
+                message rather than the inert placeholder a buffering step
+                carries. *)
+             (if step.CS.protected_handshake_head
+              then begin
+                CSL.lemma_raw_records_exactly_one_parse_record
+                  B.empty T.Application_data;
+                eliminate exists (fragment:B.bytes).
+                  WSpec.parse_record B.empty ==
+                    Some (T.Application_data, fragment, B.length B.empty)
+                with
+                ( WSpec.lemma_parse_record_implies_parse_record_wire B.empty;
+                  WSpec.lemma_parse_record_wire_some_consumed_positive
+                    B.empty T.Application_data fragment (B.length B.empty) )
+              end);
+             assert (step.CS.protected_handshake_head == false);
              (match step.CS.protected_handshake_message with
               | M.Finished _ ->
                 assert (SMR.connection_state_consistent c');
@@ -439,7 +462,23 @@ let lemma_ama_deliver_to_client
            forces `(wr c').epoch =!= R.Application`, contradicting `ASP.cf_delivered b`
            (whose first conjunct is `R.Application? (wr b.client)`).  VACUOUS by a
            control/epoch exclusion, not by a vacuous hypothesis. *)
-        (match step.CS.protected_handshake_message with
+        (if step.CS.protected_handshake_buffering
+         then
+           (* A BUFFERING step sets this record's plaintext aside so a
+              handshake message spanning several records can be reassembled.
+              It delivers NO message -- its `protected_handshake_message` is
+              an inert placeholder, so the dispatch below would be reading
+              garbage -- and it moves only the pending buffer and the read
+              sequence number (via `R.next_seq`, which preserves epoch, key
+              and static IV).  Those are exactly the fields `AB.record_mat_eq`
+              observes, so no material moves. *)
+           begin
+             assert (ASP.cf_delivered a);
+             assert (AB.record_mat_eq a.client.CS.cs_model.CS.model_record
+                                      c'.CS.cs_model.CS.model_record)
+           end
+         else
+         match step.CS.protected_handshake_message with
          | M.Finished _ ->
            assert (SMR.connection_state_consistent c');
            assert (c'.CS.cs_model.CS.model_control

@@ -57,6 +57,10 @@ inline_for_extraction let max_certificate_chain_bytes_sz : SZ.t = 32768sz
 noextract
 let max_certificate_chain_entries : nat = 8
 
+(* [SZ.t] companion (sz literal), for the same extraction reason as
+   [max_certificate_chain_bytes_sz]. *)
+inline_for_extraction let max_certificate_chain_entries_sz : SZ.t = 8sz
+
 noextract
 let max_signature_len : nat = 4096
 

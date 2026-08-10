@@ -862,6 +862,10 @@ let lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
     assert (server_driver_selection_present_when_required st1)
   | ST.LocalSendCloseNotify ->
     assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendKeyUpdate ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendKeyUpdateRequested ->
+    assert (server_driver_selection_present_when_required st1)
   | ST.LocalFail ->
     assert (server_driver_selection_present_when_required st1);
   assert (server_driver_supported_profile_selection st1 credential_identity)
@@ -2527,6 +2531,25 @@ fn process_ready_empty_local_action_once
              Bounds.max_transcript_len /\
            CM.can_verify_client_finished 'st0
              (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)));
+         let resp =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
+       }
+       ST.LocalSendKeyUpdate -> {
+         // RFC 8446 4.6.3 response to a peer update_requested.  The scheduler
+         // only proposes this when app_key_update_response_pending holds; the
+         // send itself is the same empty-payload local event as the others,
+         // and the three kind-conditional obligations below are vacuous here.
+         assert (pure (action.ST.next_local_kind == ST.LocalSendKeyUpdate));
+         assert (pure (action.ST.next_local_kind <> ST.LocalSelectServerParameters));
+         assert (pure (action.ST.next_local_kind <> ST.LocalStartServer));
+         assert (pure (action.ST.next_local_kind <> ST.LocalSendServerHello));
          let resp =
            process_empty_local_event_and_write_once
              d

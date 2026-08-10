@@ -89,13 +89,21 @@ val lemma_pending_retained_iff_residual
 (* precondition that decision S3 preserves: the pending structure must be *)
 (* empty before a record transition, so there is never more than one      *)
 (* record in flight and no queue is needed.                               *)
+(*                                                                       *)
+(* BUFFERING steps are the one exception, and are excluded here.  They    *)
+(* exist precisely to append to a non-empty pending buffer, which is what *)
+(* makes a handshake message spanning three or more records deliverable.  *)
+(* They deliver no message, so no MESSAGE-bearing step ever runs against  *)
+(* a non-empty buffer and the property above is untouched for every step  *)
+(* the pairing proofs reason about.                                       *)
 val lemma_head_requires_empty_pending
   (model:CS.connection_model)
   (step:CS.protected_handshake_step)
   : Lemma
     (requires
       CS.legal_protected_handshake_step model step /\
-      step.CS.protected_handshake_head)
+      step.CS.protected_handshake_head /\
+      step.CS.protected_handshake_buffering == false)
     (ensures
       CS.protected_handshake_buffer_empty model /\
       step.CS.protected_handshake_offset == 0)
@@ -126,16 +134,25 @@ val lemma_tail_is_determined_by_state
 (* -------------------------------------------------------------------- *)
 (* B3.  Termination: the parse cursor strictly advances.                  *)
 (*                                                                       *)
-(* Every legal step consumes at least one byte and never runs past the    *)
-(* end of the fragment, so the residual is a strictly decreasing natural  *)
-(* number.  Phase 3's internal-step loop inherits its variant from here.  *)
+(* Every legal MESSAGE-DELIVERING step consumes at least one byte and     *)
+(* never runs past the end of the fragment, so the residual is a strictly *)
+(* decreasing natural number.  Phase 3's internal-step loop inherits its  *)
+(* variant from here.                                                    *)
+(*                                                                       *)
+(* Buffering steps are excluded: they consume zero bytes of the parse     *)
+(* cursor by design.  They still terminate, but for a different reason -- *)
+(* each one appends at least one byte to a buffer capped at              *)
+(* [max_pending_protected_handshake], so only finitely many can occur     *)
+(* before a message must be delivered or the connection fails.           *)
 (* -------------------------------------------------------------------- *)
 
 val lemma_cursor_strictly_advances
   (model:CS.connection_model)
   (step:CS.protected_handshake_step)
   : Lemma
-    (requires CS.legal_protected_handshake_step model step)
+    (requires
+      CS.legal_protected_handshake_step model step /\
+      step.CS.protected_handshake_buffering == false)
     (ensures (
       let offset = step.CS.protected_handshake_offset in
       let consumed = step.CS.protected_handshake_consumed in
@@ -150,6 +167,7 @@ val lemma_residual_decreases
   : Lemma
     (requires
       CS.legal_protected_handshake_step model step /\
+      step.CS.protected_handshake_buffering == false /\
       CS.step_protected_handshake model step == Some stepped)
     (ensures (
       let flen = B.length step.CS.protected_handshake_fragment in
@@ -323,11 +341,16 @@ val lemma_local_event_charges_nothing
 (* the old one rather than a fresh guess.                                 *)
 (* -------------------------------------------------------------------- *)
 
+(* Buffering steps are excluded: they parse nothing, which is exactly the *)
+(* point -- they exist to accumulate plaintext whose message boundary has *)
+(* not yet arrived.                                                       *)
 val lemma_legal_step_is_a_stream_parse
   (model:CS.connection_model)
   (step:CS.protected_handshake_step)
   : Lemma
-    (requires CS.legal_protected_handshake_step model step)
+    (requires
+      CS.legal_protected_handshake_step model step /\
+      step.CS.protected_handshake_buffering == false)
     (ensures
       W.parse_handshake_stream
         (Seq.slice step.CS.protected_handshake_fragment

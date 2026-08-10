@@ -263,6 +263,54 @@ fn mark_received_client_hello
           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
           IM.is_valid_client_hello lch ch
 
+(* Take delivery of a protected handshake record WITHOUT interpreting it:
+   append its plaintext to whatever the previous record left unparsed and
+   advance the read sequence.  This is what makes a handshake message that
+   spans three or more records deliverable -- with only message-bearing steps
+   reassembly stalls as soon as the accumulated bytes still do not contain a
+   whole message, and the record cannot simply be left alone because opening
+   it has already advanced the AEAD sequence number irreversibly.
+
+   [stream] must already hold `leftover ++ this record's plaintext`; the
+   caller builds it, since only it has the decrypted plaintext to hand. *)
+fn buffer_protected_handshake_record
+  (c:connection_state)
+  (raw:array U8.t)
+  (stream:array U8.t)
+  (stream_len:SZ.t)
+  (#step:erased CS.protected_handshake_step)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           Pulse.Lib.Array.PtsTo.pts_to stream 'stream_bytes **
+           pure (
+             B.length (Ghost.reveal 'stream_bytes) == SZ.v stream_len /\
+             SZ.v stream_len <= max_handshake_flight_len /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == true /\
+             Seq.equal
+               (Ghost.reveal 'stream_bytes)
+               (CS.protected_handshake_stream
+                 st0.CS.cs_model
+                 (Ghost.reveal step)) /\
+             U64.fits
+               (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnProtectedHandshake (Ghost.reveal step)) /\
+             CS.event_raw_delta_legal
+               st0.CS.cs_model
+               (CS.ConnProtectedHandshake (Ghost.reveal step))
+               B.empty
+               (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (protected_handshake_state
+              st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to stream 'stream_bytes
+
 fn mark_received_encrypted_extensions
   (c:connection_state)
   (raw:array U8.t)
@@ -319,6 +367,7 @@ fn mark_received_protected_encrypted_extensions
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_encrypted_extensions lee ee **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.EncryptedExtensions (Ghost.reveal ee) /\
              Seq.equal
@@ -434,6 +483,7 @@ fn mark_received_protected_certificate_head
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_certificate_msg lcert cert **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Certificate (Ghost.reveal cert) /\
              Seq.equal
@@ -511,6 +561,7 @@ fn mark_received_protected_certificate_drain
            IM.is_valid_certificate_msg lcert cert **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Certificate (Ghost.reveal cert) /\
              Seq.equal
@@ -632,6 +683,7 @@ fn mark_received_protected_certificate_verify_head
            ArrPts.pts_to protected_fragment 'protected_fragment_bytes **
            IM.is_valid_certificate_verify lcv cv **
            pure (
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.CertificateVerify (Ghost.reveal cv) /\
              Seq.equal
@@ -712,6 +764,7 @@ fn mark_received_protected_certificate_verify_drain
            IM.is_valid_certificate_verify lcv cv **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.CertificateVerify (Ghost.reveal cv) /\
              Seq.equal
@@ -824,6 +877,7 @@ fn mark_received_protected_server_finished_drain
            IM.is_valid_finished lfin fin **
            pure (
              Seq.equal (Ghost.reveal 'raw_bytes) B.empty /\
+             (Ghost.reveal step).CS.protected_handshake_buffering == false /\
              (Ghost.reveal step).CS.protected_handshake_message ==
                M.Finished (Ghost.reveal fin) /\
              Seq.equal
@@ -992,4 +1046,30 @@ fn mark_received_key_update
   ensures connection_exactly
             c
             (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+
+fn mark_server_received_key_update
+  (c:connection_state)
+  (raw:array U8.t)
+  (requested:bool)
+  (#req:erased M.key_update_request)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+                 (requested ==> req == M.UpdateRequested) /\
+                 (requested == false ==> req == M.UpdateNotRequested) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsKeyUpdate req;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes

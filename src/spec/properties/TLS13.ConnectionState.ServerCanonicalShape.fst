@@ -274,6 +274,7 @@ let is_server_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsHandshake (M.CertificateVerify _) -> True
         | M.TlsHandshake (M.Finished _) -> True
         | M.TlsApplicationData _ -> True
+        | M.TlsKeyUpdate _ -> True
         | M.TlsAlert T.Close_notify -> True
         | _ -> False))
   | CS.ConnProtectedHandshake _ -> False
@@ -729,7 +730,12 @@ let step_from_appdata (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         with region tail' and () )
     | CS.ConnNetworkEvent msg ->
       (match msg.CL.message_value with
-       | M.TlsApplicationData _ ->
+       | M.TlsApplicationData _
+       | M.TlsKeyUpdate _ ->
+         (* A KeyUpdate is now legal for a server too.  Like application data it
+            keeps the control state at ControlApplicationData and merely extends
+            the log tail, so the canonical shape is re-established with the same
+            region and a one-longer tail. *)
          eliminate exists (region:list CS.conn_event) (tail:list CS.conn_event).
              appdata_region_ok m0 st0.CS.cs_event_log region tail
          with

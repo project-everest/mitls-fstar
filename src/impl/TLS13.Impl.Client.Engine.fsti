@@ -38,8 +38,12 @@ let engine_certificate_verify_input_capacity : SZ.t = 256sz
 inline_for_extraction
 let engine_signature_capacity : SZ.t = 4096sz
 
+// Real-world leaf certificates with large SAN lists exceed 4096 bytes
+// (e.g. googleapis.com is 6840 bytes). Must match
+// TLS13_CLIENT_ENGINE_PUBLIC_KEY_CAPACITY in runtime/tls13_client_engine.h
+// and stay within Bounds.max_public_key_len.
 inline_for_extraction
-let engine_public_key_capacity : SZ.t = 4096sz
+let engine_public_key_capacity : SZ.t = 16384sz
 
 type engine_action =
   | EngineProgress

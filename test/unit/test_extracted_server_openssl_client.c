@@ -16,6 +16,16 @@
 
 #define APPLICATION_RECORD_COUNT 16u
 
+/* Number of KeyUpdates each side drives during the exchange.  Several, not
+   one: a single KeyUpdate only exercises the transition out of epoch 0,
+   whereas the interesting failure mode is an epoch counter that stops
+   advancing (or a traffic secret re-derived from the base secret instead of
+   iterated).  Both sides rekey so that the server's send path (rotating its
+   own write key) and its receive path (rotating its read key on a peer
+   KeyUpdate) are both driven. */
+#define SERVER_KEY_UPDATE_ROUNDS 4u
+#define CLIENT_KEY_UPDATE_ROUNDS 4u
+
 static int read_file(const char *path, uint8_t **out, size_t *out_len) {
   FILE *f = fopen(path, "rb");
   if (f == NULL) {
@@ -107,6 +117,11 @@ struct tls_msg_trace {
   int last_read_content_type;
   int last_read_detail;
   size_t last_read_len;
+  /* KeyUpdate (RFC 8446 4.6.3, handshake type 24) messages observed on the
+     wire, counted separately per direction so the test can assert that the
+     rekeys actually happened rather than passing vacuously. */
+  unsigned key_updates_written;
+  unsigned key_updates_read;
 };
 
 static void trace_tls_msg(
@@ -132,10 +147,16 @@ static void trace_tls_msg(
     trace->last_write_content_type = content_type;
     trace->last_write_detail = detail;
     trace->last_write_len = len;
+    if (content_type == SSL3_RT_HANDSHAKE && detail == SSL3_MT_KEY_UPDATE) {
+      trace->key_updates_written += 1u;
+    }
   } else {
     trace->last_read_content_type = content_type;
     trace->last_read_detail = detail;
     trace->last_read_len = len;
+    if (content_type == SSL3_RT_HANDSHAKE && detail == SSL3_MT_KEY_UPDATE) {
+      trace->key_updates_read += 1u;
+    }
   }
 }
 
@@ -176,6 +197,7 @@ static int run_extracted_server(
           private_key_len) != 0) {
     goto failed;
   }
+  unsigned key_updates_sent = 0u;
   for (size_t i = 0u; i < APPLICATION_RECORD_COUNT; ++i) {
     size_t received_len = 0u;
     if (tls13_server_driver_receive_application_data(
@@ -189,6 +211,26 @@ static int run_extracted_server(
             server, received, received_len) != 0) {
       goto failed;
     }
+    /* Server-initiated rekey: rotate our own application write key and keep
+       serving on the new epoch.  The request form is update_not_requested:
+       this client writes its whole burst before it reads, so a reply would
+       only arrive after its close_notify, which is not a useful shape to
+       test here.  The receive-side rotation is driven instead by the
+       client's own KeyUpdates below. */
+    if (key_updates_sent < SERVER_KEY_UPDATE_ROUNDS) {
+      if (tls13_server_driver_send_key_update(server, false) != 0) {
+        goto failed;
+      }
+      key_updates_sent += 1u;
+    }
+  }
+  if (key_updates_sent != SERVER_KEY_UPDATE_ROUNDS) {
+    fprintf(
+        stderr,
+        "extracted server: expected %u key updates, sent %u\n",
+        (unsigned)SERVER_KEY_UPDATE_ROUNDS,
+        key_updates_sent);
+    goto failed;
   }
   if (tls13_server_driver_close(server, true) == 0) {
     rc = 0;
@@ -226,6 +268,8 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
       .last_read_content_type = -1,
       .last_read_detail = -1,
       .last_read_len = 0,
+      .key_updates_written = 0u,
+      .key_updates_read = 0u,
   };
   SSL_CTX_set_msg_callback(ctx, trace_tls_msg);
   SSL_CTX_set_msg_callback_arg(ctx, &trace);
@@ -262,7 +306,24 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
   }
 
   static const uint8_t ping[] = {'p', 'i', 'n', 'g'};
+  unsigned client_key_updates = 0u;
   for (size_t i = 0u; i < APPLICATION_RECORD_COUNT; ++i) {
+    /* Client-initiated rekey: drives the verified server's KeyUpdate RECEIVE
+       path, which rotates the server's application read key.  Half of these
+       use update_requested, which under RFC 8446 4.6.3 obliges the verified
+       server to answer with an update_not_requested KeyUpdate of its own; the
+       key_updates_read assertion below is sized to require those answers. */
+    if (client_key_updates < CLIENT_KEY_UPDATE_ROUNDS) {
+      int update_mode = (client_key_updates % 2u == 0u)
+                            ? SSL_KEY_UPDATE_REQUESTED
+                            : SSL_KEY_UPDATE_NOT_REQUESTED;
+      if (SSL_key_update(ssl, update_mode) != 1 ||
+          SSL_do_handshake(ssl) != 1) {
+        ERR_print_errors_fp(stderr);
+        goto done;
+      }
+      client_key_updates += 1u;
+    }
     if (SSL_write(ssl, ping, sizeof ping) != (int)sizeof ping) {
       ERR_print_errors_fp(stderr);
       goto done;
@@ -285,6 +346,29 @@ static int run_openssl_client(uint16_t port, const char *ca_path) {
     ERR_print_errors_fp(stderr);
     goto done;
   }
+  /* Assert the rekeys really happened on the wire.  Without this the echo
+     loop would still pass if KeyUpdate were silently dropped. */
+  /* CLIENT_KEY_UPDATE_ROUNDS/2 of the client's updates set update_requested,
+     so the server must send that many mandated responses on top of the
+     SERVER_KEY_UPDATE_ROUNDS it initiates itself. */
+  unsigned const expected_server_key_updates =
+      SERVER_KEY_UPDATE_ROUNDS + (CLIENT_KEY_UPDATE_ROUNDS + 1u) / 2u;
+  if (trace.key_updates_written < CLIENT_KEY_UPDATE_ROUNDS ||
+      trace.key_updates_read < expected_server_key_updates) {
+    fprintf(
+        stderr,
+        "openssl client: key update accounting failed: wrote %u (expected >= %u), read %u (expected >= %u)\n",
+        trace.key_updates_written,
+        (unsigned)CLIENT_KEY_UPDATE_ROUNDS,
+        trace.key_updates_read,
+        expected_server_key_updates);
+    goto done;
+  }
+  fprintf(
+      stderr,
+      "openssl client: %u key update(s) sent, %u received\n",
+      trace.key_updates_written,
+      trace.key_updates_read);
   rc = 0;
 
 done:
