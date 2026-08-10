@@ -157,6 +157,58 @@ domaincontrol.com serves a self-signed certificate.  ATLAS correctly rejects
 all three, as does the oracle.  `www.google.com` and `www.microsoft.com` both
 complete a full 1-RTT handshake and return `HTTP/1.1 200 OK`.
 
+### Next capability: `secp256r1` (NIST P-256)
+
+`secp256r1` is the NIST P-256 elliptic curve, TLS named group `0x0017`.  It is
+the *other* universally deployed TLS 1.3 key-exchange group besides X25519, and
+it is the only one the eight remaining Microsoft properties accept.  Adding it
+is worth ~8 sites (88 -> ~96).
+
+**HACL\* has everything required**, in `Hacl_P256` (already listed in
+`HACL_ACCEL_C_MODULES`, alongside its `Hacl_Bignum` dependency):
+
+| Function | Use |
+|---|---|
+| `Hacl_P256_dh_initiator(pk[64], sk[32])` | public key from private key, raw `X‖Y` |
+| `Hacl_P256_dh_responder(ss[64], their_pk[64], sk[32])` | ECDH; TLS uses the **first 32 bytes** (the X coordinate) as the shared secret |
+| `Hacl_P256_raw_to_uncompressed(pk_raw[64], pk[65])` | raw `X‖Y` to the TLS wire encoding `0x04‖X‖Y` |
+| `Hacl_P256_uncompressed_to_raw(pk[65], pk_raw[64])` | inverse |
+| `Hacl_P256_validate_public_key` / `_private_key` | point and scalar validation |
+
+Two facts keep the change bounded:
+
+* The **shared secret is 32 bytes** for both groups (P-256 contributes only its
+  X coordinate), so `C.secret`, the key schedule and every derived-key proof are
+  untouched.
+* `KeyShareEntry` is already `opaque key_exchange<1..2^16-1>` carrying a group
+  id, and `TLS13.Wire.Semantics.ch_find_key_share` already walks a *list* of
+  entries.  The ClientHello can therefore offer both shares with no wire-format
+  change -- only a new `kse_list_find_secp256r1` companion to
+  `kse_list_find_x25519`.
+
+What is *not* free is the public-key type.  `C.x25519_public` is
+`bytes_of_len 32`; a P-256 share is 65 bytes.  Widening it is the bulk of the
+work.  The recommended design mirrors what this commit did for the AEAD
+algorithm: **recover the group from the public-key length** --
+
+```fstar
+type kex_group = | KEX_X25519 | KEX_SECP256R1
+let kex_public_len (g:kex_group) : n:nat{n == 32 \/ n == 65} = ...
+let kex_group_of_public_len (n:nat) : kex_group = if n = 65 then KEX_SECP256R1 else KEX_X25519
+```
+
+with a roundtrip lemma carried as an `SMTPat`, so no separate group field has
+to be threaded and "the peer installed the same share" keeps implying "the peer
+uses the same group".  Private keys are 32 bytes for both groups, so only the
+public type widens.
+
+The ~800 `x25519` mentions in `src/` overstate the cost: 400+ are *names* of
+predicates and lemmas (`x25519_key_share_projection`, `x25519_reachable_shape`)
+whose statements do not change.  The load-bearing sites are
+`x25519_public_from_private` (95), `x25519_shared` (62) and `x25519_public`
+(12).  HelloRetryRequest is not implemented, so the client must send **both**
+shares in its first flight rather than negotiate a group.
+
 ### Diagnostic-only issue
 
 `Common_TCP_read` returns 0 for both EOF and error, and the driver reads 0 as
