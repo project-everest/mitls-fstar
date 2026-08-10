@@ -834,17 +834,26 @@ let lemma_synth_sig_schemes_cons (s: GSS.signatureScheme) tl
 let cipher_suite_lo_to_u16 (c: GCS.cipherSuite) : U16.t =
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 -> 0x1303us
+  | GCS.TLS_AES_128_GCM_SHA256 -> 0x1301us
   | GCS.Unknown_cipherSuite v -> v
 
 let lemma_unknown_cipher_suite_not_chacha
   (v:U16.t{not (GCS.known_cipherSuite_repr v)})
-  : Lemma (U16.v v <> 0x1303)
+  : Lemma (U16.v v <> 0x1303 /\ U16.v v <> 0x1301)
   =
   if U16.v v = 0x1303 then (
     assert_norm (U16.v 0x1303us == 0x1303);
     U16.v_inj v 0x1303us;
     assert (v == 0x1303us);
     assert_norm (GCS.known_cipherSuite_repr 0x1303us == true);
+    assert (GCS.known_cipherSuite_repr v);
+    assert False
+  );
+  if U16.v v = 0x1301 then (
+    assert_norm (U16.v 0x1301us == 0x1301);
+    U16.v_inj v 0x1301us;
+    assert (v == 0x1301us);
+    assert_norm (GCS.known_cipherSuite_repr 0x1301us == true);
     assert (GCS.known_cipherSuite_repr v);
     assert False
   )
@@ -857,6 +866,8 @@ let lemma_cipher_suite_lo_matches (c: GCS.cipherSuite)
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
     assert_norm (U16.v 0x1303us == 0x1303)
+  | GCS.TLS_AES_128_GCM_SHA256 ->
+    assert_norm (U16.v 0x1301us == 0x1301)
   | GCS.Unknown_cipherSuite v ->
     assert (not (GCS.known_cipherSuite_repr v));
     lemma_unknown_cipher_suite_not_chacha v
@@ -5456,6 +5467,26 @@ fn parse_handshake_message
                             snd (fst (dsnd (snd (snd cm))))));
               assert (pure ((Ghost.reveal sf).GSHB.value.GSHBody.cipher_suite == sh_cipher));
               match sh_cipher {
+                GCS.TLS_AES_128_GCM_SHA256 -> {
+                  (* AES-128-GCM is a syntactically known suite, but the current
+                     supported profile (see [serverHello_representable]) still
+                     selects ChaCha20-Poly1305 only, so the semantic synth is
+                     None and we take the same fallback as an unknown suite. *)
+                  intro_serverHelloBody (dsnd (snd (snd xsh)));
+                  intro_sh_ite_payload xsh b;
+                  intro_serverHello_body xsh;
+                  intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
+                  PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+                    GHS.free_handshake (GHS.Body_server_hello_low xsh);
+                  Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                             (S.pts_to s 'input_bytes);
+                  S.to_array s;
+                  WS.lemma_serverHello_representable (Ghost.reveal cse <: GHS.handshake_body_server_hello);
+                  RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
+                  RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+                    (Ghost.reveal gv) (SZ.v input_len);
+                  handshake_fallback content_type input input_len
+                }
                 GCS.Unknown_cipherSuite _ -> {
                   (* Unsupported server cipher suites are syntactically parseable
                      but outside the supported profile, so the semantic synth is None. *)

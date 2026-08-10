@@ -41,7 +41,7 @@ let seal
   match st.key, st.static_iv with
   | Some key, Some iv ->
     let nonce = C.tls13_record_nonce iv st.seq in
-    Some (C.chacha20_poly1305_seal key nonce aad pt.fragment, next_seq st)
+    Some (C.aead_seal (C.aead_alg_of_key key) key nonce aad pt.fragment, next_seq st)
   | _, _ -> None
 
 let open_record
@@ -53,7 +53,7 @@ let open_record
   | Some key, Some iv ->
     if B.length ct >= 16 then
       let nonce = C.tls13_record_nonce iv st.seq in
-      (match C.chacha20_poly1305_open key nonce aad ct with
+      (match C.aead_open (C.aead_alg_of_key key) key nonce aad ct with
        | Some pt -> Some (pt, next_seq st)
        | None -> None)
     else None
@@ -73,8 +73,8 @@ let lemma_open_record_after_seal
   match st.key, st.static_iv with
   | Some key, Some iv ->
     let nonce = C.tls13_record_nonce iv st.seq in
-    let ct = C.chacha20_poly1305_seal key nonce aad pt.fragment in
-    C.lemma_chacha20_poly1305_open_seal key nonce aad pt.fragment;
+    let ct = C.aead_seal (C.aead_alg_of_key key) key nonce aad pt.fragment in
+    C.lemma_aead_open_seal (C.aead_alg_of_key key) key nonce aad pt.fragment;
     assert (B.length ct == B.length pt.fragment + 16);
     assert (B.length ct >= 16)
   | _, _ ->
@@ -115,13 +115,15 @@ let lemma_open_record_after_seal_peer
     Seq.lemma_eq_elim write_iv read_iv;
     assert (C.tls13_record_nonce write_iv write_st.seq ==
             C.tls13_record_nonce read_iv read_st.seq);
-    C.lemma_chacha20_poly1305_open_seal
+    C.lemma_aead_open_seal
+      (C.aead_alg_of_key write_key)
       write_key
       (C.tls13_record_nonce write_iv write_st.seq)
       aad
       pt.fragment;
     let ct =
-      C.chacha20_poly1305_seal
+      C.aead_seal
+        (C.aead_alg_of_key write_key)
         write_key
         (C.tls13_record_nonce write_iv write_st.seq)
         aad

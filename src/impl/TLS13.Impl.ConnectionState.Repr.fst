@@ -68,7 +68,8 @@ fn store_traffic_key_material
   requires (exists* prev. traffic_key_material_exactly slot prev) **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
            ArrPts.pts_to traffic_key_src material.CS.traffic_key **
-           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
+           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+           pure (B.length material.CS.traffic_key == 32)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
           ArrPts.pts_to traffic_key_src material.CS.traffic_key **

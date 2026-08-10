@@ -176,8 +176,15 @@ fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
           pts_to out out_bytes **
           pure (x25519_shared_call 'sk_bytes 'pk_bytes out_bytes ok)
 
-fn chacha20_poly1305_seal
+(**
+  AEAD sealing for the negotiated cipher suite.  `key_len` is the concrete key
+  length (16 for AES-128-GCM, 32 for ChaCha20-Poly1305) and selects the
+  algorithm via `C.aead_alg_of_key`; both algorithms share the 12-byte nonce
+  and 16-byte tag, so the output length relation is algorithm-independent.
+**)
+fn aead_seal
   (key: array U8.t)
+  (key_len: SZ.t)
   (nonce: array U8.t)
   (aad: array U8.t)
   (aad_len: SZ.t)
@@ -190,6 +197,7 @@ fn chacha20_poly1305_seal
            pts_to plain 'plain_bytes **
            pts_to out 'old **
            pure (B.length 'key_bytes == 32 /\
+                 (SZ.v key_len == 16 \/ SZ.v key_len == 32) /\
                  B.length 'nonce_bytes == 12 /\
                  B.length 'aad_bytes == SZ.v aad_len /\
                  B.length 'plain_bytes == SZ.v plain_len /\
@@ -198,11 +206,12 @@ fn chacha20_poly1305_seal
           pts_to nonce 'nonce_bytes **
           pts_to aad 'aad_bytes **
           pts_to plain 'plain_bytes **
-          pure (B.length (C.chacha20_poly1305_seal 'key_bytes 'nonce_bytes 'aad_bytes 'plain_bytes) == B.length 'old) **
-          pts_to out (C.chacha20_poly1305_seal 'key_bytes 'nonce_bytes 'aad_bytes 'plain_bytes)
+          pure (B.length (C.aead_seal (C.aead_alg_of_key_len (SZ.v key_len)) (C.unpad_key_32 'key_bytes (SZ.v key_len)) 'nonce_bytes 'aad_bytes 'plain_bytes) == B.length 'old) **
+          pts_to out (C.aead_seal (C.aead_alg_of_key_len (SZ.v key_len)) (C.unpad_key_32 'key_bytes (SZ.v key_len)) 'nonce_bytes 'aad_bytes 'plain_bytes)
 
-fn chacha20_poly1305_open
+fn aead_open
   (key: array U8.t)
+  (key_len: SZ.t)
   (nonce: array U8.t)
   (aad: array U8.t)
   (aad_len: SZ.t)
@@ -215,6 +224,7 @@ fn chacha20_poly1305_open
            pts_to cipher 'cipher_bytes **
            pts_to out 'old **
            pure (B.length 'key_bytes == 32 /\
+                 (SZ.v key_len == 16 \/ SZ.v key_len == 32) /\
                  B.length 'nonce_bytes == 12 /\
                  B.length 'aad_bytes == SZ.v aad_len /\
                  B.length 'cipher_bytes == SZ.v cipher_len /\
@@ -227,7 +237,7 @@ fn chacha20_poly1305_open
           pts_to cipher 'cipher_bytes **
           pts_to out out_bytes **
           pure (B.length 'cipher_bytes >= 16 /\
-                (ok ==> Some? (C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes) /\
-                         out_bytes == Some?.v (C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes)) /\
-                (not ok ==> C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes == None /\
+                (ok ==> Some? (C.aead_open (C.aead_alg_of_key_len (SZ.v key_len)) (C.unpad_key_32 'key_bytes (SZ.v key_len)) 'nonce_bytes 'aad_bytes 'cipher_bytes) /\
+                         out_bytes == Some?.v (C.aead_open (C.aead_alg_of_key_len (SZ.v key_len)) (C.unpad_key_32 'key_bytes (SZ.v key_len)) 'nonce_bytes 'aad_bytes 'cipher_bytes)) /\
+                (not ok ==> C.aead_open (C.aead_alg_of_key_len (SZ.v key_len)) (C.unpad_key_32 'key_bytes (SZ.v key_len)) 'nonce_bytes 'aad_bytes 'cipher_bytes == None /\
                             out_bytes == 'old))

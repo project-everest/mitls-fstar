@@ -516,7 +516,7 @@ let expected_derived_key_material
      | None -> None)
   | TrafficKey traffic_id ->
     (match expected_traffic_secret_for_state traffic_id st with
-     | Some secret -> Some (K.derive_aead_key secret)
+     | Some secret -> Some (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 secret)
      | None -> None)
   | TrafficIV traffic_id ->
     (match expected_traffic_secret_for_state traffic_id st with
@@ -592,7 +592,7 @@ let traffic_material_matches_expected_at_count
   | Some material, Some secret ->
     let expected = application_traffic_secret_after secret n in
     Seq.equal material.traffic_secret expected /\
-    Seq.equal material.traffic_key (K.derive_aead_key expected) /\
+    Seq.equal material.traffic_key (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 expected) /\
     Seq.equal material.traffic_iv (K.derive_aead_iv expected)
   | _, _ ->
     False
@@ -629,7 +629,8 @@ let lemma_updated_traffic_key_material_advances_count
   (material:traffic_key_material)
   : Lemma
       (requires
-        Seq.equal material.traffic_secret (application_traffic_secret_after secret n))
+        Seq.equal material.traffic_secret (application_traffic_secret_after secret n) /\
+        B.length material.traffic_key == 32)
       (ensures
         (let rotated = updated_traffic_key_material material in
          Seq.equal
@@ -637,7 +638,7 @@ let lemma_updated_traffic_key_material_advances_count
            (application_traffic_secret_after secret (n + 1)) /\
          Seq.equal
            rotated.traffic_key
-           (K.derive_aead_key (application_traffic_secret_after secret (n + 1))) /\
+           (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 (application_traffic_secret_after secret (n + 1))) /\
          Seq.equal
            rotated.traffic_iv
            (K.derive_aead_iv (application_traffic_secret_after secret (n + 1)))))

@@ -5013,7 +5013,7 @@ let lemma_projected_next_seq_of_record
 let lemma_projected_install_keys_of_record
   (st:R.direction_state)
   (epoch:R.epoch)
-  (key:C.aead_key)
+  (key:C.aead_key_any)
   (iv:C.aead_nonce)
   : Lemma
       (projected_direction_state_of_record (R.install_keys st epoch key iv) ==
@@ -5837,12 +5837,14 @@ let lemma_application_traffic_install_for_role_material_matches_expected
       install.install_direction
   with
   | Some secret ->
-    assert (install.install_material == traffic_key_material_for_secret secret);
-    assert (install.install_material.traffic_key == K.derive_aead_key secret);
+    assert (install.install_material ==
+      traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret);
+    assert (install.install_material.traffic_key ==
+      K.derive_aead_key C.AEAD_CHACHA20_POLY1305 secret);
     assert (install.install_material.traffic_iv == K.derive_aead_iv secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_key
-      (K.derive_aead_key secret);
+      (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_iv
       (K.derive_aead_iv secret)
@@ -6167,6 +6169,7 @@ let lemma_atomic_application_install_matches_expected
              label ==
            Some
              (traffic_key_material_for_secret
+               C.AEAD_CHACHA20_POLY1305
                (derive_traffic_secret_for_label TrafficApplication label master cp))
          | None -> False))
       (ensures
@@ -6189,10 +6192,11 @@ let lemma_atomic_application_install_matches_expected
     assert (expected_traffic_secret_for_state
               (traffic_id TrafficApplication label)
               st1 == Some secret);
-    let material = traffic_key_material_for_secret secret in
-    assert (material.traffic_key == K.derive_aead_key secret);
+    let alg = C.AEAD_CHACHA20_POLY1305 in
+    let material = traffic_key_material_for_secret alg secret in
+    assert (material.traffic_key == K.derive_aead_key alg secret);
     assert (material.traffic_iv == K.derive_aead_iv secret);
-    Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key secret);
+    Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key alg secret);
     Seq.lemma_eq_refl material.traffic_iv (K.derive_aead_iv secret)
 
 (* Localized rlimit bump (10 -> 20) for this single lemma.  Two independent
@@ -12871,12 +12875,14 @@ let lemma_handshake_traffic_install_for_role_material_matches_expected
       install.install_direction
   with
   | Some secret ->
-    assert (install.install_material == traffic_key_material_for_secret secret);
-    assert (install.install_material.traffic_key == K.derive_aead_key secret);
+    assert (install.install_material ==
+      traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret);
+    assert (install.install_material.traffic_key ==
+      K.derive_aead_key C.AEAD_CHACHA20_POLY1305 secret);
     assert (install.install_material.traffic_iv == K.derive_aead_iv secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_key
-      (K.derive_aead_key secret);
+      (K.derive_aead_key C.AEAD_CHACHA20_POLY1305 secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_iv
       (K.derive_aead_iv secret)

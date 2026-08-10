@@ -77,20 +77,27 @@ void TLS13_Crypto_x25519_public_from_private(
   (void)tls13_hacl_x25519_public_from_private(out, sk);
 }
 
-void TLS13_Crypto_chacha20_poly1305_seal(
+void TLS13_Crypto_aead_seal(
     uint8_t *key,
+    size_t key_len,
     uint8_t *nonce,
     uint8_t *aad,
     size_t aad_len,
     uint8_t *plain,
     size_t plain_len,
     uint8_t *out) {
+  if (key_len == 16) {
+    (void)tls13_hacl_aes128_gcm_seal_combined(
+        out, plain_len + 16, key, nonce, aad, aad_len, plain, plain_len);
+    return;
+  }
   (void)tls13_hacl_chacha20_poly1305_seal_combined(
       out, plain_len + 16, key, nonce, aad, aad_len, plain, plain_len);
 }
 
-bool TLS13_Crypto_chacha20_poly1305_open(
+bool TLS13_Crypto_aead_open(
     uint8_t *key,
+    size_t key_len,
     uint8_t *nonce,
     uint8_t *aad,
     size_t aad_len,
@@ -99,6 +106,10 @@ bool TLS13_Crypto_chacha20_poly1305_open(
     uint8_t *out) {
   if (cipher_len < 16) {
     return false;
+  }
+  if (key_len == 16) {
+    return tls13_hacl_aes128_gcm_open_combined(
+        out, cipher_len - 16, key, nonce, aad, aad_len, cipher, cipher_len);
   }
   return tls13_hacl_chacha20_poly1305_open_combined(
       out, cipher_len - 16, key, nonce, aad, aad_len, cipher, cipher_len);

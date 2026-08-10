@@ -9,7 +9,86 @@ type bytes_of_len (n:nat) = B.bytes_of_len n
 
 type digest32 = bytes_of_len 32
 type secret = bytes_of_len 32
-type aead_key = bytes_of_len 32
+
+(**
+  The two AEAD algorithms ATLAS supports, corresponding to the two cipher
+  suites it offers.  Both use a 12-byte nonce and a 16-byte tag, so record
+  framing is independent of the choice; only the key length differs.
+**)
+type aead_alg =
+  | AEAD_AES128_GCM
+  | AEAD_CHACHA20_POLY1305
+
+let aead_key_len (a:aead_alg) : n:nat{n == 16 \/ n == 32} =
+  match a with
+  | AEAD_AES128_GCM -> 16
+  | AEAD_CHACHA20_POLY1305 -> 32
+
+(**
+  TLS 1.3 fixes the AEAD key length from the negotiated cipher suite, and the
+  two algorithms above have distinct key lengths, so a traffic key determines
+  its own algorithm.  Keys always come from `TLS13.Keys.derive_aead_key`, which
+  expands to exactly `aead_key_len` bytes for the negotiated suite, so this
+  recovers precisely that suite's algorithm.
+
+  Keeping the algorithm a function of the key (rather than a separate field of
+  the record-layer state) means the existing "the peer installed the same key"
+  hypotheses already imply "the peer uses the same algorithm", so record-layer
+  agreement needs no new side conditions.
+
+  NOTE: adding a third algorithm whose key length collides with one of these
+  (e.g. AES-256-GCM, which is also 32 bytes) would invalidate this and require
+  carrying the algorithm explicitly.
+**)
+let aead_alg_of_key_len (n:nat) : aead_alg =
+  if n = 16 then AEAD_AES128_GCM else AEAD_CHACHA20_POLY1305
+
+let aead_alg_of_key (k:B.bytes) : aead_alg =
+  aead_alg_of_key_len (B.length k)
+
+type aead_key (a:aead_alg) = bytes_of_len (aead_key_len a)
+type aead_key_any = k:B.bytes{B.length k == 16 \/ B.length k == 32}
+
+(**
+  Runtime buffers holding a traffic key are always 32 bytes wide, so that the
+  buffer layout does not depend on the negotiated suite.  A 16-byte AES key is
+  stored zero-padded to 32 bytes; the logical key is the `aead_key_len`-byte
+  prefix.  `pad_key_32` is the spec-level image of that storage convention, so
+  representation predicates can pin the full 32-byte buffer contents while the
+  model keeps the exact-length key.
+**)
+let pad_key_32 (k:aead_key_any) : bytes_of_len 32 =
+  Seq.append k (Seq.create (32 - B.length k) 0uy)
+
+(** Total inverse of `pad_key_32`: recovers the logical key from a padded
+    32-byte buffer.  Total (rather than refined) so it can appear in
+    postconditions, where `requires` clauses are not in scope. **)
+let unpad_key_32 (key:B.bytes) (key_len:nat) : B.bytes =
+  if key_len < B.length key then Seq.slice key 0 key_len else key
+
+(** At the full buffer width the padding is empty, so unpadding is the
+    identity.  Stated with a pattern because `requires` clauses of a Pulse
+    signature are not in scope for its `ensures`, so call sites must recover
+    this from the buffer length alone. **)
+let lemma_unpad_key_32_full (key:B.bytes) (key_len:nat)
+  : Lemma (requires key_len >= B.length key)
+          (ensures unpad_key_32 key key_len == key)
+          [SMTPat (unpad_key_32 key key_len)]
+  = ()
+
+let lemma_pad_key_32_prefix (k:aead_key_any)
+  : Lemma (ensures Seq.equal (Seq.slice (pad_key_32 k) 0 (B.length k)) k)
+          [SMTPat (pad_key_32 k)]
+  = ()
+
+(** `pad_key_32` is injective: the key length is recoverable, so no two
+    distinct keys share a padded image. **)
+let lemma_pad_key_32_injective (k1 k2:aead_key_any)
+  : Lemma (requires B.length k1 == B.length k2 /\
+                    Seq.equal (pad_key_32 k1) (pad_key_32 k2))
+          (ensures Seq.equal k1 k2)
+  = assert (Seq.equal k1 (Seq.slice (pad_key_32 k1) 0 (B.length k1)));
+    assert (Seq.equal k2 (Seq.slice (pad_key_32 k2) 0 (B.length k2)))
 type aead_nonce = bytes_of_len 12
 type x25519_private = bytes_of_len 32
 type x25519_public = bytes_of_len 32
@@ -146,14 +225,16 @@ let tls13_record_nonce
     (nonce_byte seq 256)
     (nonce_byte seq 1)
 
-val chacha20_poly1305_seal:
+val aead_seal:
+  alg:aead_alg ->
   key:B.bytes ->
   nonce:B.bytes ->
   aad:B.bytes ->
   plaintext:B.bytes ->
   Tot (bytes_of_len (B.length plaintext + 16))
 
-val chacha20_poly1305_open:
+val aead_open:
+  alg:aead_alg ->
   key:B.bytes ->
   nonce:B.bytes ->
   aad:B.bytes ->
@@ -162,21 +243,27 @@ val chacha20_poly1305_open:
 
 (**
   Trust assumption: AEAD correctness for honest encryption/decryption with the
-  same key, nonce, and additional authenticated data.  This is not proved in the
-  model; it is part of the cryptographic TCB used to lift protected byte replay
-  to decrypted TLS messages.
+  same algorithm, key, nonce, and additional authenticated data.  This is not
+  proved in the model; it is part of the cryptographic TCB used to lift
+  protected byte replay to decrypted TLS messages.
+
+  Both supported algorithms have a 16-byte tag, so the ciphertext length
+  relation above is algorithm-independent and the record framing proofs are
+  unaffected by the choice of AEAD.
 **)
-val lemma_chacha20_poly1305_open_seal:
+val lemma_aead_open_seal:
+  alg:aead_alg ->
   key:B.bytes ->
   nonce:B.bytes ->
   aad:B.bytes ->
   plaintext:B.bytes ->
   Lemma
-    (chacha20_poly1305_open
+    (aead_open
+      alg
       key
       nonce
       aad
-      (chacha20_poly1305_seal key nonce aad plaintext) ==
+      (aead_seal alg key nonce aad plaintext) ==
       Some plaintext)
 
 val verify_signature:

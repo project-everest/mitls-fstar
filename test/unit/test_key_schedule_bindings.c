@@ -85,22 +85,39 @@ static int test_traffic_key_iv_against_hacl(void) {
       0x00, 0x0c, 0x08,
       't', 'l', 's', '1', '3', ' ', 'i', 'v',
       0x00};
+  /* AES-128-GCM derives a 16-byte key, so HKDF-Expand-Label carries a
+     different output length in the first two bytes of [info]: the 16-byte key
+     is *not* a prefix of the 32-byte one. */
+  static const uint8_t key_info_16[] = {
+      0x00, 0x10, 0x09,
+      't', 'l', 's', '1', '3', ' ', 'k', 'e', 'y',
+      0x00};
   uint8_t expected_key[32];
+  uint8_t expected_key16[16];
   uint8_t expected_iv[12];
   uint8_t got_key[32];
+  uint8_t got_key16[32];
   uint8_t got_iv[12];
+  uint8_t zeros[16] = {0};
 
   if (!tls13_hacl_hkdf_expand_sha256(
           expected_key, sizeof expected_key, traffic_secret, key_info, sizeof key_info) ||
+      !tls13_hacl_hkdf_expand_sha256(
+          expected_key16, sizeof expected_key16, traffic_secret, key_info_16, sizeof key_info_16) ||
       !tls13_hacl_hkdf_expand_sha256(
           expected_iv, sizeof expected_iv, traffic_secret, iv_info, sizeof iv_info)) {
     fprintf(stderr, "direct traffic key/iv setup failed\n");
     return 1;
   }
 
-  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret, got_key);
+  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret, (size_t)32, got_key);
+  TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret, (size_t)16, got_key16);
   TLS13_KeySchedule_derive_traffic_iv((uint8_t *)traffic_secret, got_iv);
   return expect_bytes("extracted traffic key", got_key, expected_key, sizeof got_key) ||
+         expect_bytes("extracted traffic key (aes128)", got_key16, expected_key16,
+                      sizeof expected_key16) ||
+         expect_bytes("extracted traffic key (aes128 pad)", got_key16 + 16, zeros,
+                      sizeof zeros) ||
          expect_bytes("extracted traffic iv", got_iv, expected_iv, sizeof got_iv);
 }
 

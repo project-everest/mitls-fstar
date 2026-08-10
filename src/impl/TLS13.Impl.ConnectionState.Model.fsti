@@ -1238,7 +1238,8 @@ let received_client_finished_state
     | Some master ->
       let secret =
         K.client_application_traffic_secret master (Tr.hash hs0.CS.hs_transcript) in
-      let material = CS.traffic_key_material_for_secret secret in
+      let material =
+        CS.traffic_key_material_for_secret (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305) secret in
       let hs_v =
         CS.append_handshake_to_transcript
           { hs0 with CS.hs_client_finished = Some fin }
@@ -1555,7 +1556,8 @@ let received_server_finished_state
     | Some master ->
       let secret =
         K.server_application_traffic_secret master (Tr.hash hs_v.CS.hs_transcript) in
-      let material = CS.traffic_key_material_for_secret secret in
+      let material =
+        CS.traffic_key_material_for_secret (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305) secret in
       CS.with_handshake_stage
         { model0 with
             CS.model_record =
@@ -2611,6 +2613,7 @@ val lemma_client_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                 (K.client_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2633,6 +2636,7 @@ val lemma_server_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                 (K.server_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2657,6 +2661,7 @@ val lemma_server_role_server_handshake_write_traffic_install_legal
              CS.install_direction = CS.TrafficWrite;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                  (K.server_handshake_traffic_secret
                    handshake_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2682,6 +2687,7 @@ val lemma_server_role_client_handshake_read_traffic_install_legal
              CS.install_direction = CS.TrafficRead;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                  (K.client_handshake_traffic_secret
                    handshake_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2705,6 +2711,7 @@ val lemma_client_application_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                 (K.client_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2727,6 +2734,7 @@ val lemma_server_application_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                 (K.server_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2751,6 +2759,7 @@ val lemma_server_role_server_application_write_traffic_install_legal
              CS.install_direction = CS.TrafficWrite;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                  (K.server_application_traffic_secret
                    master_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2776,6 +2785,7 @@ val lemma_server_role_client_application_read_traffic_install_legal
              CS.install_direction = CS.TrafficRead;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305)
                  (K.client_application_traffic_secret
                    master_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));

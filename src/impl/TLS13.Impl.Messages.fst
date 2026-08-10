@@ -336,7 +336,9 @@ noextract
 let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> U16.v wire == 0x1303
-  | T.Unknown_cipherSuite n -> U16.v wire == U16.v n /\ U16.v n <> 0x1303
+  | T.TLS_AES_128_GCM_SHA256 -> U16.v wire == 0x1301
+  | T.Unknown_cipherSuite n ->
+    U16.v wire == U16.v n /\ U16.v n <> 0x1303 /\ U16.v n <> 0x1301
 
 noextract
 let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =

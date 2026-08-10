@@ -1,6 +1,7 @@
 module TLS13.ConnectionState.ProtectedWireRecordAlignment
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module K = TLS13.Keys
@@ -539,11 +540,13 @@ let lemma_server_handshake_install_materials_agree_from_key_schedule
     Seq.lemma_eq_elim server_hs.hs_transcript client_hs.hs_transcript;
     assert (server_material ==
       traffic_key_material_for_secret
+        C.AEAD_CHACHA20_POLY1305
         (K.server_handshake_traffic_secret
           server_secret
           (Tr.hash server_hs.hs_transcript)));
     assert (client_material ==
       traffic_key_material_for_secret
+        C.AEAD_CHACHA20_POLY1305
         (K.server_handshake_traffic_secret
           client_secret
           (Tr.hash client_hs.hs_transcript)));
@@ -754,11 +757,13 @@ let lemma_client_handshake_install_materials_agree_from_key_schedule
     Seq.lemma_eq_elim client_hs.hs_transcript server_hs.hs_transcript;
     assert (client_material ==
       traffic_key_material_for_secret
+        C.AEAD_CHACHA20_POLY1305
         (K.client_handshake_traffic_secret
           client_secret
           (Tr.hash client_hs.hs_transcript)));
     assert (server_material ==
       traffic_key_material_for_secret
+        C.AEAD_CHACHA20_POLY1305
         (K.client_handshake_traffic_secret
           server_secret
           (Tr.hash server_hs.hs_transcript)));

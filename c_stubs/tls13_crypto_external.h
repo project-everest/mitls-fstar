@@ -50,8 +50,11 @@ void TLS13_Crypto_x25519_public_from_private(
     uint8_t *sk,
     uint8_t *out);
 
-void TLS13_Crypto_chacha20_poly1305_seal(
+/* AEAD for the negotiated suite.  key_len selects the algorithm: 16 =>
+   AES-128-GCM, 32 => ChaCha20-Poly1305 (mirrors Crypto.Spec.aead_alg_of_key). */
+void TLS13_Crypto_aead_seal(
     uint8_t *key,
+    size_t key_len,
     uint8_t *nonce,
     uint8_t *aad,
     size_t aad_len,
@@ -59,8 +62,9 @@ void TLS13_Crypto_chacha20_poly1305_seal(
     size_t plain_len,
     uint8_t *out);
 
-bool TLS13_Crypto_chacha20_poly1305_open(
+bool TLS13_Crypto_aead_open(
     uint8_t *key,
+    size_t key_len,
     uint8_t *nonce,
     uint8_t *aad,
     size_t aad_len,

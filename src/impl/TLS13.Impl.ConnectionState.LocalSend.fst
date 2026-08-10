@@ -286,6 +286,8 @@ fn mark_sent_client_finished
   Rec.install_application_keys_runtime
     c.records.write
     (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+    32sz
+    (Ghost.hide ca_key)
     (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
@@ -1852,14 +1854,14 @@ fn try_send_key_update
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
 
       let mut traffic_key_out = [| 0uy; 32sz |];
-      KS.derive_traffic_key traffic_secret_out traffic_key_out;
+      KS.derive_traffic_key traffic_secret_out 32sz traffic_key_out;
       let mut traffic_iv_out = [| 0uy; 12sz |];
       KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
       with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
       with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
       let traffic_secret = Ghost.hide traffic_secret_bytes;
-      let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+      let material = Ghost.hide (CS.traffic_key_material_for_secret TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305 (Ghost.reveal traffic_secret));
       assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
       assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
       assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
@@ -1965,7 +1967,7 @@ fn try_send_key_update
         c.handshake
         (sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
 
-      Rec.install_application_keys_runtime c.records.write traffic_key_out traffic_iv_out;
+      Rec.install_application_keys_runtime c.records.write traffic_key_out 32sz (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
       assert (pure (R.install_keys
         (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
         R.Application
@@ -2368,14 +2370,14 @@ fn server_try_send_key_update
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
 
       let mut traffic_key_out = [| 0uy; 32sz |];
-      KS.derive_traffic_key traffic_secret_out traffic_key_out;
+      KS.derive_traffic_key traffic_secret_out 32sz traffic_key_out;
       let mut traffic_iv_out = [| 0uy; 12sz |];
       KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
       with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
       with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
       let traffic_secret = Ghost.hide traffic_secret_bytes;
-      let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+      let material = Ghost.hide (CS.traffic_key_material_for_secret TLS13.Crypto.Spec.AEAD_CHACHA20_POLY1305 (Ghost.reveal traffic_secret));
       assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
       assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
       assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
@@ -2481,7 +2483,7 @@ fn server_try_send_key_update
         c.handshake
         (server_sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
 
-      Rec.install_application_keys_runtime c.records.write traffic_key_out traffic_iv_out;
+      Rec.install_application_keys_runtime c.records.write traffic_key_out 32sz (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
       assert (pure (R.install_keys
         (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
         R.Application

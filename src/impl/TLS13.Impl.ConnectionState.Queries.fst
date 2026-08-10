@@ -5421,6 +5421,8 @@ fn can_verify_client_finished_runtime
     Rec.application_keys_match
       c.records.read
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      32sz
+      (Ghost.hide client_app_key)
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
@@ -5431,6 +5433,8 @@ fn can_verify_client_finished_runtime
     Rec.application_keys_match
       c.records.write
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      32sz
+      (Ghost.hide server_app_key)
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
@@ -5620,6 +5624,8 @@ fn server_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.read
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      32sz
+      (Ghost.hide client_app_key)
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
@@ -5630,6 +5636,8 @@ fn server_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.write
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      32sz
+      (Ghost.hide server_app_key)
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
@@ -5727,6 +5735,8 @@ fn client_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.read
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      32sz
+      (Ghost.hide server_app_key)
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
@@ -5737,6 +5747,8 @@ fn client_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.write
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      32sz
+      (Ghost.hide client_app_key)
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;

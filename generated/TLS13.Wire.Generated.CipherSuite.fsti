@@ -36,18 +36,21 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 let cipherSuite_repr = U16.t
 inline_for_extraction let cipherSuite_repr_eq (x1 x2: cipherSuite_repr) : Tot bool = (x1 = x2)
-let known_cipherSuite_repr (v:U16.t) : bool = v `cipherSuite_repr_eq` 4867us || (false)
+let known_cipherSuite_repr (v:U16.t) : bool = v `cipherSuite_repr_eq` 4865us || (v `cipherSuite_repr_eq` 4867us || (false))
 
 type cipherSuite =
+  | TLS_AES_128_GCM_SHA256
   | TLS_CHACHA20_POLY1305_SHA256
   | Unknown_cipherSuite of (v:U16.t{not (known_cipherSuite_repr v)})
 
 let string_of_cipherSuite = function
+  | TLS_AES_128_GCM_SHA256 -> "TLS_AES_128_GCM_SHA256"
   | TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
   | Unknown_cipherSuite _ -> "Unknown_cipherSuite"
 
 [@LT.Norm] inline_for_extraction noextract let cipherSuite_enum : LP.enum cipherSuite U16.t =
   [@inline_let] let e = [
+    TLS_AES_128_GCM_SHA256, 4865us;
     TLS_CHACHA20_POLY1305_SHA256, 4867us;
   ] in
   [@inline_let] let _ =

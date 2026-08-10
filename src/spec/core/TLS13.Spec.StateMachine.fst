@@ -16,6 +16,7 @@ module H = TLS13.Handshake.Spec
 module K = TLS13.Keys
 module M = TLS13.Messages
 module Sem = TLS13.Wire.Semantics
+module GCS = TLS13.Wire.Generated.CipherSuite
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
@@ -103,19 +104,29 @@ type handshake_start = {
 }
 type traffic_key_material = {
   traffic_secret: K.traffic_secret;
-  traffic_key: C.aead_key;
+  traffic_key: C.aead_key_any;
   traffic_iv: C.aead_nonce;
 }
-let traffic_key_material_for_secret (secret:K.traffic_secret) : traffic_key_material =
+let traffic_key_material_for_secret
+  (a:C.aead_alg)
+  (secret:K.traffic_secret)
+  : traffic_key_material =
   {
     traffic_secret = secret;
-    traffic_key = K.derive_aead_key secret;
+    traffic_key = K.derive_aead_key a secret;
     traffic_iv = K.derive_aead_iv secret;
   }
+(**
+  A key update re-derives from the updated traffic secret under the *same*
+  AEAD algorithm; the negotiated cipher suite cannot change mid-connection.
+  The algorithm is recovered from the outgoing key rather than threaded as a
+  parameter, so rekeying needs no extra plumbing.
+**)
 let updated_traffic_key_material
   (old:traffic_key_material)
   : traffic_key_material =
   traffic_key_material_for_secret
+    (C.aead_alg_of_key old.traffic_key)
     (K.application_traffic_secret_update old.traffic_secret)
 type key_schedule_state = {
   ks_early_secret: option C.secret;
@@ -207,6 +218,27 @@ let empty_handshake_state : handshake_state = {
   hs_buffers = empty_handshake_buffer_state;
   hs_keys = empty_key_schedule_state;
 }
+(**
+  The AEAD algorithm implied by a negotiated cipher suite.  Both suites ATLAS
+  offers use SHA-256 for the key schedule, so the suite determines only the
+  record-layer AEAD.  An unknown suite maps to the ChaCha20-Poly1305 default;
+  the ServerHello checks reject any suite the client did not offer, so this
+  fallback is never reached on an accepted connection.
+**)
+let aead_alg_of_cipher_suite (cs:GCS.cipherSuite) : C.aead_alg =
+  match cs with
+  | GCS.TLS_AES_128_GCM_SHA256 -> C.AEAD_AES128_GCM
+  | _ -> C.AEAD_CHACHA20_POLY1305
+
+(** The AEAD algorithm for a connection, read off the accepted ServerHello. *)
+let negotiated_aead_alg (hs:handshake_state) : C.aead_alg =
+  match hs.hs_server_hello with
+  | Some sh ->
+    (match Sem.serverHello_cipher_suite sh with
+     | Some cs -> aead_alg_of_cipher_suite cs
+     | None -> C.AEAD_CHACHA20_POLY1305)
+  | None -> C.AEAD_CHACHA20_POLY1305
+
 let client_hello_key_share (ch:GCH.clientHello) : option C.x25519_public =
   match Sem.clientHello_key_share_x25519 ch with
   | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
@@ -790,7 +822,7 @@ let step_handshake_message
     (match hs_v.hs_keys.ks_master_secret with
      | Some master ->
        let secret = K.server_application_traffic_secret master (Tr.hash hs_v.hs_transcript) in
-       let material = traffic_key_material_for_secret secret in
+       let material = traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret in
        Some (with_handshake_stage
          { model with
              model_record =
@@ -820,7 +852,7 @@ let step_handshake_message
     (match hs.hs_keys.ks_master_secret with
      | Some master ->
        let secret = K.client_application_traffic_secret master (Tr.hash hs.hs_transcript) in
-       let material = traffic_key_material_for_secret secret in
+       let material = traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret in
        let hs_v =
          append_handshake_to_transcript
            { hs with hs_client_finished = Some fin }
@@ -1380,7 +1412,7 @@ let traffic_install_matches_key_schedule
   : GTot prop =
   match expected_traffic_secret hs install.install_epoch install.install_direction with
   | Some secret ->
-    install.install_material == traffic_key_material_for_secret secret
+    install.install_material == traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret
   | None -> False
 let traffic_install_matches_key_schedule_for_role
   (role:endpoint_role)
@@ -1393,7 +1425,7 @@ let traffic_install_matches_key_schedule_for_role
           install.install_epoch
           install.install_direction with
   | Some secret ->
-    install.install_material == traffic_key_material_for_secret secret
+    install.install_material == traffic_key_material_for_secret C.AEAD_CHACHA20_POLY1305 secret
   | None -> False
 let application_traffic_available_for_role
   (role:endpoint_role)
