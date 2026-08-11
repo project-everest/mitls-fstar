@@ -1279,7 +1279,7 @@ let received_client_finished_state
                   R.install_keys
                     model0.CS.model_record.CS.record_read
                     R.Application
-                    material.CS.traffic_key
+                    material.CS.traffic_alg material.CS.traffic_key
                     material.CS.traffic_iv;
             };
           CS.model_handshake =
@@ -1592,7 +1592,7 @@ let received_server_finished_state
                     R.install_keys
                       model0.CS.model_record.CS.record_read
                       R.Application
-                      material.CS.traffic_key
+                      material.CS.traffic_alg material.CS.traffic_key
                       material.CS.traffic_iv;
               };
         }
@@ -1894,7 +1894,7 @@ let received_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_read)
                 R.Application
-                new_server_app.CS.traffic_key
+                new_server_app.CS.traffic_alg new_server_app.CS.traffic_key
                 new_server_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -1948,7 +1948,7 @@ let server_received_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_read)
                 R.Application
-                new_client_app.CS.traffic_key
+                new_client_app.CS.traffic_alg new_client_app.CS.traffic_key
                 new_client_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -2005,7 +2005,7 @@ let sent_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_write)
                 R.Application
-                new_client_app.CS.traffic_key
+                new_client_app.CS.traffic_alg new_client_app.CS.traffic_key
                 new_client_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -2062,7 +2062,7 @@ let server_sent_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_write)
                 R.Application
-                new_server_app.CS.traffic_key
+                new_server_app.CS.traffic_alg new_server_app.CS.traffic_key
                 new_server_app.CS.traffic_iv;
         };
         CS.model_handshake = {

@@ -25,34 +25,13 @@ let aead_key_len (a:aead_alg) : n:nat{n == 16 \/ n == 32} =
   | AEAD_CHACHA20_POLY1305 -> 32
 
 (**
-  TLS 1.3 fixes the AEAD key length from the negotiated cipher suite, and the
-  two algorithms above have distinct key lengths, so a traffic key determines
-  its own algorithm.  Keys always come from `TLS13.Keys.derive_aead_key`, which
-  expands to exactly `aead_key_len` bytes for the negotiated suite, so this
-  recovers precisely that suite's algorithm.
-
-  Keeping the algorithm a function of the key (rather than a separate field of
-  the record-layer state) means the existing "the peer installed the same key"
-  hypotheses already imply "the peer uses the same algorithm", so record-layer
-  agreement needs no new side conditions.
-
-  NOTE: adding a third algorithm whose key length collides with one of these
-  (e.g. AES-256-GCM, which is also 32 bytes) would invalidate this and require
-  carrying the algorithm explicitly.
+  The negotiated AEAD algorithm is carried as an explicit tag: it lives on the
+  record-layer `direction_state` and on `traffic_key_material`, both threaded
+  from the accepted ServerHello's cipher suite.  It is deliberately NOT
+  recovered from `B.length key` — key lengths collide across algorithms
+  (AES-256-GCM and ChaCha20-Poly1305 are both 32 bytes), so length inference is
+  neither sound in general nor an honest description of what was negotiated.
 **)
-let aead_alg_of_key_len (n:nat) : aead_alg =
-  if n = 16 then AEAD_AES128_GCM else AEAD_CHACHA20_POLY1305
-
-let aead_alg_of_key (k:B.bytes) : aead_alg =
-  aead_alg_of_key_len (B.length k)
-
-(** `aead_alg_of_key_len` inverts `aead_key_len`.  Carried as an SMT pattern so
-    that code which only has a runtime key length in hand recovers the
-    algorithm without an explicit case split. **)
-let lemma_aead_alg_of_key_len_roundtrip (a:aead_alg)
-  : Lemma (aead_alg_of_key_len (aead_key_len a) == a)
-          [SMTPat (aead_alg_of_key_len (aead_key_len a))]
-  = ()
 
 type aead_key (a:aead_alg) = bytes_of_len (aead_key_len a)
 type aead_key_any = k:B.bytes{B.length k == 16 \/ B.length k == 32}

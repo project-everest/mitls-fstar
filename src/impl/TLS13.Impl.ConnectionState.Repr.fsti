@@ -692,9 +692,10 @@ let traffic_key_material_exactly
             match spec with
             | Some m ->
               Seq.equal secret m.CS.traffic_secret /\
-              // The runtime key buffer is always 32 bytes; a 16-byte
-              // AES-128-GCM key is stored zero-padded (see [CryptoSpec.pad_key_32]).
-              CryptoSpec.aead_key_len alg == B.length m.CS.traffic_key /\
+              // The stored algorithm is the one the material was derived
+              // under; the runtime key buffer is always 32 bytes, so a
+              // 16-byte AES-128-GCM key is zero-padded (CryptoSpec.pad_key_32).
+              m.CS.traffic_alg == alg /\
               Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
               Seq.equal iv m.CS.traffic_iv
             | None -> False
@@ -713,7 +714,7 @@ let lemma_traffic_key_material_match_present_of_some
                  match spec with
                  | Some m ->
                    Seq.equal secret m.CS.traffic_secret /\
-                   CryptoSpec.aead_key_len alg == B.length m.CS.traffic_key /\
+                   m.CS.traffic_alg == alg /\
                    Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
                    Seq.equal iv m.CS.traffic_iv
                  | None -> False
@@ -724,6 +725,7 @@ let lemma_traffic_key_material_match_present_of_some
       (ensures present /\
               spec == Some {
                 CS.traffic_secret = secret;
+                CS.traffic_alg = alg;
                 CS.traffic_key = CryptoSpec.logical_key alg key;
                 CS.traffic_iv = iv;
               })
@@ -740,6 +742,7 @@ let lemma_traffic_key_material_match_present_of_some
     assert (CryptoSpec.logical_key alg key == m.CS.traffic_key);
     assert (m == {
       CS.traffic_secret = secret;
+      CS.traffic_alg = alg;
       CS.traffic_key = CryptoSpec.logical_key alg key;
       CS.traffic_iv = iv;
     })
@@ -757,7 +760,7 @@ let lemma_traffic_key_material_match_present_iff
                  match spec with
                  | Some m ->
                    Seq.equal secret m.CS.traffic_secret /\
-                   CryptoSpec.aead_key_len alg == B.length m.CS.traffic_key /\
+                   m.CS.traffic_alg == alg /\
                    Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
                    Seq.equal iv m.CS.traffic_iv
                  | None -> False
@@ -806,7 +809,7 @@ fn store_traffic_key_material
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
            ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
-           pure (CryptoSpec.aead_key_len alg == B.length material.CS.traffic_key)
+           pure (material.CS.traffic_alg == alg)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **

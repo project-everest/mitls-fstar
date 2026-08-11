@@ -203,6 +203,7 @@ let record_material_of_traffic_material
   (material:traffic_key_material)
   : record_key_iv_material =
   {
+    record_material_alg = material.traffic_alg;
     record_material_key = material.traffic_key;
     record_material_iv = material.traffic_iv;
   }
@@ -211,13 +212,15 @@ let record_direction_material
   : option record_key_iv_material =
   match st.R.key, st.R.static_iv with
   | Some key, Some iv ->
-    Some { record_material_key = key; record_material_iv = iv }
+    Some { record_material_alg = st.R.alg;
+           record_material_key = key; record_material_iv = iv }
   | _, _ ->
     None
 let record_key_iv_material_agrees
   (left:record_key_iv_material)
   (right:record_key_iv_material)
   : prop =
+  left.record_material_alg == right.record_material_alg /\
   Seq.equal left.record_material_key right.record_material_key /\
   Seq.equal left.record_material_iv right.record_material_iv
 let record_direction_material_matches_key_schedule_for_role
@@ -595,6 +598,7 @@ let traffic_material_matches_expected_at_count
   | Some material, Some secret ->
     let expected = application_traffic_secret_after secret n in
     Seq.equal material.traffic_secret expected /\
+    material.traffic_alg == negotiated_aead_alg st.cs_model.model_handshake /\
     Seq.equal material.traffic_key
       (K.derive_aead_key (negotiated_aead_alg st.cs_model.model_handshake) expected) /\
     Seq.equal material.traffic_iv (K.derive_aead_iv expected)
@@ -642,7 +646,7 @@ let lemma_updated_traffic_key_material_advances_count
          Seq.equal
            rotated.traffic_key
            (K.derive_aead_key
-              (C.aead_alg_of_key material.traffic_key)
+              material.traffic_alg
               (application_traffic_secret_after secret (n + 1))) /\
          Seq.equal
            rotated.traffic_iv

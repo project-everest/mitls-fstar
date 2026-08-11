@@ -386,35 +386,46 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 100 | forms.gle | OK | HTTP/1.1 400 Bad Request | OK |
 | 101 | nytimes.com | OK | HTTP/1.1 200 OK | OK |
 
-### The one remaining length-inference site
+### Length inference is gone
 
-`TLS13.Record.Spec` still recovers the AEAD algorithm from the key:
+`TLS13.Record.Spec` used to recover the AEAD algorithm from the key:
 
 ```fstar
 Some (C.aead_seal (C.aead_alg_of_key key) key nonce aad pt.fragment, next_seq st)
 ```
 
-`R.direction_state` carries `key`, `static_iv`, `epoch` and `seq` but no
-algorithm, so `seal` and `open_record` infer it from `B.length key`.  This is
-the same anti-pattern as above and should go.  It survived the AEAD refactor
-for one specific reason: `lemma_open_record_after_seal_peer` proves that what
-one peer seals the other opens, and its only hypothesis about keys is that the
-two byte strings are equal.  Same bytes implies same length implies same
-algorithm, so agreement is currently free.
+`R.direction_state` carried `key`, `static_iv`, `epoch` and `seq` but no
+algorithm, so `seal` and `open_record` inferred it from `B.length key`.  That
+site survived the earlier AEAD refactor for one specific reason:
+`lemma_open_record_after_seal_peer` proves that what one peer seals the other
+opens, and its only hypothesis about keys was that the two byte strings are
+equal.  Same bytes implies same length implies same algorithm, so agreement was
+free.
 
-The fix is to put the negotiated suite in `direction_state`, installed
-alongside the key.  Cost, measured:
+It is now removed.  The negotiated algorithm is an explicit tag:
 
-* `seal` / `open_record` read the tag from the state, so their ~105 call sites
-  across 21 files are **unchanged**.
-* `R.install_keys` gains an argument: ~134 sites, the majority inside
-  `TLS13.ConnectionState.Lemmas.fst`.
-* `lemma_open_record_after_seal_peer` needs same-tag as an added hypothesis.
-  This is already available: suite agreement between the two endpoints is a
-  threaded property (`CS.negotiated_aead_alg client == CS.negotiated_aead_alg
-  server` in `ProtectedWireClientFinished.fsti`).
+* `R.direction_state` gains `alg : C.aead_alg`, set by `R.install_keys` (which
+  gains a matching argument).  `seal` and `open_record` read `st.alg`, so their
+  ~105 call sites across 21 files are unchanged.
+* `CS.traffic_key_material` gains `traffic_alg : C.aead_alg`, and its key field
+  becomes the dependent type `C.aead_key traffic_alg`.  That makes
+  `aead_key_len alg == B.length key` free from the type rather than a
+  hypothesis, which removed several length side conditions outright.
+* `traffic_material_matches_record_direction` and `record_key_iv_material`
+  carry the algorithm, so "installed from this material" now also relates the
+  algorithms.
+* `lemma_open_record_after_seal_peer` takes same-algorithm as an added
+  hypothesis.  It is discharged from `paired_cleartext_hello_key_shares`, which
+  already pins `Sem.serverHello_cipher_suite client_sh ==
+  Sem.serverHello_cipher_suite server_sh` across the two endpoints.
 
-Prefer carrying the whole `GCS.cipherSuite` rather than just `C.aead_alg`.  It
-is the actual negotiated object, it is what the ServerHello echoes, and it
-brings the hash with it -- so if a SHA-384 suite is ever needed the key
-schedule can index on the same tag instead of growing a second one.
+`C.aead_alg_of_key` and `C.aead_alg_of_key_len` are deleted.  No length-derived
+cryptographic parameter remains anywhere in the tree.
+
+**Why `C.aead_alg` and not `GCS.cipherSuite`.**  Carrying the whole negotiated
+suite looks more faithful, but `TLS13.Record.Spec` imports only `TLS13.Bytes`,
+`TLS13.Crypto.Spec`, `FStar.Seq`, `TLS13.Types` and `TLS13.Messages`.  Pulling
+generated handshake wire types into the record layer inverts the layering.  The
+suite-to-algorithm mapping stays where it belongs, in
+`TLS13.Spec.StateMachine.aead_alg_of_cipher_suite`; a future SHA-384 suite adds
+a hash tag on the key schedule, not on the record layer.

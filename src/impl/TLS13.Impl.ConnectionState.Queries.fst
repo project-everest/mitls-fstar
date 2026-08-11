@@ -5151,6 +5151,7 @@ fn server_finished_verify_data_matches
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic ==
     Some {
       CS.traffic_secret = server_hs_secret;
+      CS.traffic_alg = server_hs_alg;
       CS.traffic_key = CryptoSpec.logical_key server_hs_alg server_hs_key;
       CS.traffic_iv = server_hs_iv;
     }));
@@ -5309,6 +5310,7 @@ fn client_finished_verify_data_matches
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ==
     Some {
       CS.traffic_secret = client_hs_secret;
+      CS.traffic_alg = client_hs_alg;
       CS.traffic_key = CryptoSpec.logical_key client_hs_alg client_hs_key;
       CS.traffic_iv = client_hs_iv;
     }));

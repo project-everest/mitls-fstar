@@ -2297,6 +2297,7 @@ let lemma_server_step_no_ku_backward
 let rec lemma_advance_preserves_key_iv (st:R.direction_state) (n:nat)
   : Lemma
       (ensures
+        (CS.advance_direction_records st n).R.alg == st.R.alg /\
         (CS.advance_direction_records st n).R.key == st.R.key /\
         (CS.advance_direction_records st n).R.static_iv == st.R.static_iv)
       (decreases n)
@@ -2305,7 +2306,7 @@ let rec lemma_advance_preserves_key_iv (st:R.direction_state) (n:nat)
 
 (** Backward preservation of application-record-key installation across a single
     application-data step.  `traffic_material_matches_record_direction` inspects
-    ONLY `.key`/`.static_iv` (never `.seq`/`.epoch`); an application-data
+    ONLY `.alg`/`.key`/`.static_iv` (never `.seq`/`.epoch`); an application-data
     send/receive performs `next_seq`/`advance_direction_records` and never
     rewrites the record key or IV, and the no-key-update guard excludes the only
     event (KeyUpdate) that would.  So if the post-state has the application record

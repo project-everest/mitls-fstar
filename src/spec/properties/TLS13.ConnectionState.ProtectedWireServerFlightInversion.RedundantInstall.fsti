@@ -7,7 +7,7 @@ module TLS13.ConnectionState.ProtectedWireServerFlightInversion.RedundantInstall
   server (resp. client) has already installed those keys is:
 
     * MODEL-NEUTRAL: [step_model M install == Some M].  The record-layer install
-      ([R.install_keys]) is a CONSTANT function of (epoch, key, iv) — it ignores
+      ([R.install_keys]) is a CONSTANT function of (epoch, alg, key, iv) — it ignores
       the prior direction state entirely — so re-installing the SAME material is
       idempotent; and the key-schedule update rewrites a field to the value it
       already holds, hence is identity.  Neither the model control nor any other
@@ -64,12 +64,12 @@ let client_hs_read_install_event (material:CS.traffic_key_material) : CS.conn_ev
 let server_write_keys_installed (m:CS.connection_model) (material:CS.traffic_key_material) : prop =
   m.CS.model_record.CS.record_write ==
     R.install_keys m.CS.model_record.CS.record_write R.Handshake
-      material.CS.traffic_key material.CS.traffic_iv
+      material.CS.traffic_alg material.CS.traffic_key material.CS.traffic_iv
 
 let client_read_keys_installed (m:CS.connection_model) (material:CS.traffic_key_material) : prop =
   m.CS.model_record.CS.record_read ==
     R.install_keys m.CS.model_record.CS.record_read R.Handshake
-      material.CS.traffic_key material.CS.traffic_iv
+      material.CS.traffic_alg material.CS.traffic_key material.CS.traffic_iv
 
 (** The material-matches-key-schedule legality side condition (server write). *)
 let server_write_material_matches (m:CS.connection_model) (material:CS.traffic_key_material) : prop =

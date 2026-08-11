@@ -3010,6 +3010,7 @@ fn process_send_server_finished_serialized
   assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic ==
     Some {
       CS.traffic_secret = sh_secret;
+      CS.traffic_alg = sh_alg;
       CS.traffic_key = CryptoSpec.logical_key sh_alg sh_key;
       CS.traffic_iv = sh_iv;
     }));

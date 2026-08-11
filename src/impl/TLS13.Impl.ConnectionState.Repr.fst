@@ -71,7 +71,7 @@ fn store_traffic_key_material
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
            ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
-           pure (CryptoSpec.aead_key_len alg == B.length material.CS.traffic_key)
+           pure (material.CS.traffic_alg == alg)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **

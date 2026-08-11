@@ -2248,7 +2248,7 @@ let lemma_step_model_server_handshake_write_key_reachable_shape
               R.install_keys
                 model.model_record.record_write
                 R.Handshake
-                install.install_material.traffic_key
+                install.install_material.traffic_alg install.install_material.traffic_key
                 install.install_material.traffic_iv);
             assert (traffic_material_option_matches_record_direction
               model'.model_handshake.hs_keys.ks_server_handshake_traffic
@@ -2631,6 +2631,7 @@ let rec lemma_advance_direction_records_preserves_key_iv
   (n:nat)
   : Lemma
       (ensures
+        (advance_direction_records st n).R.alg == st.R.alg /\
         (advance_direction_records st n).R.key == st.R.key /\
         (advance_direction_records st n).R.static_iv == st.R.static_iv)
       (decreases n)
@@ -5013,10 +5014,11 @@ let lemma_projected_next_seq_of_record
 let lemma_projected_install_keys_of_record
   (st:R.direction_state)
   (epoch:R.epoch)
+  (alg:C.aead_alg)
   (key:C.aead_key_any)
   (iv:C.aead_nonce)
   : Lemma
-      (projected_direction_state_of_record (R.install_keys st epoch key iv) ==
+      (projected_direction_state_of_record (R.install_keys st epoch alg key iv) ==
         projected_install_keys epoch)
 =
   ()
@@ -5036,12 +5038,14 @@ let lemma_projected_install_record_keys_of_record
     lemma_projected_install_keys_of_record
       record.record_write
       (traffic_record_epoch install.install_epoch)
+      install.install_material.traffic_alg
       install.install_material.traffic_key
       install.install_material.traffic_iv
   | _, TrafficRead ->
     lemma_projected_install_keys_of_record
       record.record_read
       (traffic_record_epoch install.install_epoch)
+      install.install_material.traffic_alg
       install.install_material.traffic_key
       install.install_material.traffic_iv
 
@@ -5062,6 +5066,7 @@ let lemma_projected_install_record_keys_of_record_for_role
     lemma_projected_install_keys_of_record
       record.record_write
       R.Application
+      install.install_material.traffic_alg
       install.install_material.traffic_key
       install.install_material.traffic_iv
   | _, _, _ ->
@@ -5083,6 +5088,7 @@ let lemma_projected_client_application_write_after_finished
     lemma_projected_install_keys_of_record
       (R.next_seq record.record_write)
       R.Application
+      material.traffic_alg
       material.traffic_key
       material.traffic_iv
   | None -> assert False
@@ -7495,7 +7501,7 @@ let lemma_step_model_record_keys_consistent
             R.install_keys
               model0.model_record.record_write
               R.Handshake
-              install.install_material.traffic_key
+              install.install_material.traffic_alg install.install_material.traffic_key
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
             Some install.install_material)
@@ -7504,7 +7510,7 @@ let lemma_step_model_record_keys_consistent
             R.install_keys
               model0.model_record.record_read
               R.Handshake
-              install.install_material.traffic_key
+              install.install_material.traffic_alg install.install_material.traffic_key
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
             Some install.install_material)
@@ -7517,7 +7523,7 @@ let lemma_step_model_record_keys_consistent
             R.install_keys
               model0.model_record.record_read
               R.Application
-              install.install_material.traffic_key
+              install.install_material.traffic_alg install.install_material.traffic_key
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
             Some install.install_material))
@@ -7530,7 +7536,7 @@ let lemma_step_model_record_keys_consistent
             R.install_keys
               model0.model_record.record_write
               R.Handshake
-              install.install_material.traffic_key
+              install.install_material.traffic_alg install.install_material.traffic_key
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
             Some install.install_material)
@@ -7539,7 +7545,7 @@ let lemma_step_model_record_keys_consistent
             R.install_keys
               model0.model_record.record_read
               R.Handshake
-              install.install_material.traffic_key
+              install.install_material.traffic_alg install.install_material.traffic_key
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
             Some install.install_material)
@@ -7552,7 +7558,7 @@ let lemma_step_model_record_keys_consistent
             R.install_keys
               model0.model_record.record_read
               R.Application
-              install.install_material.traffic_key
+              install.install_material.traffic_alg install.install_material.traffic_key
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
             Some install.install_material))
@@ -7572,7 +7578,7 @@ let lemma_step_model_record_keys_consistent
                R.install_keys
                  (R.next_seq model0.model_record.record_write)
                  R.Application
-                 material.traffic_key
+                 material.traffic_alg material.traffic_key
                  material.traffic_iv);
              assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
                Some material)
@@ -7589,7 +7595,7 @@ let lemma_step_model_record_keys_consistent
                R.install_keys
                  (R.next_seq model0.model_record.record_read)
                  R.Application
-                 new_server_app.traffic_key
+                 new_server_app.traffic_alg new_server_app.traffic_key
                  new_server_app.traffic_iv);
              assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
                Some new_server_app)
@@ -7606,7 +7612,7 @@ let lemma_step_model_record_keys_consistent
                R.install_keys
                  (R.next_seq model0.model_record.record_write)
                  R.Application
-                 new_client_app.traffic_key
+                 new_client_app.traffic_alg new_client_app.traffic_key
                  new_client_app.traffic_iv);
              assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
                Some new_client_app)
@@ -7659,7 +7665,7 @@ let lemma_step_model_record_keys_consistent
            | Some material ->
              assert (model1.model_record.record_read ==
                R.install_keys model0.model_record.record_read R.Application
-                 material.traffic_key material.traffic_iv);
+                 material.traffic_alg material.traffic_key material.traffic_iv);
              assert (traffic_material_matches_record_direction
                material model1.model_record.record_read);
              assert (record_keys_match_key_schedule_for_role
@@ -7729,7 +7735,7 @@ let lemma_step_model_record_keys_consistent
        | Some material ->
          assert (model1.model_record.record_read ==
            R.install_keys model0.model_record.record_read R.Application
-             material.traffic_key material.traffic_iv);
+             material.traffic_alg material.traffic_key material.traffic_iv);
          assert (traffic_material_matches_record_direction
            material model1.model_record.record_read);
          assert (record_keys_match_key_schedule_for_role
@@ -7883,7 +7889,7 @@ let lemma_step_model_record_keys_consistent_for_role
                 | Some material ->
                   assert (model1.model_record.record_read ==
                     R.install_keys model0.model_record.record_read R.Application
-                      material.traffic_key material.traffic_iv);
+                      material.traffic_alg material.traffic_key material.traffic_iv);
                   assert (traffic_material_matches_record_direction
                     material model1.model_record.record_read);
                   assert (record_keys_match_key_schedule_for_role
@@ -7968,7 +7974,7 @@ let lemma_step_model_record_keys_consistent_for_role
                  R.install_keys
                    (R.next_seq model0.model_record.record_read)
                    R.Application
-                   new_read_app.traffic_key
+                   new_read_app.traffic_alg new_read_app.traffic_key
                    new_read_app.traffic_iv);
                assert (traffic_material_for_label
                          model1.model_handshake.hs_keys
@@ -7996,7 +8002,7 @@ let lemma_step_model_record_keys_consistent_for_role
                  R.install_keys
                    (R.next_seq model0.model_record.record_write)
                    R.Application
-                   new_write_app.traffic_key
+                   new_write_app.traffic_alg new_write_app.traffic_key
                    new_write_app.traffic_iv);
                assert (traffic_material_for_label
                          model1.model_handshake.hs_keys
@@ -8134,12 +8140,13 @@ let lemma_step_model_record_layer_delta
                    R.install_keys
                      (R.next_seq model0.model_record.record_read)
                      R.Application
-                     new_read_app.traffic_key
+                     new_read_app.traffic_alg new_read_app.traffic_key
                      new_read_app.traffic_iv
              });
              lemma_projected_install_keys_of_record
                (R.next_seq model0.model_record.record_read)
                R.Application
+               new_read_app.traffic_alg
                new_read_app.traffic_key
                new_read_app.traffic_iv;
              assert (model_record_layer_delta model0 ev model1)
@@ -8164,12 +8171,13 @@ let lemma_step_model_record_layer_delta
                    R.install_keys
                      (R.next_seq model0.model_record.record_write)
                      R.Application
-                     new_write_app.traffic_key
+                     new_write_app.traffic_alg new_write_app.traffic_key
                      new_write_app.traffic_iv
              });
              lemma_projected_install_keys_of_record
                (R.next_seq model0.model_record.record_write)
                R.Application
+               new_write_app.traffic_alg
                new_write_app.traffic_key
                new_write_app.traffic_iv;
              assert (model_record_layer_delta model0 ev model1)
@@ -8211,12 +8219,13 @@ let lemma_step_model_record_layer_delta
                    R.install_keys
                      model0.model_record.record_read
                      R.Application
-                     material.traffic_key
+                     material.traffic_alg material.traffic_key
                      material.traffic_iv
              });
              lemma_projected_install_keys_of_record
                model0.model_record.record_read
                R.Application
+               material.traffic_alg
                material.traffic_key
                material.traffic_iv;
              assert (model_record_layer_delta model0 ev model1)
@@ -8230,12 +8239,13 @@ let lemma_step_model_record_layer_delta
                    R.install_keys
                      model0.model_record.record_read
                      R.Application
-                     material.traffic_key
+                     material.traffic_alg material.traffic_key
                      material.traffic_iv
              });
              lemma_projected_install_keys_of_record
                model0.model_record.record_read
                R.Application
+               material.traffic_alg
                material.traffic_key
                material.traffic_iv;
              assert (model_record_layer_delta model0 ev model1)
@@ -8368,10 +8378,11 @@ let lemma_step_model_record_layer_delta
         | Some material ->
           assert (model1.model_record.record_read ==
             R.install_keys model0.model_record.record_read R.Application
-              material.traffic_key material.traffic_iv);
+              material.traffic_alg material.traffic_key material.traffic_iv);
           lemma_projected_install_keys_of_record
             model0.model_record.record_read
             R.Application
+            material.traffic_alg
             material.traffic_key
             material.traffic_iv;
           assert (model_record_layer_delta model0 ev model1)
@@ -9260,9 +9271,12 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
     with
     | Some write_key, Some write_iv, Some read_key, Some read_iv ->
       assert (record_direction_material write_st ==
-        Some { record_material_key = write_key; record_material_iv = write_iv });
+        Some { record_material_alg = write_st.R.alg;
+               record_material_key = write_key; record_material_iv = write_iv });
       assert (record_direction_material read_st ==
-        Some { record_material_key = read_key; record_material_iv = read_iv });
+        Some { record_material_alg = read_st.R.alg;
+               record_material_key = read_key; record_material_iv = read_iv });
+      assert (write_st.R.alg == read_st.R.alg);
       assert (Seq.equal write_key read_key);
       assert (Seq.equal write_iv read_iv);
       R.lemma_open_record_after_seal_peer write_st read_st aad pt;

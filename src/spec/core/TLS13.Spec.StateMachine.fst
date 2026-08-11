@@ -102,9 +102,15 @@ type handshake_start = {
   start_cipher_suites: list T.cipher_suite;
   start_signature_schemes: list T.signature_scheme;
 }
+(**
+  `traffic_alg` is the AEAD algorithm this material was derived under.  It is
+  retained rather than recovered from `traffic_key`'s length: the algorithm is
+  a negotiated parameter and a key length is not a substitute for it.
+**)
 type traffic_key_material = {
   traffic_secret: K.traffic_secret;
-  traffic_key: C.aead_key_any;
+  traffic_alg: C.aead_alg;
+  traffic_key: C.aead_key traffic_alg;
   traffic_iv: C.aead_nonce;
 }
 let traffic_key_material_for_secret
@@ -113,20 +119,21 @@ let traffic_key_material_for_secret
   : traffic_key_material =
   {
     traffic_secret = secret;
+    traffic_alg = a;
     traffic_key = K.derive_aead_key a secret;
     traffic_iv = K.derive_aead_iv secret;
   }
 (**
   A key update re-derives from the updated traffic secret under the *same*
   AEAD algorithm; the negotiated cipher suite cannot change mid-connection.
-  The algorithm is recovered from the outgoing key rather than threaded as a
-  parameter, so rekeying needs no extra plumbing.
+  The algorithm is carried on the material being replaced, so it survives the
+  update by construction.
 **)
 let updated_traffic_key_material
   (old:traffic_key_material)
   : traffic_key_material =
   traffic_key_material_for_secret
-    (C.aead_alg_of_key old.traffic_key)
+    old.traffic_alg
     (K.application_traffic_secret_update old.traffic_secret)
 type key_schedule_state = {
   ks_early_secret: option C.secret;
@@ -417,7 +424,7 @@ let install_client_application_write_after_finished
           R.install_keys
             (R.next_seq record.record_write)
             R.Application
-            material.traffic_key
+            material.traffic_alg material.traffic_key
             material.traffic_iv;
     }
   | None ->
@@ -472,13 +479,13 @@ let install_record_keys
     {
       record with
         record_write =
-          R.install_keys record.record_write epoch material.traffic_key material.traffic_iv;
+          R.install_keys record.record_write epoch material.traffic_alg material.traffic_key material.traffic_iv;
     }
   | _, TrafficRead ->
     {
       record with
         record_read =
-          R.install_keys record.record_read epoch material.traffic_key material.traffic_iv;
+          R.install_keys record.record_read epoch material.traffic_alg material.traffic_key material.traffic_iv;
     }
 let install_record_keys_for_role
   (role:endpoint_role)
@@ -491,7 +498,7 @@ let install_record_keys_for_role
     {
     record with
       record_write =
-        R.install_keys record.record_write R.Application material.traffic_key material.traffic_iv;
+        R.install_keys record.record_write R.Application material.traffic_alg material.traffic_key material.traffic_iv;
     }
   | _, _, _ ->
     install_record_keys record install
@@ -499,6 +506,7 @@ let traffic_material_matches_record_direction
   (material:traffic_key_material)
   (st:R.direction_state)
   : prop =
+  st.R.alg == material.traffic_alg /\
   st.R.key == Some material.traffic_key /\
   st.R.static_iv == Some material.traffic_iv
 let traffic_material_for_label
@@ -831,7 +839,7 @@ let step_handshake_message
                      R.install_keys
                        model.model_record.record_read
                        R.Application
-                       material.traffic_key
+                       material.traffic_alg material.traffic_key
                        material.traffic_iv;
                };
          }
@@ -866,7 +874,7 @@ let step_handshake_message
                    R.install_keys
                      model.model_record.record_read
                      R.Application
-                     material.traffic_key
+                     material.traffic_alg material.traffic_key
                      material.traffic_iv;
              };
            model_handshake =
@@ -929,7 +937,7 @@ let rotate_application_traffic
               R.install_keys
                 (R.next_seq model.model_record.record_read)
                 R.Application
-                updated.traffic_key
+                updated.traffic_alg updated.traffic_key
                 updated.traffic_iv }
       | TrafficWrite ->
         { model.model_record with
@@ -937,7 +945,7 @@ let rotate_application_traffic
               R.install_keys
                 (R.next_seq model.model_record.record_write)
                 R.Application
-                updated.traffic_key
+                updated.traffic_alg updated.traffic_key
                 updated.traffic_iv } in
     Some {
       model with

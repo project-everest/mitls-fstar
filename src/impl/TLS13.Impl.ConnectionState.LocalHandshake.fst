@@ -3169,7 +3169,7 @@ fn install_server_handshake_write_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
     as (Rec.is_record_state
@@ -3180,7 +3180,7 @@ fn install_server_handshake_write_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.write
@@ -3396,7 +3396,7 @@ fn install_client_handshake_read_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
     as (Rec.is_record_state
@@ -3407,7 +3407,7 @@ fn install_client_handshake_read_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -3623,7 +3623,7 @@ fn install_server_application_write_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
     as (Rec.is_record_state
@@ -3634,7 +3634,7 @@ fn install_server_application_write_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.write
@@ -3851,7 +3851,7 @@ fn install_client_application_read_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
     as (Rec.is_record_state
@@ -3862,7 +3862,7 @@ fn install_client_application_read_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -5329,7 +5329,7 @@ fn try_install_client_handshake_traffic_keys
       R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_write
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv));
     rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
       as (Rec.is_record_state
@@ -5340,7 +5340,7 @@ fn try_install_client_handshake_traffic_keys
       (R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_write
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv))
       as (Rec.is_record_state
         c.records.write
@@ -5618,7 +5618,7 @@ fn try_install_server_handshake_traffic_keys
       R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv));
     rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
       as (Rec.is_record_state
@@ -5629,7 +5629,7 @@ fn try_install_server_handshake_traffic_keys
       (R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv))
       as (Rec.is_record_state
         c.records.read
@@ -6183,7 +6183,7 @@ fn try_install_server_application_traffic_keys
       R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Application
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv));
     rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
       as (Rec.is_record_state
@@ -6194,7 +6194,7 @@ fn try_install_server_application_traffic_keys
       (R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Application
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv))
       as (Rec.is_record_state
         c.records.read
