@@ -454,12 +454,14 @@ fn serialize_client_hello_from_start
   (#rnd: erased B.bytes)
   (#sni: erased B.bytes)
   (#ks: erased B.bytes)
+  (#pks: erased B.bytes)
   (#cs: erased GCH.clientHello_cipher_suites)
   (#sa: erased GECH.extensionClientHello_extension_data_signature_algorithms)
   (start_random: V.vec U8.t)
   (start_server_name: V.vec U8.t)
   (start_server_name_len: box SZ.t)
   (start_key_share: V.vec U8.t)
+  (start_p256_key_share: V.vec U8.t)
   (start_cipher_suites: V.vec U16.t)
   (start_cipher_suites_len: box SZ.t)
   (start_signature_schemes: V.vec U16.t)
@@ -480,6 +482,7 @@ fn serialize_client_hello_from_start
           V.pts_to start_server_name server_name **
           Box.pts_to start_server_name_len server_name_len **
           V.pts_to start_key_share key_share **
+          V.pts_to start_p256_key_share (Ghost.reveal pks) **
           V.pts_to start_cipher_suites cipher_suites **
           Box.pts_to start_cipher_suites_len cipher_suites_len **
           V.pts_to start_signature_schemes signature_schemes **
@@ -498,6 +501,7 @@ fn serialize_client_hello_from_start
                 V.is_full_vec start_random /\
                 V.is_full_vec start_server_name /\
                 V.is_full_vec start_key_share /\
+                V.is_full_vec start_p256_key_share /\
                 V.is_full_vec start_cipher_suites /\
                 V.is_full_vec start_signature_schemes /\
                 V.is_full_vec l.L.client_hello_random /\
@@ -510,7 +514,8 @@ fn serialize_client_hello_from_start
                 V.length start_random == 32 /\
                 V.length start_server_name == L.max_server_name_len /\
                 V.length start_key_share == 32 /\
-                V.length start_cipher_suites == L.max_cipher_suites /\
+                V.length start_p256_key_share == 65 /\
+                                V.length start_cipher_suites == L.max_cipher_suites /\
                 V.length start_signature_schemes == L.max_signature_schemes /\
                 V.length l.L.client_hello_random == 32 /\
                 V.length l.L.client_hello_session_id == 32 /\
@@ -532,7 +537,7 @@ fn serialize_client_hello_from_start
                 Seq.length old_l_signature_schemes == L.max_signature_schemes /\
                 B.length old_client_hello_bytes == 8192 /\
                 B.length old_network_out == SZ.v network_out_len /\
-                517 <= SZ.v network_out_len /\
+                544 <= SZ.v network_out_len /\
                 SZ.v server_name_len <= B.length server_name /\
                 SZ.v cipher_suites_len <= Seq.length cipher_suites /\
                 SZ.v signature_schemes_len <= Seq.length signature_schemes /\
@@ -540,6 +545,7 @@ fn serialize_client_hello_from_start
                 B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len /\
                 Seq.equal (Ghost.reveal start).CS.start_server_name (Seq.slice server_name 0 (SZ.v server_name_len)) /\
                 Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public /\
+                Seq.equal (Ghost.reveal pks) (Ghost.reveal start).CS.start_client_p256_public /\
                 L.cipher_suites_match
                   cipher_suites
                   (SZ.v cipher_suites_len)
@@ -551,13 +557,14 @@ fn serialize_client_hello_from_start
                 CS.client_hello_matches_start (Ghost.reveal start) (Ghost.reveal ch) /\
                 Seq.length (Ghost.reveal rnd) == 32 /\
                 Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal pks) == 65 /\
                 1 <= Seq.length (Ghost.reveal sni) /\
                 Seq.length (Ghost.reveal sni) <= 255 /\
                 FStar.List.Tot.length (Ghost.reveal cs) <= 16 /\
                 FStar.List.Tot.length (Ghost.reveal sa) <= 16 /\
                 Ghost.reveal ch ==
                   SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks)
-                    (Ghost.reveal rnd) (Ghost.reveal cs) (Ghost.reveal sa))
+                    (Ghost.reveal pks) (Ghost.reveal rnd) (Ghost.reveal cs) (Ghost.reveal sa))
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* random server_name server_name_len key_share
                  cipher_suites cipher_suites_len
@@ -567,6 +574,7 @@ fn serialize_client_hello_from_start
           V.pts_to start_server_name server_name **
           Box.pts_to start_server_name_len server_name_len **
           V.pts_to start_key_share key_share **
+          V.pts_to start_p256_key_share (Ghost.reveal pks) **
           V.pts_to start_cipher_suites cipher_suites **
           Box.pts_to start_cipher_suites_len cipher_suites_len **
           V.pts_to start_signature_schemes signature_schemes **
@@ -584,6 +592,7 @@ fn serialize_client_hello_from_start
           pure (V.is_full_vec start_random /\
                V.is_full_vec start_server_name /\
                V.is_full_vec start_key_share /\
+               V.is_full_vec start_p256_key_share /\
                V.is_full_vec start_cipher_suites /\
                V.is_full_vec start_signature_schemes /\
                V.is_full_vec l.L.client_hello_random /\
@@ -596,7 +605,8 @@ fn serialize_client_hello_from_start
                V.length start_random == 32 /\
                V.length start_server_name == L.max_server_name_len /\
                V.length start_key_share == 32 /\
-               V.length start_cipher_suites == L.max_cipher_suites /\
+               V.length start_p256_key_share == 65 /\
+                              V.length start_cipher_suites == L.max_cipher_suites /\
                V.length start_signature_schemes == L.max_signature_schemes /\
                V.length l.L.client_hello_random == 32 /\
                V.length l.L.client_hello_session_id == 32 /\
@@ -619,6 +629,7 @@ fn serialize_client_hello_from_start
                B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len /\
                Seq.equal (Ghost.reveal start).CS.start_server_name (CL.raw_slice server_name 0 (SZ.v server_name_len)) /\
                Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public /\
+               Seq.equal (Ghost.reveal pks) (Ghost.reveal start).CS.start_client_p256_public /\
                L.cipher_suites_match
                  cipher_suites
                  (SZ.v cipher_suites_len)

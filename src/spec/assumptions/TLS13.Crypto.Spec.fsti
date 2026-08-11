@@ -137,6 +137,114 @@ val lemma_x25519_shared_agreement:
       x25519_shared client_sk server_pub ==
       x25519_shared server_sk client_pub)
 
+(**
+  secp256r1 (NIST P-256).  The private key is 32 bytes as for X25519, but the
+  public value is the 65-byte uncompressed SEC1 point `0x04 || X || Y` that TLS
+  puts in a `KeyShareEntry`.  The shared secret is the 32-byte X coordinate of
+  the shared point (RFC 8446 section 7.4.2), so it has the same type as the
+  X25519 one and the key schedule above it is unchanged.
+
+  `p256_shared` is partial: unlike X25519 it can fail, because a peer's point
+  must lie on the curve and P-256 has no all-zero-output convention to fall
+  back on.
+**)
+type p256_private = bytes_of_len 32
+type p256_public = bytes_of_len 65
+
+val p256_public_from_private:
+  sk:B.bytes ->
+  Tot p256_public
+
+val p256_shared:
+  sk:B.bytes ->
+  pk:B.bytes ->
+  Tot (option x25519_shared_secret)
+
+val lemma_p256_shared_agreement:
+  client_sk:p256_private ->
+  server_sk:p256_private ->
+  client_pub:p256_public ->
+  server_pub:p256_public ->
+  Lemma
+    (requires
+      p256_public_from_private client_sk == client_pub /\
+      p256_public_from_private server_sk == server_pub)
+    (ensures
+      p256_shared client_sk server_pub ==
+      p256_shared server_sk client_pub)
+
+(**
+  The negotiated key-exchange group.  Like the AEAD algorithm, this is carried
+  as an explicit tag and never recovered from a share's length: `kex_public_len`
+  happens to be injective today, but the group is what the peer actually named
+  in its `KeyShareEntry` and there is no reason to launder it through a size.
+**)
+type kex_group =
+  | KexX25519
+  | KexP256
+
+let kex_public_len (g:kex_group) : n:nat{n == 32 \/ n == 65} =
+  match g with
+  | KexX25519 -> 32
+  | KexP256 -> 65
+
+type kex_private = bytes_of_len 32
+type kex_public (g:kex_group) = bytes_of_len (kex_public_len g)
+type kex_shared_secret = x25519_shared_secret
+
+let kex_public_from_private (g:kex_group) (sk:B.bytes) : kex_public g =
+  match g with
+  | KexX25519 -> x25519_public_from_private sk
+  | KexP256 -> p256_public_from_private sk
+
+let kex_shared (g:kex_group) (sk:B.bytes) (pk:B.bytes) : option kex_shared_secret =
+  match g with
+  | KexX25519 -> x25519_shared sk pk
+  | KexP256 -> p256_shared sk pk
+
+(**
+  Runtime buffers holding a peer key share are always 65 bytes wide -- the
+  widest group -- so that the buffer layout does not depend on the negotiated
+  group, exactly as `pad_key_32` does for AEAD keys.  A 32-byte X25519 share is
+  stored zero-padded; the logical share is the `kex_public_len`-byte prefix, and
+  which prefix that is comes from the explicit group tag, never from the buffer.
+**)
+type kex_public_any = k:B.bytes{B.length k == 32 \/ B.length k == 65}
+
+let pad_share_65 (k:kex_public_any) : bytes_of_len 65 =
+  Seq.append k (Seq.create (65 - B.length k) 0uy)
+
+(** Total inverse of `pad_share_65`, in the same style as `unpad_key_32`. **)
+let unpad_share_65 (share:B.bytes) (share_len:nat) : B.bytes =
+  if share_len < B.length share then Seq.slice share 0 share_len else share
+
+let lemma_unpad_share_65 (k:kex_public_any)
+  : Lemma (unpad_share_65 (pad_share_65 k) (B.length k) == k)
+          [SMTPat (unpad_share_65 (pad_share_65 k) (B.length k))]
+  = assert (Seq.equal (Seq.slice (pad_share_65 k) 0 (B.length k)) k)
+
+let lemma_pad_share_65_injective (k1 k2:kex_public_any)
+  : Lemma (requires Seq.equal (pad_share_65 k1) (pad_share_65 k2) /\
+                    B.length k1 == B.length k2)
+          (ensures Seq.equal k1 k2)
+  = assert (Seq.equal k1 (Seq.slice (pad_share_65 k1) 0 (B.length k1)));
+    assert (Seq.equal k2 (Seq.slice (pad_share_65 k2) 0 (B.length k2)))
+
+let lemma_kex_shared_agreement
+  (g:kex_group)
+  (client_sk server_sk:kex_private)
+  (client_pub server_pub:kex_public g)
+  : Lemma
+      (requires
+        kex_public_from_private g client_sk == client_pub /\
+        kex_public_from_private g server_sk == server_pub)
+      (ensures
+        kex_shared g client_sk server_pub ==
+        kex_shared g server_sk client_pub)
+  = match g with
+    | KexX25519 -> lemma_x25519_shared_agreement client_sk server_sk client_pub server_pub
+    | KexP256 -> lemma_p256_shared_agreement client_sk server_sk client_pub server_pub
+
 let nonce_byte (seq:nat) (divisor:pos) : U8.t =
   U8.uint_to_t ((seq / divisor) % 256)
 

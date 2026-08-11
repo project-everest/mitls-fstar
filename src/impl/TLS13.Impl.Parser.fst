@@ -13,6 +13,8 @@ module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module CryptoSpec = TLS13.Crypto.Spec
+module Sem = TLS13.Wire.Semantics
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
@@ -2565,6 +2567,64 @@ fn copy_vec_32_into
   V.to_vec_pts_to dst;
 }
 
+(* Copy [n] bytes of [src] into the front of the 65-byte [dst], zeroing the
+   remaining bytes.  This is the runtime image of [C.pad_share_65]: a key share
+   is stored at the widest offered width so the buffer layout does not depend on
+   the negotiated group. *)
+fn copy_padded_share_into
+  (dst: V.vec U8.t)
+  (src: V.vec U8.t)
+  (n: SZ.t)
+  (#src_bytes: erased CryptoSpec.kex_public_any)
+  requires V.pts_to dst 'dst_bytes ** V.pts_to src src_bytes **
+           pure (V.is_full_vec dst /\ V.length dst == 65 /\
+                 V.is_full_vec src /\ V.length src == SZ.v n)
+  ensures V.pts_to src src_bytes **
+          (exists* dst_bytes2.
+            V.pts_to dst dst_bytes2 **
+            pure (V.is_full_vec dst /\
+                  V.length dst == 65 /\
+                  Seq.length dst_bytes2 == 65 /\
+                  Seq.equal dst_bytes2 (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes))))
+{
+  V.pts_to_len src;
+  V.pts_to_len dst;
+  let mut i = 0sz;
+  while (
+    let iv = !i;
+    iv `SZ.lt` 65sz
+  )
+  invariant exists* iv dbytes.
+    R.pts_to i iv **
+    V.pts_to dst dbytes **
+    V.pts_to src src_bytes **
+    pure (
+      SZ.v iv <= 65 /\
+      V.is_full_vec dst /\ V.length dst == 65 /\
+      V.is_full_vec src /\ V.length src == SZ.v n /\
+      Seq.length dbytes == 65 /\
+      (forall (k:nat). k < SZ.v iv ==>
+        Seq.index dbytes k ==
+          Seq.index (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)) k)
+    )
+  decreases (65 - SZ.v (!i))
+  {
+    let iv = !i;
+    if (iv `SZ.lt` n) {
+      let b = V.op_Array_Access src iv;
+      V.op_Array_Assignment dst iv b;
+      SZ.fits_lte (SZ.v iv + 1) 65;
+      i := iv `SZ.add` 1sz;
+    } else {
+      V.op_Array_Assignment dst iv 0uy;
+      SZ.fits_lte (SZ.v iv + 1) 65;
+      i := iv `SZ.add` 1sz;
+    }
+  };
+  with dbytes. assert (V.pts_to dst dbytes);
+  Seq.lemma_eq_intro dbytes (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes));
+}
+
 (* Copy a legacy_session_id / legacy_session_id_echo lvec into a fixed 32-byte
    destination vec, but only if it really is 32 bytes long.  [lvec_len] is a
    sound runtime stand-in for the ghost vector length (see the refinement on
@@ -3492,6 +3552,61 @@ fn repack_kse (v0: GKSE.keyShareEntry_lowtype) (#cm: Ghost.erased GKSE.keyShareE
    32 key bytes into [key_vec] and return true; otherwise leave [key_vec]
    unchanged and return false.  Mirrors the spec test
    [X25519? group && key_exchange_to_key32 = Some _] used by [sh_key_share]. *)
+(* Copy the share of a `KeyShareEntry` into the 65-byte padded destination, but
+   only if the entry's group is one ATLAS offers *and* its share has exactly
+   that group's length.  Returns [(ok, group)]; [group] is meaningful only when
+   [ok], and is the group the entry named -- never a guess from the length. *)
+fn try_copy_kex_share
+  (key_vec: V.vec U8.t)
+  (v0: GKSE.keyShareEntry_lowtype)
+  (#cm: Ghost.erased GKSE.keyShareEntry_mid)
+  requires V.pts_to key_vec 'kv ** GKSE.keyShareEntry_vmatch v0 cm **
+           pure (V.is_full_vec key_vec /\ V.length key_vec == 65)
+  returns res: (bool & CryptoSpec.kex_group)
+  ensures GKSE.keyShareEntry_vmatch v0 cm **
+          (exists* kbytes. V.pts_to key_vec kbytes **
+            pure (V.is_full_vec key_vec /\ V.length key_vec == 65 /\
+                  Seq.length kbytes == 65 /\
+                  ((fst res) <==>
+                     (Seq.length (snd (Ghost.reveal cm)) ==
+                        CryptoSpec.kex_public_len
+                          (Sem.kex_group_of_named_group (fst (Ghost.reveal cm))) /\
+                      (GNG.X25519? (fst (Ghost.reveal cm)) \/
+                       GNG.Secp256r1? (fst (Ghost.reveal cm))))) /\
+                  ((fst res) ==>
+                     (snd res) == Sem.kex_group_of_named_group (fst (Ghost.reveal cm)) /\
+                     Seq.equal kbytes (CryptoSpec.pad_share_65 (snd (Ghost.reveal cm)))) /\
+                  ((not (fst res)) ==> Seq.equal kbytes (Ghost.reveal 'kv))))
+{
+  V.pts_to_len key_vec;
+  rewrite (GKSE.keyShareEntry_vmatch v0 cm)
+      as (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  unfold (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  rewrite (GNG.namedGroup_vmatch (fst v0) (fst cm))
+      as (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  unfold (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  rewrite (GKSE.keyShareEntry_key_exchange_vmatch (snd v0) (snd cm))
+      as (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  unfold (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  V.pts_to_len (snd v0).PPBY.lvec_vec;
+  let group_lo = fst v0;
+  let key_len = (snd v0).PPBY.lvec_len;
+  let is_x = GNG.X25519? group_lo;
+  let is_p = GNG.Secp256r1? group_lo;
+  if (is_x && SZ.eq key_len 32sz) {
+    copy_padded_share_into key_vec (snd v0).PPBY.lvec_vec 32sz;
+    repack_kse v0;
+    (true, CryptoSpec.KexX25519)
+  } else if (is_p && SZ.eq key_len 65sz) {
+    copy_padded_share_into key_vec (snd v0).PPBY.lvec_vec 65sz;
+    repack_kse v0;
+    (true, CryptoSpec.KexP256)
+  } else {
+    repack_kse v0;
+    (false, CryptoSpec.KexX25519)
+  }
+}
+
 fn try_copy_x25519_key
   (key_vec: V.vec U8.t)
   (v0: GKSE.keyShareEntry_lowtype)
@@ -3591,18 +3706,21 @@ fn scan_sh_key_share
   requires PPVCL.vmatch_vclist
              (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
              ext_lo cext
-  returns res: (V.vec U8.t & bool)
+  returns res: (V.vec U8.t & bool & CryptoSpec.kex_group)
   ensures PPVCL.vmatch_vclist
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
             ext_lo cext **
-          (exists* kbytes. V.pts_to (fst res) kbytes **
-            pure (V.is_full_vec (fst res) /\ V.length (fst res) == 32 /\
-                  Seq.length kbytes == 32 /\
+          (exists* kbytes. V.pts_to (Mktuple3?._1 res) kbytes **
+            pure (V.is_full_vec (Mktuple3?._1 res) /\ V.length (Mktuple3?._1 res) == 65 /\
+                  Seq.length kbytes == 65 /\
                   (match RV.reveal_sh_key_share cext false None with
-                   | Some k -> (snd res) == true /\ Seq.equal kbytes (Ghost.reveal k <: Seq.seq U8.t)
-                   | None -> (snd res) == false)))
+                   | Some (g, k) ->
+                     (Mktuple3?._2 res) == true /\
+                     (Mktuple3?._3 res) == Sem.kex_group_of_named_group g /\
+                     Seq.equal kbytes (k <: Seq.seq U8.t)
+                   | None -> (Mktuple3?._2 res) == false)))
 {
-  let key_vec = V.alloc 0uy 32sz;
+  let key_vec = V.alloc 0uy 65sz;
   match ext_lo {
     None -> {
       unfold (PPVCL.vmatch_vclist
@@ -3618,7 +3736,7 @@ fn scan_sh_key_share
           as (PPVCL.vmatch_vclist
                 (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
                 ext_lo cext);
-      (key_vec, false)
+      (key_vec, false, CryptoSpec.KexX25519)
     }
     Some nv -> {
       unfold (PPVCL.vmatch_vclist
@@ -3634,7 +3752,8 @@ fn scan_sh_key_share
       let mut failed = false;
       let mut saw_sv = false;
       let mut have_key = false;
-      let kacc_ref = GR.alloc (None #(B.bytes_of_len 32));
+      let mut kgroup = CryptoSpec.KexX25519;
+      let kacc_ref = GR.alloc (None #RV.sh_kex_share);
       RV.lemma_list_drop_zero cext;
       assert (pure (RV.list_drop (SZ.v 0sz) cext == cext));
       assert (pure (RV.reveal_sh_key_share cext false None ==
@@ -3644,11 +3763,12 @@ fn scan_sh_key_share
         let iv = !i;
         (not f) && (iv `SZ.lt` count)
       )
-      invariant exists* iv fl svb hkb kacc kbytes.
+      invariant exists* iv fl svb hkb kg kacc kbytes.
         R.pts_to i iv **
         R.pts_to failed fl **
         R.pts_to saw_sv svb **
         R.pts_to have_key hkb **
+        R.pts_to kgroup kg **
         GR.pts_to kacc_ref kacc **
         V.pts_to (snd nv) s **
         SM.seq_list_match s cext
@@ -3659,10 +3779,12 @@ fn scan_sh_key_share
           SZ.v count == FStar.List.Tot.length cext /\
           Seq.length s == FStar.List.Tot.length cext /\
           V.is_full_vec (snd nv) /\
-          V.is_full_vec key_vec /\ V.length key_vec == 32 /\ Seq.length kbytes == 32 /\
+          V.is_full_vec key_vec /\ V.length key_vec == 65 /\ Seq.length kbytes == 65 /\
           (hkb <==> Some? kacc) /\
           ((not svb) ==> kacc == None) /\
-          (Some? kacc ==> Seq.equal kbytes (Ghost.reveal (Some?.v kacc) <: Seq.seq U8.t)) /\
+          (Some? kacc ==>
+            Seq.equal kbytes (snd (Some?.v kacc) <: Seq.seq U8.t) /\
+            kg == Sem.kex_group_of_named_group (fst (Some?.v kacc))) /\
           (fl ==> RV.reveal_sh_key_share cext false None == None) /\
           ((not fl) ==>
             RV.reveal_sh_key_share cext false None ==
@@ -3714,10 +3836,8 @@ fn scan_sh_key_share
           with cm_ks. assert (GKSE.keyShareEntry_vmatch v0 cm_ks);
           lemma_extSH_ks_conv cm_ks
             (GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv)));
-          RV.lemma_reveal_key_exchange_to_key32
-            ((GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv))
-                <: GKSE.keyShareEntry).GKSE.key_exchange);
-          let ok = try_copy_x25519_key key_vec v0 #cm_ks;
+          let okg = try_copy_kex_share key_vec v0 #cm_ks;
+          let ok = fst okg;
           intro_vmatch_extSH_key_share v0 cm_ks #(FStar.List.Tot.index cext (SZ.v iv));
           rewrite (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
                      (GESH.Extension_data_key_share_low v0) (FStar.List.Tot.index cext (SZ.v iv)))
@@ -3730,15 +3850,18 @@ fn scan_sh_key_share
                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
           if ok {
             GR.write kacc_ref
-              (Ghost.hide (RV.reveal_key_exchange_to_key32
+              (Ghost.hide (RV.reveal_key_exchange_to_share
+                ((GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv))
+                    <: GKSE.keyShareEntry).GKSE.group)
                 ((GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv))
                     <: GKSE.keyShareEntry).GKSE.key_exchange)));
+            kgroup := snd okg;
             have_key := true;
             saw_sv := true;
             SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
             i := iv `SZ.add` 1sz;
           } else {
-            GR.write kacc_ref (Ghost.hide (None #(B.bytes_of_len 32)));
+            GR.write kacc_ref (Ghost.hide (None #RV.sh_kex_share));
             saw_sv := true;
             SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
             i := iv `SZ.add` 1sz;
@@ -3762,6 +3885,7 @@ fn scan_sh_key_share
       let kacc_final = GR.read kacc_ref;
       RV.lemma_sh_key_share_nil svb0 (Ghost.reveal kacc_final);
       assert (pure ((not fl) ==> SZ.v iv == FStar.List.Tot.length cext));
+      let kg0 = !kgroup;
       let found = (not fl) && svb0 && hkb0;
       fold (PPVCL.vmatch_vclist
                 (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
@@ -3773,7 +3897,7 @@ fn scan_sh_key_share
                 (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
                 ext_lo cext);
       GR.free kacc_ref;
-      (key_vec, found)
+      (key_vec, found, kg0)
     }
   }
 }
@@ -5487,7 +5611,7 @@ fn parse_handshake_message
                 }
                 GCS.TLS_CHACHA20_POLY1305_SHA256 -> {
                   let res = scan_sh_key_share (snd (snd (dsnd (snd (snd xsh)))));
-                  with kbytes. assert (V.pts_to (fst res) kbytes);
+                  with kbytes. assert (V.pts_to (Mktuple3?._1 res) kbytes);
                   let randvec = V.alloc 0uy 32sz;
                   unfold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
                   V.pts_to_len (fst (snd xsh)).PPBY.lvec_vec;
@@ -5524,20 +5648,21 @@ fn parse_handshake_message
                     ((Ghost.reveal sf).GSHB.value.GSHBody.extensions <: list GESH.extensionServerHello);
                   WS.lemma_serverHello_representable (Ghost.reveal cse <: GHS.handshake_body_server_hello);
                   RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
-                  let found = snd res;
+                  let found = Mktuple3?._2 res;
                   if found {
                     RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
                       (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
                     let lsh = ({ L.server_hello_random = randvec;
                                  L.server_hello_session_id = sidvec;
-                                 L.server_hello_key_share = fst res;
+                                 L.server_hello_key_share = Mktuple3?._1 res;
+                                 L.server_hello_kex_group = Mktuple3?._3 res;
                                  L.server_hello_cipher_suite = 0x1303us });
                     rewrite (V.pts_to randvec rbytes)
                          as (V.pts_to lsh.L.server_hello_random rbytes);
                     rewrite (V.pts_to sidvec sidbytes)
                          as (V.pts_to lsh.L.server_hello_session_id sidbytes);
-                    rewrite (V.pts_to (fst res) kbytes)
+                    rewrite (V.pts_to (Mktuple3?._1 res) kbytes)
                          as (V.pts_to lsh.L.server_hello_key_share kbytes);
                     fold (L.is_valid_server_hello lsh
                             (M.ServerHello?._0 (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
@@ -5565,7 +5690,7 @@ fn parse_handshake_message
                        server_hello_max_len: synth is [None]; fall back. *)
                     V.free randvec;
                     V.free sidvec;
-                    V.free (fst res);
+                    V.free (Mktuple3?._1 res);
                     RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
                       (Ghost.reveal gv) (SZ.v input_len);
                     handshake_fallback content_type input input_len
@@ -5573,7 +5698,7 @@ fn parse_handshake_message
                 }
                 GCS.TLS_AES_128_GCM_SHA256 -> {
                   let res = scan_sh_key_share (snd (snd (dsnd (snd (snd xsh)))));
-                  with kbytes. assert (V.pts_to (fst res) kbytes);
+                  with kbytes. assert (V.pts_to (Mktuple3?._1 res) kbytes);
                   let randvec = V.alloc 0uy 32sz;
                   unfold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
                   V.pts_to_len (fst (snd xsh)).PPBY.lvec_vec;
@@ -5610,20 +5735,21 @@ fn parse_handshake_message
                     ((Ghost.reveal sf).GSHB.value.GSHBody.extensions <: list GESH.extensionServerHello);
                   WS.lemma_serverHello_representable (Ghost.reveal cse <: GHS.handshake_body_server_hello);
                   RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
-                  let found = snd res;
+                  let found = Mktuple3?._2 res;
                   if found {
                     RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
                       (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
                     WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
                     let lsh = ({ L.server_hello_random = randvec;
                                  L.server_hello_session_id = sidvec;
-                                 L.server_hello_key_share = fst res;
+                                 L.server_hello_key_share = Mktuple3?._1 res;
+                                 L.server_hello_kex_group = Mktuple3?._3 res;
                                  L.server_hello_cipher_suite = 0x1301us });
                     rewrite (V.pts_to randvec rbytes)
                          as (V.pts_to lsh.L.server_hello_random rbytes);
                     rewrite (V.pts_to sidvec sidbytes)
                          as (V.pts_to lsh.L.server_hello_session_id sidbytes);
-                    rewrite (V.pts_to (fst res) kbytes)
+                    rewrite (V.pts_to (Mktuple3?._1 res) kbytes)
                          as (V.pts_to lsh.L.server_hello_key_share kbytes);
                     fold (L.is_valid_server_hello lsh
                             (M.ServerHello?._0 (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
@@ -5651,7 +5777,7 @@ fn parse_handshake_message
                        server_hello_max_len: synth is [None]; fall back. *)
                     V.free randvec;
                     V.free sidvec;
-                    V.free (fst res);
+                    V.free (Mktuple3?._1 res);
                     RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
                       (Ghost.reveal gv) (SZ.v input_len);
                     handshake_fallback content_type input input_len

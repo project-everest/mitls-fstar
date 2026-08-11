@@ -69,6 +69,19 @@ type optional_fixed_bytes = {
   bytes: V.vec U8.t;
 }
 
+(* The peer key share received in a ServerHello.  The buffer is always 65 bytes
+   wide -- the widest group ATLAS offers -- with the share zero-padded, and
+   [group] records which group the server named in its `KeyShareEntry`.  The
+   group is a tag carried alongside the bytes, never recovered from them: field
+   names match [optional_fixed_bytes] so the presence/bytes accessors read the
+   same. *)
+noeq
+type kex_share_storage = {
+  present: box bool;
+  bytes: V.vec U8.t;
+  group: box CryptoSpec.kex_group;
+}
+
 noeq
 type u16_list_storage = {
   items: V.vec U16.t;
@@ -135,6 +148,10 @@ type handshake_start_storage = {
   client_random: V.vec U8.t;
   client_key_share_private: optional_fixed_bytes;
   client_key_share_public: V.vec U8.t;
+  (* The secp256r1 offer carried alongside the X25519 offer.  The public share
+     is a 65-byte SEC1 uncompressed point. *)
+  client_p256_private: optional_fixed_bytes;
+  client_p256_public: V.vec U8.t;
   cipher_suites: u16_list_storage;
   signature_schemes: u16_list_storage;
 }
@@ -184,7 +201,7 @@ type handshake_storage = {
   start: handshake_start_storage;
   messages: handshake_message_storage;
   server_selection_present: box bool;
-  server_key_share: optional_fixed_bytes;
+  server_key_share: kex_share_storage;
   server_key_share_private: optional_fixed_bytes;
   validated_peer: peer_storage;
   certificate_verify_verified: box bool;
@@ -316,14 +333,18 @@ let lemma_optional_fixed_bytes_match_present_iff
 
 let lemma_server_key_share_option_some
   (server:option GSH.serverHello)
-  (storage:TLS13.Crypto.Spec.x25519_public)
+  (storage:(b:B.bytes{B.length b == 65}))
   : Lemma
       (requires (match server with
-                 | Some sh -> CS.server_hello_key_share sh
+                 | Some sh -> (match CS.server_hello_kex sh with
+                               | Some (| _, k |) -> Some (TLS13.Crypto.Spec.pad_share_65 k)
+                               | None -> None)
                  | None -> None) == Some storage)
       (ensures Some? server /\
                server == Some (Some?.v server) /\
-               CS.server_hello_key_share (Some?.v server) == Some storage)
+               Some? (CS.server_hello_kex (Some?.v server)) /\
+               TLS13.Crypto.Spec.pad_share_65
+                 (dsnd (Some?.v (CS.server_hello_kex (Some?.v server)))) == storage)
 =
   match server with
   | Some sh -> ()
@@ -822,6 +843,8 @@ let handshake_start_fields_allocated
   fixed_bytes_allocated start.client_random 32 **
   optional_fixed_bytes_exactly start.client_key_share_private 32 None **
   fixed_bytes_allocated start.client_key_share_public 32 **
+  optional_fixed_bytes_exactly start.client_p256_private 32 None **
+  fixed_bytes_allocated start.client_p256_public 65 **
   cipher_suite_list_allocated start.cipher_suites max_cipher_suites **
   signature_scheme_list_allocated start.signature_schemes max_signature_schemes
 
@@ -833,6 +856,8 @@ let handshake_start_fields_exactly
   fixed_bytes_exactly start.client_random 32 spec.CS.start_client_random **
   optional_fixed_bytes_exactly start.client_key_share_private 32 spec.CS.start_client_key_share_private **
   fixed_bytes_exactly start.client_key_share_public 32 spec.CS.start_client_key_share_public **
+  optional_fixed_bytes_exactly start.client_p256_private 32 spec.CS.start_client_p256_private **
+  fixed_bytes_exactly start.client_p256_public 65 spec.CS.start_client_p256_public **
   cipher_suite_list_exactly start.cipher_suites max_cipher_suites spec.CS.start_cipher_suites **
   signature_scheme_list_exactly start.signature_schemes max_signature_schemes spec.CS.start_signature_schemes **
   pure (CS.handshake_start_key_share_consistent spec)
@@ -1028,16 +1053,39 @@ let handshake_messages_exactly
   finished_slot_exactly msgs.server_finished hs.CS.hs_server_finished **
   finished_slot_exactly msgs.client_finished hs.CS.hs_client_finished
 
+(* The group/share pair the server selected, as stored: [None] until an
+   acceptable ServerHello has been received. *)
+// [noextract] for the same reason as [server_key_share_private_option] below:
+// these are pure projections over the *ghost* connection model state used only
+// in slprops, and extracting them drags the `noextract` generated high records
+// (GSH.serverHello, ...) into the C bundle as undefined struct members.
+noextract
+let server_kex (hs:CS.handshake_state)
+  : option (g:CryptoSpec.kex_group & CryptoSpec.kex_public g) =
+  match hs.CS.hs_server_hello with
+  | Some sh -> CS.server_hello_kex sh
+  | None -> None
+
+noextract
+let server_kex_bytes (hs:CS.handshake_state)
+  : option (B.bytes_of_len 65) =
+  match server_kex hs with
+  | Some (| _, k |) -> Some (CryptoSpec.pad_share_65 k)
+  | None -> None
+
 let server_key_share_exactly
-  ([@@@mkey] slot:optional_fixed_bytes)
+  ([@@@mkey] slot:kex_share_storage)
   (hs:CS.handshake_state)
   : slprop =
-  optional_fixed_bytes_exactly
-    slot
-    32
-    (match hs.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None)
+  exists* g.
+    Box.pts_to slot.group g **
+    optional_fixed_bytes_exactly
+      ({ present = slot.present; bytes = slot.bytes })
+      65
+      (server_kex_bytes hs) **
+    pure (match server_kex hs with
+          | Some (| g', _ |) -> g == g'
+          | None -> True)
 
 // [noextract]: pure spec-level projection over the *ghost* connection model
 // state (`CS.handshake_state`) returning spec `B.bytes`.  It is used only in
@@ -1722,6 +1770,35 @@ fn copy_fixed32_array_to_vec
   ensures ArrPts.pts_to src 'src_bytes **
           V.pts_to dst 'src_bytes **
           pure (V.is_full_vec dst /\ V.length dst == 32)
+
+fn copy_fixed65_array_to_vec
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (B.length 'src_bytes == 65 /\
+                 V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 B.length 'old_dst == 65)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst 'src_bytes **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
+
+(* Copy a 32-byte X25519 share into the front of a 65-byte, zero-initialised
+   destination: the runtime image of [CryptoSpec.pad_share_65] for the narrow
+   group. *)
+fn copy_padded32_array_to_vec65
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (#src_bytes:erased (B.bytes_of_len 32))
+  requires ArrPts.pts_to src src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 Seq.equal 'old_dst (Seq.create 65 0uy))
+  ensures ArrPts.pts_to src src_bytes **
+          V.pts_to dst (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)) **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
 
 fn store_optional_fixed32_from_array
   (src:array U8.t)

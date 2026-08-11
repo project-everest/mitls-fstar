@@ -177,6 +177,53 @@ fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
           pure (x25519_shared_call 'sk_bytes 'pk_bytes out_bytes ok)
 
 (**
+  secp256r1 bindings.  There is one binding per group rather than a single
+  length-dispatched one: the caller knows the negotiated `C.kex_group` and picks
+  the primitive from it.  The public value is 65 bytes (uncompressed SEC1) and
+  the shared secret is the 32-byte X coordinate.
+**)
+
+fn p256_public_from_private (sk: array U8.t) (out: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to out 'old **
+           pure (B.length 'sk_bytes == 32 /\ B.length 'old == 65)
+  ensures pts_to sk 'sk_bytes ** pts_to out (C.p256_public_from_private 'sk_bytes)
+
+noextract
+val p256_shared_call:
+  sk:B.bytes ->
+  pk:B.bytes ->
+  shared:B.bytes ->
+  ok:bool ->
+  GTot prop
+
+noextract
+val lemma_p256_shared_call_success:
+  sk:B.bytes ->
+  pk:B.bytes ->
+  shared:B.bytes ->
+  ok:bool ->
+  Lemma
+    (requires p256_shared_call sk pk shared ok /\
+              ok /\
+              B.length shared == 32)
+    (ensures Some? (C.p256_shared sk pk) /\
+             C.p256_shared sk pk == Some (Some?.v (C.p256_shared sk pk)) /\
+             Some?.v (C.p256_shared sk pk) == shared)
+
+fn p256_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to pk 'pk_bytes **
+           pts_to out 'old **
+           pure (B.length 'sk_bytes == 32 /\ B.length 'pk_bytes == 65 /\ B.length 'old == 32)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to pk 'pk_bytes **
+          pts_to out out_bytes **
+          pure (p256_shared_call 'sk_bytes 'pk_bytes out_bytes ok)
+
+(**
   Raw AEAD bindings, one per supported algorithm.  Each is a direct binding to a
   single primitive: the key array has exactly that algorithm's key length and the
   specification names that algorithm as a constant, so neither the C stub nor

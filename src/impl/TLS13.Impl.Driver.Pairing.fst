@@ -518,6 +518,18 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
          CS.server_hello_key_share client_sh
        with
        | Some ch_ks, Some sh_ks ->
+         (* ATLAS's own server role only ever selects X25519, and the paired
+            ServerHello correspondence carries that choice to the client, so the
+            client's group-agile projection collapses to its X25519 instance. *)
+         CS.lemma_server_hello_kex_of_share client_sh;
+         assert (CS.server_hello_kex client_sh ==
+           Some (| C.KexX25519, (sh_ks <: C.kex_public C.KexX25519) |));
+         assert (CS.start_kex_private start C.KexX25519 ==
+           start.CS.start_client_key_share_private);
+         assert (CS.start_kex_public start C.KexX25519 ==
+           start.CS.start_client_key_share_public);
+         assert (CS.client_hello_kex client_ch C.KexX25519 ==
+           CS.client_hello_key_share client_ch);
          assert (ch_ks == start.CS.start_client_key_share_public);
          assert (sh_ks == selection.CS.server_key_share_public);
          assert (C.x25519_public_from_private client_sk ==

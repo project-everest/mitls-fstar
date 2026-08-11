@@ -471,6 +471,7 @@ let record_schedule_coupling (m:CS.connection_model) : prop =
      Some? (hs_traffic_slot keys
              (CS.traffic_label_for_endpoint_direction role CS.TrafficRead)))
 
+#restart-solver
 #push-options "--fuel 4 --ifuel 6 --z3rlimit 60 --split_queries always"
 let lemma_step_record_schedule_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)

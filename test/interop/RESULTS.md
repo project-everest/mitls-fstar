@@ -7,12 +7,12 @@ entries of the Tranco top-1m that negotiate TLS 1.3, in rank order, plus
 
 ## ATLAS's offer
 
-ATLAS currently offers exactly one group, two cipher suites and two signature
+ATLAS currently offers two groups, two cipher suites and two signature
 schemes:
 
 | Parameter | Value |
 |---|---|
-| Group | `X25519` |
+| Groups | `X25519` (`0x001d`), `secp256r1` (`0x0017`) |
 | Cipher suites | `TLS_CHACHA20_POLY1305_SHA256` (`0x1303`), `TLS_AES_128_GCM_SHA256` (`0x1301`) |
 | Signature schemes | `rsa_pss_rsae_sha256` (`0x0804`), `ecdsa_secp256r1_sha256` (`0x0403`) |
 
@@ -30,22 +30,19 @@ real-world signature schemes are RSA-PSS and ECDSA P-256.
 | ATLAS OK, before this round of fixes | 54 / 101 |
 | ATLAS OK, after the four bug fixes | 77 / 101 |
 | ATLAS OK, after cross-record handshake reassembly | 83 / 101 |
-| ATLAS OK, after AES-128-GCM negotiation | **88 / 101** |
-| Oracle ceiling (ATLAS's offer, best case) | 88 / 101 |
+| ATLAS OK, after AES-128-GCM negotiation | 88 / 101 |
+| ATLAS OK, after `secp256r1` key exchange | **96 / 101** |
+| Oracle ceiling (ATLAS's offer, best case) | 96 / 101 |
 | Remaining ATLAS gap (oracle OK, ATLAS fails) | **0** |
-| Oracle ceiling with `secp256r1` added | 96 / 101 |
 | Structurally unreachable (bad hostname / self-signed) | 5 |
 
-**ATLAS reaches its crypto ceiling.**  Every one of the 101 sites that a
-client with ATLAS's offer can reach at all, ATLAS reaches.  The remaining 13
-are refused by the OpenSSL oracle under the same offer, so they are not ATLAS
-defects; lifting them is a matter of widening the offer (see "Beyond ATLAS's
-offer" below), not of fixing the implementation.
-
-Of those 13, exactly **8 are recoverable** and all 8 need the same single
-capability, `secp256r1`.  The other 5 present a certificate that no correct
-client would accept, at any offer.  So 96 / 101 is the true ceiling for this
-catalog and one feature reaches it.
+**ATLAS reaches the catalog ceiling.**  Every one of the 101 sites that any
+correct client can reach at all, ATLAS reaches.  The remaining 5 present a
+certificate that no correct client would accept, at any offer: four
+(googlevideo.com, windows.net, www.edgekey.net, trbcdn.net) serve a
+certificate that does not match the apex hostname, and domaincontrol.com
+serves a self-signed one.  OpenSSL with a maximal modern offer fails on all
+five.
 
 ## Bugs found and fixed
 
@@ -73,6 +70,13 @@ catalog and one feature reaches it.
    could negotiate.  Several large properties (Amazon, Azure, Skype,
    `cloud.microsoft`, `windows.com`) offer only AES-GCM.  Adding
    `TLS_AES_128_GCM_SHA256` lifted the ceiling from 83 to 88.
+6. **`secp256r1` not offered.** Eight Microsoft properties (microsoft.com,
+   office.com, live.com, bing.com, sharepoint.com, outlook.com, msn.com,
+   office365.com) and europa.eu do not accept X25519 at all.  ATLAS now offers
+   *both* groups in its first flight -- HelloRetryRequest is not implemented,
+   so it sends both shares rather than negotiating -- and dispatches the ECDH
+   on the group the server names in its echoed `KeyShareEntry`.  This lifted
+   88 to 96, the catalog ceiling.
 
 A fifth defect was in the harness, not in ATLAS: the per-host anchor extractor
 fetched chains *unconstrained*, so dual-credential servers returned a chain
@@ -140,19 +144,13 @@ in scope, as part of a three-way mutual induction
 restates the record-material flagship with that gate discharged, so no
 top-level theorem is weakened.
 
-### Beyond ATLAS's offer (8 sites)
+### FIXED: `secp256r1` key exchange (was 9 sites)
 
-| Missing capability | Sites |
-|---|---|
-| `secp256r1` key exchange | bing.com, live.com, msn.com, office.com, outlook.com, sharepoint.com, microsoft.com, office365.com |
+bing.com, live.com, msn.com, office.com, outlook.com, sharepoint.com,
+microsoft.com, office365.com and europa.eu -- **all nine now complete a full
+1-RTT handshake and return HTTP.**
 
-The oracle fails on all of these too.  Adding `secp256r1` is the single
-highest-value follow-up, and the only remaining one: it lifts the ceiling from
-88 to 96 (see the per-capability matrix below).  The eight
-Microsoft properties fail with `workflow exhausted fuel` rather than a clean
-alert because the server RSTs the connection when the offered group list has
-no acceptable entry, which ATLAS reports as "no data yet" (see "Diagnostic-only
-issue" below).
+See "How `secp256r1` landed" below.
 
 ### Genuinely unservable at the apex (5 sites)
 
@@ -164,13 +162,13 @@ with a maximal modern offer -- these are not capability gaps and no offer
 change reaches them.  `www.google.com` and `www.microsoft.com` both
 complete a full 1-RTT handshake and return `HTTP/1.1 200 OK`.
 
-### Next capability: `secp256r1` (NIST P-256)
+### How `secp256r1` (NIST P-256) landed
 
 `secp256r1` is the NIST P-256 elliptic curve, TLS named group `0x0017`.  It is
 the *other* universally deployed TLS 1.3 key-exchange group besides X25519, and
-it is the only one the eight remaining Microsoft properties accept.
+it was the only one the eight remaining Microsoft properties accept.
 
-**It is the last blocker.**  Running OpenSSL over the 13 non-OK hosts with
+**It was the last blocker.**  Running OpenSSL over the 13 non-OK hosts with
 ATLAS's offer plus one capability at a time isolates the cause exactly:
 
 | host | base | +P-256 | +AES-256-GCM | +SHA-384 sigalgs | +P-384 | everything |
@@ -204,7 +202,7 @@ Two conclusions:
 
 Re-running the oracle with `-groups X25519:P-256` and everything else unchanged
 scores **96 OK / 5 FAIL**.  That is the ceiling for this catalog, and P-256 is
-the single change that reaches it (88 -> 96).
+the single change that reaches it (88 -> 96).  ATLAS now scores exactly that.
 
 **HACL\* has everything required**, in `Hacl_P256` (already listed in
 `HACL_ACCEL_C_MODULES`, alongside its `Hacl_Bignum` dependency):
@@ -229,13 +227,30 @@ Two facts keep the change bounded:
   `kse_list_find_x25519`.
 
 What is *not* free is the public-key type.  `C.x25519_public` is
-`bytes_of_len 32`; a P-256 share is 65 bytes.  Widening it is the bulk of the
-work.  Carry the group **explicitly**:
+`bytes_of_len 32`; a P-256 share is 65 bytes.  Widening it was the bulk of the
+work.  The group is carried **explicitly**, in `TLS13.Crypto.Spec`:
 
 ```fstar
-type kex_group = | KEX_X25519 | KEX_SECP256R1
+type kex_group = | KexX25519 | KexP256
 let kex_public_len (g:kex_group) : n:nat{n == 32 \/ n == 65} = ...
+type kex_public (g:kex_group) = bytes_of_len (kex_public_len g)
 ```
+
+Runtime key-share buffers are a uniform 65 bytes -- the widest group -- so
+their layout does not depend on what was negotiated; a 32-byte X25519 share is
+stored zero-padded (`pad_share_65`) next to an explicit `kex_group` tag.  This
+is the same shape as `pad_key_32` for AEAD keys.  `TLS13.KEX` is the only place
+that dispatches on the group: it selects between the two raw C bindings
+(`TLS13.Crypto.x25519_shared_runtime` / `p256_shared_runtime`), each of which
+has its group's public length baked into its signature, so the C stubs perform
+no dispatch at all.
+
+The decisive change was in the *parser*, not the crypto:
+`TLS13.Wire.Spec.serverHello_representable` required
+`Some? (serverHello_key_share_x25519 b) && length = 32`, so the synth layer was
+rejecting every non-X25519 ServerHello outright, before any state-machine code
+ran.  Generalizing it to `Some? (Sem.serverHello_kex_share b)` is what actually
+opened the receive path.
 
 An earlier draft of this note suggested recovering the group from the
 public-key length (`kex_group_of_public_len`) instead.  That was wrong, and it
@@ -288,7 +303,7 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 2 | cloudflare.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 3 | gstatic.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 4 | facebook.com | OK | HTTP/1.1 301 Moved Permanently | OK |
-| 5 | microsoft.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
+| 5 | microsoft.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 6 | googleapis.com | OK | HTTP/1.1 404 Not Found | OK |
 | 7 | youtube.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 8 | amazonaws.com | OK | HTTP/1.1 301 Moved Permanently | OK |
@@ -298,14 +313,14 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 12 | twitter.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 13 | dzen.ru | OK | HTTP/1.1 302 Found | OK |
 | 14 | linkedin.com | OK | HTTP/1.1 200 OK | OK |
-| 15 | office.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
+| 15 | office.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 16 | googlevideo.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
 | 17 | googletagmanager.com | OK | HTTP/1.1 404 Not Found | OK |
-| 18 | live.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
+| 18 | live.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 19 | amazon.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 20 | azure.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 21 | domaincontrol.com | NOANCHOR | no system root anchors this host under the ATLAS offer | FAIL |
-| 22 | bing.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
+| 22 | bing.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 23 | github.com | OK | HTTP/1.1 200 OK | OK |
 | 24 | wikipedia.org | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 25 | whatsapp.net | OK | HTTP/1.1 302 Found | OK |
@@ -314,14 +329,14 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 28 | doubleclick.net | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 29 | netflix.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 30 | wordpress.org | OK | HTTP/1.1 200 OK | OK |
-| 31 | sharepoint.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
+| 31 | sharepoint.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 32 | skype.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 33 | digicert.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 34 | youtu.be | OK | HTTP/1.1 303 See Other | OK |
 | 35 | gandi.net | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 36 | goo.gl | OK | HTTP/1.1 400 Bad Request | OK |
 | 37 | x.com | OK | HTTP/1.1 200 OK | OK |
-| 38 | outlook.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
+| 38 | outlook.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 39 | pinterest.com | OK | HTTP/1.1 308 Permanent Redirect | OK |
 | 40 | cloud.microsoft | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 41 | tiktok.com | OK | HTTP/1.1 301 Moved Permanently | OK |
@@ -330,7 +345,7 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 44 | whatsapp.com | OK | HTTP/1.1 302 Found | OK |
 | 45 | yahoo.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 46 | googledomains.com | OK | HTTP/1.1 301 Moved Permanently | OK |
-| 47 | msn.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
+| 47 | msn.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 48 | cloudflare.net | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 49 | googlesyndication.com | OK | HTTP/1.1 302 Found | OK |
 | 50 | spotify.com | OK | HTTP/1.1 301 Moved Permanently | OK |
@@ -359,7 +374,7 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 | 73 | ui.com | OK | HTTP/1.1 200 OK | OK |
 | 74 | workers.dev | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 75 | blogspot.com | OK | HTTP/1.1 301 Moved Permanently | OK |
-| 76 | office365.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
+| 76 | office365.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 77 | okcdn.ru | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 78 | t.me | OK | HTTP/1.1 302 Found | OK |
 | 79 | discord.gg | OK | HTTP/1.1 301 Moved Permanently | OK |

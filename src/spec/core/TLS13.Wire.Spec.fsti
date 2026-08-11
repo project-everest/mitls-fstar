@@ -361,9 +361,7 @@ val lemma_certificateVerify_representable (b:GCV.certificateVerify)
 
 val lemma_serverHello_representable (b:GSH.serverHello)
   : Lemma (serverHello_representable b ==
-           ((match TLS13.Wire.Semantics.serverHello_key_share_x25519 b with
-             | Some k -> B.length k = 32
-             | None -> false) &&
+           (Some? (TLS13.Wire.Semantics.serverHello_kex_share b) &&
             (match TLS13.Wire.Semantics.serverHello_cipher_suite b with
              | Some cs -> H.is_supported_cipher_suite cs
              | None -> false)))

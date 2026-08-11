@@ -292,6 +292,8 @@ fn free_handshake_start_exactly (start:handshake_start_storage)
       free_fixed_bytes_exactly start.client_random;
       free_optional_fixed_bytes_exactly start.client_key_share_private;
       free_fixed_bytes_exactly start.client_key_share_public;
+      free_optional_fixed_bytes_exactly start.client_p256_private;
+      free_fixed_bytes_exactly start.client_p256_public;
       free_cipher_suite_list_exactly start.cipher_suites;
       free_signature_scheme_list_exactly start.signature_schemes;
       Box.free start.present;
@@ -303,6 +305,8 @@ fn free_handshake_start_exactly (start:handshake_start_storage)
       free_fixed_bytes_allocated start.client_random;
       free_optional_fixed_bytes_exactly start.client_key_share_private;
       free_fixed_bytes_allocated start.client_key_share_public;
+      free_optional_fixed_bytes_exactly start.client_p256_private;
+      free_fixed_bytes_allocated start.client_p256_public;
       free_cipher_suite_list_allocated start.cipher_suites;
       free_signature_scheme_list_allocated start.signature_schemes;
       Box.free start.present;
@@ -644,6 +648,45 @@ fn free_handshake_buffers_exactly (buffers:handshake_buffer_storage)
   free_optional_sized_bytes_exactly buffers.certificate_verify_input;
 }
 
+let lemma_empty_server_kex_bytes ()
+  : Lemma (server_kex_bytes CS.empty_handshake_state == None /\
+           server_kex CS.empty_handshake_state == None)
+  = ()
+
+fn alloc_empty_kex_share ()
+  requires emp
+  returns slot:kex_share_storage
+  ensures server_key_share_exactly slot CS.empty_handshake_state
+{
+  let present = Box.alloc false;
+  let bytes = V.alloc 0uy 65sz;
+  let group = Box.alloc CryptoSpec.KexX25519;
+  let slot = { present; bytes; group };
+  rewrite (Box.pts_to present false) as (Box.pts_to slot.present false);
+  rewrite (Box.pts_to group CryptoSpec.KexX25519) as
+    (Box.pts_to slot.group CryptoSpec.KexX25519);
+  rewrite (V.pts_to bytes (Seq.create 65 0uy)) as
+    (V.pts_to slot.bytes (Seq.create 65 0uy));
+  assert (pure (B.length (Seq.create 65 0uy) == 65));
+  assert_norm (optional_fixed_bytes_match false (Seq.create 65 0uy) 65 None);
+  lemma_empty_server_kex_bytes ();
+  fold (optional_fixed_bytes_exactly
+          ({ present = slot.present; bytes = slot.bytes }) 65
+          (server_kex_bytes CS.empty_handshake_state));
+  fold (server_key_share_exactly slot CS.empty_handshake_state);
+  slot
+}
+
+fn free_kex_share_exactly (slot:kex_share_storage)
+  requires exists* spec. server_key_share_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (server_key_share_exactly slot spec);
+  with g. _;
+  Box.free slot.group;
+  free_optional_fixed_bytes_exactly ({ present = slot.present; bytes = slot.bytes });
+}
+
 fn free_handshake_exactly (handshake:handshake_storage)
   requires exists* spec. handshake_exactly handshake spec
   ensures emp
@@ -657,8 +700,7 @@ fn free_handshake_exactly (handshake:handshake_storage)
     spec.CS.hs_server_selection);
   with selection_present. _;
   Box.free handshake.server_selection_present;
-  unfold (server_key_share_exactly handshake.server_key_share spec);
-  free_optional_fixed_bytes_exactly handshake.server_key_share;
+  free_kex_share_exactly handshake.server_key_share;
   free_server_key_share_private_exactly handshake.server_key_share_private;
   free_peer_exactly handshake.validated_peer;
   Box.free handshake.certificate_verify_verified;
@@ -853,6 +895,7 @@ fn copy_optional_sized_bytes_to_array
   fold (optional_sized_bytes_exactly slot (reveal cap) (Ghost.reveal bytes_opt));
   copy_len
 }
+
 
 fn alloc_empty_optional_fixed32 ()
   requires emp
@@ -1443,6 +1486,8 @@ fn alloc_handshake_start_empty ()
   let client_random = V.alloc 0uy 32sz;
   let client_key_share_private = alloc_empty_optional_fixed32 ();
   let client_key_share_public = V.alloc 0uy 32sz;
+  let client_p256_private = alloc_empty_optional_fixed32 ();
+  let client_p256_public = V.alloc 0uy 65sz;
   let cipher_suites_items = V.alloc 0us (max_cipher_suites_sz);
   let cipher_suites_len = Box.alloc 0sz;
   let cipher_suites = { items = cipher_suites_items; len = cipher_suites_len };
@@ -1455,6 +1500,8 @@ fn alloc_handshake_start_empty ()
     client_random;
     client_key_share_private;
     client_key_share_public;
+    client_p256_private;
+    client_p256_public;
     cipher_suites;
     signature_schemes;
   };
@@ -1472,6 +1519,10 @@ fn alloc_handshake_start_empty ()
     (optional_fixed_bytes_exactly start.client_key_share_private 32 None);
   rewrite (V.pts_to client_key_share_public (Seq.create 32 0uy)) as
     (V.pts_to start.client_key_share_public (Seq.create 32 0uy));
+  rewrite (optional_fixed_bytes_exactly client_p256_private 32 None) as
+    (optional_fixed_bytes_exactly start.client_p256_private 32 None);
+  rewrite (V.pts_to client_p256_public (Seq.create 65 0uy)) as
+    (V.pts_to start.client_p256_public (Seq.create 65 0uy));
   rewrite (V.pts_to cipher_suites_items (Seq.create max_cipher_suites 0us)) as
     (V.pts_to start.cipher_suites.items (Seq.create max_cipher_suites 0us));
   rewrite (Box.pts_to cipher_suites_len 0sz) as
@@ -1485,6 +1536,7 @@ fn alloc_handshake_start_empty ()
   assert (pure (Seq.length (Seq.create max_signature_schemes 0us) == max_signature_schemes));
   fold (fixed_bytes_allocated start.client_random 32);
   fold (fixed_bytes_allocated start.client_key_share_public 32);
+  fold (fixed_bytes_allocated start.client_p256_public 65);
   fold (cipher_suite_list_allocated start.cipher_suites max_cipher_suites);
   fold (signature_scheme_list_allocated start.signature_schemes max_signature_schemes);
   fold (handshake_start_fields_allocated start);
@@ -1730,7 +1782,7 @@ fn alloc_handshake_empty ()
   let start = alloc_handshake_start_empty ();
   let messages = alloc_handshake_messages_empty ();
   let server_selection_present = Box.alloc false;
-  let server_key_share = alloc_empty_optional_fixed32 ();
+  let server_key_share = alloc_empty_kex_share ();
   let server_key_share_private = alloc_empty_optional_fixed32 ();
   let validated_peer = alloc_peer_empty ();
   let certificate_verify_verified = Box.alloc false;
@@ -1761,7 +1813,7 @@ fn alloc_handshake_empty ()
   fold (server_selection_presence_exactly
     handshake.server_selection_present
     CS.empty_handshake_state.CS.hs_server_selection);
-  rewrite (optional_fixed_bytes_exactly server_key_share 32 None) as
+  rewrite (server_key_share_exactly server_key_share CS.empty_handshake_state) as
     (server_key_share_exactly handshake.server_key_share CS.empty_handshake_state);
   assert (pure (handshake.server_key_share_private == server_key_share_private));
   rewrite (optional_fixed_bytes_exactly server_key_share_private 32 None) as
@@ -2479,6 +2531,64 @@ fn copy_fixed32_array_to_vec
   V.to_vec_pts_to dst;
   with stored. assert (V.pts_to dst stored);
   assert (pure (stored == Ghost.reveal 'src_bytes))
+}
+
+fn copy_fixed65_array_to_vec
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (B.length 'src_bytes == 65 /\
+                 V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 B.length 'old_dst == 65)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst 'src_bytes **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
+{
+  ArrPts.pts_to_len src;
+  V.pts_to_len dst;
+  V.to_array_pts_to dst;
+  Arr.memcpy 65sz src (V.vec_to_array dst);
+  V.to_vec_pts_to dst;
+  with stored. assert (V.pts_to dst stored);
+  assert (pure (stored == Ghost.reveal 'src_bytes))
+}
+
+(* Copy a 32-byte X25519 share into the front of a 65-byte, zero-initialised
+   destination: the runtime image of [CryptoSpec.pad_share_65] for the narrow
+   group.  The tail is required to be zero already, so no zeroing is needed. *)
+fn copy_padded32_array_to_vec65
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (#src_bytes:erased (B.bytes_of_len 32))
+  requires ArrPts.pts_to src src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 Seq.equal 'old_dst (Seq.create 65 0uy))
+  ensures ArrPts.pts_to src src_bytes **
+          V.pts_to dst (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)) **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
+{
+  ArrPts.pts_to_len src;
+  V.pts_to_len dst;
+  V.to_array_pts_to dst;
+  let dst_slice = Slice.from_array (V.vec_to_array dst) 65sz;
+  let src_slice = Slice.from_array src 32sz;
+  let dst_split = Slice.split dst_slice 32sz;
+  Slice.pts_to_len src_slice;
+  Slice.pts_to_len (fst dst_split);
+  Slice.pts_to_len (snd dst_split);
+  Slice.copy (fst dst_split) src_slice;
+  Slice.to_array src_slice;
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst;
+  with stored. assert (V.pts_to dst stored);
+  Seq.lemma_eq_intro stored (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes));
+  rewrite (V.pts_to dst stored)
+    as (V.pts_to dst (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)))
 }
 
 fn store_optional_fixed32_from_array

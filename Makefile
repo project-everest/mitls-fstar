@@ -492,6 +492,7 @@ BUNDLE_IMPL_MODULES = \
   $(PARSER_MODULES) \
   TLS13.Impl.Messages \
   TLS13.AEAD \
+  TLS13.KEX \
   TLS13.KeySchedule \
   TLS13.Record
 
@@ -509,7 +510,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
   TLS13.Impl.Handle.Local,$(SERIALIZER_INTERNAL_MODULES),$(PARSER_INTERNAL_MODULES),\
   TLS13.Impl.Messages,\
-  TLS13.AEAD,TLS13.KeySchedule,TLS13.Record
+  TLS13.AEAD,TLS13.KEX,TLS13.KeySchedule,TLS13.Record
 
 # Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
 # models remain under src/spec/assumptions.
@@ -553,6 +554,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Handle.Local \
   TLS13.Impl.Messages \
   TLS13.AEAD \
+  TLS13.KEX \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client \
@@ -612,6 +614,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.ConnectionState.LocalApp \
   TLS13.Impl.Messages \
   TLS13.AEAD \
+  TLS13.KEX \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Server.Types \
@@ -906,6 +909,10 @@ HACL_ACCEL_CONFIG_DEP =
 HACL_ACCEL_TEST_OBJECTS =
 HACL_ACCEL_BENCHMARK_OBJECTS =
 HACL_ACCEL_PROFILE_OBJECTS =
+# Hacl_P256 supplies the secp256r1 key exchange.  When HACL_ACCEL=1 it is
+# already built as an accelerated object (HACL_ACCEL_C_MODULES), so compiling it
+# again here would give duplicate definitions at link time.
+HACL_WRAPPER_SOURCES += $(HACL_DIR)/Hacl_P256.c
 endif
 
 HACL_TEST_OBJECTS = $(HACL_SIMD256_TEST_OBJECTS) $(HACL_ACCEL_TEST_OBJECTS)

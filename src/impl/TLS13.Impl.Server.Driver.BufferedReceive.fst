@@ -386,6 +386,8 @@ fn rec receive_loop
       loop_len = 0sz;
     }
   } else {
+    let fuel_positive = Ghost.hide (SZ.v fuel > 0);
+    assert (pure (SZ.v fuel > 0));
     let drive = drive_connected_once d out out_len fuel;
     with st1 received1 sent1 output.
       assert (
@@ -446,6 +448,7 @@ fn rec receive_loop
               loop_len = 0sz;
             }
           } else {
+            assert (pure (SZ.v fuel > 0));
             let next_fuel = SZ.sub fuel 1sz;
             assert (pure (SZ.v next_fuel < SZ.v fuel));
             receive_loop d out out_len next_fuel

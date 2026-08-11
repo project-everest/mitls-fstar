@@ -50,6 +50,19 @@ void TLS13_Crypto_x25519_public_from_private(
     uint8_t *sk,
     uint8_t *out);
 
+/* secp256r1.  `pk` is the 65-byte uncompressed SEC1 point the peer put on the
+   wire; `out` receives the 32-byte X coordinate of the shared point, which is
+   what RFC 8446 feeds to the key schedule.  Returns false on an invalid peer
+   point. */
+bool TLS13_Crypto_p256_shared_runtime(
+    uint8_t *sk,
+    uint8_t *pk,
+    uint8_t *out);
+
+void TLS13_Crypto_p256_public_from_private(
+    uint8_t *sk,
+    uint8_t *out);
+
 /* AEAD.  There is one raw binding per algorithm and each maps to exactly one
    primitive; no key length or algorithm identifier is passed, and no dispatch
    happens here.  The choice of algorithm for the negotiated cipher suite is

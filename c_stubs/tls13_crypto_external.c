@@ -105,6 +105,19 @@ void TLS13_Crypto_x25519_public_from_private(
   (void)tls13_hacl_x25519_public_from_private(out, sk);
 }
 
+bool TLS13_Crypto_p256_shared_runtime(
+    uint8_t *sk,
+    uint8_t *pk,
+    uint8_t *out) {
+  return tls13_hacl_p256_shared(out, sk, pk);
+}
+
+void TLS13_Crypto_p256_public_from_private(
+    uint8_t *sk,
+    uint8_t *out) {
+  (void)tls13_hacl_p256_public_from_private(out, sk);
+}
+
 void TLS13_Crypto_chacha20_poly1305_seal(
     uint8_t *key,
     uint8_t *nonce,

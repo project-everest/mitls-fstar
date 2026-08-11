@@ -1285,14 +1285,11 @@ let client_x25519_reachable_shape
    | None ->
      (match st.cs_model.model_control with
       | ControlHandshaking HsStarted ->
+        (* Every offered group's keypair is consistent, not just X25519's:
+           the negotiated group is not known yet, so all of them must be. *)
         (match st.cs_model.model_handshake.hs_start with
          | Some start ->
-           (match start.start_client_key_share_private with
-            | Some client_sk ->
-              C.x25519_public_from_private client_sk ==
-                start.start_client_key_share_public
-            | None ->
-              True)
+           handshake_start_key_share_consistent start
          | None ->
            True)
       | ControlHandshaking HsClientHelloSent
@@ -1368,18 +1365,18 @@ let lemma_legal_local_event_client_x25519_reachable_shape
     assert (client_x25519_pre_shared_secret_projection st0);
     (match hs0.hs_start, hs0.hs_client_hello, hs0.hs_server_hello with
      | Some start, Some ch, Some sh ->
-      (match start.start_client_key_share_private with
-       | Some client_sk ->
-         assert (client_hello_key_share ch ==
-           Some start.start_client_key_share_public);
-         assert (C.x25519_public_from_private client_sk ==
-           start.start_client_key_share_public);
-         (match server_hello_key_share sh with
-          | Some sh_ks ->
-            assert (C.x25519_shared client_sk sh_ks == Some shared)
+      (* Dispatch on the group the server named, exactly as the transition
+         relation does.  Only the negotiated group's private key need exist:
+         with P-256 negotiated the X25519 private may legitimately be `None`. *)
+      (match server_hello_kex sh with
+       | Some (| g, sh_ks |) ->
+         assert (client_hello_kex ch g == Some (start_kex_public start g));
+         (match start_kex_private start g with
+          | Some sk ->
+            assert (C.kex_public_from_private g sk == start_kex_public start g);
+            assert (C.kex_shared g sk sh_ks == Some shared)
           | None -> assert False)
-       | None ->
-         assert False)
+       | None -> assert False)
      | _, _, _ ->
       assert False);
     assert (stable_client_x25519_key_share_projection st1);
@@ -1512,6 +1509,9 @@ let lemma_legal_local_event_server_x25519_reachable_shape
   | _, _ ->
     assert False
 
+(* The ClientHello now carries two KeyShareEntry values (X25519 and secp256r1),
+   so the `kse_list_find_x25519` walk needs one more unfolding than before. *)
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 let lemma_connection_delta_client_x25519_reachable_shape
   (st0:connection_state)
   (st1:connection_state)
@@ -1574,18 +1574,16 @@ let lemma_connection_delta_client_x25519_reachable_shape
               st0.cs_model.model_handshake.hs_server_hello
             with
             | Some start, Some ch, Some sh ->
-              (match start.start_client_key_share_private with
-               | Some client_sk ->
-                 assert (client_hello_key_share ch ==
-                   Some start.start_client_key_share_public);
-                 assert (C.x25519_public_from_private client_sk ==
-                   start.start_client_key_share_public);
-                 (match server_hello_key_share sh with
-                  | Some sh_ks ->
-                    assert (C.x25519_shared client_sk sh_ks == Some shared)
+              (* Only the negotiated group's private key need exist. *)
+              (match server_hello_kex sh with
+               | Some (| g, sh_ks |) ->
+                 assert (client_hello_kex ch g == Some (start_kex_public start g));
+                 (match start_kex_private start g with
+                  | Some sk ->
+                    assert (C.kex_public_from_private g sk == start_kex_public start g);
+                    assert (C.kex_shared g sk sh_ks == Some shared)
                   | None -> assert False)
-               | None ->
-                 assert False)
+               | None -> assert False)
             | _, _, _ ->
               assert False);
             assert (stable_client_x25519_key_share_projection st1);
@@ -1610,16 +1608,19 @@ let lemma_connection_delta_client_x25519_reachable_shape
               st0.cs_model
               msg.CL.message_direction
               msg.CL.message_value == Some st1.cs_model);
+            assert (client_x25519_reachable_shape st0);
             (match st0.cs_model.model_handshake.hs_start with
             | Some start ->
               assert (client_hello_key_share ch ==
                 Some start.start_client_key_share_public);
-              (match start.start_client_key_share_private with
-               | Some client_sk ->
-                 assert (C.x25519_public_from_private client_sk ==
-                   start.start_client_key_share_public)
-               | None ->
-                 ())
+              assert (client_hello_p256_key_share ch ==
+                Some start.start_client_p256_public);
+              introduce forall (g:C.kex_group).
+                client_hello_kex ch g == Some (start_kex_public start g) /\
+                (match start_kex_private start g with
+                 | Some sk -> C.kex_public_from_private g sk == start_kex_public start g
+                 | None -> True)
+              with (match g with | C.KexX25519 -> () | C.KexP256 -> ())
             | None ->
              assert False);
             assert (client_x25519_reachable_shape st1)
@@ -1701,6 +1702,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
            | _, _ -> assert False);
          assert (st1.cs_model.model_handshake.hs_keys.ks_shared_secret == None);
          assert (client_x25519_reachable_shape st1) end)
+#pop-options
 
 #restart-solver
 let lemma_connection_delta_server_x25519_reachable_shape
