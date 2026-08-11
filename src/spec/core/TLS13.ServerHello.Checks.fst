@@ -3,6 +3,12 @@ module TLS13.ServerHello.Checks
 module B = TLS13.Bytes
 module Seq = FStar.Seq
 
+(** The wire byte at offset 72 that selects the AEAD: 0x03 is
+    TLS_CHACHA20_POLY1305_SHA256 (0x1303), 0x01 is TLS_AES_128_GCM_SHA256
+    (0x1301).  Offset 71 is 0x13 for both. *)
+let server_hello_cipher_suite_lo_ok (v:FStar.UInt8.t) : GTot bool =
+  v = 0x03uy || v = 0x01uy
+
 let server_hello_header_ok (input:B.bytes) : GTot bool =
   if B.length input == 122 then
     Seq.index input 0 = 0x02uy &&
@@ -13,11 +19,17 @@ let server_hello_header_ok (input:B.bytes) : GTot bool =
     Seq.index input 5 = 0x03uy &&
     Seq.index input 38 = 0x20uy &&
     Seq.index input 71 = 0x13uy &&
-    Seq.index input 72 = 0x03uy &&
+    server_hello_cipher_suite_lo_ok (Seq.index input 72) &&
     Seq.index input 73 = 0uy &&
     Seq.index input 74 = 0uy &&
     Seq.index input 75 = 0x2euy
   else false
+
+(** The suite selected by a header-ok ServerHello image. *)
+let server_hello_selected_suite (input:B.bytes) : GTot TLS13.Types.cipher_suite =
+  if B.length input == 122 && Seq.index input 72 = 0x01uy
+  then TLS13.Types.TLS_AES_128_GCM_SHA256
+  else TLS13.Types.TLS_CHACHA20_POLY1305_SHA256
 
 let server_hello_is_hrr (input:B.bytes) : GTot bool =
   if B.length input == 122 then

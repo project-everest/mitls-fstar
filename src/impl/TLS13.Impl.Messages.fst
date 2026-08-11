@@ -5,6 +5,7 @@ module TLS13.Impl.Messages
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module H = TLS13.Handshake.Spec
 module L = FStar.List.Tot
 module M = TLS13.Messages
 module Seq = FStar.Seq
@@ -336,7 +337,9 @@ noextract
 let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> U16.v wire == 0x1303
-  | T.Unknown_cipherSuite n -> U16.v wire == U16.v n /\ U16.v n <> 0x1303
+  | T.TLS_AES_128_GCM_SHA256 -> U16.v wire == 0x1301
+  | T.Unknown_cipherSuite n ->
+    U16.v wire == U16.v n /\ U16.v n <> 0x1303 /\ U16.v n <> 0x1301
 
 noextract
 let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =
@@ -512,7 +515,7 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slpro
       (match Sem.serverHello_cipher_suite m with
        | Some cs ->
          cipher_suite_matches l.server_hello_cipher_suite cs /\
-         cs == T.TLS_CHACHA20_POLY1305_SHA256
+         H.is_supported_cipher_suite cs
        | None -> False))
 
 let is_valid_encrypted_extensions

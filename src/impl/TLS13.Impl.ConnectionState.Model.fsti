@@ -191,6 +191,32 @@ val lemma_cipher_suites_match_index_chacha_offer
                 U16.v (Seq.index wire i) == 0x1303)
       (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
 
+/// AES-128-GCM analogues of the chacha offer lemmas above.  The client now
+/// offers both supported suites, so the ServerHello gate has to be able to
+/// prove "the selected suite was offered" for either one.
+val lemma_cipher_suites_match_first_aes_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x1301)
+      (ensures CS.cipher_suite_offered suites T.TLS_AES_128_GCM_SHA256)
+
+val lemma_cipher_suites_match_index_aes_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1301)
+      (ensures CS.cipher_suite_offered suites T.TLS_AES_128_GCM_SHA256)
+
 /// Existential forms, which is what a runtime linear scan can produce: the scan
 /// reports "some entry below [len] equals the target" without carrying the index.
 val lemma_signature_schemes_match_exists_rsa_offer
@@ -1238,7 +1264,8 @@ let received_client_finished_state
     | Some master ->
       let secret =
         K.client_application_traffic_secret master (Tr.hash hs0.CS.hs_transcript) in
-      let material = CS.traffic_key_material_for_secret secret in
+      let material =
+        CS.traffic_key_material_for_secret (CS.negotiated_aead_alg hs0) secret in
       let hs_v =
         CS.append_handshake_to_transcript
           { hs0 with CS.hs_client_finished = Some fin }
@@ -1555,7 +1582,8 @@ let received_server_finished_state
     | Some master ->
       let secret =
         K.server_application_traffic_secret master (Tr.hash hs_v.CS.hs_transcript) in
-      let material = CS.traffic_key_material_for_secret secret in
+      let material =
+        CS.traffic_key_material_for_secret (CS.negotiated_aead_alg hs0) secret in
       CS.with_handshake_stage
         { model0 with
             CS.model_record =
@@ -2611,6 +2639,7 @@ val lemma_client_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.client_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2633,6 +2662,7 @@ val lemma_server_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.server_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2657,6 +2687,7 @@ val lemma_server_role_server_handshake_write_traffic_install_legal
              CS.install_direction = CS.TrafficWrite;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.server_handshake_traffic_secret
                    handshake_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2682,6 +2713,7 @@ val lemma_server_role_client_handshake_read_traffic_install_legal
              CS.install_direction = CS.TrafficRead;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.client_handshake_traffic_secret
                    handshake_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2705,6 +2737,7 @@ val lemma_client_application_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.client_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2727,6 +2760,7 @@ val lemma_server_application_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.server_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2751,6 +2785,7 @@ val lemma_server_role_server_application_write_traffic_install_legal
              CS.install_direction = CS.TrafficWrite;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.server_application_traffic_secret
                    master_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2776,6 +2811,7 @@ val lemma_server_role_client_application_read_traffic_install_legal
              CS.install_direction = CS.TrafficRead;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.client_application_traffic_secret
                    master_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));

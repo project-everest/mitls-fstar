@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module K = TLS13.Keys
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -131,14 +132,23 @@ fn finished_verify_data
                        (Ghost.reveal 'base_key_bytes)
                        (Ghost.reveal 'hash_bytes))
 
+(**
+  Derives the record-protection key for the negotiated suite, branching on the
+  negotiated algorithm.  The output buffer is always 32 bytes: a shorter key is
+  zero-padded, so the buffer layout is independent of the suite and the logical
+  key is the `C.aead_key_len alg`-byte prefix (see
+  `TLS13.Crypto.Spec.pad_key_32`).
+**)
 fn derive_traffic_key
   (traffic_secret: array U8.t)
+  (alg: C.aead_alg)
   (out: array U8.t)
   requires pts_to traffic_secret 'secret_bytes **
           pts_to out 'old **
            pure (B.length 'secret_bytes == 32 /\ B.length 'old == 32)
   ensures pts_to traffic_secret 'secret_bytes **
-          pts_to out (K.derive_aead_key (Ghost.reveal 'secret_bytes))
+          pts_to out (C.pad_key_32
+                       (K.derive_aead_key alg (Ghost.reveal 'secret_bytes)))
 
 fn derive_traffic_iv
   (traffic_secret: array U8.t)

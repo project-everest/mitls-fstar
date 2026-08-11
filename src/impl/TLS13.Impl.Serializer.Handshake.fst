@@ -1688,6 +1688,7 @@ fn mk_singleton_vclist
 
 let u16_to_cipher_suite (w: U16.t) : GCS.cipherSuite =
   if w = 4867us then GCS.TLS_CHACHA20_POLY1305_SHA256
+  else if w = 4865us then GCS.TLS_AES_128_GCM_SHA256
   else GCS.Unknown_cipherSuite w
 
 let lemma_u16_to_cipher_suite_matches (w: U16.t) (c: GCS.cipherSuite)
@@ -1697,8 +1698,12 @@ let lemma_u16_to_cipher_suite_matches (w: U16.t) (c: GCS.cipherSuite)
     | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
       assert_norm (U16.v 4867us == 0x1303);
       U16.v_inj w 4867us
+    | GCS.TLS_AES_128_GCM_SHA256 ->
+      assert_norm (U16.v 4865us == 0x1301);
+      U16.v_inj w 4865us
     | GCS.Unknown_cipherSuite n ->
       assert_norm (U16.v 4867us == 0x1303);
+      assert_norm (U16.v 4865us == 0x1301);
       U16.v_inj w n
 
 (* [u16_to_sig_scheme] + [lemma_u16_to_sig_scheme] are defined above (reused by

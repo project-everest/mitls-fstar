@@ -25,6 +25,22 @@
 #include "internal/EverCrypt_Hash.h"
 #endif
 
+/* AES-128-GCM is provided by EverCrypt, which on x86_64 dispatches to the Vale
+   verified assembly in aesgcm-x86_64-linux.S.  That code path requires AES-NI
+   and PCLMULQDQ; EverCrypt_AEAD_create_in reports UnsupportedAlgorithm when
+   they are absent, which tls13_hacl_aes128_gcm_available() surfaces so the
+   ClientHello can drop TLS_AES_128_GCM_SHA256 from its offer rather than
+   negotiating a suite we cannot run. */
+#ifndef TLS13_HACL_HAS_AESGCM
+#define TLS13_HACL_HAS_AESGCM 0
+#endif
+
+#if TLS13_HACL_HAS_AESGCM
+#include "EverCrypt_AEAD.h"
+#include "EverCrypt_Error.h"
+#include "Hacl_Spec.h"
+#endif
+
 static uint8_t empty_input;
 
 static bool fits_u32(size_t len) {
@@ -257,4 +273,113 @@ bool tls13_hacl_chacha20_poly1305_open_combined(
              (uint8_t *)key,
              (uint8_t *)nonce,
              (uint8_t *)(ciphertext_and_tag + plaintext_len)) == 0;
+}
+
+/* ── AES-128-GCM ───────────────────────────────────────────────────────────
+   EverCrypt owns the key schedule, so each call expands the key.  TLS record
+   protection installs a traffic key once and then uses it for many records;
+   the expansion is a handful of AES rounds against a per-record cost that is
+   linear in the record size, so this stays off the hot path's critical term
+   while keeping the stub stateless (and therefore trivially thread-safe).  */
+
+bool tls13_hacl_aes128_gcm_available(void) {
+#if TLS13_HACL_HAS_AESGCM
+  EverCrypt_AEAD_state_s *st = NULL;
+  uint8_t probe_key[16] = {0};
+  tls13_hacl_init_acceleration();
+  if (EverCrypt_AEAD_create_in(Spec_Agile_AEAD_AES128_GCM, &st, probe_key) !=
+      EverCrypt_Error_Success) {
+    return false;
+  }
+  EverCrypt_AEAD_free(st);
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool tls13_hacl_aes128_gcm_seal_combined(
+    uint8_t *ciphertext_and_tag,
+    size_t ciphertext_and_tag_len,
+    const uint8_t key[16],
+    const uint8_t nonce[12],
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *plaintext,
+    size_t plaintext_len) {
+#if TLS13_HACL_HAS_AESGCM
+  EverCrypt_AEAD_state_s *st = NULL;
+  EverCrypt_Error_error_code rc;
+  if (plaintext_len > UINT32_MAX || aad_len > UINT32_MAX ||
+      plaintext_len > SIZE_MAX - 16 ||
+      ciphertext_and_tag_len != plaintext_len + 16 ||
+      ciphertext_and_tag == NULL || key == NULL || nonce == NULL ||
+      (aad_len != 0 && aad == NULL) || (plaintext_len != 0 && plaintext == NULL)) {
+    return false;
+  }
+  tls13_hacl_init_acceleration();
+  if (EverCrypt_AEAD_create_in(Spec_Agile_AEAD_AES128_GCM, &st, (uint8_t *)key) !=
+      EverCrypt_Error_Success) {
+    return false;
+  }
+  rc = EverCrypt_AEAD_encrypt(
+      st,
+      (uint8_t *)nonce,
+      12U,
+      read_ptr(aad, aad_len),
+      (uint32_t)aad_len,
+      read_ptr(plaintext, plaintext_len),
+      (uint32_t)plaintext_len,
+      ciphertext_and_tag,
+      ciphertext_and_tag + plaintext_len);
+  EverCrypt_AEAD_free(st);
+  return rc == EverCrypt_Error_Success;
+#else
+  (void)ciphertext_and_tag; (void)ciphertext_and_tag_len; (void)key;
+  (void)nonce; (void)aad; (void)aad_len; (void)plaintext; (void)plaintext_len;
+  return false;
+#endif
+}
+
+bool tls13_hacl_aes128_gcm_open_combined(
+    uint8_t *plaintext,
+    size_t plaintext_len,
+    const uint8_t key[16],
+    const uint8_t nonce[12],
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *ciphertext_and_tag,
+    size_t ciphertext_and_tag_len) {
+#if TLS13_HACL_HAS_AESGCM
+  EverCrypt_AEAD_state_s *st = NULL;
+  EverCrypt_Error_error_code rc;
+  if (plaintext_len > UINT32_MAX || aad_len > UINT32_MAX ||
+      plaintext_len > SIZE_MAX - 16 ||
+      ciphertext_and_tag_len != plaintext_len + 16 ||
+      (plaintext_len != 0 && plaintext == NULL) || key == NULL || nonce == NULL ||
+      (aad_len != 0 && aad == NULL) || ciphertext_and_tag == NULL) {
+    return false;
+  }
+  tls13_hacl_init_acceleration();
+  if (EverCrypt_AEAD_create_in(Spec_Agile_AEAD_AES128_GCM, &st, (uint8_t *)key) !=
+      EverCrypt_Error_Success) {
+    return false;
+  }
+  rc = EverCrypt_AEAD_decrypt(
+      st,
+      (uint8_t *)nonce,
+      12U,
+      read_ptr(aad, aad_len),
+      (uint32_t)aad_len,
+      (uint8_t *)ciphertext_and_tag,
+      (uint32_t)plaintext_len,
+      (uint8_t *)(ciphertext_and_tag + plaintext_len),
+      write_ptr(plaintext, plaintext_len));
+  EverCrypt_AEAD_free(st);
+  return rc == EverCrypt_Error_Success;
+#else
+  (void)plaintext; (void)plaintext_len; (void)key; (void)nonce;
+  (void)aad; (void)aad_len; (void)ciphertext_and_tag; (void)ciphertext_and_tag_len;
+  return false;
+#endif
 }

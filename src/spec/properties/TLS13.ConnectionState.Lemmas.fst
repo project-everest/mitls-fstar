@@ -5013,7 +5013,7 @@ let lemma_projected_next_seq_of_record
 let lemma_projected_install_keys_of_record
   (st:R.direction_state)
   (epoch:R.epoch)
-  (key:C.aead_key)
+  (key:C.aead_key_any)
   (iv:C.aead_nonce)
   : Lemma
       (projected_direction_state_of_record (R.install_keys st epoch key iv) ==
@@ -5837,12 +5837,14 @@ let lemma_application_traffic_install_for_role_material_matches_expected
       install.install_direction
   with
   | Some secret ->
-    assert (install.install_material == traffic_key_material_for_secret secret);
-    assert (install.install_material.traffic_key == K.derive_aead_key secret);
+    assert (install.install_material ==
+      traffic_key_material_for_secret (negotiated_aead_alg hs0) secret);
+    assert (install.install_material.traffic_key ==
+      K.derive_aead_key (negotiated_aead_alg hs0) secret);
     assert (install.install_material.traffic_iv == K.derive_aead_iv secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_key
-      (K.derive_aead_key secret);
+      (K.derive_aead_key (negotiated_aead_alg hs0) secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_iv
       (K.derive_aead_iv secret)
@@ -5868,6 +5870,8 @@ let lemma_application_traffic_label_match_expected_preserved
           label /\
         model1.model_handshake.hs_keys.ks_master_secret ==
         model0.model_handshake.hs_keys.ks_master_secret /\
+        negotiated_aead_alg model1.model_handshake ==
+          negotiated_aead_alg model0.model_handshake /\
         transcript_checkpoint_bytes TH_SF model1.model_handshake ==
         transcript_checkpoint_bytes TH_SF model0.model_handshake)
       (ensures
@@ -5925,6 +5929,8 @@ let lemma_first_epoch_application_label_match_expected_preserved
           label /\
         model1.model_handshake.hs_keys.ks_master_secret ==
         model0.model_handshake.hs_keys.ks_master_secret /\
+        negotiated_aead_alg model1.model_handshake ==
+          negotiated_aead_alg model0.model_handshake /\
         transcript_checkpoint_bytes TH_SF model1.model_handshake ==
         transcript_checkpoint_bytes TH_SF model0.model_handshake)
       (ensures
@@ -6001,6 +6007,8 @@ let lemma_first_epoch_application_label_match_expected_preserved_when_slot_uncha
           label == None \/
          (model1.model_handshake.hs_keys.ks_master_secret ==
           model0.model_handshake.hs_keys.ks_master_secret /\
+          negotiated_aead_alg model1.model_handshake ==
+            negotiated_aead_alg model0.model_handshake /\
           transcript_checkpoint_bytes TH_SF model1.model_handshake ==
           transcript_checkpoint_bytes TH_SF model0.model_handshake)))
       (ensures
@@ -6041,6 +6049,9 @@ let lemma_first_epoch_application_label_match_expected_preserved_when_slot_uncha
       assert
         (model1.model_handshake.hs_keys.ks_master_secret ==
          model0.model_handshake.hs_keys.ks_master_secret);
+      assert
+        (negotiated_aead_alg model1.model_handshake ==
+         negotiated_aead_alg model0.model_handshake);
       assert
         (transcript_checkpoint_bytes TH_SF model1.model_handshake ==
          transcript_checkpoint_bytes TH_SF model0.model_handshake);
@@ -6084,6 +6095,8 @@ let lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkp
           ClientTraffic == None \/
          (model1.model_handshake.hs_keys.ks_master_secret ==
           model0.model_handshake.hs_keys.ks_master_secret /\
+          negotiated_aead_alg model1.model_handshake ==
+            negotiated_aead_alg model0.model_handshake /\
           transcript_checkpoint_bytes TH_SF model1.model_handshake ==
           transcript_checkpoint_bytes TH_SF model0.model_handshake)) /\
         (traffic_material_for_label
@@ -6092,6 +6105,8 @@ let lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkp
           ServerTraffic == None \/
          (model1.model_handshake.hs_keys.ks_master_secret ==
           model0.model_handshake.hs_keys.ks_master_secret /\
+          negotiated_aead_alg model1.model_handshake ==
+            negotiated_aead_alg model0.model_handshake /\
           transcript_checkpoint_bytes TH_SF model1.model_handshake ==
           transcript_checkpoint_bytes TH_SF model0.model_handshake)))
       (ensures
@@ -6132,6 +6147,8 @@ let lemma_first_epoch_application_slots_preserved_when_application_labels_unchan
           ServerTraffic /\
         model1.model_handshake.hs_keys.ks_master_secret ==
         model0.model_handshake.hs_keys.ks_master_secret /\
+        negotiated_aead_alg model1.model_handshake ==
+          negotiated_aead_alg model0.model_handshake /\
         transcript_checkpoint_bytes TH_SF model1.model_handshake ==
         transcript_checkpoint_bytes TH_SF model0.model_handshake)
       (ensures
@@ -6167,6 +6184,7 @@ let lemma_atomic_application_install_matches_expected
              label ==
            Some
              (traffic_key_material_for_secret
+               (negotiated_aead_alg model1.model_handshake)
                (derive_traffic_secret_for_label TrafficApplication label master cp))
          | None -> False))
       (ensures
@@ -6189,10 +6207,11 @@ let lemma_atomic_application_install_matches_expected
     assert (expected_traffic_secret_for_state
               (traffic_id TrafficApplication label)
               st1 == Some secret);
-    let material = traffic_key_material_for_secret secret in
-    assert (material.traffic_key == K.derive_aead_key secret);
+    let alg = negotiated_aead_alg model1.model_handshake in
+    let material = traffic_key_material_for_secret alg secret in
+    assert (material.traffic_key == K.derive_aead_key alg secret);
     assert (material.traffic_iv == K.derive_aead_iv secret);
-    Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key secret);
+    Seq.lemma_eq_refl material.traffic_key (K.derive_aead_key alg secret);
     Seq.lemma_eq_refl material.traffic_iv (K.derive_aead_iv secret)
 
 (* Localized rlimit bump (10 -> 20) for this single lemma.  Two independent
@@ -6718,6 +6737,8 @@ let lemma_expected_application_traffic_secret_stable
       (requires
         model1.model_handshake.hs_keys.ks_master_secret ==
         model0.model_handshake.hs_keys.ks_master_secret /\
+        negotiated_aead_alg model1.model_handshake ==
+          negotiated_aead_alg model0.model_handshake /\
         transcript_checkpoint_bytes TH_SF model1.model_handshake ==
         transcript_checkpoint_bytes TH_SF model0.model_handshake)
       (ensures
@@ -6752,6 +6773,8 @@ let lemma_step_model_post_handshake_application_slots_stable
         model0.model_handshake.hs_keys.ks_server_application_traffic /\
         model1.model_handshake.hs_keys.ks_master_secret ==
         model0.model_handshake.hs_keys.ks_master_secret /\
+        negotiated_aead_alg model1.model_handshake ==
+          negotiated_aead_alg model0.model_handshake /\
         transcript_checkpoint_bytes TH_SF model1.model_handshake ==
         transcript_checkpoint_bytes TH_SF model0.model_handshake)
 =
@@ -12608,6 +12631,8 @@ let lemma_handshake_traffic_label_match_expected_preserved
           label /\
         model1.model_handshake.hs_keys.ks_handshake_secret ==
         model0.model_handshake.hs_keys.ks_handshake_secret /\
+        negotiated_aead_alg model1.model_handshake ==
+          negotiated_aead_alg model0.model_handshake /\
         transcript_checkpoint_bytes TH_SH model1.model_handshake ==
         transcript_checkpoint_bytes TH_SH model0.model_handshake)
       (ensures
@@ -12666,6 +12691,8 @@ let lemma_first_epoch_handshake_label_match_expected_preserved_when_slot_unchang
           label == None \/
          (model1.model_handshake.hs_keys.ks_handshake_secret ==
           model0.model_handshake.hs_keys.ks_handshake_secret /\
+          negotiated_aead_alg model1.model_handshake ==
+            negotiated_aead_alg model0.model_handshake /\
           transcript_checkpoint_bytes TH_SH model1.model_handshake ==
           transcript_checkpoint_bytes TH_SH model0.model_handshake)))
       (ensures
@@ -12714,6 +12741,9 @@ let lemma_first_epoch_handshake_label_match_expected_preserved_when_slot_unchang
         (model1.model_handshake.hs_keys.ks_handshake_secret ==
          model0.model_handshake.hs_keys.ks_handshake_secret);
       assert
+        (negotiated_aead_alg model1.model_handshake ==
+         negotiated_aead_alg model0.model_handshake);
+      assert
         (transcript_checkpoint_bytes TH_SH model1.model_handshake ==
          transcript_checkpoint_bytes TH_SH model0.model_handshake);
       lemma_handshake_traffic_label_match_expected_preserved
@@ -12753,6 +12783,8 @@ let lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoi
           ClientTraffic == None \/
          (model1.model_handshake.hs_keys.ks_handshake_secret ==
           model0.model_handshake.hs_keys.ks_handshake_secret /\
+          negotiated_aead_alg model1.model_handshake ==
+            negotiated_aead_alg model0.model_handshake /\
           transcript_checkpoint_bytes TH_SH model1.model_handshake ==
           transcript_checkpoint_bytes TH_SH model0.model_handshake)) /\
         (traffic_material_for_label
@@ -12761,6 +12793,8 @@ let lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoi
           ServerTraffic == None \/
          (model1.model_handshake.hs_keys.ks_handshake_secret ==
           model0.model_handshake.hs_keys.ks_handshake_secret /\
+          negotiated_aead_alg model1.model_handshake ==
+            negotiated_aead_alg model0.model_handshake /\
           transcript_checkpoint_bytes TH_SH model1.model_handshake ==
           transcript_checkpoint_bytes TH_SH model0.model_handshake)))
       (ensures
@@ -12871,12 +12905,14 @@ let lemma_handshake_traffic_install_for_role_material_matches_expected
       install.install_direction
   with
   | Some secret ->
-    assert (install.install_material == traffic_key_material_for_secret secret);
-    assert (install.install_material.traffic_key == K.derive_aead_key secret);
+    assert (install.install_material ==
+      traffic_key_material_for_secret (negotiated_aead_alg hs0) secret);
+    assert (install.install_material.traffic_key ==
+      K.derive_aead_key (negotiated_aead_alg hs0) secret);
     assert (install.install_material.traffic_iv == K.derive_aead_iv secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_key
-      (K.derive_aead_key secret);
+      (K.derive_aead_key (negotiated_aead_alg hs0) secret);
     Seq.lemma_eq_refl
       install.install_material.traffic_iv
       (K.derive_aead_iv secret)

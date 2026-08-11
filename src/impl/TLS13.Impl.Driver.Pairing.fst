@@ -465,7 +465,10 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
           assert (C.x25519_public_from_private server_sk ==
             selection.CS.server_key_share_public);
           assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+          // The ServerHello correspondence above pins the cipher suite, hence
+          // the negotiated AEAD algorithm, on both sides.
+          assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
         | _, _ -> assert False)
      | _, _ ->
        assert False)
@@ -522,7 +525,10 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
          assert (C.x25519_public_from_private server_sk ==
            selection.CS.server_key_share_public);
          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-         assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+         assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+         // The ServerHello correspondence above pins the cipher suite, hence
+         // the negotiated AEAD algorithm, on both sides.
+         assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
        | _, _ -> assert False)
      | _, _ ->
       assert False)

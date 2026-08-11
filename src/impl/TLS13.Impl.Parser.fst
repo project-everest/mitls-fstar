@@ -834,17 +834,26 @@ let lemma_synth_sig_schemes_cons (s: GSS.signatureScheme) tl
 let cipher_suite_lo_to_u16 (c: GCS.cipherSuite) : U16.t =
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 -> 0x1303us
+  | GCS.TLS_AES_128_GCM_SHA256 -> 0x1301us
   | GCS.Unknown_cipherSuite v -> v
 
 let lemma_unknown_cipher_suite_not_chacha
   (v:U16.t{not (GCS.known_cipherSuite_repr v)})
-  : Lemma (U16.v v <> 0x1303)
+  : Lemma (U16.v v <> 0x1303 /\ U16.v v <> 0x1301)
   =
   if U16.v v = 0x1303 then (
     assert_norm (U16.v 0x1303us == 0x1303);
     U16.v_inj v 0x1303us;
     assert (v == 0x1303us);
     assert_norm (GCS.known_cipherSuite_repr 0x1303us == true);
+    assert (GCS.known_cipherSuite_repr v);
+    assert False
+  );
+  if U16.v v = 0x1301 then (
+    assert_norm (U16.v 0x1301us == 0x1301);
+    U16.v_inj v 0x1301us;
+    assert (v == 0x1301us);
+    assert_norm (GCS.known_cipherSuite_repr 0x1301us == true);
     assert (GCS.known_cipherSuite_repr v);
     assert False
   )
@@ -857,6 +866,8 @@ let lemma_cipher_suite_lo_matches (c: GCS.cipherSuite)
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
     assert_norm (U16.v 0x1303us == 0x1303)
+  | GCS.TLS_AES_128_GCM_SHA256 ->
+    assert_norm (U16.v 0x1301us == 0x1301)
   | GCS.Unknown_cipherSuite v ->
     assert (not (GCS.known_cipherSuite_repr v));
     lemma_unknown_cipher_suite_not_chacha v
@@ -5522,6 +5533,92 @@ fn parse_handshake_message
                                  L.server_hello_session_id = sidvec;
                                  L.server_hello_key_share = fst res;
                                  L.server_hello_cipher_suite = 0x1303us });
+                    rewrite (V.pts_to randvec rbytes)
+                         as (V.pts_to lsh.L.server_hello_random rbytes);
+                    rewrite (V.pts_to sidvec sidbytes)
+                         as (V.pts_to lsh.L.server_hello_session_id sidbytes);
+                    rewrite (V.pts_to (fst res) kbytes)
+                         as (V.pts_to lsh.L.server_hello_key_share kbytes);
+                    fold (L.is_valid_server_hello lsh
+                            (M.ServerHello?._0 (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                    fold (L.is_valid_handshake_msg (L.LServerHello lsh)
+                            (Some?.v (RV.handshake_synth (Ghost.reveal gv))));
+                    fold (L.is_valid_tls_message
+                            (L.LTlsHandshake (L.LServerHello lsh))
+                            (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                    (* Prime the precondition of [lemma_handshake_wire_success_fixed]
+                       with focused asserts (mirroring the ClientHello arm): the
+                       [fold]s above bloat the slprop context, so proving the
+                       three-way conjunction in a single query is unstable.
+                       Splitting it into individual obligations keeps each Z3
+                       query small and deterministic. *)
+                    assert (pure (L.content_type_matches content_type T.Handshake));
+                    assert (pure (LP.parse GHS.handshake_parser (Ghost.reveal 'input_bytes) ==
+                                  Some (Ghost.reveal gv, B.length (Ghost.reveal 'input_bytes))));
+                    assert (pure (RV.handshake_synth (Ghost.reveal gv) ==
+                                  Some (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                    lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes)
+                      (Ghost.reveal gv) (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
+                    Some (L.LTlsHandshake (L.LServerHello lsh))
+                  } else {
+                    (* key_share scan found nothing, or the body exceeds
+                       server_hello_max_len: synth is [None]; fall back. *)
+                    V.free randvec;
+                    V.free sidvec;
+                    V.free (fst res);
+                    RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+                      (Ghost.reveal gv) (SZ.v input_len);
+                    handshake_fallback content_type input input_len
+                  }
+                }
+                GCS.TLS_AES_128_GCM_SHA256 -> {
+                  let res = scan_sh_key_share (snd (snd (dsnd (snd (snd xsh)))));
+                  with kbytes. assert (V.pts_to (fst res) kbytes);
+                  let randvec = V.alloc 0uy 32sz;
+                  unfold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
+                  V.pts_to_len (fst (snd xsh)).PPBY.lvec_vec;
+                  copy_vec_32_into randvec (fst (snd xsh)).PPBY.lvec_vec;
+                  with rbytes. assert (V.pts_to randvec rbytes);
+                  fold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
+                  let sidvec = V.alloc 0uy 32sz;
+                  rewrite (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
+                       as (LSeqB.vmatch_copy_seqbytes
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))));
+                  copy_session_id_32_checked sidvec (fst (fst (dsnd (snd (snd xsh)))))
+                                 #(fst (fst (dsnd (snd (snd cm)))));
+                  with sidbytes. assert (V.pts_to sidvec sidbytes **
+                    pure (V.is_full_vec sidvec /\
+                          V.length sidvec == 32 /\
+                          Seq.length sidbytes == 32 /\
+                          Seq.equal sidbytes
+                            (TLS13.Wire.Semantics.session_id_32 (fst (fst (dsnd (snd (snd cm))))))));
+                  rewrite (LSeqB.vmatch_copy_seqbytes
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
+                       as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch
+                             (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))));
+                  intro_serverHelloBody (dsnd (snd (snd xsh)));
+                  intro_sh_ite_payload xsh b;
+                  intro_serverHello_body xsh;
+                  intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
+                  PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+                    GHS.free_handshake (GHS.Body_server_hello_low xsh);
+                  Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                             (S.pts_to s 'input_bytes);
+                  S.to_array s;
+                  RV.lemma_reveal_sh_key_share_connect
+                    ((Ghost.reveal sf).GSHB.value.GSHBody.extensions <: list GESH.extensionServerHello);
+                  WS.lemma_serverHello_representable (Ghost.reveal cse <: GHS.handshake_body_server_hello);
+                  RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
+                  let found = snd res;
+                  if found {
+                    RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
+                      (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
+                    WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
+                    let lsh = ({ L.server_hello_random = randvec;
+                                 L.server_hello_session_id = sidvec;
+                                 L.server_hello_key_share = fst res;
+                                 L.server_hello_cipher_suite = 0x1301us });
                     rewrite (V.pts_to randvec rbytes)
                          as (V.pts_to lsh.L.server_hello_random rbytes);
                     rewrite (V.pts_to sidvec sidbytes)

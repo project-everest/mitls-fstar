@@ -371,24 +371,28 @@ fn get_key_schedule_snapshot
   with master_present_w master_secret_bytes.
     assert (Box.pts_to c.handshake.keys.master_secret.present master_present_w **
             V.pts_to c.handshake.keys.master_secret.secret master_secret_bytes);
-  with client_hs_present_w client_hs_secret client_hs_key client_hs_iv.
+  with client_hs_present_w client_hs_secret client_hs_alg client_hs_key client_hs_iv.
     assert (Box.pts_to c.handshake.keys.client_handshake_traffic.present client_hs_present_w **
             V.pts_to c.handshake.keys.client_handshake_traffic.traffic_secret client_hs_secret **
+            Box.pts_to c.handshake.keys.client_handshake_traffic.alg client_hs_alg **
             V.pts_to c.handshake.keys.client_handshake_traffic.traffic_key client_hs_key **
             V.pts_to c.handshake.keys.client_handshake_traffic.traffic_iv client_hs_iv);
-  with server_hs_present_w server_hs_secret server_hs_key server_hs_iv.
+  with server_hs_present_w server_hs_secret server_hs_alg server_hs_key server_hs_iv.
     assert (Box.pts_to c.handshake.keys.server_handshake_traffic.present server_hs_present_w **
             V.pts_to c.handshake.keys.server_handshake_traffic.traffic_secret server_hs_secret **
+            Box.pts_to c.handshake.keys.server_handshake_traffic.alg server_hs_alg **
             V.pts_to c.handshake.keys.server_handshake_traffic.traffic_key server_hs_key **
             V.pts_to c.handshake.keys.server_handshake_traffic.traffic_iv server_hs_iv);
-  with client_app_present_w client_app_secret client_app_key client_app_iv.
+  with client_app_present_w client_app_secret client_app_alg client_app_key client_app_iv.
     assert (Box.pts_to c.handshake.keys.client_application_traffic.present client_app_present_w **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_secret client_app_secret **
+            Box.pts_to c.handshake.keys.client_application_traffic.alg client_app_alg **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_key client_app_key **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_iv client_app_iv);
-  with server_app_present_w server_app_secret server_app_key server_app_iv.
+  with server_app_present_w server_app_secret server_app_alg server_app_key server_app_iv.
     assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present_w **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_secret server_app_secret **
+            Box.pts_to c.handshake.keys.server_application_traffic.alg server_app_alg **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_key server_app_key **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_iv server_app_iv);
 
@@ -412,7 +416,8 @@ fn get_key_schedule_snapshot
       match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic with
       | Some m ->
         Seq.equal client_hs_secret m.CS.traffic_secret /\
-        Seq.equal client_hs_key m.CS.traffic_key /\
+        CryptoSpec.aead_key_len client_hs_alg == B.length m.CS.traffic_key /\
+        Seq.equal client_hs_key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
         Seq.equal client_hs_iv m.CS.traffic_iv
       | None -> False
     else
@@ -422,7 +427,8 @@ fn get_key_schedule_snapshot
       match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic with
       | Some m ->
         Seq.equal server_hs_secret m.CS.traffic_secret /\
-        Seq.equal server_hs_key m.CS.traffic_key /\
+        CryptoSpec.aead_key_len server_hs_alg == B.length m.CS.traffic_key /\
+        Seq.equal server_hs_key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
         Seq.equal server_hs_iv m.CS.traffic_iv
       | None -> False
     else
@@ -432,7 +438,8 @@ fn get_key_schedule_snapshot
       match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic with
       | Some m ->
         Seq.equal client_app_secret m.CS.traffic_secret /\
-        Seq.equal client_app_key m.CS.traffic_key /\
+        CryptoSpec.aead_key_len client_app_alg == B.length m.CS.traffic_key /\
+        Seq.equal client_app_key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
         Seq.equal client_app_iv m.CS.traffic_iv
       | None -> False
     else
@@ -442,7 +449,8 @@ fn get_key_schedule_snapshot
       match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic with
       | Some m ->
         Seq.equal server_app_secret m.CS.traffic_secret /\
-        Seq.equal server_app_key m.CS.traffic_key /\
+        CryptoSpec.aead_key_len server_app_alg == B.length m.CS.traffic_key /\
+        Seq.equal server_app_key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
         Seq.equal server_app_iv m.CS.traffic_iv
       | None -> False
     else
@@ -492,24 +500,28 @@ fn get_key_schedule_snapshot
   lemma_traffic_key_material_match_present_iff
     client_hs_present_w
     client_hs_secret
+    client_hs_alg
     client_hs_key
     client_hs_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic;
   lemma_traffic_key_material_match_present_iff
     server_hs_present_w
     server_hs_secret
+    server_hs_alg
     server_hs_key
     server_hs_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic;
   lemma_traffic_key_material_match_present_iff
     client_app_present_w
     client_app_secret
+    client_app_alg
     client_app_key
     client_app_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
   lemma_traffic_key_material_match_present_iff
     server_app_present_w
     server_app_secret
+    server_app_alg
     server_app_key
     server_app_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;
@@ -970,6 +982,70 @@ fn get_certificate_verify_signature_snapshot
   snapshot
 }
 
+(** The negotiated AEAD algorithm, read off the accepted ServerHello.  Both
+    endpoints branch on this to derive and install traffic keys.  Before a
+    ServerHello is stored the connection has no negotiated suite, and the ghost
+    [CS.negotiated_aead_alg] defaults to ChaCha20-Poly1305, so this agrees. *)
+fn read_negotiated_aead_alg
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns alg: CryptoSpec.aead_alg
+  ensures connection_exactly c st0 **
+          pure (alg == CS.negotiated_aead_alg st0.CS.cs_model.CS.model_handshake)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  let spec = Ghost.hide st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello;
+  unfold (server_hello_slot_exactly c.handshake.messages.server_hello (Ghost.reveal spec));
+  with stored. _;
+  let value = !c.handshake.messages.server_hello;
+  assert (pure (value == stored));
+  match value {
+    Some message -> {
+      Repr.lemma_option_some_v (Ghost.reveal spec);
+      rewrite
+        (match stored, Ghost.reveal spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_server_hello local model
+         | _, _ -> pure False)
+      as
+        (IM.is_valid_server_hello message (Some?.v (Ghost.reveal spec)));
+      unfold (IM.is_valid_server_hello message (Some?.v (Ghost.reveal spec)));
+      let wire = message.IM.server_hello_cipher_suite;
+      assert (pure (match Sem.serverHello_cipher_suite (Some?.v (Ghost.reveal spec)) with
+                    | Some cs -> IM.cipher_suite_matches wire cs
+                    | None -> False));
+      fold (IM.is_valid_server_hello message (Some?.v (Ghost.reveal spec)));
+      rewrite
+        (IM.is_valid_server_hello message (Some?.v (Ghost.reveal spec)))
+      as
+        (match stored, Ghost.reveal spec with
+         | None, None -> pure True
+         | Some local, Some model -> IM.is_valid_server_hello local model
+         | _, _ -> pure False);
+    fold (server_hello_slot_exactly c.handshake.messages.server_hello (Ghost.reveal spec));
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+      let is_aes = wire = 0x1301us;
+      if is_aes { CryptoSpec.AEAD_AES128_GCM } else { CryptoSpec.AEAD_CHACHA20_POLY1305 }
+    }
+    None -> {
+      assert (pure (Ghost.reveal spec == None));
+    fold (server_hello_slot_exactly c.handshake.messages.server_hello (Ghost.reveal spec));
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+      CryptoSpec.AEAD_CHACHA20_POLY1305
+    }
+  }
+}
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -1300,7 +1376,9 @@ fn can_receive_server_hello
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256 /\
+           pure ((exists (cs:T.cipher_suite).
+                    Sem.serverHello_cipher_suite sh == Some cs /\
+                    H.is_supported_cipher_suite cs) /\
              // Parse-success equation supplied by the caller (see
              // TLS13.Impl.Handle.Handshake): the decoded ServerHello serializes
              // back to the on-the-wire fragment, so its serialized-handshake
@@ -1419,22 +1497,38 @@ fn can_receive_server_hello
         let offered_nonempty = SZ.gt offered_len 0sz;
         let first_cipher = V.op_Array_Access c.handshake.start.cipher_suites.items 0sz;
         let offers_chacha = first_cipher = 0x1303us;
-        if (offered_nonempty && offers_chacha) {
+        let offers_two = SZ.gte offered_len 2sz;
+        let second_cipher =
+          if offers_two { V.op_Array_Access c.handshake.start.cipher_suites.items 1sz }
+          else { 0us };
+        let offers_aes = offers_two && second_cipher = 0x1301us;
+        if (offered_nonempty && offers_chacha && offers_aes) {
           assert (pure (Seq.length cipher_items == max_cipher_suites));
           assert (pure (0 < Seq.length cipher_items));
           assert (pure (SZ.v cipher_len > 0));
           assert (pure (SZ.v offered_len == SZ.v cipher_len));
           assert (pure (start_spec.CS.start_cipher_suites <> []));
           assert (pure (U16.v (Seq.index cipher_items 0) == 0x1303));
+          assert (pure (SZ.v cipher_len >= 2));
+          assert (pure (U16.v (Seq.index cipher_items 1) == 0x1301));
           lemma_cipher_suites_match_first_chacha_offer
             cipher_items
             (SZ.v cipher_len)
             start_spec.CS.start_cipher_suites;
-          assert (pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256));
+          lemma_cipher_suites_match_index_aes_offer
+            cipher_items
+            (SZ.v cipher_len)
+            start_spec.CS.start_cipher_suites
+            1;
           assert (pure (CS.cipher_suite_offered
             start_spec.CS.start_cipher_suites
             T.TLS_CHACHA20_POLY1305_SHA256));
-          assert (pure (H.is_supported_cipher_suite T.TLS_CHACHA20_POLY1305_SHA256));
+          assert (pure (CS.cipher_suite_offered
+            start_spec.CS.start_cipher_suites
+            T.TLS_AES_128_GCM_SHA256));
+          assert (pure (forall (cs:T.cipher_suite).
+            H.is_supported_cipher_suite cs ==>
+            CS.cipher_suite_offered start_spec.CS.start_cipher_suites cs));
 
           let control_ok = tag_ok && stage_ok && role_ok;
           let ok = control_ok && no_server_hello && transcript_room && fragment_fits_sh;
@@ -5046,17 +5140,18 @@ fn server_finished_verify_data_matches
   unfold (traffic_key_material_exactly
     c.handshake.keys.server_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
-  with server_hs_present server_hs_secret server_hs_key server_hs_iv. _;
+  with server_hs_present server_hs_secret server_hs_alg server_hs_key server_hs_iv. _;
   lemma_traffic_key_material_match_present_of_some
     server_hs_present
     server_hs_secret
+    server_hs_alg
     server_hs_key
     server_hs_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic;
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic ==
     Some {
       CS.traffic_secret = server_hs_secret;
-      CS.traffic_key = server_hs_key;
+      CS.traffic_key = CryptoSpec.logical_key server_hs_alg server_hs_key;
       CS.traffic_iv = server_hs_iv;
     }));
   assert (pure ((Ghost.reveal server_hs).CS.traffic_secret == server_hs_secret));
@@ -5203,17 +5298,18 @@ fn client_finished_verify_data_matches
   unfold (traffic_key_material_exactly
     c.handshake.keys.client_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
-  with client_hs_present client_hs_secret client_hs_key client_hs_iv. _;
+  with client_hs_present client_hs_secret client_hs_alg client_hs_key client_hs_iv. _;
   lemma_traffic_key_material_match_present_of_some
     client_hs_present
     client_hs_secret
+    client_hs_alg
     client_hs_key
     client_hs_iv
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic;
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ==
     Some {
       CS.traffic_secret = client_hs_secret;
-      CS.traffic_key = client_hs_key;
+      CS.traffic_key = CryptoSpec.logical_key client_hs_alg client_hs_key;
       CS.traffic_iv = client_hs_iv;
     }));
   assert (pure ((Ghost.reveal client_hs).CS.traffic_secret == client_hs_secret));
@@ -5388,19 +5484,22 @@ fn can_verify_client_finished_runtime
   assert (pure (client_finished_present ==>
     Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
 
-  with client_hs_present_w client_hs_secret client_hs_key client_hs_iv.
+  with client_hs_present_w client_hs_secret client_hs_alg client_hs_key client_hs_iv.
     assert (Box.pts_to c.handshake.keys.client_handshake_traffic.present client_hs_present_w **
             V.pts_to c.handshake.keys.client_handshake_traffic.traffic_secret client_hs_secret **
+            Box.pts_to c.handshake.keys.client_handshake_traffic.alg client_hs_alg **
             V.pts_to c.handshake.keys.client_handshake_traffic.traffic_key client_hs_key **
             V.pts_to c.handshake.keys.client_handshake_traffic.traffic_iv client_hs_iv);
-  with client_app_present_w client_app_secret client_app_key client_app_iv.
+  with client_app_present_w client_app_secret client_app_alg client_app_key client_app_iv.
     assert (Box.pts_to c.handshake.keys.client_application_traffic.present client_app_present_w **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_secret client_app_secret **
+            Box.pts_to c.handshake.keys.client_application_traffic.alg client_app_alg **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_key client_app_key **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_iv client_app_iv);
-  with server_app_present_w server_app_secret server_app_key server_app_iv.
+  with server_app_present_w server_app_secret server_app_alg server_app_key server_app_iv.
     assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present_w **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_secret server_app_secret **
+            Box.pts_to c.handshake.keys.server_application_traffic.alg server_app_alg **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_key server_app_key **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_iv server_app_iv);
 
@@ -5410,6 +5509,10 @@ fn can_verify_client_finished_runtime
   assert (pure (client_hs_present == client_hs_present_w));
   assert (pure (client_app_present == client_app_present_w));
   assert (pure (server_app_present == server_app_present_w));
+  let client_app_alg_v = !c.handshake.keys.client_application_traffic.alg;
+  let server_app_alg_v = !c.handshake.keys.server_application_traffic.alg;
+  assert (pure (client_app_alg_v == client_app_alg));
+  assert (pure (server_app_alg_v == server_app_alg));
 
   with transcript_len. assert (Box.pts_to c.handshake.transcript.len transcript_len);
   let current_transcript_len = !c.handshake.transcript.len;
@@ -5421,6 +5524,7 @@ fn can_verify_client_finished_runtime
     Rec.application_keys_match
       c.records.read
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      client_app_alg_v
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
@@ -5431,6 +5535,7 @@ fn can_verify_client_finished_runtime
     Rec.application_keys_match
       c.records.write
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      server_app_alg_v
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
@@ -5519,18 +5624,21 @@ fn can_verify_client_finished_runtime
       lemma_traffic_key_material_match_present_of_some
         client_hs_present_w
         client_hs_secret
+        client_hs_alg
         client_hs_key
         client_hs_iv
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic;
       lemma_traffic_key_material_match_present_of_some
         client_app_present_w
         client_app_secret
+        client_app_alg
         client_app_key
         client_app_iv
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
       lemma_traffic_key_material_match_present_of_some
         server_app_present_w
         server_app_secret
+        server_app_alg
         server_app_key
         server_app_iv
         st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;
@@ -5598,14 +5706,16 @@ fn server_application_record_keys_installed_runtime
     c.handshake.keys.server_application_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
 
-  with client_app_present_w client_app_secret client_app_key client_app_iv.
+  with client_app_present_w client_app_secret client_app_alg client_app_key client_app_iv.
     assert (Box.pts_to c.handshake.keys.client_application_traffic.present client_app_present_w **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_secret client_app_secret **
+            Box.pts_to c.handshake.keys.client_application_traffic.alg client_app_alg **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_key client_app_key **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_iv client_app_iv);
-  with server_app_present_w server_app_secret server_app_key server_app_iv.
+  with server_app_present_w server_app_secret server_app_alg server_app_key server_app_iv.
     assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present_w **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_secret server_app_secret **
+            Box.pts_to c.handshake.keys.server_application_traffic.alg server_app_alg **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_key server_app_key **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_iv server_app_iv);
 
@@ -5613,6 +5723,10 @@ fn server_application_record_keys_installed_runtime
   let server_app_present = !c.handshake.keys.server_application_traffic.present;
   assert (pure (client_app_present == client_app_present_w));
   assert (pure (server_app_present == server_app_present_w));
+  let client_app_alg_v = !c.handshake.keys.client_application_traffic.alg;
+  let server_app_alg_v = !c.handshake.keys.server_application_traffic.alg;
+  assert (pure (client_app_alg_v == client_app_alg));
+  assert (pure (server_app_alg_v == server_app_alg));
 
   V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_key;
   V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
@@ -5620,6 +5734,7 @@ fn server_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.read
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      client_app_alg_v
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
@@ -5630,6 +5745,7 @@ fn server_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.write
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      server_app_alg_v
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
@@ -5657,12 +5773,14 @@ fn server_application_record_keys_installed_runtime
     lemma_traffic_key_material_match_present_of_some
       client_app_present_w
       client_app_secret
+      client_app_alg
       client_app_key
       client_app_iv
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
     lemma_traffic_key_material_match_present_of_some
       server_app_present_w
       server_app_secret
+      server_app_alg
       server_app_key
       server_app_iv
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;
@@ -5705,14 +5823,16 @@ fn client_application_record_keys_installed_runtime
     c.handshake.keys.server_application_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
 
-  with client_app_present_w client_app_secret client_app_key client_app_iv.
+  with client_app_present_w client_app_secret client_app_alg client_app_key client_app_iv.
     assert (Box.pts_to c.handshake.keys.client_application_traffic.present client_app_present_w **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_secret client_app_secret **
+            Box.pts_to c.handshake.keys.client_application_traffic.alg client_app_alg **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_key client_app_key **
             V.pts_to c.handshake.keys.client_application_traffic.traffic_iv client_app_iv);
-  with server_app_present_w server_app_secret server_app_key server_app_iv.
+  with server_app_present_w server_app_secret server_app_alg server_app_key server_app_iv.
     assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present_w **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_secret server_app_secret **
+            Box.pts_to c.handshake.keys.server_application_traffic.alg server_app_alg **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_key server_app_key **
             V.pts_to c.handshake.keys.server_application_traffic.traffic_iv server_app_iv);
 
@@ -5720,6 +5840,10 @@ fn client_application_record_keys_installed_runtime
   let server_app_present = !c.handshake.keys.server_application_traffic.present;
   assert (pure (client_app_present == client_app_present_w));
   assert (pure (server_app_present == server_app_present_w));
+  let client_app_alg_v = !c.handshake.keys.client_application_traffic.alg;
+  let server_app_alg_v = !c.handshake.keys.server_application_traffic.alg;
+  assert (pure (client_app_alg_v == client_app_alg));
+  assert (pure (server_app_alg_v == server_app_alg));
 
   V.to_array_pts_to c.handshake.keys.server_application_traffic.traffic_key;
   V.to_array_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
@@ -5727,6 +5851,7 @@ fn client_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.read
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      server_app_alg_v
       (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
@@ -5737,6 +5862,7 @@ fn client_application_record_keys_installed_runtime
     Rec.application_keys_match
       c.records.write
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      client_app_alg_v
       (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
   V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
@@ -5764,12 +5890,14 @@ fn client_application_record_keys_installed_runtime
     lemma_traffic_key_material_match_present_of_some
       client_app_present_w
       client_app_secret
+      client_app_alg
       client_app_key
       client_app_iv
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
     lemma_traffic_key_material_match_present_of_some
       server_app_present_w
       server_app_secret
+      server_app_alg
       server_app_key
       server_app_iv
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;

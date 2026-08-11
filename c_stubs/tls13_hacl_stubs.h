@@ -54,4 +54,28 @@ bool tls13_hacl_chacha20_poly1305_open_combined(
     const uint8_t *ciphertext_and_tag,
     size_t ciphertext_and_tag_len);
 
+/* Whether this build/CPU can run AES-128-GCM.  The ClientHello offer is
+   filtered on this so we never negotiate a suite we cannot execute. */
+bool tls13_hacl_aes128_gcm_available(void);
+
+bool tls13_hacl_aes128_gcm_seal_combined(
+    uint8_t *ciphertext_and_tag,
+    size_t ciphertext_and_tag_len,
+    const uint8_t key[16],
+    const uint8_t nonce[12],
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *plaintext,
+    size_t plaintext_len);
+
+bool tls13_hacl_aes128_gcm_open_combined(
+    uint8_t *plaintext,
+    size_t plaintext_len,
+    const uint8_t key[16],
+    const uint8_t nonce[12],
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *ciphertext_and_tag,
+    size_t ciphertext_and_tag_len);
+
 #endif

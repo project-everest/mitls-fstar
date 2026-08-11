@@ -4,7 +4,7 @@
 #   usage: test/interop/oracle.sh [catalog.tsv] [out.tsv] [parallelism]
 #
 # Reports what an *unverified* TLS 1.3 client (OpenSSL) constrained to exactly
-# ATLAS's offer -- X25519, TLS_CHACHA20_POLY1305_SHA256, and
+# ATLAS's offer -- X25519, {TLS_CHACHA20_POLY1305_SHA256, TLS_AES_128_GCM_SHA256}, and
 # {rsa_pss_rsae_sha256, ecdsa_secp256r1_sha256} -- achieves against each host,
 # with hostname verification enabled.
 #
@@ -24,7 +24,7 @@ run_one() {
   local out rc detail
   out=$(timeout 25 openssl s_client -connect "$connect_host:443" \
           -servername "$connect_host" -tls1_3 -groups X25519 \
-          -ciphersuites TLS_CHACHA20_POLY1305_SHA256 \
+          -ciphersuites TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256 \
           -sigalgs rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256 \
           -verify_hostname "$connect_host" -verify_return_error \
           </dev/null 2>&1)

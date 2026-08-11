@@ -383,7 +383,7 @@ fn install_server_handshake_write_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
             st0.CS.cs_model
@@ -407,7 +407,7 @@ fn install_server_handshake_write_traffic_keys_from_material
              };
            }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
            st0
@@ -443,7 +443,7 @@ fn install_client_handshake_read_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
             st0.CS.cs_model
@@ -467,7 +467,7 @@ fn install_client_handshake_read_traffic_keys_from_material
              };
            }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
            st0
@@ -503,7 +503,7 @@ fn install_server_application_write_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
             st0.CS.cs_model
@@ -527,7 +527,7 @@ fn install_server_application_write_traffic_keys_from_material
             };
            }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
            st0
@@ -563,7 +563,7 @@ fn install_client_application_read_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
             st0.CS.cs_model
@@ -587,7 +587,7 @@ fn install_client_application_read_traffic_keys_from_material
             };
            }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
            st0

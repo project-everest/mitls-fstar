@@ -7,13 +7,13 @@ entries of the Tranco top-1m that negotiate TLS 1.3, in rank order, plus
 
 ## ATLAS's offer
 
-ATLAS currently offers exactly one group, one cipher suite and two signature
+ATLAS currently offers exactly one group, two cipher suites and two signature
 schemes:
 
 | Parameter | Value |
 |---|---|
 | Group | `X25519` |
-| Cipher suite | `TLS_CHACHA20_POLY1305_SHA256` (`0x1303`) |
+| Cipher suites | `TLS_CHACHA20_POLY1305_SHA256` (`0x1303`), `TLS_AES_128_GCM_SHA256` (`0x1301`) |
 | Signature schemes | `rsa_pss_rsae_sha256` (`0x0804`), `ecdsa_secp256r1_sha256` (`0x0403`) |
 
 The **oracle** column is OpenSSL constrained to *exactly* that offer, with
@@ -29,13 +29,14 @@ real-world signature schemes are RSA-PSS and ECDSA P-256.
 |---|---|
 | ATLAS OK, before this round of fixes | 54 / 101 |
 | ATLAS OK, after the four bug fixes | 77 / 101 |
-| ATLAS OK, after cross-record handshake reassembly | **83 / 101** |
-| Oracle ceiling (ATLAS's offer, best case) | 83 / 101 |
+| ATLAS OK, after cross-record handshake reassembly | 83 / 101 |
+| ATLAS OK, after AES-128-GCM negotiation | **88 / 101** |
+| Oracle ceiling (ATLAS's offer, best case) | 88 / 101 |
 | Remaining ATLAS gap (oracle OK, ATLAS fails) | **0** |
-| Beyond ATLAS's offer, or genuinely unservable | 18 |
+| Beyond ATLAS's offer, or genuinely unservable | 13 |
 
-**ATLAS now reaches its crypto ceiling.**  Every one of the 101 sites that a
-client with ATLAS's offer can reach at all, ATLAS reaches.  The remaining 18
+**ATLAS reaches its crypto ceiling.**  Every one of the 101 sites that a
+client with ATLAS's offer can reach at all, ATLAS reaches.  The remaining 13
 are refused by the OpenSSL oracle under the same offer, so they are not ATLAS
 defects; lifting them is a matter of widening the offer (see "Beyond ATLAS's
 offer" below), not of fixing the implementation.
@@ -62,6 +63,10 @@ offer" below), not of fixing the implementation.
 4. **ECDSA P-256 not offered.** Adding `ecdsa_secp256r1_sha256` to the default
    offer raised the achievable ceiling from 80 to 83 and unblocked several
    sites that serve only ECDSA credentials.
+5. **AES-128-GCM not offered.** ChaCha20-Poly1305 was the only suite ATLAS
+   could negotiate.  Several large properties (Amazon, Azure, Skype,
+   `cloud.microsoft`, `windows.com`) offer only AES-GCM.  Adding
+   `TLS_AES_128_GCM_SHA256` lifted the ceiling from 83 to 88.
 
 A fifth defect was in the harness, not in ATLAS: the per-host anchor extractor
 fetched chains *unconstrained*, so dual-credential servers returned a chain
@@ -129,22 +134,80 @@ in scope, as part of a three-way mutual induction
 restates the record-material flagship with that gate discharged, so no
 top-level theorem is weakened.
 
-### Beyond ATLAS's offer (15 sites)
+### Beyond ATLAS's offer (10 sites)
 
 | Missing capability | Sites |
 |---|---|
-| AES-128-GCM (no ChaCha20) | amazon.com, azure.com, cloud.microsoft, skype.com, windows.com, windows.net, trbcdn.net (also needs P-384) |
-| AES-128-GCM **and** secp256r1 | bing.com, live.com, msn.com, office.com, outlook.com, sharepoint.com, microsoft.com, office365.com |
+| `secp256r1` key exchange | bing.com, live.com, msn.com, office.com, outlook.com, sharepoint.com, microsoft.com, office365.com |
+| `secp384r1` **and** `TLS_AES_256_GCM_SHA384` | trbcdn.net |
+| unreachable over TLS 1.3 under any offer | edgekey.net |
 
-The oracle fails on all of these too.  Adding `TLS_AES_128_GCM_SHA256` and
-`secp256r1` is the single highest-value follow-up: it would lift the ceiling
-from 83 to ~99.
+The oracle fails on all of these too.  Adding `secp256r1` is the single
+highest-value follow-up: it would lift the ceiling from 88 to ~96.  The eight
+Microsoft properties fail with `workflow exhausted fuel` rather than a clean
+alert because the server RSTs the connection when the offered group list has
+no acceptable entry, which ATLAS reports as "no data yet" (see "Diagnostic-only
+issue" below).
 
 ### Genuinely unservable at the apex (3 sites)
 
-googlevideo.com and edgekey.net present certificates that do not match the
-apex hostname; domaincontrol.com serves a self-signed certificate.  ATLAS
-correctly rejects all three, as does the oracle.
+googlevideo.com and windows.net present certificates that do not match the
+apex hostname (`www.google.com` and `reroute443.microsoft.com` respectively);
+domaincontrol.com serves a self-signed certificate.  ATLAS correctly rejects
+all three, as does the oracle.  `www.google.com` and `www.microsoft.com` both
+complete a full 1-RTT handshake and return `HTTP/1.1 200 OK`.
+
+### Next capability: `secp256r1` (NIST P-256)
+
+`secp256r1` is the NIST P-256 elliptic curve, TLS named group `0x0017`.  It is
+the *other* universally deployed TLS 1.3 key-exchange group besides X25519, and
+it is the only one the eight remaining Microsoft properties accept.  Adding it
+is worth ~8 sites (88 -> ~96).
+
+**HACL\* has everything required**, in `Hacl_P256` (already listed in
+`HACL_ACCEL_C_MODULES`, alongside its `Hacl_Bignum` dependency):
+
+| Function | Use |
+|---|---|
+| `Hacl_P256_dh_initiator(pk[64], sk[32])` | public key from private key, raw `X‖Y` |
+| `Hacl_P256_dh_responder(ss[64], their_pk[64], sk[32])` | ECDH; TLS uses the **first 32 bytes** (the X coordinate) as the shared secret |
+| `Hacl_P256_raw_to_uncompressed(pk_raw[64], pk[65])` | raw `X‖Y` to the TLS wire encoding `0x04‖X‖Y` |
+| `Hacl_P256_uncompressed_to_raw(pk[65], pk_raw[64])` | inverse |
+| `Hacl_P256_validate_public_key` / `_private_key` | point and scalar validation |
+
+Two facts keep the change bounded:
+
+* The **shared secret is 32 bytes** for both groups (P-256 contributes only its
+  X coordinate), so `C.secret`, the key schedule and every derived-key proof are
+  untouched.
+* `KeyShareEntry` is already `opaque key_exchange<1..2^16-1>` carrying a group
+  id, and `TLS13.Wire.Semantics.ch_find_key_share` already walks a *list* of
+  entries.  The ClientHello can therefore offer both shares with no wire-format
+  change -- only a new `kse_list_find_secp256r1` companion to
+  `kse_list_find_x25519`.
+
+What is *not* free is the public-key type.  `C.x25519_public` is
+`bytes_of_len 32`; a P-256 share is 65 bytes.  Widening it is the bulk of the
+work.  The recommended design mirrors what this commit did for the AEAD
+algorithm: **recover the group from the public-key length** --
+
+```fstar
+type kex_group = | KEX_X25519 | KEX_SECP256R1
+let kex_public_len (g:kex_group) : n:nat{n == 32 \/ n == 65} = ...
+let kex_group_of_public_len (n:nat) : kex_group = if n = 65 then KEX_SECP256R1 else KEX_X25519
+```
+
+with a roundtrip lemma carried as an `SMTPat`, so no separate group field has
+to be threaded and "the peer installed the same share" keeps implying "the peer
+uses the same group".  Private keys are 32 bytes for both groups, so only the
+public type widens.
+
+The ~800 `x25519` mentions in `src/` overstate the cost: 400+ are *names* of
+predicates and lemmas (`x25519_key_share_projection`, `x25519_reachable_shape`)
+whose statements do not change.  The load-bearing sites are
+`x25519_public_from_private` (95), `x25519_shared` (62) and `x25519_public`
+(12).  HelloRetryRequest is not implemented, so the client must send **both**
+shares in its first flight rather than negotiate a group.
 
 ### Diagnostic-only issue
 
@@ -159,104 +222,104 @@ Columns: rank, host, ATLAS status, ATLAS detail, oracle status.
 
 | # | Host | ATLAS | Detail | Oracle |
 |---|---|---|---|---|
-| 1 | google.com | OK | — | OK |
-| 2 | cloudflare.com | OK | — | OK |
-| 3 | gstatic.com | OK | — | OK |
-| 4 | facebook.com | OK | — | OK |
+| 1 | google.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 2 | cloudflare.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 3 | gstatic.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 4 | facebook.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 5 | microsoft.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 6 | googleapis.com | OK | — | OK |
-| 7 | youtube.com | OK | — | OK |
-| 8 | amazonaws.com | OK | — | OK |
-| 9 | apple.com | OK | — | OK |
-| 10 | instagram.com | OK | — | OK |
-| 11 | fbcdn.net | OK | — | OK |
-| 12 | twitter.com | OK | — | OK |
-| 13 | dzen.ru | OK | — | OK |
-| 14 | linkedin.com | OK | — | OK |
+| 6 | googleapis.com | OK | HTTP/1.1 404 Not Found | OK |
+| 7 | youtube.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 8 | amazonaws.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 9 | apple.com | OK | HTTP/1.1 301 Redirect | OK |
+| 10 | instagram.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 11 | fbcdn.net | OK | HTTP/1.1 302 Found | OK |
+| 12 | twitter.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 13 | dzen.ru | OK | HTTP/1.1 302 Found | OK |
+| 14 | linkedin.com | OK | HTTP/1.1 200 OK | OK |
 | 15 | office.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
 | 16 | googlevideo.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 17 | googletagmanager.com | OK | — | OK |
+| 17 | googletagmanager.com | OK | HTTP/1.1 404 Not Found | OK |
 | 18 | live.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
-| 19 | amazon.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 20 | azure.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
+| 19 | amazon.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 20 | azure.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 21 | domaincontrol.com | NOANCHOR | no system root anchors this host under the ATLAS offer | FAIL |
 | 22 | bing.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
-| 23 | github.com | OK | — | OK |
-| 24 | wikipedia.org | OK | — | OK |
-| 25 | whatsapp.net | OK | — | OK |
-| 26 | appsflyersdk.com | OK | — | OK |
-| 27 | googleusercontent.com | OK | — | OK |
-| 28 | doubleclick.net | OK | — | OK |
-| 29 | netflix.com | OK | — | OK |
-| 30 | wordpress.org | OK | — | OK |
+| 23 | github.com | OK | HTTP/1.1 200 OK | OK |
+| 24 | wikipedia.org | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 25 | whatsapp.net | OK | HTTP/1.1 302 Found | OK |
+| 26 | appsflyersdk.com | OK | HTTP/1.1 403 Forbidden | OK |
+| 27 | googleusercontent.com | OK | HTTP/1.1 404 Not Found | OK |
+| 28 | doubleclick.net | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 29 | netflix.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 30 | wordpress.org | OK | HTTP/1.1 200 OK | OK |
 | 31 | sharepoint.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
-| 32 | skype.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 33 | digicert.com | OK | — | OK |
-| 34 | youtu.be | OK | — | OK |
-| 35 | gandi.net | OK | — | OK |
-| 36 | goo.gl | OK | — | OK |
-| 37 | x.com | OK | — | OK |
+| 32 | skype.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 33 | digicert.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 34 | youtu.be | OK | HTTP/1.1 303 See Other | OK |
+| 35 | gandi.net | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 36 | goo.gl | OK | HTTP/1.1 400 Bad Request | OK |
+| 37 | x.com | OK | HTTP/1.1 200 OK | OK |
 | 38 | outlook.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
-| 39 | pinterest.com | OK | — | OK |
-| 40 | cloud.microsoft | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 41 | tiktok.com | OK | — | OK |
-| 42 | roblox.com | OK | — | OK |
-| 43 | icloud.com | OK | — | OK |
-| 44 | whatsapp.com | OK | — | OK |
-| 45 | yahoo.com | OK | — | OK |
-| 46 | googledomains.com | OK | — | OK |
+| 39 | pinterest.com | OK | HTTP/1.1 308 Permanent Redirect | OK |
+| 40 | cloud.microsoft | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 41 | tiktok.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 42 | roblox.com | OK | HTTP/1.1 308 Permanent Redirect | OK |
+| 43 | icloud.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 44 | whatsapp.com | OK | HTTP/1.1 302 Found | OK |
+| 45 | yahoo.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 46 | googledomains.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 47 | msn.com | HANDSHAKE | connect: workflow exhausted fuel | FAIL |
-| 48 | cloudflare.net | OK | — | OK |
-| 49 | googlesyndication.com | OK | — | OK |
-| 50 | spotify.com | OK | — | OK |
+| 48 | cloudflare.net | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 49 | googlesyndication.com | OK | HTTP/1.1 302 Found | OK |
+| 50 | spotify.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 51 | windows.net | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 52 | adobe.com | OK | — | OK |
-| 53 | chatgpt.com | OK | — | OK |
-| 54 | wa.me | OK | — | OK |
-| 55 | myfritz.net | OK | — | OK |
-| 56 | vimeo.com | OK | — | OK |
-| 57 | zoom.us | OK | — | OK |
-| 58 | windows.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
+| 52 | adobe.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 53 | chatgpt.com | OK | HTTP/1.1 403 Forbidden | OK |
+| 54 | wa.me | OK | HTTP/1.1 302 Found | OK |
+| 55 | myfritz.net | OK | HTTP/1.1 302 Found | OK |
+| 56 | vimeo.com | OK | HTTP/1.1 200 OK | OK |
+| 57 | zoom.us | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 58 | windows.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 59 | edgekey.net | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 60 | tiktokv.com | OK | — | OK |
-| 61 | qq.com | OK | — | OK |
-| 62 | yandex.net | OK | — | OK |
-| 63 | opera.com | OK | — | OK |
-| 64 | cloudflare-dns.com | OK | — | OK |
-| 65 | mozilla.org | OK | — | OK |
-| 66 | nic.ru | OK | — | OK |
-| 67 | samsung.com | OK | — | OK |
-| 68 | nginx.com | OK | — | OK |
-| 69 | yandex.ru | OK | — | OK |
-| 70 | wordpress.com | OK | — | OK |
-| 71 | sentry.io | OK | — | OK |
-| 72 | reddit.com | OK | — | OK |
-| 73 | ui.com | OK | — | OK |
-| 74 | workers.dev | OK | — | OK |
-| 75 | blogspot.com | OK | — | OK |
+| 60 | tiktokv.com | OK | HTTP/1.1 404 Not Found | OK |
+| 61 | qq.com | OK | HTTP/1.1 200 OK | OK |
+| 62 | yandex.net | OK | HTTP/1.1 302 Found | OK |
+| 63 | opera.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 64 | cloudflare-dns.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 65 | mozilla.org | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 66 | nic.ru | OK | HTTP/1.1 200 OK | OK |
+| 67 | samsung.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 68 | nginx.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 69 | yandex.ru | OK | HTTP/1.1 302 Moved temporarily | OK |
+| 70 | wordpress.com | OK | HTTP/1.1 200 OK | OK |
+| 71 | sentry.io | OK | HTTP/1.1 302 Found | OK |
+| 72 | reddit.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 73 | ui.com | OK | HTTP/1.1 200 OK | OK |
+| 74 | workers.dev | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 75 | blogspot.com | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 76 | office365.com | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 77 | okcdn.ru | OK | — | OK |
-| 78 | t.me | OK | — | OK |
-| 79 | discord.gg | OK | — | OK |
-| 80 | bit.ly | OK | — | OK |
-| 81 | google-analytics.com | OK | — | OK |
-| 82 | b-cdn.net | OK | — | OK |
-| 83 | europa.eu | OK | — | OK |
-| 84 | criteo.com | OK | — | OK |
-| 85 | vk.com | OK | — | OK |
-| 86 | github.io | OK | — | OK |
-| 87 | snapchat.com | OK | — | OK |
-| 88 | openai.com | OK | — | OK |
-| 89 | amazonvideo.com | OK | — | OK |
-| 90 | apache.org | OK | — | OK |
-| 91 | app-measurement.com | OK | — | OK |
-| 92 | nih.gov | OK | — | OK |
-| 93 | app-analytics-services.com | OK | — | OK |
-| 94 | amazon-adsystem.com | OK | — | OK |
-| 95 | vkuserphoto.ru | OK | — | OK |
+| 77 | okcdn.ru | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 78 | t.me | OK | HTTP/1.1 302 Found | OK |
+| 79 | discord.gg | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 80 | bit.ly | OK | HTTP/1.1 302 Found | OK |
+| 81 | google-analytics.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 82 | b-cdn.net | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 83 | europa.eu | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 84 | criteo.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 85 | vk.com | OK | HTTP/1.1 302 Found | OK |
+| 86 | github.io | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 87 | snapchat.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 88 | openai.com | OK | HTTP/1.1 403 Forbidden | OK |
+| 89 | amazonvideo.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 90 | apache.org | OK | HTTP/1.1 200 OK | OK |
+| 91 | app-measurement.com | OK | HTTP/1.1 404 Not Found | OK |
+| 92 | nih.gov | OK | HTTP/1.1 200 OK | OK |
+| 93 | app-analytics-services.com | OK | HTTP/1.1 404 Not Found | OK |
+| 94 | amazon-adsystem.com | OK | HTTP/1.1 404 Not Found | OK |
+| 95 | vkuserphoto.ru | OK | HTTP/1.1 301 Moved Permanently | OK |
 | 96 | trbcdn.net | HANDSHAKE | connect: verified protocol step failed | FAIL |
-| 97 | prodregistryv2.org | OK | — | OK |
-| 98 | dns.google | OK | — | OK |
-| 99 | intuit.com | OK | — | OK |
-| 100 | forms.gle | OK | — | OK |
-| 101 | nytimes.com | OK | — | OK |
+| 97 | prodregistryv2.org | OK | HTTP/1.1 404 Not Found | OK |
+| 98 | dns.google | OK | HTTP/1.1 200 OK | OK |
+| 99 | intuit.com | OK | HTTP/1.1 301 Moved Permanently | OK |
+| 100 | forms.gle | OK | HTTP/1.1 400 Bad Request | OK |
+| 101 | nytimes.com | OK | HTTP/1.1 200 OK | OK |

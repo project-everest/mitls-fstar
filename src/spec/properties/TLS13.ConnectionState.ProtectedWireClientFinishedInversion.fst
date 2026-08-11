@@ -560,6 +560,7 @@ let lemma_server_prefix_model
         p.CS.model_config == cfg /\
         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
+        p.CS.model_handshake.CS.hs_server_hello == Some sh /\
         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
 =
   let m0 = CS.initial_model cfg in
@@ -635,7 +636,8 @@ let lemma_install_step_preserves_transcript
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
       (requires is_key_install_ev ev /\ CS.step_model m ev == Some m1)
-      (ensures m1.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript)
+      (ensures m1.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript /\
+               m1.CS.model_handshake.CS.hs_server_hello == m.CS.model_handshake.CS.hs_server_hello)
 = ()
 #pop-options
 
@@ -647,7 +649,8 @@ let rec lemma_region_preserves_transcript_sent
       (requires
         L.for_all is_key_install_ev evs /\
         SMReplay.conn_events_sent_seal_replay m evs rs rr final)
-      (ensures final.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript)
+      (ensures final.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript /\
+               final.CS.model_handshake.CS.hs_server_hello == m.CS.model_handshake.CS.hs_server_hello)
       (decreases evs)
 =
   match evs with
@@ -676,7 +679,8 @@ let rec lemma_region_preserves_transcript_received
       (requires
         L.for_all is_key_install_ev evs /\
         SMReplay.conn_events_received_decode_replay m evs rs rr final)
-      (ensures final.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript)
+      (ensures final.CS.model_handshake.CS.hs_transcript == m.CS.model_handshake.CS.hs_transcript /\
+               final.CS.model_handshake.CS.hs_server_hello == m.CS.model_handshake.CS.hs_server_hello)
       (decreases evs)
 =
   match evs with
@@ -713,6 +717,7 @@ let lemma_client_prefix_model
         p.CS.model_config == cfg /\
         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
+        p.CS.model_handshake.CS.hs_server_hello == Some sh /\
         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
 =
   let m0 = CS.initial_model cfg in
@@ -1819,6 +1824,7 @@ let lemma_server_prefix_model_recv
         p.CS.model_config == cfg /\
         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloSent /\
         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some server_shared /\
+        p.CS.model_handshake.CS.hs_server_hello == Some sh /\
         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
 =
   let m0 = CS.initial_model cfg in
@@ -1900,6 +1906,7 @@ let lemma_client_prefix_model_sent
         p.CS.model_config == cfg /\
         p.CS.model_control == CS.ControlHandshaking CS.HsServerHelloReceived /\
         p.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == Some client_shared /\
+        p.CS.model_handshake.CS.hs_server_hello == Some sh /\
         p.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh)
 =
   let m0 = CS.initial_model cfg in
@@ -2230,6 +2237,7 @@ let client_pkg (s:sysp)
   Some? mc.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
   mc.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
     s.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+  mc.CS.model_handshake.CS.hs_server_hello == Some sh /\
   mc.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
   Seq.equal s.client.CS.cs_wire_log.CL.raw_sent
     (B.append (W.serialize_record T.Handshake (W.serialize_handshake (M.ClientHello ch))) fl_sent) /\
@@ -2268,6 +2276,7 @@ let server_pkg (s:sysp)
   Some? ms.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
   ms.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
     s.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+  ms.CS.model_handshake.CS.hs_server_hello == Some sh /\
   ms.CS.model_handshake.CS.hs_transcript == server_prefix_transcript ch sh /\
   SCShape.log_has_no_received_ccs server_rest /\
   CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello ch)) d_ch /\
@@ -3080,7 +3089,9 @@ let lemma_preflight_align
         | Some client_secret, Some server_secret -> Seq.equal client_secret server_secret
         | _, _ -> False) /\
         Seq.equal mc.CS.model_handshake.CS.hs_transcript
-                  ms.CS.model_handshake.CS.hs_transcript)
+                  ms.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg mc.CS.model_handshake ==
+          CS.negotiated_aead_alg ms.CS.model_handshake)
       (ensures PWBase.write_read_record_material_aligned mc ms)
   =
   lemma_redundant_cw_install_identity mc mat_write;
@@ -3264,6 +3275,11 @@ let lemma_finish_cf (s:sysp)
     (W.serialize_handshake (M.ServerHello sh_s))
     (W.serialize_handshake (M.ServerHello sh_c))
     rest_ss sh_rest_c ss;
+  (* ---- ServerHello agreement: same serialized bytes, injective codec ---- *)
+  Inj.lemma_serialize_handshake_server_hello_injective sh_s sh_c;
+  assert (sh_s == sh_c);
+  assert (CS.negotiated_aead_alg mc.CS.model_handshake ==
+          CS.negotiated_aead_alg ms.CS.model_handshake);
   (* ---- transcript equality ---- *)
   lemma_transcript_cong ch_s ch_c sh_s sh_c;
   assert (Seq.equal mc.CS.model_handshake.CS.hs_transcript

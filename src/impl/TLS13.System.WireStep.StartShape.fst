@@ -23,7 +23,8 @@ let client_start_shape (m:CS.connection_model) : prop =
    | Some start -> CS.start_matches_config m.CS.model_config start
    | None -> True)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#restart-solver
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 80 --split_queries always"
 (** A single legal step preserves `client_start_shape`. **)
 let lemma_step_model_preserves_client_start_shape
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)

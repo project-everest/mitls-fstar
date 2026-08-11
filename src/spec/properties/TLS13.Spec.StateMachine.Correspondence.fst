@@ -231,7 +231,12 @@ let paired_x25519_key_shares
           C.x25519_public_from_private client_sk == start.start_client_key_share_public /\
           C.x25519_public_from_private server_sk == selection.server_key_share_public /\
           C.x25519_shared client_sk sh_ks == Some client_shared /\
-          C.x25519_shared server_sk ch_ks == Some server_shared
+          C.x25519_shared server_sk ch_ks == Some server_shared /\
+          // The two endpoints negotiated the same AEAD algorithm.  Both read it
+          // off their own stored ServerHello; the server's is the message it
+          // sent and the client's is the message it received, so this holds for
+          // any pair of genuinely peered endpoints.
+          negotiated_aead_alg client_hs == negotiated_aead_alg server_hs
         | _, _ -> False)
      | _, _, _, _ -> False)
   | _, _, _, _ -> False

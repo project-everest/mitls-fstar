@@ -259,6 +259,18 @@ fn get_certificate_verify_signature_snapshot
                   SZ.v snapshot.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
+(** The negotiated AEAD algorithm, read off the accepted ServerHello.  Both
+    endpoints branch on this to derive and install traffic keys.  Before a
+    ServerHello is stored the connection has no negotiated suite, and the ghost
+    [CS.negotiated_aead_alg] defaults to ChaCha20-Poly1305, so this agrees. *)
+fn read_negotiated_aead_alg
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns alg: CryptoSpec.aead_alg
+  ensures connection_exactly c st0 **
+          pure (alg == CS.negotiated_aead_alg st0.CS.cs_model.CS.model_handshake)
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -323,7 +335,9 @@ fn can_receive_server_hello
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256 /\
+           pure ((exists (cs:T.cipher_suite).
+               Sem.serverHello_cipher_suite sh == Some cs /\
+               H.is_supported_cipher_suite cs) /\
              // Parse-success equation supplied by the caller (see
              // TLS13.Impl.Handle.Handshake): the decoded ServerHello serializes
              // back to the on-the-wire fragment, so its serialized-handshake

@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -62,20 +63,23 @@ fn store_optional_secret
 fn store_traffic_key_material
   (slot:traffic_key_material_storage)
   (traffic_secret_src:array U8.t)
+  (alg:CryptoSpec.aead_alg)
   (traffic_key_src:array U8.t)
   (traffic_iv_src:array U8.t)
   (#material:erased CS.traffic_key_material)
   requires (exists* prev. traffic_key_material_exactly slot prev) **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
-           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
+           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
+           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+           pure (CryptoSpec.aead_key_len alg == B.length material.CS.traffic_key)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
 {
   with prev. unfold (traffic_key_material_exactly slot prev);
-  with old_present old_secret old_key old_iv. _;
+  with old_present old_secret old_alg old_key old_iv. _;
+  slot.alg := alg;
   ArrPts.pts_to_len traffic_secret_src;
   ArrPts.pts_to_len traffic_key_src;
   ArrPts.pts_to_len traffic_iv_src;
@@ -96,7 +100,7 @@ fn store_traffic_key_material
   with stored_key. assert (V.pts_to slot.traffic_key stored_key);
   with stored_iv. assert (V.pts_to slot.traffic_iv stored_iv);
   assert (pure (stored_secret == (Ghost.reveal material).CS.traffic_secret));
-  assert (pure (stored_key == (Ghost.reveal material).CS.traffic_key));
+  assert (pure (stored_key == CryptoSpec.pad_key_32 (Ghost.reveal material).CS.traffic_key));
   assert (pure (stored_iv == (Ghost.reveal material).CS.traffic_iv));
   fold (traffic_key_material_exactly slot (Some (Ghost.reveal material)))
 }
@@ -215,8 +219,9 @@ fn free_traffic_key_material_exactly (slot:traffic_key_material_storage)
   ensures emp
 {
   with spec. unfold (traffic_key_material_exactly slot spec);
-  with present secret key iv. _;
+  with present secret alg key iv. _;
   Box.free slot.present;
+  Box.free slot.alg;
   V.free slot.traffic_secret;
   V.free slot.traffic_key;
   V.free slot.traffic_iv;
@@ -890,10 +895,13 @@ fn alloc_empty_traffic_key_material ()
 {
   let present = Box.alloc false;
   let traffic_secret = V.alloc 0uy 32sz;
+  let alg = Box.alloc CryptoSpec.AEAD_CHACHA20_POLY1305;
   let traffic_key = V.alloc 0uy 32sz;
   let traffic_iv = V.alloc 0uy 12sz;
-  let slot = { present; traffic_secret; traffic_key; traffic_iv };
+  let slot = { present; traffic_secret; alg; traffic_key; traffic_iv };
   rewrite (Box.pts_to present false) as (Box.pts_to slot.present false);
+  rewrite (Box.pts_to alg CryptoSpec.AEAD_CHACHA20_POLY1305) as
+    (Box.pts_to slot.alg CryptoSpec.AEAD_CHACHA20_POLY1305);
   rewrite (V.pts_to traffic_secret (Seq.create 32 0uy)) as
     (V.pts_to slot.traffic_secret (Seq.create 32 0uy));
   rewrite (V.pts_to traffic_key (Seq.create 32 0uy)) as
@@ -915,20 +923,30 @@ fn alloc_default_cipher_suites ()
             default_connection_config.CS.config_cipher_suites
 {
   let items = V.alloc 0x1303us (max_cipher_suites_sz);
-  let len = Box.alloc 1sz;
+  V.op_Array_Assignment items 1sz 0x1301us;
+  let contents = Ghost.hide (Seq.upd (Seq.create max_cipher_suites 0x1303us) 1 0x1301us);
+  let len = Box.alloc 2sz;
   let slot = { items; len };
-  rewrite (V.pts_to items (Seq.create max_cipher_suites 0x1303us)) as
-    (V.pts_to slot.items (Seq.create max_cipher_suites 0x1303us));
-  rewrite (Box.pts_to len 1sz) as (Box.pts_to slot.len 1sz);
-  assert (pure (Seq.length (Seq.create max_cipher_suites 0x1303us) == max_cipher_suites));
+  rewrite (V.pts_to items (Ghost.reveal contents)) as
+    (V.pts_to slot.items (Ghost.reveal contents));
+  rewrite (Box.pts_to len 2sz) as (Box.pts_to slot.len 2sz);
   Seq.lemma_index_create max_cipher_suites 0x1303us 0;
-  assert (pure (Seq.index (Seq.create max_cipher_suites 0x1303us) 0 == 0x1303us));
+  assert (pure (Seq.length (Ghost.reveal contents) == max_cipher_suites));
+  assert (pure (Seq.index (Ghost.reveal contents) 0 == 0x1303us));
+  assert (pure (Seq.index (Ghost.reveal contents) 1 == 0x1301us));
+  let tail = Ghost.hide (Seq.slice (Ghost.reveal contents) 1 (Seq.length (Ghost.reveal contents)));
+  assert (pure (Seq.index (Ghost.reveal tail) 0 == 0x1301us));
   assert_norm (IM.cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256);
+  assert_norm (IM.cipher_suite_matches 0x1301us T.TLS_AES_128_GCM_SHA256);
   assert_norm (default_connection_config.CS.config_cipher_suites ==
-    [T.TLS_CHACHA20_POLY1305_SHA256]);
+    [T.TLS_CHACHA20_POLY1305_SHA256; T.TLS_AES_128_GCM_SHA256]);
   assert (pure (IM.cipher_suites_match
-    (Seq.create max_cipher_suites 0x1303us)
+    (Ghost.reveal tail)
     1
+    [T.TLS_AES_128_GCM_SHA256]));
+  assert (pure (IM.cipher_suites_match
+    (Ghost.reveal contents)
+    2
     default_connection_config.CS.config_cipher_suites));
   fold (cipher_suite_list_exactly
     slot

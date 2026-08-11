@@ -495,14 +495,14 @@ let lemma_ch_extensions_connect (c:GCH.clientHello) =
   lemma_connect_sa (c.GCH.extensions <: list GECH.extensionClientHello) None None false []
 
 // A (non-HRR) ServerHello is representable iff it selects an X25519 key share (32
-// bytes) and the CHACHA20_POLY1305_SHA256 cipher suite.  Matches
+// bytes) and one of the supported cipher suites.  Matches
 // is_valid_server_hello (Sem.serverHello_random is always Some on this arm).
 let serverHello_representable (b:GSH.serverHello) : GTot bool =
   (match Sem.serverHello_key_share_x25519 b with
    | Some k -> B.length k = 32
    | None -> false) &&
   (match Sem.serverHello_cipher_suite b with
-   | Some cs -> cs = T.TLS_CHACHA20_POLY1305_SHA256
+   | Some cs -> H.is_supported_cipher_suite cs
    | None -> false)
 
 // EncryptedExtensions is representable iff its ALPN protocol name (if any) is <=
@@ -860,7 +860,7 @@ let parse_supported_server_hello_impl (input:B.bytes)
       Some {
         random = random;
         key_share = key_share;
-        cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        cipher_suite = SHC.server_hello_selected_suite input;
       }
     | _, _ -> None
   else if SHC.server_hello_ok_90 input then
@@ -869,7 +869,7 @@ let parse_supported_server_hello_impl (input:B.bytes)
       Some {
         random = random;
         key_share = key_share;
-        cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        cipher_suite = SHC.server_hello_selected_suite input;
       }
     | _, _ -> None
   else None
@@ -890,7 +890,7 @@ let lemma_parse_supported_server_hello_fields (input:B.bytes)
       (ensures (
         match parse_supported_server_hello input with
         | Some sh ->
-          sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+          sh.cipher_suite == SHC.server_hello_selected_suite input /\
           Seq.equal sh.random (Seq.slice input 6 38) /\
           ((SHC.server_hello_ok_84 input /\
             Seq.equal sh.key_share (Seq.slice input 84 116)) \/

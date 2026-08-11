@@ -1,6 +1,34 @@
 #include "tls13_crypto_external.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "tls13_hacl_stubs.h"
+
+/* ATLAS's default ClientHello offers TLS_AES_128_GCM_SHA256 alongside
+   TLS_CHACHA20_POLY1305_SHA256 (see [default_connection_config] in
+   TLS13.Impl.ConnectionState.Repr.fsti).  HACL* ships AES-GCM only as Vale
+   assembly, so a build without the accelerated modules cannot honour an offer
+   it makes.  Fail at compile time rather than emit a client that negotiates a
+   suite it cannot implement. */
+#ifndef TLS13_HACL_HAS_AESGCM
+#define TLS13_HACL_HAS_AESGCM 0
+#endif
+#if !TLS13_HACL_HAS_AESGCM
+#error "ATLAS offers TLS_AES_128_GCM_SHA256; build with HACL_ACCEL=1 (x86_64 Linux)"
+#endif
+
+/* The seal bindings are assumed *total* functions in F*: their postconditions
+   pin the output buffer to [C.aead_seal ...] unconditionally.
+   The only way the backend can fail is if the running CPU lacks AES-NI /
+   PCLMULQDQ, in which case EverCrypt refuses to create the AEAD state.  Silently
+   returning leaves the caller reading uninitialised memory, so abort instead:
+   an assumption that cannot be met must be loud. */
+static void tls13_aead_backend_failed(const char *what) {
+  fprintf(stderr, "ATLAS: %s failed; the CPU does not provide the required "
+                  "AEAD backend\n", what);
+  abort();
+}
 
 void TLS13_Crypto_sha256_empty(uint8_t *out) {
   (void)tls13_hacl_sha256(out, NULL, 0);
@@ -85,8 +113,10 @@ void TLS13_Crypto_chacha20_poly1305_seal(
     uint8_t *plain,
     size_t plain_len,
     uint8_t *out) {
-  (void)tls13_hacl_chacha20_poly1305_seal_combined(
-      out, plain_len + 16, key, nonce, aad, aad_len, plain, plain_len);
+  if (!tls13_hacl_chacha20_poly1305_seal_combined(
+          out, plain_len + 16, key, nonce, aad, aad_len, plain, plain_len)) {
+    tls13_aead_backend_failed("ChaCha20-Poly1305 seal");
+  }
 }
 
 bool TLS13_Crypto_chacha20_poly1305_open(
@@ -97,9 +127,32 @@ bool TLS13_Crypto_chacha20_poly1305_open(
     uint8_t *cipher,
     size_t cipher_len,
     uint8_t *out) {
-  if (cipher_len < 16) {
-    return false;
-  }
   return tls13_hacl_chacha20_poly1305_open_combined(
+      out, cipher_len - 16, key, nonce, aad, aad_len, cipher, cipher_len);
+}
+
+void TLS13_Crypto_aes128_gcm_seal(
+    uint8_t *key,
+    uint8_t *nonce,
+    uint8_t *aad,
+    size_t aad_len,
+    uint8_t *plain,
+    size_t plain_len,
+    uint8_t *out) {
+  if (!tls13_hacl_aes128_gcm_seal_combined(
+          out, plain_len + 16, key, nonce, aad, aad_len, plain, plain_len)) {
+    tls13_aead_backend_failed("AES-128-GCM seal");
+  }
+}
+
+bool TLS13_Crypto_aes128_gcm_open(
+    uint8_t *key,
+    uint8_t *nonce,
+    uint8_t *aad,
+    size_t aad_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    uint8_t *out) {
+  return tls13_hacl_aes128_gcm_open_combined(
       out, cipher_len - 16, key, nonce, aad, aad_len, cipher, cipher_len);
 }

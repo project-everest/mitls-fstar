@@ -502,17 +502,43 @@ fn finished_verify_data
 
 fn derive_traffic_key
   (traffic_secret: array U8.t)
+  (alg: C.aead_alg)
   (out: array U8.t)
   requires pts_to traffic_secret 'secret_bytes **
           pts_to out 'old **
            pure (B.length 'secret_bytes == 32 /\ B.length 'old == 32)
   ensures pts_to traffic_secret 'secret_bytes **
-          pts_to out (K.derive_aead_key (Ghost.reveal 'secret_bytes))
+          pts_to out (C.pad_key_32
+                       (K.derive_aead_key alg (Ghost.reveal 'secret_bytes)))
 {
   let mut lbl = [| 0uy; 3sz |];
   write_label_key lbl;
   let mut empty_context = [| 0uy; 0sz |];
-  hkdf_expand_label traffic_secret lbl 3sz empty_context 0sz out 32sz;
+  match alg {
+    C.AEAD_CHACHA20_POLY1305 -> {
+    hkdf_expand_label traffic_secret lbl 3sz empty_context 0sz out 32sz;
+    with produced. assert (pts_to out produced);
+    assert (pure (Seq.equal produced
+      (C.pad_key_32 (K.derive_aead_key C.AEAD_CHACHA20_POLY1305
+                                       (Ghost.reveal 'secret_bytes)))));
+    }
+    C.AEAD_AES128_GCM -> {
+    (* A 16-byte AES-128 key is stored zero-padded to 32 bytes: zero the whole
+       buffer, then overwrite the 16-byte prefix with the derived key. *)
+    let mut zeros = [| 0uy; 32sz |];
+    pts_to_len out;
+    pts_to_len zeros;
+    Pulse.Lib.Array.memcpy 32sz zeros out;
+    let mut k16 = [| 0uy; 16sz |];
+    hkdf_expand_label traffic_secret lbl 3sz empty_context 0sz k16 16sz;
+    pts_to_len k16;
+    let _ = Pulse.Lib.Array.memcpy_l 16sz k16 out;
+    with produced. assert (pts_to out produced);
+    assert (pure (Seq.equal produced
+      (C.pad_key_32 (K.derive_aead_key C.AEAD_AES128_GCM
+                                       (Ghost.reveal 'secret_bytes)))));
+    }
+  }
 }
 
 fn derive_traffic_iv

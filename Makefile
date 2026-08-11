@@ -491,6 +491,7 @@ BUNDLE_IMPL_MODULES = \
   $(SERIALIZER_MODULES) \
   $(PARSER_MODULES) \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
   TLS13.KeySchedule \
   TLS13.Record
 
@@ -508,7 +509,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
   TLS13.Impl.Handle.Local,$(SERIALIZER_INTERNAL_MODULES),$(PARSER_INTERNAL_MODULES),\
   TLS13.Impl.Messages,\
-  TLS13.KeySchedule,TLS13.Record
+  TLS13.AEAD,TLS13.KeySchedule,TLS13.Record
 
 # Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
 # models remain under src/spec/assumptions.
@@ -551,6 +552,7 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Handle.Handshake \
   TLS13.Impl.Handle.Local \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client \
@@ -609,6 +611,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.ConnectionState.LocalSend \
   TLS13.Impl.ConnectionState.LocalApp \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Server.Types \
@@ -875,11 +878,16 @@ HACL_ACCEL_C_MODULES = \
   EverCrypt_HMAC \
   EverCrypt_HKDF \
   EverCrypt_Curve25519 \
-  Hacl_Curve25519_64
+  EverCrypt_AEAD \
+  EverCrypt_Chacha20Poly1305 \
+  Hacl_Curve25519_64 \
+  Hacl_P256 \
+  Hacl_Bignum
 HACL_ACCEL_ASM_MODULES = \
   cpuid-x86_64-linux \
   sha256-x86_64-linux \
-  curve25519-x86_64-linux
+  curve25519-x86_64-linux \
+  aesgcm-x86_64-linux
 HACL_ACCEL_MODULES = $(HACL_ACCEL_C_MODULES) $(HACL_ACCEL_ASM_MODULES)
 HACL_ACCEL_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_obj
 HACL_ACCEL_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_benchmark_obj
@@ -932,6 +940,7 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -DATLAS_ENABLE_LOGGING=$(ATLAS_LOGGING) \
   -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
   -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
   -I c_stubs \
   -I runtime \
   -I $(HACL_ACCEL_CONFIG_DIR) \
@@ -1134,6 +1143,7 @@ check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
 	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
 	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+	  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
 	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
@@ -1160,6 +1170,9 @@ test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(HACL_TEST_OBJECTS) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Record.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_AEAD.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_ArrayCopy.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
 	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \

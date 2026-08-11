@@ -1616,7 +1616,7 @@ fn process_install_server_handshake_write_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1638,7 +1638,7 @@ fn process_install_server_handshake_write_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -1676,7 +1676,7 @@ fn process_install_server_handshake_write_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1761,7 +1761,7 @@ fn process_install_client_handshake_read_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1783,7 +1783,7 @@ fn process_install_client_handshake_read_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -1821,7 +1821,7 @@ fn process_install_client_handshake_read_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1906,7 +1906,7 @@ fn process_install_server_application_write_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1928,7 +1928,7 @@ fn process_install_server_application_write_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -1966,7 +1966,7 @@ fn process_install_server_application_write_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1986,7 +1986,7 @@ fn process_install_client_application_read_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -2008,7 +2008,7 @@ fn process_install_client_application_read_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -2046,7 +2046,7 @@ fn process_install_client_application_read_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);

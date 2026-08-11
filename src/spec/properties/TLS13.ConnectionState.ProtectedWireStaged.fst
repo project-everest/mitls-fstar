@@ -135,6 +135,8 @@ let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
         Seq.equal
           server_flight_sender.model_handshake.hs_transcript
           server_flight_receiver.model_handshake.hs_transcript /\
+        negotiated_aead_alg server_flight_sender.model_handshake ==
+          negotiated_aead_alg server_flight_receiver.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\

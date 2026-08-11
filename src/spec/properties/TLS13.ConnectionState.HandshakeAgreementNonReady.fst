@@ -107,7 +107,8 @@ let lemma_paired_x25519_key_shares_nonready
           assert (C.x25519_public_from_private server_sk ==
             selection.server_key_share_public);
           assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+          assert (negotiated_aead_alg client_hs == negotiated_aead_alg server_hs)
         | _, _ -> assert False)
      | _, _ -> assert False)
   | _, _, _, _, _, _, _, _ -> assert False
@@ -188,7 +189,8 @@ let lemma_paired_x25519_key_shares_nonready_cf
           assert (C.x25519_public_from_private server_sk ==
             selection.server_key_share_public);
           assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+          assert (negotiated_aead_alg client_hs == negotiated_aead_alg server_hs)
         | _, _ -> assert False)
      | _, _ -> assert False)
   | _, _, _, _, _, _, _, _ -> assert False
