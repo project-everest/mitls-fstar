@@ -1155,9 +1155,11 @@ let record_app_epoch_coupling (m:CS.connection_model) : prop =
 
 (* Verifies immediately under --admit_except: what defeats it in situ is the
    Z3 state accumulated over this module, enlarged by the agentic merge, not
-   the goal.  Reset the solver instead of raising fuel/rlimit. *)
+   the goal.  Reset the solver instead of raising fuel/ifuel.  The rlimit has
+   to be generous because F*'s `fly_deps` changes the declaration context this
+   query is encoded against. *)
 #restart-solver
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 100 --split_queries always"
 let lemma_step_record_app_epoch_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
