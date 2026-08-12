@@ -23,6 +23,43 @@ of any client with ATLAS's crypto -- it is not an ATLAS defect.
 Empirical note: **zero** of the 101 sites serve an Ed25519 certificate.  The
 real-world signature schemes are RSA-PSS and ECDSA P-256.
 
+### The catalog tests apex names, which are often *not* the browsable site
+
+Tranco ranks registrable domains, so the catalog connects to the **apex**
+(`microsoft.com`), not the host a browser ends up on (`www.microsoft.com`).
+For many large properties these are different servers with different TLS
+stacks, and the apex is frequently a bare redirector with a much narrower
+offer:
+
+| Host | Frontend | X25519 | ChaCha20 | Serves |
+|---|---|---|---|---|
+| `www.microsoft.com` | Akamai (`e13678.dscb.akamaiedge.net`) | yes | yes | the site |
+| `microsoft.com` | Microsoft/SChannel (`150.171.109.230`) | **no** | **no** | `301` to `www` |
+
+("no" = TLS 1.3 `handshake_failure`, alert 40, when that is the only group or
+the only cipher suite offered.  Measured over IPv4; the test host has no IPv6
+route, so the AAAA record `2603:1061:14:190::1` was not probed.)
+
+This is worth stating explicitly because it produces a genuinely confusing
+observation: the Chromium ATLAS provider demo
+(`runtime/chromium/README.md`, `launch-chrome.sh --public https://www.microsoft.com/`)
+reached Microsoft long before ATLAS supported either AES-128-GCM or P-256 --
+because it was talking to the Akamai `www` host, which accepts X25519 and
+ChaCha20.  The apex accepts neither.  Both facts are true at once; they are
+simply different servers.
+
+The catalog therefore tests a strictly harder target than everyday browsing.
+That is deliberate -- the narrow apex redirectors are what exposed both the
+AEAD and the key-exchange gaps -- but a failure row for `example.com` should
+not be read as "the site is unreachable".
+
+Related: a browser reaches these apexes by a route ATLAS deliberately does not
+implement.  Chrome key-shares X25519, receives a `HelloRetryRequest`, and
+retries with P-256.  ATLAS rejects HRR outright
+(`TLS13.Spec.StateMachine.fst`, `HelloRetryRequestRejected`) to stay strictly
+1-RTT, so it must guess the group correctly in the first flight.  That is why
+the fix was to offer *both* key shares up front rather than to implement HRR.
+
 ## Summary
 
 | | Sites |
@@ -192,8 +229,14 @@ Two conclusions:
 * **A NIST curve is the only missing capability.**  Neither AES-256-GCM/SHA-384
   nor the SHA-384 signature algorithms unblock a single host on their own.
   These servers simply do not offer X25519; with P-256 (or P-384) in the offer
-  they complete under ChaCha20-Poly1305 or AES-128-GCM and `rsa_pss_rsae_sha256`.
-  So neither a 384-bit hash in the key schedule nor a third AEAD is needed.
+  they complete under AES-128-GCM and `rsa_pss_rsae_sha256`.  So neither a
+  384-bit hash in the key schedule nor a third AEAD is needed.
+
+  Note that all eight also reject `TLS_CHACHA20_POLY1305_SHA256`, so
+  AES-128-GCM (landed earlier, in `705710cd7`) was a *prerequisite* for this
+  group of hosts, not an independent win.  Neither capability reaches them
+  alone; the 83 -> 88 -> 96 progression in the summary table is the order the
+  two landed, not two disjoint sets of hosts.
 * **The remaining 5 are unreachable by any correct client.**  Four
   (googlevideo.com, windows.net, www.edgekey.net, trbcdn.net) return
   `hostname mismatch` at the apex and one (domaincontrol.com) serves a
