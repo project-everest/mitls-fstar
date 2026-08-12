@@ -189,8 +189,8 @@ let rec lemma_list_drop_length (#a:Type) (l:list a)
 let rec reveal_sh_key_share
   (l:list GESH.extensionServerHello)
   (decided:bool)
-  (key_share:option (B.bytes_of_len 32))
-  : GTot (option (B.bytes_of_len 32)) (decreases l)
+  (key_share:option sh_kex_share)
+  : GTot (option sh_kex_share) (decreases l)
   = if decided then key_share
     else match l with
       | [] -> None
@@ -198,9 +198,7 @@ let rec reveal_sh_key_share
         (match e with
          | GESH.Extension_data_key_share kse ->
            reveal_sh_key_share tl true
-             (if GNG.X25519? kse.GKSE.group
-              then reveal_key_exchange_to_key32 kse.GKSE.key_exchange
-              else None)
+             (reveal_key_exchange_to_share kse.GKSE.group kse.GKSE.key_exchange)
          | _ -> reveal_sh_key_share tl false None)
 
 let lemma_sh_key_share_nil decided key_share = ()
@@ -215,10 +213,7 @@ let rec lemma_reveal_sh_key_share_connect l =
   | GESH.Extension_data_key_share kse :: tl ->
       lemma_sh_key_share_cons (GESH.Extension_data_key_share kse) tl false None;
       lemma_sh_key_share_decided tl
-        (if GNG.X25519? kse.GKSE.group
-         then reveal_key_exchange_to_key32 kse.GKSE.key_exchange
-         else None);
-      lemma_reveal_key_exchange_to_key32 kse.GKSE.key_exchange
+        (reveal_key_exchange_to_share kse.GKSE.group kse.GKSE.key_exchange)
   | e :: tl ->
       lemma_sh_key_share_cons e tl false None;
       lemma_reveal_sh_key_share_connect tl

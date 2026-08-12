@@ -1293,14 +1293,18 @@ fn build_server_hello_from_arrays
 {
   let random_vec = V.alloc 0uy 32sz;
   let session_id_vec = V.alloc 0uy 32sz;
-  let key_share_vec = V.alloc 0uy 32sz;
+  (* Key shares are stored at the widest offered width (65 bytes); this server
+     role only ever offers X25519, so its 32-byte share is zero-padded and the
+     group tag is X25519. *)
+  let key_share_vec = V.alloc 0uy 65sz;
   CR.copy_fixed32_array_to_vec server_random random_vec;
   CR.copy_fixed32_array_to_vec session_id session_id_vec;
-  CR.copy_fixed32_array_to_vec server_key_share key_share_vec;
+  CR.copy_padded32_array_to_vec65 server_key_share key_share_vec;
   let lsh = {
     IM.server_hello_random = random_vec;
     IM.server_hello_session_id = session_id_vec;
     IM.server_hello_key_share = key_share_vec;
+    IM.server_hello_kex_group = CryptoSpec.KexX25519;
     IM.server_hello_cipher_suite = 0x1303us;
   };
   with random_bytes. assert (V.pts_to random_vec random_bytes);
@@ -1308,7 +1312,8 @@ fn build_server_hello_from_arrays
   with key_share_bytes. assert (V.pts_to key_share_vec key_share_bytes);
   assert (pure (Seq.equal random_bytes (Ghost.reveal 'server_random_bytes)));
   assert (pure (Seq.equal session_id_vec_bytes (Ghost.reveal 'session_id_bytes)));
-  assert (pure (Seq.equal key_share_bytes (Ghost.reveal 'server_key_share_bytes)));
+  assert (pure (Seq.equal key_share_bytes
+    (CryptoSpec.pad_share_65 (Ghost.reveal 'server_key_share_bytes))));
   assert_norm (IM.cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256);
   rewrite (V.pts_to random_vec random_bytes)
     as (V.pts_to lsh.IM.server_hello_random random_bytes);
@@ -3010,6 +3015,7 @@ fn process_send_server_finished_serialized
   assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic ==
     Some {
       CS.traffic_secret = sh_secret;
+      CS.traffic_alg = sh_alg;
       CS.traffic_key = CryptoSpec.logical_key sh_alg sh_key;
       CS.traffic_iv = sh_iv;
     }));

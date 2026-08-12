@@ -562,11 +562,10 @@ fn mark_received_server_hello
     c.handshake.server_key_share
     st0.CS.cs_model.CS.model_handshake);
   unfold (optional_fixed_bytes_exactly
-    c.handshake.server_key_share
-    32
-    (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None));
+    ({ present = c.handshake.server_key_share.present;
+       bytes = c.handshake.server_key_share.bytes })
+    65
+    (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
   with old_server_key_share_present old_server_key_share_storage. _;
 
   c.control.handshake_stage_tag := 3uy;
@@ -599,23 +598,29 @@ fn mark_received_server_hello
   V.to_array_pts_to lsh.IM.server_hello_key_share;
   V.to_array_pts_to c.handshake.server_key_share.bytes;
   Arr.memcpy
-    32sz
+    65sz
     (V.vec_to_array lsh.IM.server_hello_key_share)
     (V.vec_to_array c.handshake.server_key_share.bytes);
   V.to_vec_pts_to lsh.IM.server_hello_key_share;
   V.to_vec_pts_to c.handshake.server_key_share.bytes;
   c.handshake.server_key_share.present := true;
+  (* The group the server named travels with the bytes; it is stored, never
+     recovered from the buffer's width. *)
+  c.handshake.server_key_share.group := lsh.IM.server_hello_kex_group;
   with copied_server_key_share. assert (V.pts_to c.handshake.server_key_share.bytes copied_server_key_share);
-  assert (pure (Some? (CS.server_hello_key_share (Ghost.reveal sh)) /\
-    Seq.equal copied_server_key_share (Some?.v (CS.server_hello_key_share (Ghost.reveal sh)))));
-  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (CS.server_hello_key_share (Ghost.reveal sh))));
+  assert (pure (Some? (CS.server_hello_kex (Ghost.reveal sh)) /\
+    Seq.equal copied_server_key_share
+      (CryptoSpec.pad_share_65 (dsnd (Some?.v (CS.server_hello_kex (Ghost.reveal sh)))))));
+  assert (pure (optional_fixed_bytes_match true copied_server_key_share 65
+    (match CS.server_hello_kex (Ghost.reveal sh) with
+     | Some (| _, k |) -> Some (CryptoSpec.pad_share_65 k)
+     | None -> None)));
   lemma_received_server_hello_state_server_hello st0 sh (Ghost.reveal 'raw_bytes);
   fold (optional_fixed_bytes_exactly
-    c.handshake.server_key_share
-    32
-    (match (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None));
+    ({ present = c.handshake.server_key_share.present;
+       bytes = c.handshake.server_key_share.bytes })
+    65
+    (server_kex_bytes (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake));
   fold (server_key_share_exactly
     c.handshake.server_key_share
     (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
@@ -1017,6 +1022,10 @@ fn mark_received_client_hello
   fold (handshake_buffers_exactly
     c.handshake.buffers
     (received_client_hello_state st0 ch (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  assert (pure ((received_client_hello_state st0 ch (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+                st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure (server_kex (received_client_hello_state st0 ch (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake ==
+                server_kex st0.CS.cs_model.CS.model_handshake));
   fold (server_key_share_exactly
     c.handshake.server_key_share
     (received_client_hello_state st0 ch (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
@@ -3465,7 +3474,7 @@ fn apply_received_server_finished
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
     as (Rec.is_record_state
@@ -3476,7 +3485,7 @@ fn apply_received_server_finished
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -3994,7 +4003,7 @@ fn mark_received_client_finished
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
     as (Rec.is_record_state
@@ -4005,7 +4014,7 @@ fn mark_received_client_finished
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -4349,6 +4358,7 @@ fn mark_received_key_update
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic ==
     Some {
       CS.traffic_secret = old_secret;
+      CS.traffic_alg = old_alg;
       CS.traffic_key = CryptoSpec.logical_key old_alg old_key;
       CS.traffic_iv = old_iv;
     }));
@@ -4403,19 +4413,19 @@ fn mark_received_key_update
   assert (pure (R.install_keys
     st0.CS.cs_model.CS.model_record.CS.record_read
     R.Application
-    (Ghost.reveal material).CS.traffic_key
+    rotate_alg (Ghost.reveal material).CS.traffic_key
     (Ghost.reveal material).CS.traffic_iv ==
     R.install_keys
       (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read)
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      rotate_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state
     c.records.read
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      rotate_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -4629,6 +4639,7 @@ fn mark_server_received_key_update
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic ==
     Some {
       CS.traffic_secret = old_secret;
+      CS.traffic_alg = old_alg;
       CS.traffic_key = CryptoSpec.logical_key old_alg old_key;
       CS.traffic_iv = old_iv;
     }));
@@ -4683,19 +4694,19 @@ fn mark_server_received_key_update
   assert (pure (R.install_keys
     st0.CS.cs_model.CS.model_record.CS.record_read
     R.Application
-    (Ghost.reveal material).CS.traffic_key
+    rotate_alg (Ghost.reveal material).CS.traffic_key
     (Ghost.reveal material).CS.traffic_iv ==
     R.install_keys
       (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read)
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      rotate_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state
     c.records.read
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      rotate_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read

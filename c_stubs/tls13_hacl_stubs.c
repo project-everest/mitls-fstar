@@ -11,6 +11,7 @@
 #include "Hacl_HKDF.h"
 #include "Hacl_HMAC.h"
 #include "Hacl_Hash_SHA2.h"
+#include "Hacl_P256.h"
 #include "Lib_RandomBuffer_System.h"
 
 #ifndef TLS13_HACL_HAS_ACCEL
@@ -191,6 +192,45 @@ bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8
 #else
   return Hacl_Curve25519_51_ecdh(out, (uint8_t *)sk, (uint8_t *)pk);
 #endif
+}
+
+/* secp256r1 (NIST P-256) ECDH.
+
+   TLS 1.3 puts the peer's share on the wire in the uncompressed SEC1 encoding,
+   0x04 || X || Y, so 65 bytes; HACL* works with the 64-byte raw X || Y form,
+   hence the conversions.  RFC 8446 section 7.4.2 takes the shared secret to be
+   the 32-byte X coordinate only, so the low 32 bytes of the 64-byte HACL*
+   output are what feeds the key schedule. */
+bool tls13_hacl_p256_public_from_private(uint8_t out[65], const uint8_t sk[32]) {
+  uint8_t raw[64];
+  if (out == NULL || sk == NULL) {
+    return false;
+  }
+  if (!Hacl_P256_dh_initiator(raw, (uint8_t *)sk)) {
+    return false;
+  }
+  Hacl_P256_raw_to_uncompressed(raw, out);
+  return true;
+}
+
+bool tls13_hacl_p256_shared(uint8_t out[32], const uint8_t sk[32],
+                            const uint8_t pk[65]) {
+  uint8_t their_raw[64];
+  uint8_t shared[64];
+  if (out == NULL || sk == NULL || pk == NULL) {
+    return false;
+  }
+  if (!Hacl_P256_uncompressed_to_raw((uint8_t *)pk, their_raw)) {
+    return false;
+  }
+  if (!Hacl_P256_validate_public_key(their_raw)) {
+    return false;
+  }
+  if (!Hacl_P256_dh_responder(shared, their_raw, (uint8_t *)sk)) {
+    return false;
+  }
+  memcpy(out, shared, 32);
+  return true;
 }
 
 bool tls13_hacl_chacha20_poly1305_seal_combined(

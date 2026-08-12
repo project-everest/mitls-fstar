@@ -11,6 +11,7 @@ module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module Sem = TLS13.Wire.Semantics
+module CryptoSpec = TLS13.Crypto.Spec
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
@@ -88,7 +89,12 @@ noeq
 type server_hello = {
   server_hello_random: V.vec U8.t;
   server_hello_session_id: V.vec U8.t;
+  (* 65 bytes: the widest group ATLAS offers, with the share zero-padded.
+     [server_hello_kex_group] is the group the server named in its
+     `KeyShareEntry` and says which prefix is the logical share; it is never
+     recovered from the buffer's length. *)
   server_hello_key_share: V.vec U8.t;
+  server_hello_kex_group: CryptoSpec.kex_group;
   server_hello_cipher_suite: U16.t;
 }
 
@@ -505,12 +511,15 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slpro
       Seq.equal session_id (Sem.serverHello_session_id_echo_32 m) /\
       V.is_full_vec l.server_hello_key_share /\
       V.length l.server_hello_random == 32 /\
-      V.length l.server_hello_key_share == 32 /\
+      V.length l.server_hello_key_share == 65 /\
       (match Sem.serverHello_random m with
        | Some r -> Seq.equal random r
        | None -> False) /\
-      (match Sem.serverHello_key_share_x25519 m with
-       | Some k -> B.length k == 32 /\ Seq.equal key_share k
+      (match Sem.serverHello_kex_share m with
+       | Some (g, k) ->
+         Seq.equal key_share (CryptoSpec.pad_share_65 k) /\
+         l.server_hello_kex_group == Sem.kex_group_of_named_group g /\
+         B.length k == CryptoSpec.kex_public_len l.server_hello_kex_group
        | None -> False) /\
       (match Sem.serverHello_cipher_suite m with
        | Some cs ->

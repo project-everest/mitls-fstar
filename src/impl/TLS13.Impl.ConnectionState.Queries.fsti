@@ -327,7 +327,7 @@ fn can_send_client_hello_runtime
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
               <= max_transcript_len - max_client_hello_len /\
-            517 <= SZ.v network_out_len)
+            544 <= SZ.v network_out_len)
 
 fn can_receive_server_hello
   (c:connection_state)

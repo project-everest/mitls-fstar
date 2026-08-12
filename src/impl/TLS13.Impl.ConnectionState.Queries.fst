@@ -1243,7 +1243,7 @@ fn can_send_client_hello_runtime
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
               <= max_transcript_len - max_client_hello_len /\
-            517 <= SZ.v network_out_len)
+            544 <= SZ.v network_out_len)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -1282,8 +1282,8 @@ fn can_send_client_hello_runtime
   let transcript_bound = SZ.sub max_transcript_len_sz max_client_hello_len_sz;
   let transcript_room = sizet_lte_plain transcript_len transcript_bound;
   lemma_sizet_lte_plain transcript_len transcript_bound;
-  let out_room = sizet_lte_plain 517sz network_out_len;
-  lemma_sizet_lte_plain 517sz network_out_len;
+  let out_room = sizet_lte_plain 544sz network_out_len;
+  lemma_sizet_lte_plain 544sz network_out_len;
   let ok =
     role_ok &&
     (tag = 1uy) &&
@@ -1298,7 +1298,7 @@ fn can_send_client_hello_runtime
     assert (pure (start_present == true));
     assert (pure (ch_present == false));
     assert (pure (SZ.v transcript_len <= max_transcript_len - max_client_hello_len));
-    assert (pure (517 <= SZ.v network_out_len));
+    assert (pure (544 <= SZ.v network_out_len));
     rewrite (handshake_start_payload_exactly
       c.handshake.start
       start_present
@@ -5151,6 +5151,7 @@ fn server_finished_verify_data_matches
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic ==
     Some {
       CS.traffic_secret = server_hs_secret;
+      CS.traffic_alg = server_hs_alg;
       CS.traffic_key = CryptoSpec.logical_key server_hs_alg server_hs_key;
       CS.traffic_iv = server_hs_iv;
     }));
@@ -5309,6 +5310,7 @@ fn client_finished_verify_data_matches
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ==
     Some {
       CS.traffic_secret = client_hs_secret;
+      CS.traffic_alg = client_hs_alg;
       CS.traffic_key = CryptoSpec.logical_key client_hs_alg client_hs_key;
       CS.traffic_iv = client_hs_iv;
     }));

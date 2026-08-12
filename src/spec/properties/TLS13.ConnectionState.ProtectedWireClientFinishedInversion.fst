@@ -1434,7 +1434,7 @@ let rec lemma_received_replay_preserves_config
 let client_write_keys_installed (m:CS.connection_model) (material:CS.traffic_key_material) : prop =
   m.CS.model_record.CS.record_write ==
     R.install_keys m.CS.model_record.CS.record_write R.Handshake
-      material.CS.traffic_key material.CS.traffic_iv
+      material.CS.traffic_alg material.CS.traffic_key material.CS.traffic_iv
 
 let client_write_material_matches (m:CS.connection_model) (material:CS.traffic_key_material) : prop =
   CS.traffic_install_matches_key_schedule
@@ -1583,7 +1583,7 @@ let rec lemma_cw_region_write_installed
 let server_read_keys_installed (m:CS.connection_model) (material:CS.traffic_key_material) : prop =
   m.CS.model_record.CS.record_read ==
     R.install_keys m.CS.model_record.CS.record_read R.Handshake
-      material.CS.traffic_key material.CS.traffic_iv
+      material.CS.traffic_alg material.CS.traffic_key material.CS.traffic_iv
 
 let server_read_material_matches (m:CS.connection_model) (material:CS.traffic_key_material) : prop =
   CS.traffic_install_matches_key_schedule_for_role CS.ServerEndpoint

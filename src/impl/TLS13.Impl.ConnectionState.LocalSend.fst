@@ -278,6 +278,7 @@ fn mark_sent_client_finished
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic ==
     Some {
       CS.traffic_secret = ca_secret;
+      CS.traffic_alg = ca_alg;
       CS.traffic_key = CryptoSpec.logical_key ca_alg ca_key;
       CS.traffic_iv = ca_iv;
     }));
@@ -308,6 +309,7 @@ fn mark_sent_client_finished
     R.install_keys
       (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
       R.Application
+      ca_alg_runtime
       (CryptoSpec.logical_key ca_alg ca_key)
       ca_iv));
   rewrite (Rec.is_record_state
@@ -321,6 +323,7 @@ fn mark_sent_client_finished
     (R.install_keys
       (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
       R.Application
+      ca_alg_runtime
       (CryptoSpec.logical_key ca_alg ca_key)
       ca_iv))
     as (Rec.is_record_state
@@ -550,6 +553,7 @@ fn try_send_client_finished
     assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic ==
       Some {
         CS.traffic_secret = ch_secret;
+        CS.traffic_alg = ch_alg;
         CS.traffic_key = CryptoSpec.logical_key ch_alg ch_key;
         CS.traffic_iv = ch_iv;
       }));
@@ -1838,6 +1842,7 @@ fn try_send_key_update
       assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic ==
         Some {
           CS.traffic_secret = old_secret;
+          CS.traffic_alg = old_alg;
           CS.traffic_key = CryptoSpec.logical_key old_alg old_key;
           CS.traffic_iv = old_iv;
         }));
@@ -1871,6 +1876,7 @@ fn try_send_key_update
 
       let traffic_secret = Ghost.hide traffic_secret_bytes;
       let material = Ghost.hide (CS.traffic_key_material_for_secret (rotate_alg) (Ghost.reveal traffic_secret));
+      assert (pure ((Ghost.reveal material).CS.traffic_alg == rotate_alg));
       assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
       assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
       assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
@@ -1981,7 +1987,7 @@ fn try_send_key_update
       assert (pure (R.install_keys
         (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
         R.Application
-        (Ghost.reveal material).CS.traffic_key
+        rotate_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv ==
         (sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_record.CS.record_write));
       rewrite (Rec.is_record_state
@@ -1989,7 +1995,7 @@ fn try_send_key_update
         (R.install_keys
           (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
           R.Application
-          (Ghost.reveal material).CS.traffic_key
+          rotate_alg (Ghost.reveal material).CS.traffic_key
           (Ghost.reveal material).CS.traffic_iv))
         as (Rec.is_record_state
           c.records.write
@@ -2359,6 +2365,7 @@ fn server_try_send_key_update
       assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic ==
         Some {
           CS.traffic_secret = old_secret;
+          CS.traffic_alg = old_alg;
           CS.traffic_key = CryptoSpec.logical_key old_alg old_key;
           CS.traffic_iv = old_iv;
         }));
@@ -2392,6 +2399,7 @@ fn server_try_send_key_update
 
       let traffic_secret = Ghost.hide traffic_secret_bytes;
       let material = Ghost.hide (CS.traffic_key_material_for_secret (rotate_alg) (Ghost.reveal traffic_secret));
+      assert (pure ((Ghost.reveal material).CS.traffic_alg == rotate_alg));
       assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
       assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
       assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
@@ -2502,7 +2510,7 @@ fn server_try_send_key_update
       assert (pure (R.install_keys
         (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
         R.Application
-        (Ghost.reveal material).CS.traffic_key
+        rotate_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv ==
         (server_sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_record.CS.record_write));
       rewrite (Rec.is_record_state
@@ -2510,7 +2518,7 @@ fn server_try_send_key_update
         (R.install_keys
           (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write)
           R.Application
-          (Ghost.reveal material).CS.traffic_key
+          rotate_alg (Ghost.reveal material).CS.traffic_key
           (Ghost.reveal material).CS.traffic_iv))
         as (Rec.is_record_state
           c.records.write

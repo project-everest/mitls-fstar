@@ -303,7 +303,7 @@ let cho_sn_ext (sni: B.bytes { 1 <= Seq.length sni /\ Seq.length sni <= 255 })
 
 noextract
 let cho_sg_ext : GECH.extensionClientHello
-  = GECH.Extension_data_supported_groups ([GNG.X25519] <: GECH.extensionClientHello_extension_data_supported_groups)
+  = GECH.Extension_data_supported_groups ([GNG.X25519; GNG.Secp256r1] <: GECH.extensionClientHello_extension_data_supported_groups)
 
 noextract
 let cho_sa_data (l: list GSS.signatureScheme { 1 <= LL.length l /\ LL.length l <= 16 })
@@ -317,16 +317,22 @@ let cho_sa_ext (sa: GECH.extensionClientHello_extension_data_signature_algorithm
   = GECH.Extension_data_signature_algorithms sa
 
 noextract
-let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 })
+let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 }) (pks: B.bytes { Seq.length pks == 65 })
   : GECH.extensionClientHello
   = let ke : GKSE.keyShareEntry_key_exchange = ks in
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
+    let pke : GKSE.keyShareEntry_key_exchange = pks in
+    let pkse : GKSE.keyShareEntry = { GKSE.group = GNG.Secp256r1; GKSE.key_exchange = pke } in
     GKSCH.keyShareClientHello_list_bytesize_nil;
-    GKSCH.keyShareClientHello_list_bytesize_cons kse [];
+    GKSCH.keyShareClientHello_list_bytesize_cons pkse [];
+    GKSCH.keyShareClientHello_list_bytesize_cons kse [pkse];
     GKSE.keyShareEntry_bytesize_eqn kse;
+    GKSE.keyShareEntry_bytesize_eqn pkse;
     GNG.namedGroup_bytesize_eq GNG.X25519;
+    GNG.namedGroup_bytesize_eq GNG.Secp256r1;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
-    GECH.Extension_data_key_share ([kse] <: GECH.extensionClientHello_extension_data_key_share)
+    GKSE.keyShareEntry_key_exchange_bytesize_eqn pke;
+    GECH.Extension_data_key_share ([kse; pkse] <: GECH.extensionClientHello_extension_data_key_share)
 
 noextract
 let cho_sv_ext : GECH.extensionClientHello
@@ -339,10 +345,11 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
     let sa = cho_sa_data (cho_sa_list start) in
     let r32 : Seq.lseq U8.t 32 = start.CS.start_client_random in
     let ks = start.CS.start_client_key_share_public in
+    let pks = start.CS.start_client_p256_public in
     let sn_ext = cho_sn_ext sni in
     let sg_ext = cho_sg_ext in
     let sa_ext = cho_sa_ext sa in
-    let ks_ext = cho_ks_ext ks in
+    let ks_ext = cho_ks_ext ks pks in
     let sv_ext = cho_sv_ext in
     GCH.clientHello_extensions_list_bytesize_nil;
     GCH.clientHello_extensions_list_bytesize_cons sv_ext [];
@@ -1279,7 +1286,7 @@ let received_client_finished_state
                   R.install_keys
                     model0.CS.model_record.CS.record_read
                     R.Application
-                    material.CS.traffic_key
+                    material.CS.traffic_alg material.CS.traffic_key
                     material.CS.traffic_iv;
             };
           CS.model_handshake =
@@ -1592,7 +1599,7 @@ let received_server_finished_state
                     R.install_keys
                       model0.CS.model_record.CS.record_read
                       R.Application
-                      material.CS.traffic_key
+                      material.CS.traffic_alg material.CS.traffic_key
                       material.CS.traffic_iv;
               };
         }
@@ -1894,7 +1901,7 @@ let received_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_read)
                 R.Application
-                new_server_app.CS.traffic_key
+                new_server_app.CS.traffic_alg new_server_app.CS.traffic_key
                 new_server_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -1948,7 +1955,7 @@ let server_received_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_read)
                 R.Application
-                new_client_app.CS.traffic_key
+                new_client_app.CS.traffic_alg new_client_app.CS.traffic_key
                 new_client_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -2005,7 +2012,7 @@ let sent_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_write)
                 R.Application
-                new_client_app.CS.traffic_key
+                new_client_app.CS.traffic_alg new_client_app.CS.traffic_key
                 new_client_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -2062,7 +2069,7 @@ let server_sent_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_write)
                 R.Application
-                new_server_app.CS.traffic_key
+                new_server_app.CS.traffic_alg new_server_app.CS.traffic_key
                 new_server_app.CS.traffic_iv;
         };
         CS.model_handshake = {

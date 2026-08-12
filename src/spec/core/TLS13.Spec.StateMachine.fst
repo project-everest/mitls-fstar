@@ -19,6 +19,7 @@ module Sem = TLS13.Wire.Semantics
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
+module GNG = TLS13.Wire.Generated.NamedGroup
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
@@ -99,12 +100,23 @@ type handshake_start = {
   start_client_random: B.bytes_of_len 32;
   start_client_key_share_private: option C.x25519_private;
   start_client_key_share_public: C.x25519_public;
+  (* The client offers an X25519 and a secp256r1 share in the same flight, so a
+     P-256-only server can proceed without a HelloRetryRequest.  Both private
+     keys are held until the server names the group it chose. *)
+  start_client_p256_private: option C.p256_private;
+  start_client_p256_public: C.p256_public;
   start_cipher_suites: list T.cipher_suite;
   start_signature_schemes: list T.signature_scheme;
 }
+(**
+  `traffic_alg` is the AEAD algorithm this material was derived under.  It is
+  retained rather than recovered from `traffic_key`'s length: the algorithm is
+  a negotiated parameter and a key length is not a substitute for it.
+**)
 type traffic_key_material = {
   traffic_secret: K.traffic_secret;
-  traffic_key: C.aead_key_any;
+  traffic_alg: C.aead_alg;
+  traffic_key: C.aead_key traffic_alg;
   traffic_iv: C.aead_nonce;
 }
 let traffic_key_material_for_secret
@@ -113,20 +125,21 @@ let traffic_key_material_for_secret
   : traffic_key_material =
   {
     traffic_secret = secret;
+    traffic_alg = a;
     traffic_key = K.derive_aead_key a secret;
     traffic_iv = K.derive_aead_iv secret;
   }
 (**
   A key update re-derives from the updated traffic secret under the *same*
   AEAD algorithm; the negotiated cipher suite cannot change mid-connection.
-  The algorithm is recovered from the outgoing key rather than threaded as a
-  parameter, so rekeying needs no extra plumbing.
+  The algorithm is carried on the material being replaced, so it survives the
+  update by construction.
 **)
 let updated_traffic_key_material
   (old:traffic_key_material)
   : traffic_key_material =
   traffic_key_material_for_secret
-    (C.aead_alg_of_key old.traffic_key)
+    old.traffic_alg
     (K.application_traffic_secret_update old.traffic_secret)
 type key_schedule_state = {
   ks_early_secret: option C.secret;
@@ -247,6 +260,84 @@ let server_hello_key_share (sh:GSH.serverHello) : option C.x25519_public =
   match Sem.serverHello_key_share_x25519 sh with
   | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
   | None -> None
+
+let client_hello_p256_key_share (ch:GCH.clientHello) : option C.p256_public =
+  match Sem.clientHello_key_share_secp256r1 ch with
+  | Some k -> if B.length k = 65 then Some (k <: C.p256_public) else None
+  | None -> None
+let server_hello_p256_key_share (sh:GSH.serverHello) : option C.p256_public =
+  match Sem.serverHello_key_share_secp256r1 sh with
+  | Some k -> if B.length k = 65 then Some (k <: C.p256_public) else None
+  | None -> None
+
+(**
+  The key-exchange group for a connection, read off the `KeyShareEntry` the
+  server echoed.  Like `negotiated_aead_alg` this is a tag the peer put on the
+  wire, not something inferred from the share's length.
+**)
+let kex_group_of_named_group (g:GNG.namedGroup) : C.kex_group =
+  Sem.kex_group_of_named_group g
+
+let negotiated_kex_group (hs:handshake_state) : C.kex_group =
+  match hs.hs_server_hello with
+  | Some sh ->
+    (match Sem.serverHello_key_share_group sh with
+     | Some g -> kex_group_of_named_group g
+     | None -> C.KexX25519)
+  | None -> C.KexX25519
+
+(**
+  The group the server selected together with its share, `None` unless the
+  server picked one of the two groups ATLAS offers *and* sent a share of that
+  group's exact length.  This is the single accessor the client's ECDH and its
+  runtime storage agree on; `server_hello_key_share` above is its X25519
+  special case, kept for the X25519-only server role.
+**)
+let server_hello_kex (sh:GSH.serverHello) : option (g:C.kex_group & C.kex_public g) =
+  match Sem.serverHello_kex_share sh with
+  | Some (GNG.X25519, k) ->
+    if B.length k = 32 then Some (| C.KexX25519, (k <: C.kex_public C.KexX25519) |) else None
+  | Some (GNG.Secp256r1, k) ->
+    if B.length k = 65 then Some (| C.KexP256, (k <: C.kex_public C.KexP256) |) else None
+  | _ -> None
+
+(** [server_hello_kex] is exactly [Sem.serverHello_kex_share] retagged: the
+    wire's `NamedGroup` becomes a `kex_group` and the share keeps its bytes.
+    Stated so callers holding the [Sem]-level accessor (the parser and the
+    runtime validity predicate) can reach the model-level one. **)
+let lemma_server_hello_kex_of_share (sh:GSH.serverHello)
+  : Lemma
+      (ensures (match Sem.serverHello_kex_share sh with
+                | Some (g, k) ->
+                  B.length k == C.kex_public_len (kex_group_of_named_group g) /\
+                  server_hello_kex sh ==
+                    Some (| kex_group_of_named_group g,
+                            (k <: C.kex_public (kex_group_of_named_group g)) |)
+                | None -> server_hello_kex sh == None))
+      [SMTPat (server_hello_kex sh)]
+  = match Sem.serverHello_kex_share sh with
+    | Some (GNG.X25519, _) -> ()
+    | Some (GNG.Secp256r1, _) -> ()
+    | _ -> ()
+
+(** The client's own private/public pair for a group, as offered in its
+    ClientHello.  Both pairs are always generated; the negotiated group selects
+    which one the ECDH uses. **)
+let start_kex_private (start:handshake_start) (g:C.kex_group) : option C.kex_private =
+  match g with
+  | C.KexX25519 -> start.start_client_key_share_private
+  | C.KexP256 -> start.start_client_p256_private
+
+let start_kex_public (start:handshake_start) (g:C.kex_group) : C.kex_public g =
+  match g with
+  | C.KexX25519 -> start.start_client_key_share_public
+  | C.KexP256 -> start.start_client_p256_public
+
+(** The client's offered share for a group, read back off its ClientHello. **)
+let client_hello_kex (ch:GCH.clientHello) (g:C.kex_group) : option (C.kex_public g) =
+  match g with
+  | C.KexX25519 -> client_hello_key_share ch
+  | C.KexP256 -> client_hello_p256_key_share ch
 type record_layer_state = {
   record_read: R.direction_state;
   record_write: R.direction_state;
@@ -417,7 +508,7 @@ let install_client_application_write_after_finished
           R.install_keys
             (R.next_seq record.record_write)
             R.Application
-            material.traffic_key
+            material.traffic_alg material.traffic_key
             material.traffic_iv;
     }
   | None ->
@@ -472,13 +563,13 @@ let install_record_keys
     {
       record with
         record_write =
-          R.install_keys record.record_write epoch material.traffic_key material.traffic_iv;
+          R.install_keys record.record_write epoch material.traffic_alg material.traffic_key material.traffic_iv;
     }
   | _, TrafficRead ->
     {
       record with
         record_read =
-          R.install_keys record.record_read epoch material.traffic_key material.traffic_iv;
+          R.install_keys record.record_read epoch material.traffic_alg material.traffic_key material.traffic_iv;
     }
 let install_record_keys_for_role
   (role:endpoint_role)
@@ -491,7 +582,7 @@ let install_record_keys_for_role
     {
     record with
       record_write =
-        R.install_keys record.record_write R.Application material.traffic_key material.traffic_iv;
+        R.install_keys record.record_write R.Application material.traffic_alg material.traffic_key material.traffic_iv;
     }
   | _, _, _ ->
     install_record_keys record install
@@ -499,6 +590,7 @@ let traffic_material_matches_record_direction
   (material:traffic_key_material)
   (st:R.direction_state)
   : prop =
+  st.R.alg == material.traffic_alg /\
   st.R.key == Some material.traffic_key /\
   st.R.static_iv == Some material.traffic_iv
 let traffic_material_for_label
@@ -831,7 +923,7 @@ let step_handshake_message
                      R.install_keys
                        model.model_record.record_read
                        R.Application
-                       material.traffic_key
+                       material.traffic_alg material.traffic_key
                        material.traffic_iv;
                };
          }
@@ -866,7 +958,7 @@ let step_handshake_message
                    R.install_keys
                      model.model_record.record_read
                      R.Application
-                     material.traffic_key
+                     material.traffic_alg material.traffic_key
                      material.traffic_iv;
              };
            model_handshake =
@@ -929,7 +1021,7 @@ let rotate_application_traffic
               R.install_keys
                 (R.next_seq model.model_record.record_read)
                 R.Application
-                updated.traffic_key
+                updated.traffic_alg updated.traffic_key
                 updated.traffic_iv }
       | TrafficWrite ->
         { model.model_record with
@@ -937,7 +1029,7 @@ let rotate_application_traffic
               R.install_keys
                 (R.next_seq model.model_record.record_write)
                 R.Application
-                updated.traffic_key
+                updated.traffic_alg updated.traffic_key
                 updated.traffic_iv } in
     Some {
       model with
@@ -1321,18 +1413,47 @@ let start_matches_config (cfg:connection_config) (start:handshake_start) : prop 
   start.start_cipher_suites == cfg.config_cipher_suites /\
   start.start_signature_schemes == cfg.config_signature_schemes
 let handshake_start_key_share_consistent (start:handshake_start) : prop =
-  match start.start_client_key_share_private with
-  | Some sk ->
-    Seq.equal
-      start.start_client_key_share_public
-      (C.x25519_public_from_private sk)
-  | None ->
-    True
+  (match start.start_client_key_share_private with
+   | Some sk ->
+     Seq.equal
+       start.start_client_key_share_public
+       (C.x25519_public_from_private sk)
+   | None ->
+     True) /\
+  (match start.start_client_p256_private with
+   | Some sk ->
+     Seq.equal
+       start.start_client_p256_public
+       (C.p256_public_from_private sk)
+   | None ->
+     True)
+(** [handshake_start_key_share_consistent] states the private/public agreement
+    per group; this is its group-dispatched reading, which is what the ECDH
+    implementation needs once the negotiated group has selected a keypair. **)
+let lemma_start_kex_public_from_private (start:handshake_start) (g:C.kex_group)
+  : Lemma
+      (requires handshake_start_key_share_consistent start /\
+                Some? (start_kex_private start g))
+      (ensures C.kex_public_from_private g (Some?.v (start_kex_private start g)) ==
+               start_kex_public start g)
+  = match g with
+    | C.KexX25519 ->
+      Seq.lemma_eq_elim
+        start.start_client_key_share_public
+        (C.x25519_public_from_private (Some?.v start.start_client_key_share_private))
+    | C.KexP256 ->
+      Seq.lemma_eq_elim
+        start.start_client_p256_public
+        (C.p256_public_from_private (Some?.v start.start_client_p256_private))
+
 let client_hello_matches_start (start:handshake_start) (ch:GCH.clientHello) : prop =
   Seq.equal (Sem.clientHello_random ch) start.start_client_random /\
   Sem.clientHello_server_name ch == Some start.start_server_name /\
   (match Sem.clientHello_key_share_x25519 ch with
    | Some k -> B.length k = 32 /\ Seq.equal k start.start_client_key_share_public
+   | None -> False) /\
+  (match Sem.clientHello_key_share_secp256r1 ch with
+   | Some k -> B.length k = 65 /\ Seq.equal k start.start_client_p256_public
    | None -> False) /\
   Sem.clientHello_cipher_suites ch == start.start_cipher_suites /\
   Sem.clientHello_sig_algs ch == Some start.start_signature_schemes /\
@@ -1489,10 +1610,16 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     (match hs.hs_start, hs.hs_server_hello with
      | Some start, Some sh ->
        handshake_start_key_share_consistent start /\
-       (match start.start_client_key_share_private with
-        | Some sk ->
-          (match server_hello_key_share sh with
-           | Some k -> C.x25519_shared sk k == Some shared
+       (* Dispatch on the group the server named in its KeyShareEntry.  The
+          client generated a keypair for every group it offered, so the
+          negotiated group selects which private key the ECDH runs with; no
+          parameter is recovered from a share's length. *)
+       (match server_hello_kex sh with
+        | Some (| g, server_share |) ->
+          (match start_kex_private start g with
+           | Some sk ->
+             C.kex_public_from_private g sk == start_kex_public start g /\
+             C.kex_shared g sk server_share == Some shared
            | None -> False)
         | None -> False)
      | _, _ -> False)

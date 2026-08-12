@@ -34,6 +34,10 @@ bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]
 
 bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8_t pk[32]);
 
+bool tls13_hacl_p256_public_from_private(uint8_t out[65], const uint8_t sk[32]);
+
+bool tls13_hacl_p256_shared(uint8_t out[32], const uint8_t sk[32], const uint8_t pk[65]);
+
 bool tls13_hacl_chacha20_poly1305_seal_combined(
     uint8_t *ciphertext_and_tag,
     size_t ciphertext_and_tag_len,

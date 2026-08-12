@@ -63,7 +63,7 @@ let next_local_action_sound
       st.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript
         <= Bounds.max_transcript_len - Bounds.max_client_hello_len /\
-      517 <= SZ.v network_out_len
+      544 <= SZ.v network_out_len
     | CT.LocalDeriveSharedSecret ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==

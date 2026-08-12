@@ -44,6 +44,7 @@ let state_matches
   U64.v seq == s.R.seq /\
   ((installed /\
     Seq.equal key (C.pad_key_32 (C.logical_key alg key)) /\
+    s.R.alg == alg /\
     s.R.key == Some (C.logical_key alg key) /\
     s.R.static_iv == Some iv) \/
    (not installed /\ s.R.key == None /\ s.R.static_iv == None))
@@ -296,6 +297,7 @@ fn application_keys_match (st: record_state) (key: array U8.t) (alg: C.aead_alg)
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **
           pure (ok ==>
+            's.R.alg == alg /\
             's.R.key == Some (C.logical_key alg 'key_bytes) /\
             's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
 {
@@ -331,6 +333,7 @@ fn application_keys_match (st: record_state) (key: array U8.t) (alg: C.aead_alg)
   assert (pure (ok ==> stored_iv == Ghost.reveal 'iv_bytes));
   assert (pure (ok ==> Seq.equal (C.logical_key stored_alg stored_key)
                                  (C.logical_key alg 'key_bytes)));
+  assert (pure (ok ==> 's.R.alg == alg));
   assert (pure (ok ==> 's.R.key == Some (C.logical_key alg 'key_bytes)));
   assert (pure (ok ==> 's.R.static_iv == Some (Ghost.reveal 'iv_bytes)));
   fold (is_record_state st 's);
@@ -416,7 +419,7 @@ fn install_keys
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
                  C.aead_key_len alg == B.length key_spec /\
                  Seq.equal 'key_bytes (C.pad_key_32 key_spec))
-  ensures is_record_state st (R.install_keys 's epoch (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
+  ensures is_record_state st (R.install_keys 's epoch alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -441,8 +444,8 @@ fn install_keys
   with iv_s. assert (V.pts_to st.iv iv_s);
   assert (pure (key_s == 'key_bytes));
   assert (pure (iv_s == 'iv_bytes));
-  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's epoch (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
-  fold (is_record_state st (R.install_keys 's epoch (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
+  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's epoch alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's epoch alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
 }
 
 fn install_handshake_keys_runtime
@@ -457,7 +460,7 @@ fn install_handshake_keys_runtime
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
                  C.aead_key_len alg == B.length key_spec /\
                  Seq.equal 'key_bytes (C.pad_key_32 key_spec))
-  ensures is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
+  ensures is_record_state st (R.install_keys 's R.Handshake alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -484,8 +487,8 @@ fn install_handshake_keys_runtime
   with iv_s. assert (V.pts_to st.iv iv_s);
   assert (pure (key_s == 'key_bytes));
   assert (pure (iv_s == 'iv_bytes));
-  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's R.Handshake (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
-  fold (is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
+  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's R.Handshake alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's R.Handshake alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
 }
 
 fn install_application_keys_runtime
@@ -500,7 +503,7 @@ fn install_application_keys_runtime
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
                  C.aead_key_len alg == B.length key_spec /\
                  Seq.equal 'key_bytes (C.pad_key_32 key_spec))
-  ensures is_record_state st (R.install_keys 's R.Application (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
+  ensures is_record_state st (R.install_keys 's R.Application alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -527,8 +530,8 @@ fn install_application_keys_runtime
   with iv_s. assert (V.pts_to st.iv iv_s);
   assert (pure (key_s == 'key_bytes));
   assert (pure (iv_s == 'iv_bytes));
-  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's R.Application (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
-  fold (is_record_state st (R.install_keys 's R.Application (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
+  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's R.Application alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's R.Application alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
 }
 
 fn seal_application

@@ -41,11 +41,13 @@ let is_keyupdate_event (ev:CS.conn_event) : bool =
 
 let record_mat_eq (r r':CS.record_layer_state) : prop =
   r'.CS.record_write.R.epoch     == r.CS.record_write.R.epoch /\
+  r'.CS.record_write.R.alg       == r.CS.record_write.R.alg /\
   r'.CS.record_write.R.key       == r.CS.record_write.R.key /\
   r'.CS.record_write.R.static_iv == r.CS.record_write.R.static_iv /\
   r'.CS.record_read.R.epoch      == r.CS.record_read.R.epoch /\
-  r'.CS.record_read.R.key        == r.CS.record_read.R.key /\
-  r'.CS.record_read.R.static_iv  == r.CS.record_read.R.static_iv
+  r'.CS.record_read.R.alg        == r.CS.record_read.R.alg /\
+  r'.CS.record_read.R.static_iv  == r.CS.record_read.R.static_iv /\
+  r'.CS.record_read.R.key        == r.CS.record_read.R.key
 
 (** Control is settled: past every key-installer.  In `step_local_event` and
     `step_handshake_message` EVERY key-install arm is gated on `ControlHandshaking _`,
@@ -72,8 +74,8 @@ let rec lemma_adv_preserves_mat (st:R.direction_state) (n:nat)
   : Lemma
       (ensures
         (let a = CS.advance_direction_records st n in
-         a.R.epoch == st.R.epoch /\ a.R.key == st.R.key /\
-         a.R.static_iv == st.R.static_iv))
+         a.R.epoch == st.R.epoch /\ a.R.alg == st.R.alg /\
+         a.R.key == st.R.key /\ a.R.static_iv == st.R.static_iv))
       (decreases n)
   = if n = 0 then () else lemma_adv_preserves_mat st (n - 1)
 

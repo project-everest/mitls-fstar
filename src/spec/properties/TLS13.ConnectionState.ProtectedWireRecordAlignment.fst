@@ -440,13 +440,13 @@ let lemma_server_handshake_write_client_handshake_read_install_aligned
     R.install_keys
       server.model_record.record_write
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv);
   assert (client_after.model_record.record_read ==
     R.install_keys
       client.model_record.record_read
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv)
 
 let lemma_server_handshake_write_client_handshake_read_install_materials_aligned
@@ -486,13 +486,13 @@ let lemma_server_handshake_write_client_handshake_read_install_materials_aligned
     R.install_keys
       server.model_record.record_write
       R.Handshake
-      server_material.traffic_key
+      server_material.traffic_alg server_material.traffic_key
       server_material.traffic_iv);
   assert (client_after.model_record.record_read ==
     R.install_keys
       client.model_record.record_read
       R.Handshake
-      client_material.traffic_key
+      client_material.traffic_alg client_material.traffic_key
       client_material.traffic_iv)
 
 let lemma_server_handshake_install_materials_agree_from_key_schedule
@@ -660,13 +660,13 @@ let lemma_client_handshake_write_server_handshake_read_install_aligned
     R.install_keys
       client.model_record.record_write
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv);
   assert (server_after.model_record.record_read ==
     R.install_keys
       server.model_record.record_read
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv)
 
 let lemma_client_handshake_write_server_handshake_read_install_materials_aligned
@@ -706,13 +706,13 @@ let lemma_client_handshake_write_server_handshake_read_install_materials_aligned
     R.install_keys
       client.model_record.record_write
       R.Handshake
-      client_material.traffic_key
+      client_material.traffic_alg client_material.traffic_key
       client_material.traffic_iv);
   assert (server_after.model_record.record_read ==
     R.install_keys
       server.model_record.record_read
       R.Handshake
-      server_material.traffic_key
+      server_material.traffic_alg server_material.traffic_key
       server_material.traffic_iv)
 
 let lemma_client_handshake_install_materials_agree_from_key_schedule

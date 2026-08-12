@@ -38,9 +38,10 @@ let helpers () : Lemma (ensures
      dir_shape st ==> dir_shape (R.next_seq st)) /\
   (forall (st:R.direction_state) (n:nat). {:pattern (CS.advance_direction_records st n)}
      dir_shape st ==> dir_shape (CS.advance_direction_records st n)) /\
-  (forall (st:R.direction_state) (ep:R.epoch) (k iv:TLS13.Bytes.bytes).
-     {:pattern (R.install_keys st ep k iv)}
-     ~(R.Initial? ep) ==> dir_shape (R.install_keys st ep k iv)) /\
+  (forall (st:R.direction_state) (ep:R.epoch) (a:TLS13.Crypto.Spec.aead_alg)
+          (k iv:TLS13.Bytes.bytes).
+     {:pattern (R.install_keys st ep a k iv)}
+     ~(R.Initial? ep) ==> dir_shape (R.install_keys st ep a k iv)) /\
   (forall (te:CS.traffic_epoch). {:pattern (CS.traffic_record_epoch te)}
      ~(R.Initial? (CS.traffic_record_epoch te))))
   =

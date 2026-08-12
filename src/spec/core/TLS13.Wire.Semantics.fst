@@ -16,6 +16,7 @@ module TLS13.Wire.Semantics
 
 module U8  = FStar.UInt8
 module Seq = FStar.Seq
+module C   = TLS13.Crypto.Spec
 
 module GCH     = TLS13.Wire.Generated.ClientHello
 module GECH    = TLS13.Wire.Generated.ExtensionClientHello
@@ -112,6 +113,29 @@ let rec ch_find_key_share (l: list GECH.extensionClientHello)
 let clientHello_key_share_x25519 (ch: GCH.clientHello) : option (Seq.seq U8.t) =
   ch_find_key_share (ch.GCH.extensions <: list GECH.extensionClientHello)
 
+/// The secp256r1 entry of the ClientHello key_share extension.  A ClientHello
+/// may offer several groups, so this walks the same list looking for a
+/// different tag; offering both leaves `clientHello_key_share_x25519` intact.
+let rec kse_list_find_secp256r1 (l: list GKE.keyShareEntry)
+  : Tot (option (Seq.seq U8.t)) (decreases l)
+  = match l with
+    | [] -> None
+    | entry :: tl ->
+      if GNG.Secp256r1? entry.GKE.group
+      then Some (entry.GKE.key_exchange <: Seq.seq U8.t)
+      else kse_list_find_secp256r1 tl
+
+let rec ch_find_key_share_secp256r1 (l: list GECH.extensionClientHello)
+  : Tot (option (Seq.seq U8.t)) (decreases l)
+  = match l with
+    | [] -> None
+    | GECH.Extension_data_key_share ks :: _ ->
+      kse_list_find_secp256r1 (ks <: list GKE.keyShareEntry)
+    | _ :: tl -> ch_find_key_share_secp256r1 tl
+
+let clientHello_key_share_secp256r1 (ch: GCH.clientHello) : option (Seq.seq U8.t) =
+  ch_find_key_share_secp256r1 (ch.GCH.extensions <: list GECH.extensionClientHello)
+
 /// Walk the ClientHello extensions for the first signature_algorithms ext.
 let rec ch_find_sig_algs (l: list GECH.extensionClientHello)
   : Tot (option (list GSS.signatureScheme)) (decreases l)
@@ -180,6 +204,145 @@ let serverHello_key_share_x25519 (sh: GSH.serverHello) : option (Seq.seq U8.t) =
   match serverHello_body sh with
   | None -> None
   | Some body -> sh_find_key_share (body.GSHB.extensions <: list GESH.extensionServerHello)
+
+/// The group the server named in its key_share extension, and the share it
+/// paired with that group.  The group is read off the wire rather than guessed
+/// from the share's length: a `KeyShareEntry` is a `NamedGroup` together with
+/// an opaque `key_exchange`, and the server's choice is exactly that tag.
+let rec sh_find_key_share_entry (l: list GESH.extensionServerHello)
+  : Tot (option GKE.keyShareEntry) (decreases l)
+  = match l with
+    | [] -> None
+    | GESH.Extension_data_key_share kse :: _ -> Some (kse <: GKE.keyShareEntry)
+    | _ :: tl -> sh_find_key_share_entry tl
+
+let serverHello_key_share_group (sh: GSH.serverHello) : option GNG.namedGroup =
+  match serverHello_body sh with
+  | None -> None
+  | Some body ->
+    (match sh_find_key_share_entry (body.GSHB.extensions <: list GESH.extensionServerHello) with
+     | None -> None
+     | Some kse -> Some kse.GKE.group)
+
+let serverHello_key_share_bytes (sh: GSH.serverHello) : option (Seq.seq U8.t) =
+  match serverHello_body sh with
+  | None -> None
+  | Some body ->
+    (match sh_find_key_share_entry (body.GSHB.extensions <: list GESH.extensionServerHello) with
+     | None -> None
+     | Some kse -> Some (kse.GKE.key_exchange <: Seq.seq U8.t))
+
+/// The secp256r1 share, when that is what the server picked.
+let serverHello_key_share_secp256r1 (sh: GSH.serverHello) : option (Seq.seq U8.t) =
+  match serverHello_key_share_group sh, serverHello_key_share_bytes sh with
+  | Some GNG.Secp256r1, Some k -> Some k
+  | _, _ -> None
+
+/// The share length ATLAS requires of each group it offers.  This is a
+/// *validation* rule -- "an X25519 entry must carry 32 bytes" -- not a way of
+/// recovering the group: the group always comes from the entry's `NamedGroup`.
+let named_group_share_len (g: GNG.namedGroup) : nat =
+  match g with
+  | GNG.X25519 -> 32
+  | GNG.Secp256r1 -> 65
+  | _ -> 0
+
+/// A share ATLAS can hold in its 65-byte key-share buffers: exactly the widths
+/// of the two groups it offers, so that `C.pad_share_65` applies directly.
+let offered_share = C.kex_public_any
+
+/// The key-exchange group a `NamedGroup` denotes.  ATLAS offers exactly two;
+/// any other group is rejected before this is consulted (`sh_find_kex_share`
+/// returns `None` for it), so the catch-all is never the negotiated answer.
+let kex_group_of_named_group (g: GNG.namedGroup) : C.kex_group =
+  match g with
+  | GNG.Secp256r1 -> C.KexP256
+  | _ -> C.KexX25519
+
+/// The first `key_share` entry of a ServerHello extension list, accepted only
+/// at a group ATLAS offers and only at that group's exact share length.
+/// First-wins: a leading `key_share` at any other group rejects outright, it
+/// does not scan on.
+let rec sh_find_kex_share (l: list GESH.extensionServerHello)
+  : Tot (option (GNG.namedGroup & offered_share)) (decreases l)
+  = match l with
+    | [] -> None
+    | GESH.Extension_data_key_share kse :: _ ->
+      let g = (kse <: GKE.keyShareEntry).GKE.group in
+      let k = ((kse <: GKE.keyShareEntry).GKE.key_exchange <: Seq.seq U8.t) in
+      (match g with
+       | GNG.X25519 -> if Seq.length k = 32 then Some (g, k) else None
+       | GNG.Secp256r1 -> if Seq.length k = 65 then Some (g, k) else None
+       | _ -> None)
+    | _ :: tl -> sh_find_kex_share tl
+
+/// The negotiated group and share of a ServerHello, `None` unless the server
+/// selected one of the two groups ATLAS offers at its exact length.
+let serverHello_kex_share (sh: GSH.serverHello)
+  : option (GNG.namedGroup & offered_share) =
+  match serverHello_body sh with
+  | None -> None
+  | Some body -> sh_find_kex_share (body.GSHB.extensions <: list GESH.extensionServerHello)
+
+/// The accepted groups and their exact lengths, made visible to callers that
+/// only hold `serverHello_kex_share`.
+let rec lemma_sh_find_kex_share_shape (l: list GESH.extensionServerHello)
+  : Lemma
+      (ensures (match sh_find_kex_share l with
+                | Some (g, k) ->
+                  (g == GNG.X25519 /\ Seq.length k == 32) \/
+                  (g == GNG.Secp256r1 /\ Seq.length k == 65)
+                | None -> True))
+      (decreases l)
+  = match l with
+    | [] -> ()
+    | GESH.Extension_data_key_share _ :: _ -> ()
+    | _ :: tl -> lemma_sh_find_kex_share_shape tl
+
+let lemma_serverHello_kex_share_shape (sh: GSH.serverHello)
+  : Lemma
+      (ensures (match serverHello_kex_share sh with
+                | Some (g, k) ->
+                  (g == GNG.X25519 /\ Seq.length k == 32) \/
+                  (g == GNG.Secp256r1 /\ Seq.length k == 65)
+                | None -> True))
+      [SMTPat (serverHello_kex_share sh)]
+  = match serverHello_body sh with
+    | None -> ()
+    | Some body ->
+      lemma_sh_find_kex_share_shape (body.GSHB.extensions <: list GESH.extensionServerHello)
+
+/// `sh_find_key_share` is the X25519 special case of `sh_find_kex_share`: both
+/// stop at the first `key_share` extension, and the former succeeds exactly
+/// when that entry names X25519.  A 32-byte X25519 share therefore satisfies
+/// the general accessor's length rule.
+let rec lemma_sh_find_kex_share_x25519 (l: list GESH.extensionServerHello)
+  : Lemma
+      (requires (match sh_find_key_share l with
+                 | Some k -> Seq.length k == 32
+                 | None -> True))
+      (ensures (match sh_find_key_share l with
+                | Some k -> sh_find_kex_share l == Some (GNG.X25519, (k <: offered_share))
+                | None -> True))
+      (decreases l)
+  = match l with
+    | [] -> ()
+    | GESH.Extension_data_key_share _ :: _ -> ()
+    | _ :: tl -> lemma_sh_find_kex_share_x25519 tl
+
+let lemma_serverHello_kex_share_x25519 (sh: GSH.serverHello)
+  : Lemma
+      (requires (match serverHello_key_share_x25519 sh with
+                 | Some k -> Seq.length k == 32
+                 | None -> True))
+      (ensures (match serverHello_key_share_x25519 sh with
+                | Some k -> serverHello_kex_share sh == Some (GNG.X25519, (k <: offered_share))
+                | None -> True))
+      [SMTPat (serverHello_key_share_x25519 sh)]
+  = match serverHello_body sh with
+    | None -> ()
+    | Some body ->
+      lemma_sh_find_kex_share_x25519 (body.GSHB.extensions <: list GESH.extensionServerHello)
 
 /// The selected protocol version from the ServerHello supported_versions ext.
 let rec sh_find_selected_version (l: list GESH.extensionServerHello)

@@ -151,15 +151,3 @@ let derive_aead_key (a:C.aead_alg) (secret:B.bytes) : C.aead_key a =
 
 let derive_aead_iv (secret:B.bytes) : C.aead_nonce =
   C.hkdf_expand_label secret label_iv B.empty 12
-
-(**
-  The derived traffic key recovers its own algorithm, because the two supported
-  algorithms have distinct key lengths.  This is what lets the record layer
-  dispatch on the key alone (see `TLS13.Crypto.Spec.aead_alg_of_key`), so that
-  "the peer installed the same key" already implies "the peer uses the same
-  algorithm".
-**)
-let lemma_aead_alg_of_derived_key (a:C.aead_alg) (secret:B.bytes)
-  : Lemma (C.aead_alg_of_key (derive_aead_key a secret) == a)
-          [SMTPat (C.aead_alg_of_key (derive_aead_key a secret))]
-= ()
