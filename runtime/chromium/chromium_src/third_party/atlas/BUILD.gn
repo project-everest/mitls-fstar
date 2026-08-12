@@ -1,0 +1,21 @@
+source_set("atlas") {
+  sources = [ "tls13_client_socket.cc" ]
+
+  public = [
+    "tls13_client_engine.h",
+    "tls13_client_socket.h",
+  ]
+
+  include_dirs = [ "." ]
+
+  # Link the verified engine by full path rather than via `lib_dirs` plus a
+  # short `libs` name.  GN turns a short `libs` entry into a bare -l flag and
+  # does not create a dependency edge for it, so ninja never learned that
+  # `chrome` depends on the verified archive: rebuilding the engine left the
+  # previously linked `chrome` in place and `autoninja` reported "no work to
+  # do".  A packaged demo could then ship a browser linked against a stale
+  # engine.  Listing the archive in `inputs` gives ninja the missing edge, and
+  # passing the same path in `libs` keeps the link line correct.
+  inputs = [ "lib/libatlas_tls13_client_engine.a" ]
+  libs = [ rebase_path("lib/libatlas_tls13_client_engine.a", root_build_dir) ]
+}

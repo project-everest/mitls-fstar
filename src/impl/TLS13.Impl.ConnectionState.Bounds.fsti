@@ -4,14 +4,19 @@ noextract
 let max_hostname_len : nat = 255
 noextract
 let max_trust_anchors_len : nat = 65535
+(* Capacity of the buffer carrying a peer leaf certificate's DER to the
+   certificate validator.  Real-world leaf certificates routinely exceed 4 KiB:
+   a wildcard certificate covering a few hundred SAN entries (googleapis.com
+   serves one of 6840 bytes) is common, and a leaf that does not fit is treated
+   as a validation failure. *)
 noextract
-let max_public_key_len : nat = 4096
+let max_public_key_len : nat = 16384
 noextract
-let max_cipher_suites : nat = 16
+let max_cipher_suites : nat = 64
 noextract
-let max_signature_schemes : nat = 16
+let max_signature_schemes : nat = 32
 noextract
-let max_client_hello_len : nat = 512
+let max_client_hello_len : nat = 8192
 noextract
 let max_server_hello_len : nat = 4096
 noextract
@@ -34,10 +39,10 @@ module SZ = FStar.SizeT
    [FStar_SizeT_uint_to_t].  Use these in executable [SZ.uint_to_t <const>]
    positions; [SZ.v <const>_sz == <const>] holds definitionally. *)
 inline_for_extraction let max_hostname_len_sz : SZ.t = 255sz
-inline_for_extraction let max_public_key_len_sz : SZ.t = 4096sz
-inline_for_extraction let max_cipher_suites_sz : SZ.t = 16sz
-inline_for_extraction let max_signature_schemes_sz : SZ.t = 16sz
-inline_for_extraction let max_client_hello_len_sz : SZ.t = 512sz
+inline_for_extraction let max_public_key_len_sz : SZ.t = 16384sz
+inline_for_extraction let max_cipher_suites_sz : SZ.t = 64sz
+inline_for_extraction let max_signature_schemes_sz : SZ.t = 32sz
+inline_for_extraction let max_client_hello_len_sz : SZ.t = 8192sz
 inline_for_extraction let max_server_hello_len_sz : SZ.t = 4096sz
 inline_for_extraction let max_handshake_flight_len_sz : SZ.t = 32768sz
 inline_for_extraction let max_transcript_len_sz : SZ.t = 65535sz

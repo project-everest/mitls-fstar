@@ -17,7 +17,7 @@ module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
 
-let lemma_server_hello_window_rank_fresh_is_eleven
+let lemma_server_hello_window_rank_fresh_is_nine
   (model:CS.connection_model)
   : Lemma
       (requires
@@ -31,7 +31,7 @@ let lemma_server_hello_window_rank_fresh_is_eleven
         model.CS.model_handshake.CS.hs_certificate == None /\
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false)
-      (ensures server_hello_window_rank model == 11)
+      (ensures server_hello_window_rank model == 9)
 = ()
 
 let lemma_server_hello_window_rank_application_data_installed_zero
@@ -112,7 +112,7 @@ let lemma_server_hello_window_after_server_cleartext_prefix_fresh
         model5.CS.model_handshake.CS.hs_certificate == None /\
         model5.CS.model_handshake.CS.hs_certificate_verify == None /\
         model5.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
-        server_hello_window_rank model5 == 11)
+        server_hello_window_rank model5 == 9)
 =
   assert (model0.CS.model_control == CS.ControlNew);
   assert (model0.CS.model_handshake == CS.empty_handshake_state);
@@ -255,7 +255,7 @@ let lemma_server_hello_window_after_server_cleartext_prefix_fresh
   assert (model5.CS.model_handshake.CS.hs_certificate == None);
   assert (model5.CS.model_handshake.CS.hs_certificate_verify == None);
   assert (model5.CS.model_handshake.CS.hs_certificate_verify_verified == false);
-  lemma_server_hello_window_rank_fresh_is_eleven model5
+  lemma_server_hello_window_rank_fresh_is_nine model5
 
 let lemma_server_hello_window_role_install_step
   (model:CS.connection_model)
@@ -326,7 +326,8 @@ let lemma_server_hello_window_rank_step
         CS.step_model model ev == Some model')
       (ensures
         CS.ControlFailed? model'.CS.model_control \/
-        server_hello_window_rank model <= server_hello_window_rank model' + 1)
+        (server_hello_window_rank model <= server_hello_window_rank model' + 1 /\
+         server_hello_window_control model'.CS.model_control))
 =
   CSL.lemma_step_model_preserves_config model ev model';
   match model'.CS.model_control with
@@ -358,6 +359,13 @@ let lemma_server_hello_window_rank_step
         | _, _ ->
           assert (CS.step_local_event model local == None);
           assert False))
+    | CS.ConnProtectedHandshake step ->
+      assert_norm (
+        CS.legal_event model (CS.ConnProtectedHandshake step) ==
+        CS.legal_protected_handshake_step model step);
+      assert (CS.legal_protected_handshake_step model step);
+      assert (model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+      assert False
     | CS.ConnNetworkEvent msg ->
       assert (CS.legal_tls_message
         model
@@ -500,9 +508,7 @@ let rec lemma_closing_or_closed_never_returns_to_application_data
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      ~ (final_model.CS.model_control == CS.ControlApplicationData)
-    with _.
+    with
     (
       match model1.CS.model_control with
       | CS.ControlFailed _ ->
@@ -569,6 +575,7 @@ let rec lemma_closing_or_closed_never_returns_to_application_data
           assert False)
     )
 
+#push-options "--z3rlimit 40"
 let rec lemma_server_hello_window_rank_replay_lower_bound
   (model:CS.connection_model)
   (events:list CS.conn_event)
@@ -610,10 +617,17 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      server_hello_window_rank model <= FStar.List.Tot.length (ev :: rest)
-    with _.
+    with
     (
+      (match ev with
+       | CS.ConnProtectedHandshake step ->
+         assert_norm (
+           CS.legal_event model (CS.ConnProtectedHandshake step) ==
+           CS.legal_protected_handshake_step model step);
+         assert (CS.legal_protected_handshake_step model step);
+         assert (model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+         assert False
+       | _ -> ());
       match model.CS.model_control with
       | CS.ControlApplicationData ->
         CSL.lemma_step_model_preserves_config model ev model1;
@@ -653,6 +667,9 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
           assert False)
       | _ ->
         lemma_server_hello_window_rank_step model ev model1;
+        assert (CS.ControlFailed? model1.CS.model_control \/
+          (server_hello_window_rank model <= server_hello_window_rank model1 + 1 /\
+           server_hello_window_control model1.CS.model_control));
         (match model1.CS.model_control with
         | CS.ControlFailed _ ->
           PNI.lemma_conn_events_raw_replay_from_failed_results_failed
@@ -683,6 +700,7 @@ let rec lemma_server_hello_window_rank_replay_lower_bound
   See the [.fsti] comment for why this auxiliary fact is necessary in
   addition to the numeric rank bound above.
 **)
+#pop-options
 let rec lemma_server_hello_window_stuck_without_client_handshake_traffic
   (model:CS.connection_model)
   (events:list CS.conn_event)
@@ -719,9 +737,7 @@ let rec lemma_server_hello_window_stuck_without_client_handshake_traffic
       Seq.equal raw_sent (B.append delta_sent tail_sent) /\
       Seq.equal raw_received (B.append delta_received tail_received) /\
       TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-    returns
-      ~ (final_model.CS.model_control == CS.ControlApplicationData)
-    with _.
+    with
     (
       CSL.lemma_step_model_preserves_config model ev model1;
       match model1.CS.model_control with
@@ -916,8 +932,7 @@ let lemma_server_hello_window_tight_next_event_handshake_traffic_install
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 rest tail_sent tail_received final_model
-  returns PNI.server_no_tail_handshake_traffic_install_event ev
-  with _.
+  with
   (
     match model1.CS.model_control with
     | CS.ControlFailed _ ->
@@ -1196,10 +1211,7 @@ let lemma_server_hello_window_tight_next_two_events_handshake_traffic_installs
     Seq.equal raw_sent (B.append delta_sent tail_sent) /\
     Seq.equal raw_received (B.append delta_received tail_received) /\
     TLS13.Spec.StateMachine.Replay.conn_events_raw_replay model1 (ev1 :: rest) tail_sent tail_received final_model
-  returns
-    PNI.server_no_tail_handshake_traffic_install_event ev0 /\
-    PNI.server_no_tail_handshake_traffic_install_event ev1
-  with _.
+  with
   (
     lemma_server_hello_window_after_fresh_handshake_install
       model

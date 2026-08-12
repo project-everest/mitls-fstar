@@ -8,6 +8,5 @@ typedef struct TLS13_OpenSSL_auth_context_s *TLS13_OpenSSL_auth_context;
 typedef struct TLS13_OpenSSL_server_credentials_s *TLS13_OpenSSL_server_credentials;
 
 typedef void *TLS13_X509_Spec_cert_chain;
-typedef void *TLS13_X509_Spec_peer_identity;
 
 #endif

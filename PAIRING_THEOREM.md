@@ -56,6 +56,44 @@ See `src/impl/TLS13.Impl.Driver.Pairing.fst:1046-1086`. The proof body is
 therefore intentionally small; most of the proof is in the helper theorem it
 calls and in pure connection-state lemmas.
 
+## Internal events and the settled form of the theorem
+
+The client receive path processes a protected handshake record in two stages:
+the record transition installs a pending plaintext, and a sequence of *internal
+events* — ordinary `LocalEvent`s classified by `pi_internal`, emitting no wire
+output — consume it one handshake message at a time. See `INTERNAL_EVENT_PLAN.md`
+for the design and `TLS13.Impl.Client.Drain` for the drain theory.
+
+This does not change the statement above. The pairing argument is over wire
+logs, and an internal step by construction appends nothing to them
+(`internal_step_output` is `step_output [] []`). What it does change is *when*
+the hypotheses hold: immediately after a record is delivered, the client's
+semantic state has not yet absorbed the messages that record carried, so
+`client_received` and the connection state can disagree until the pending
+plaintext is drained.
+
+The theorem is therefore stated at **readiness**, which subsumes the scheduling
+side condition: `client_driver_application_ready` carries
+`CS.protected_handshake_buffer_empty`, so a ready client has no internal step
+still enabled and has already absorbed every message its accepted records were
+carrying. The flagship is
+
+```fstar
+val lemma_flagship_record_material_agreement_ungated : ...
+```
+
+in `TLS13.System.StreamTemporal`, over
+`TLS13.System.Temporal.record_material_agrees_when_ready_scoped`.
+
+At the C boundary the side condition is observable: `TLS13.Impl.Client.Engine.poll`
+returns `EngineReady` only when `~(D.internal_pending st1)`. A caller that has
+been told the connection is ready is entitled to the agreement conclusion.
+
+(An earlier `TLS13.System.Internal` stated a separate *settled* form with an
+explicit `~(tls_internal_pending s)` antecedent. It was never wired into
+`ROOT_FILES`, so it was never machine-checked; it has been deleted rather than
+left as an unverified claim. The readiness form above is the live theorem.)
+
 ## Main statement, fully expanded
 
 ### Parameters

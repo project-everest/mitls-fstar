@@ -34,19 +34,10 @@ void TLS13_Crypto_hkdf_extract(
     size_t ikm_len,
     uint8_t *out);
 
-void TLS13_Crypto_hkdf_expand_label(
+void TLS13_Crypto_hkdf_expand(
     uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
-    uint8_t *context,
-    size_t context_len,
-    uint8_t *out,
-    size_t out_len);
-
-void TLS13_Crypto_hkdf_expand_label_empty_context(
-    uint8_t *secret,
-    uint8_t *label,
-    size_t label_len,
+    uint8_t *info,
+    size_t info_len,
     uint8_t *out,
     size_t out_len);
 
@@ -59,11 +50,26 @@ void TLS13_Crypto_x25519_public_from_private(
     uint8_t *sk,
     uint8_t *out);
 
-bool TLS13_Crypto_tls13_record_nonce(
-    uint8_t *static_iv,
-    uint64_t sequence_number,
+/* secp256r1.  `pk` is the 65-byte uncompressed SEC1 point the peer put on the
+   wire; `out` receives the 32-byte X coordinate of the shared point, which is
+   what RFC 8446 feeds to the key schedule.  Returns false on an invalid peer
+   point. */
+bool TLS13_Crypto_p256_shared_runtime(
+    uint8_t *sk,
+    uint8_t *pk,
     uint8_t *out);
 
+void TLS13_Crypto_p256_public_from_private(
+    uint8_t *sk,
+    uint8_t *out);
+
+/* AEAD.  There is one raw binding per algorithm and each maps to exactly one
+   primitive; no key length or algorithm identifier is passed, and no dispatch
+   happens here.  The choice of algorithm for the negotiated cipher suite is
+   made by verified Pulse code in TLS13.AEAD, which branches on the algorithm
+   itself. */
+
+/* key is 32 bytes, nonce 12, out is plain_len + 16. */
 void TLS13_Crypto_chacha20_poly1305_seal(
     uint8_t *key,
     uint8_t *nonce,
@@ -73,7 +79,28 @@ void TLS13_Crypto_chacha20_poly1305_seal(
     size_t plain_len,
     uint8_t *out);
 
+/* key is 32 bytes, nonce 12, cipher_len >= 16, out is cipher_len - 16. */
 bool TLS13_Crypto_chacha20_poly1305_open(
+    uint8_t *key,
+    uint8_t *nonce,
+    uint8_t *aad,
+    size_t aad_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    uint8_t *out);
+
+/* key is 16 bytes, nonce 12, out is plain_len + 16. */
+void TLS13_Crypto_aes128_gcm_seal(
+    uint8_t *key,
+    uint8_t *nonce,
+    uint8_t *aad,
+    size_t aad_len,
+    uint8_t *plain,
+    size_t plain_len,
+    uint8_t *out);
+
+/* key is 16 bytes, nonce 12, cipher_len >= 16, out is cipher_len - 16. */
+bool TLS13_Crypto_aes128_gcm_open(
     uint8_t *key,
     uint8_t *nonce,
     uint8_t *aad,

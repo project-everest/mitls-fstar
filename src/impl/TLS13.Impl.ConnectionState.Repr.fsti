@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -68,6 +69,19 @@ type optional_fixed_bytes = {
   bytes: V.vec U8.t;
 }
 
+(* The peer key share received in a ServerHello.  The buffer is always 65 bytes
+   wide -- the widest group ATLAS offers -- with the share zero-padded, and
+   [group] records which group the server named in its `KeyShareEntry`.  The
+   group is a tag carried alongside the bytes, never recovered from them: field
+   names match [optional_fixed_bytes] so the presence/bytes accessors read the
+   same. *)
+noeq
+type kex_share_storage = {
+  present: box bool;
+  bytes: V.vec U8.t;
+  group: box CryptoSpec.kex_group;
+}
+
 noeq
 type u16_list_storage = {
   items: V.vec U16.t;
@@ -97,6 +111,12 @@ noeq
 type traffic_key_material_storage = {
   present: box bool;
   traffic_secret: V.vec U8.t;
+  // The traffic key buffer is always 32 bytes wide; [alg] records which AEAD
+  // algorithm the key belongs to, and hence (via [CryptoSpec.aead_key_len]) how
+  // many of those bytes are the logical key.  Pulse vecs cannot report their
+  // length at runtime and the buffer is not reallocated per suite, so the
+  // negotiated algorithm is tracked here.
+  alg: box CryptoSpec.aead_alg;
   traffic_key: V.vec U8.t;
   traffic_iv: V.vec U8.t;
 }
@@ -128,6 +148,10 @@ type handshake_start_storage = {
   client_random: V.vec U8.t;
   client_key_share_private: optional_fixed_bytes;
   client_key_share_public: V.vec U8.t;
+  (* The secp256r1 offer carried alongside the X25519 offer.  The public share
+     is a 65-byte SEC1 uncompressed point. *)
+  client_p256_private: optional_fixed_bytes;
+  client_p256_public: V.vec U8.t;
   cipher_suites: u16_list_storage;
   signature_schemes: u16_list_storage;
 }
@@ -177,7 +201,7 @@ type handshake_storage = {
   start: handshake_start_storage;
   messages: handshake_message_storage;
   server_selection_present: box bool;
-  server_key_share: optional_fixed_bytes;
+  server_key_share: kex_share_storage;
   server_key_share_private: optional_fixed_bytes;
   validated_peer: peer_storage;
   certificate_verify_verified: box bool;
@@ -309,14 +333,18 @@ let lemma_optional_fixed_bytes_match_present_iff
 
 let lemma_server_key_share_option_some
   (server:option GSH.serverHello)
-  (storage:TLS13.Crypto.Spec.x25519_public)
+  (storage:(b:B.bytes{B.length b == 65}))
   : Lemma
       (requires (match server with
-                 | Some sh -> CS.server_hello_key_share sh
+                 | Some sh -> (match CS.server_hello_kex sh with
+                               | Some (| _, k |) -> Some (TLS13.Crypto.Spec.pad_share_65 k)
+                               | None -> None)
                  | None -> None) == Some storage)
       (ensures Some? server /\
                server == Some (Some?.v server) /\
-               CS.server_hello_key_share (Some?.v server) == Some storage)
+               Some? (CS.server_hello_kex (Some?.v server)) /\
+               TLS13.Crypto.Spec.pad_share_65
+                 (dsnd (Some?.v (CS.server_hello_kex (Some?.v server)))) == storage)
 =
   match server with
   | Some sh -> ()
@@ -403,6 +431,18 @@ type control_snapshot = {
 type certificate_verify_signature_snapshot = {
   cv_signature_scheme: U16.t;
   cv_signature_len: SZ.t;
+}
+
+type certificate_chain_snapshot = {
+  certificate_chain_bytes_len: SZ.t;
+  certificate_chain_cert_count: SZ.t;
+}
+
+noeq
+type pending_protected_handshake_snapshot = {
+  pending_protected_fragment: V.vec U8.t;
+  pending_protected_fragment_len: SZ.t;
+  pending_protected_parsed: SZ.t;
 }
 
 type key_schedule_snapshot = {
@@ -654,9 +694,10 @@ let traffic_key_material_exactly
   ([@@@mkey] slot:traffic_key_material_storage)
   (spec:option CS.traffic_key_material)
   : slprop =
-  exists* present secret key iv.
+  exists* present secret alg key iv.
     Box.pts_to slot.present present **
     V.pts_to slot.traffic_secret secret **
+    Box.pts_to slot.alg alg **
     V.pts_to slot.traffic_key key **
     V.pts_to slot.traffic_iv iv **
     pure (V.is_full_vec slot.traffic_secret /\
@@ -672,7 +713,11 @@ let traffic_key_material_exactly
             match spec with
             | Some m ->
               Seq.equal secret m.CS.traffic_secret /\
-              Seq.equal key m.CS.traffic_key /\
+              // The stored algorithm is the one the material was derived
+              // under; the runtime key buffer is always 32 bytes, so a
+              // 16-byte AES-128-GCM key is zero-padded (CryptoSpec.pad_key_32).
+              m.CS.traffic_alg == alg /\
+              Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
               Seq.equal iv m.CS.traffic_iv
             | None -> False
           else
@@ -681,6 +726,7 @@ let traffic_key_material_exactly
 let lemma_traffic_key_material_match_present_of_some
   (present:bool)
   (secret:B.bytes)
+  (alg:CryptoSpec.aead_alg)
   (key:B.bytes)
   (iv:B.bytes)
   (spec:option CS.traffic_key_material)
@@ -689,30 +735,36 @@ let lemma_traffic_key_material_match_present_of_some
                  match spec with
                  | Some m ->
                    Seq.equal secret m.CS.traffic_secret /\
-                   Seq.equal key m.CS.traffic_key /\
+                   m.CS.traffic_alg == alg /\
+                   Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
                    Seq.equal iv m.CS.traffic_iv
                  | None -> False
                else
                  spec == None) /\
-               Some? spec)
+               Some? spec /\
+               B.length key == 32)
       (ensures present /\
               spec == Some {
                 CS.traffic_secret = secret;
-                CS.traffic_key = key;
+                CS.traffic_alg = alg;
+                CS.traffic_key = CryptoSpec.logical_key alg key;
                 CS.traffic_iv = iv;
               })
 =
   match spec with
   | Some m ->
     Seq.lemma_eq_intro secret m.CS.traffic_secret;
-    Seq.lemma_eq_intro key m.CS.traffic_key;
+    Seq.lemma_eq_intro key (CryptoSpec.pad_key_32 m.CS.traffic_key);
     Seq.lemma_eq_intro iv m.CS.traffic_iv;
     assert (secret == m.CS.traffic_secret);
-    assert (key == m.CS.traffic_key);
+    assert (key == CryptoSpec.pad_key_32 m.CS.traffic_key);
     assert (iv == m.CS.traffic_iv);
+    CryptoSpec.lemma_unpad_pad_key_32 m.CS.traffic_key;
+    assert (CryptoSpec.logical_key alg key == m.CS.traffic_key);
     assert (m == {
       CS.traffic_secret = secret;
-      CS.traffic_key = key;
+      CS.traffic_alg = alg;
+      CS.traffic_key = CryptoSpec.logical_key alg key;
       CS.traffic_iv = iv;
     })
   | None -> ()
@@ -720,6 +772,7 @@ let lemma_traffic_key_material_match_present_of_some
 let lemma_traffic_key_material_match_present_iff
   (present:bool)
   (secret:B.bytes)
+  (alg:CryptoSpec.aead_alg)
   (key:B.bytes)
   (iv:B.bytes)
   (spec:option CS.traffic_key_material)
@@ -728,7 +781,8 @@ let lemma_traffic_key_material_match_present_iff
                  match spec with
                  | Some m ->
                    Seq.equal secret m.CS.traffic_secret /\
-                   Seq.equal key m.CS.traffic_key /\
+                   m.CS.traffic_alg == alg /\
+                   Seq.equal key (CryptoSpec.pad_key_32 m.CS.traffic_key) /\
                    Seq.equal iv m.CS.traffic_iv
                  | None -> False
                else
@@ -768,16 +822,18 @@ fn store_optional_secret
 fn store_traffic_key_material
   (slot:traffic_key_material_storage)
   (traffic_secret_src:array U8.t)
+  (alg:CryptoSpec.aead_alg)
   (traffic_key_src:array U8.t)
   (traffic_iv_src:array U8.t)
   (#material:erased CS.traffic_key_material)
   requires (exists* prev. traffic_key_material_exactly slot prev) **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
-           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
+           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
+           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+           pure (material.CS.traffic_alg == alg)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
 
 let handshake_start_fields_allocated
@@ -787,6 +843,8 @@ let handshake_start_fields_allocated
   fixed_bytes_allocated start.client_random 32 **
   optional_fixed_bytes_exactly start.client_key_share_private 32 None **
   fixed_bytes_allocated start.client_key_share_public 32 **
+  optional_fixed_bytes_exactly start.client_p256_private 32 None **
+  fixed_bytes_allocated start.client_p256_public 65 **
   cipher_suite_list_allocated start.cipher_suites max_cipher_suites **
   signature_scheme_list_allocated start.signature_schemes max_signature_schemes
 
@@ -798,6 +856,8 @@ let handshake_start_fields_exactly
   fixed_bytes_exactly start.client_random 32 spec.CS.start_client_random **
   optional_fixed_bytes_exactly start.client_key_share_private 32 spec.CS.start_client_key_share_private **
   fixed_bytes_exactly start.client_key_share_public 32 spec.CS.start_client_key_share_public **
+  optional_fixed_bytes_exactly start.client_p256_private 32 spec.CS.start_client_p256_private **
+  fixed_bytes_exactly start.client_p256_public 65 spec.CS.start_client_p256_public **
   cipher_suite_list_exactly start.cipher_suites max_cipher_suites spec.CS.start_cipher_suites **
   signature_scheme_list_exactly start.signature_schemes max_signature_schemes spec.CS.start_signature_schemes **
   pure (CS.handshake_start_key_share_consistent spec)
@@ -827,24 +887,28 @@ let client_hello_slot_exactly
   ([@@@mkey] l:IM.client_hello)
   (spec:option GCH.clientHello)
   : slprop =
-  exists* present random server_name key_share cipher_suites signature_schemes.
+  exists* present random session_id server_name key_share cipher_suites signature_schemes.
     Box.pts_to present_box present **
     V.pts_to l.IM.client_hello_random random **
+    V.pts_to l.IM.client_hello_session_id session_id **
     V.pts_to l.IM.client_hello_server_name server_name **
     V.pts_to l.IM.client_hello_key_share key_share **
     V.pts_to l.IM.client_hello_cipher_suites cipher_suites **
     V.pts_to l.IM.client_hello_signature_schemes signature_schemes **
     pure (V.is_full_vec l.IM.client_hello_random /\
+          V.is_full_vec l.IM.client_hello_session_id /\
           V.is_full_vec l.IM.client_hello_server_name /\
           V.is_full_vec l.IM.client_hello_key_share /\
           V.is_full_vec l.IM.client_hello_cipher_suites /\
           V.is_full_vec l.IM.client_hello_signature_schemes /\
           V.length l.IM.client_hello_random == 32 /\
+          V.length l.IM.client_hello_session_id == 32 /\
           V.length l.IM.client_hello_server_name == max_hostname_len /\
           V.length l.IM.client_hello_key_share == 32 /\
           V.length l.IM.client_hello_cipher_suites == max_cipher_suites /\
           V.length l.IM.client_hello_signature_schemes == max_signature_schemes /\
           B.length random == 32 /\
+          B.length session_id == 32 /\
           B.length server_name == max_hostname_len /\
           B.length key_share == 32 /\
           Seq.length cipher_suites == max_cipher_suites /\
@@ -853,8 +917,9 @@ let client_hello_slot_exactly
             match spec with
             | Some m ->
               Seq.equal random (Sem.clientHello_random m) /\
+              Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
               IM.optional_byte_prefix_matches
-                true
+                (client_hello_has_sni m)
                 server_name
                 (client_hello_server_name_len_for m)
                 (Sem.clientHello_server_name m) /\
@@ -874,7 +939,12 @@ let client_hello_slot_exactly
                | None -> False)
             | None -> False
           else
-            spec == None))
+            // The slot is allocated but empty: the session-id mirror still
+            // holds its all-zero initial content, which is exactly what
+            // [TLS13.Impl.ConnectionState.Model.stored_client_hello_session_id]
+            // reports for a state with no stored ClientHello.  Pinning it here
+            // makes the runtime session-id reader total.
+            spec == None /\ Seq.equal session_id (Seq.create 32 0uy)))
 
 let client_hello_metadata_exactly
   (has_server_name_box:box bool)
@@ -890,7 +960,7 @@ let client_hello_metadata_exactly
     Box.pts_to signature_schemes_len_box signature_schemes_len **
     pure (match spec with
       | Some m ->
-        has_server_name == true /\
+        has_server_name == client_hello_has_sni m /\
         server_name_len == client_hello_server_name_len_for m /\
         cipher_suites_len == client_hello_cipher_suites_len_for m /\
         signature_schemes_len == client_hello_signature_schemes_len_for m
@@ -983,16 +1053,39 @@ let handshake_messages_exactly
   finished_slot_exactly msgs.server_finished hs.CS.hs_server_finished **
   finished_slot_exactly msgs.client_finished hs.CS.hs_client_finished
 
+(* The group/share pair the server selected, as stored: [None] until an
+   acceptable ServerHello has been received. *)
+// [noextract] for the same reason as [server_key_share_private_option] below:
+// these are pure projections over the *ghost* connection model state used only
+// in slprops, and extracting them drags the `noextract` generated high records
+// (GSH.serverHello, ...) into the C bundle as undefined struct members.
+noextract
+let server_kex (hs:CS.handshake_state)
+  : option (g:CryptoSpec.kex_group & CryptoSpec.kex_public g) =
+  match hs.CS.hs_server_hello with
+  | Some sh -> CS.server_hello_kex sh
+  | None -> None
+
+noextract
+let server_kex_bytes (hs:CS.handshake_state)
+  : option (B.bytes_of_len 65) =
+  match server_kex hs with
+  | Some (| _, k |) -> Some (CryptoSpec.pad_share_65 k)
+  | None -> None
+
 let server_key_share_exactly
-  ([@@@mkey] slot:optional_fixed_bytes)
+  ([@@@mkey] slot:kex_share_storage)
   (hs:CS.handshake_state)
   : slprop =
-  optional_fixed_bytes_exactly
-    slot
-    32
-    (match hs.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None)
+  exists* g.
+    Box.pts_to slot.group g **
+    optional_fixed_bytes_exactly
+      ({ present = slot.present; bytes = slot.bytes })
+      65
+      (server_kex_bytes hs) **
+    pure (match server_kex hs with
+          | Some (| g', _ |) -> g == g'
+          | None -> True)
 
 // [noextract]: pure spec-level projection over the *ghost* connection model
 // state (`CS.handshake_state`) returning spec `B.bytes`.  It is used only in
@@ -1221,8 +1314,8 @@ let default_connection_config : CS.connection_config = {
   CS.config_server_name = B.empty;
   CS.config_trust_store = { X.anchors = B.empty };
   CS.config_validation_time = { X.seconds_since_epoch = 0 };
-  CS.config_cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256];
-  CS.config_signature_schemes = [T.Rsa_pss_rsae_sha256];
+  CS.config_cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256; T.TLS_AES_128_GCM_SHA256];
+  CS.config_signature_schemes = [T.Rsa_pss_rsae_sha256; T.Ecdsa_secp256r1_sha256];
   CS.config_server = None;
 }
 
@@ -1290,6 +1383,41 @@ let server_initial_state
   (credential_identity:B.bytes)
   : CS.connection_state =
   CS.initial (server_connection_config certificate_chain credential_identity)
+
+(** IMPLEMENTATION-level validity of a server configuration: the protocol-level
+    fact that the credential is present (`CS.server_config_present`), conjoined
+    with THIS implementation's certificate-chain buffer bound.
+
+    The two halves live at different layers on purpose.  The first is a property
+    of the protocol; the second is a property of our buffers -- the wire format
+    permits a considerably longer chain than `max_server_certificate_chain_len`,
+    so this conjunct is genuinely an implementation restriction and is not
+    derivable from spec-level reachability.  It is exactly the precondition the
+    Pulse constructors `TLS13.Impl.Server.new_server` (and its erased-credential
+    variant) already impose on their caller, and they now discharge this
+    predicate as a postcondition, which is what lets the system-level
+    stream-integrity theorem be instantiated at a state the implementation can
+    actually build. **)
+let server_config_valid (st:CS.connection_state) : prop =
+  CS.server_config_present st /\
+  (match st.CS.cs_model.CS.model_config.CS.config_server with
+   | Some cfg ->
+     B.length cfg.CS.server_certificate_chain <= max_server_certificate_chain_len
+   | None -> False)
+
+(** The state the Pulse server constructor builds satisfies the predicate, given
+    exactly that constructor's own precondition.  Definitional: the config is
+    built with `config_server = Some { server_certificate_chain = chain; ... }`. **)
+let lemma_server_initial_state_config_valid
+  (certificate_chain:B.bytes)
+  (credential_identity:B.bytes)
+  : Lemma
+      (requires B.length certificate_chain <= max_server_certificate_chain_len)
+      (ensures
+        server_config_valid
+          (server_initial_state certificate_chain credential_identity))
+=
+  ()
 
 let lemma_default_initial_consistent ()
   : Lemma (TLS13.Spec.StateMachine.Reachability.connection_state_consistent default_initial_state)
@@ -1642,6 +1770,35 @@ fn copy_fixed32_array_to_vec
   ensures ArrPts.pts_to src 'src_bytes **
           V.pts_to dst 'src_bytes **
           pure (V.is_full_vec dst /\ V.length dst == 32)
+
+fn copy_fixed65_array_to_vec
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (B.length 'src_bytes == 65 /\
+                 V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 B.length 'old_dst == 65)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst 'src_bytes **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
+
+(* Copy a 32-byte X25519 share into the front of a 65-byte, zero-initialised
+   destination: the runtime image of [CryptoSpec.pad_share_65] for the narrow
+   group. *)
+fn copy_padded32_array_to_vec65
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (#src_bytes:erased (B.bytes_of_len 32))
+  requires ArrPts.pts_to src src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 Seq.equal 'old_dst (Seq.create 65 0uy))
+  ensures ArrPts.pts_to src src_bytes **
+          V.pts_to dst (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)) **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
 
 fn store_optional_fixed32_from_array
   (src:array U8.t)

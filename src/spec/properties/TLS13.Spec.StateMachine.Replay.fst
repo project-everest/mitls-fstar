@@ -60,6 +60,13 @@ let event_protected_single_raw_parse_success
          W.parse_record_wire raw_received ==
             Some (T.Application_data, fragment, B.length raw_received)
     else True
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+     exists fragment.
+       W.parse_record_wire raw_received ==
+         Some (T.Application_data, fragment, B.length raw_received)
+    else True
   | ConnLocalEvent _ -> True
 let event_protected_raw_parse_prefix_success
   (ev:conn_event)
@@ -84,6 +91,15 @@ let event_protected_raw_parse_prefix_success
             Some (T.Application_data, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received))
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      exists fragment. exists (consumed:nat).
+       W.parse_record_wire raw_received ==
+         Some (T.Application_data, fragment, consumed) /\
+       consumed > 0 /\
+       consumed <= B.length raw_received
+    else True
   | ConnLocalEvent _ -> True
 let event_protected_raw_decompose_prefix_success
   (ev:conn_event)
@@ -116,6 +132,19 @@ let event_protected_raw_decompose_prefix_success
             (Seq.slice raw_received consumed (B.length raw_received))
             T.Application_data
             (protected_record_count msg.CL.message_direction msg.CL.message_value - 1)))
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then
+      exists fragment. exists (consumed:nat).
+        W.parse_record_wire raw_received ==
+          Some (T.Application_data, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw_received /\
+        raw_records_exactly
+          (Seq.slice raw_received consumed (B.length raw_received))
+          T.Application_data
+          0
+    else True
   | ConnLocalEvent _ -> True
 let event_protected_raw_segmented_success
   (ev:conn_event)
@@ -138,6 +167,11 @@ let event_protected_raw_segmented_success
           raw_received
           T.Application_data
           (protected_record_count msg.CL.message_direction msg.CL.message_value))
+  | ConnProtectedHandshake step ->
+    raw_records_segmented
+      raw_received
+      T.Application_data
+      (if step.protected_handshake_head then 1 else 0)
   | ConnLocalEvent _ -> True
 let rec conn_events_raw_replay
   (model:connection_model)
@@ -374,3 +408,504 @@ let connection_state_full_log_consistent
   : prop =
   st.cs_model.model_config.config_role == ClientEndpoint /\
   connection_state_full_log_consistent_for_role ClientEndpoint st
+
+(* ==================================================================== *)
+(* Single-message head steps normalise to network events.               *)
+(*                                                                      *)
+(* A client-received protected handshake record carrying exactly one    *)
+(* message is described by a HEAD [ConnProtectedHandshake] step whose    *)
+(* [consumed] saturates the fragment.  The implementation emits only    *)
+(* this form.  The lemmas below show that such a step denotes the SAME   *)
+(* transition -- same legality, same successor model, same raw          *)
+(* accounting, same decode projection -- as the [ConnNetworkEvent]      *)
+(* carrying the message.  This is what lets the receiver-side pairing   *)
+(* proofs, which are written against the network shape, apply unchanged. *)
+(* ==================================================================== *)
+
+let single_message_head_step_shape (step:protected_handshake_step) : prop =
+  step.protected_handshake_head /\
+  (* A BUFFERING step delivers no message, so it is never one of these.
+     Given legality this is already forced -- a buffering step has
+     [consumed == 0] and a non-empty fragment -- but stating it here keeps
+     the normal form usable without unfolding the legality relation. *)
+  step.protected_handshake_buffering == false /\
+  step.protected_handshake_offset == 0 /\
+  step.protected_handshake_consumed ==
+    B.length step.protected_handshake_fragment
+
+let head_step_network_event (step:protected_handshake_step) : conn_event =
+  ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = M.TlsHandshake step.protected_handshake_message;
+  }
+
+let lemma_single_message_head_step_legal
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : Lemma
+      (requires
+        legal_protected_handshake_step model step /\
+        step.protected_handshake_buffering == false)
+      (ensures legal_event model (head_step_network_event step))
+  = ()
+
+let lemma_single_message_head_step_model
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : Lemma
+      (requires
+        legal_protected_handshake_step model step /\
+        single_message_head_step_shape step)
+      (ensures
+        step_model model (ConnProtectedHandshake step) ==
+        step_model model (head_step_network_event step))
+  =
+  match step_handshake_message model CL.Received step.protected_handshake_message with
+  | None -> ()
+  | Some stepped ->
+    Seq.lemma_eq_elim
+      stepped.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes
+      B.empty
+
+let lemma_single_message_head_step_raw_delta
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        legal_protected_handshake_step model step /\
+        single_message_head_step_shape step /\
+        event_raw_delta_legal model (ConnProtectedHandshake step) raw_sent raw_received)
+      (ensures
+        event_raw_delta_legal model (head_step_network_event step) raw_sent raw_received)
+  = ()
+
+let lemma_single_message_head_step_decode
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        legal_protected_handshake_step model step /\
+        single_message_head_step_shape step /\
+        received_event_nonempty_decode_projection
+          model
+          (ConnProtectedHandshake step)
+          raw_received)
+      (ensures
+        received_event_nonempty_decode_projection
+          model
+          (head_step_network_event step)
+          raw_received)
+  =
+  if B.length raw_received == 0
+  then ()
+  else begin
+    FStar.Seq.Properties.slice_length step.protected_handshake_fragment;
+    eliminate exists outer_fragment opened plaintext.
+      W.parse_record_wire raw_received ==
+        Some (T.Application_data, outer_fragment, B.length raw_received) /\
+      received_record_opened model raw_received outer_fragment opened /\
+      W.parse_plaintext opened == Some plaintext /\
+      plaintext.M.content_type == T.Handshake /\
+      Seq.equal plaintext.M.fragment step.protected_handshake_fragment /\
+      step.protected_handshake_offset <=
+        B.length step.protected_handshake_fragment /\
+      W.parse_handshake
+        (Seq.slice
+          step.protected_handshake_fragment
+          step.protected_handshake_offset
+          (B.length step.protected_handshake_fragment)) ==
+        Some
+          (step.protected_handshake_message,
+           step.protected_handshake_consumed)
+    with
+    ( Seq.lemma_eq_elim plaintext.M.fragment step.protected_handshake_fragment;
+      W.lemma_parse_handshake_stream_def step.protected_handshake_fragment;
+      W.lemma_parse_handshake_stream_whole step.protected_handshake_fragment;
+      assert (W.parse_tls_message plaintext.M.content_type plaintext.M.fragment ==
+                Some (M.TlsHandshake step.protected_handshake_message));
+      assert (received_single_protected_message_decode
+                model
+                (M.TlsHandshake step.protected_handshake_message)
+                raw_received) )
+  end
+
+(* Unfolding equation for a received-decode replay whose event list is a cons.
+
+   With the head event itself built from a constructor application, the
+   fuel-guarded SMT encoding of the recursive definition does not line up with
+   the hypothesis, so the equation is established by normalisation instead. *)
+(* Unfolding equation for a raw replay whose event list is a cons; proved by
+   normalisation for the same reason as the received-decode counterpart. *)
+let lemma_raw_replay_cons_unfold
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+        (exists model1 delta_sent delta_received tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay model1 rest tail_sent tail_received final_model))
+  =
+  assert (conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+      (exists model1 delta_sent delta_received tail_sent tail_received.
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_raw_replay model1 rest tail_sent tail_received final_model))
+    by (FStar.Tactics.norm [delta_only [`%conn_events_raw_replay]; zeta; iota];
+        FStar.Tactics.trefl ())
+
+let lemma_received_decode_replay_cons_unfold
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (conn_events_received_decode_replay model (ev :: rest) raw_sent raw_received final_model ==
+        (exists model1 delta_sent delta_received tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          received_event_nonempty_decode_projection model ev delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_received_decode_replay model1 rest tail_sent tail_received final_model))
+  =
+  assert (conn_events_received_decode_replay model (ev :: rest) raw_sent raw_received final_model ==
+      (exists model1 delta_sent delta_received tail_sent tail_received.
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        received_event_nonempty_decode_projection model ev delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_received_decode_replay model1 rest tail_sent tail_received final_model))
+    by (FStar.Tactics.norm [delta_only [`%conn_events_received_decode_replay]; zeta; iota];
+        FStar.Tactics.trefl ())
+
+(* The replay-level statement: a received-decode replay whose head is a
+   saturating head step is also a received-decode replay whose head is the
+   corresponding network event, with the same tail, the same raw split and
+   the same final model. *)
+let lemma_single_message_head_step_replay_normalizes
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        single_message_head_step_shape step /\
+        conn_events_received_decode_replay
+          model
+          (ConnProtectedHandshake step :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        conn_events_received_decode_replay
+          model
+          (head_step_network_event step :: rest)
+          raw_sent
+          raw_received
+          final_model)
+  =
+  let ev = ConnProtectedHandshake step in
+  let nev = head_step_network_event step in
+  lemma_received_decode_replay_cons_unfold model ev rest raw_sent raw_received final_model;
+  lemma_received_decode_replay_cons_unfold model nev rest raw_sent raw_received final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    legal_event model ev /\
+    step_model model ev == Some model1 /\
+    event_raw_delta_legal model ev delta_sent delta_received /\
+    received_event_nonempty_decode_projection model ev delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_received_decode_replay model1 rest tail_sent tail_received final_model
+  with
+  ( lemma_single_message_head_step_legal model step;
+    lemma_single_message_head_step_model model step;
+    lemma_single_message_head_step_raw_delta model step delta_sent delta_received;
+    lemma_single_message_head_step_decode model step delta_received;
+    introduce exists model1' delta_sent' delta_received' tail_sent' tail_received'.
+      legal_event model nev /\
+      step_model model nev == Some model1' /\
+      event_raw_delta_legal model nev delta_sent' delta_received' /\
+      received_event_nonempty_decode_projection model nev delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_received_decode_replay model1' rest tail_sent' tail_received' final_model
+    with model1 delta_sent delta_received tail_sent tail_received
+    and () )
+
+(* The same normalisation one event later: the head step is the SECOND event
+   of the replay, behind an arbitrary first event (in practice the client's
+   traffic-key install).  Used by the server-flight inversion, which reasons
+   about the flight starting from before the read-key install. *)
+
+(* Explicit-witness introduction for a received-decode replay cons cell.
+
+   The unfolding equation is established by normalisation rather than left to
+   the SMT solver: with the tail list itself a cons, the fuel-guarded encoding
+   of the recursive definition does not line up with the hypothesis. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let lemma_received_decode_replay_cons
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  (model1:connection_model)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  (tail_sent:B.bytes)
+  (tail_received:B.bytes)
+  : Lemma
+      (requires
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        received_event_nonempty_decode_projection model ev delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_received_decode_replay model1 rest tail_sent tail_received final_model)
+      (ensures
+        conn_events_received_decode_replay model (ev :: rest) raw_sent raw_received final_model)
+  =
+  assert (conn_events_received_decode_replay model (ev :: rest) raw_sent raw_received final_model ==
+      (exists model1 delta_sent delta_received tail_sent tail_received.
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        received_event_nonempty_decode_projection model ev delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_received_decode_replay model1 rest tail_sent tail_received final_model))
+    by (FStar.Tactics.norm [delta_only [`%conn_events_received_decode_replay]; zeta; iota];
+        FStar.Tactics.trefl ())
+#pop-options
+
+(* The same normalisation one event later: the head step is the SECOND event
+   of the replay, behind the client's traffic-key install. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let lemma_single_message_head_step_replay_normalizes_after
+  (model:connection_model)
+  (local:local_event)
+  (step:protected_handshake_step)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        single_message_head_step_shape step /\
+        conn_events_received_decode_replay
+          model
+          (ConnLocalEvent local :: ConnProtectedHandshake step :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        conn_events_received_decode_replay
+          model
+          (ConnLocalEvent local :: head_step_network_event step :: rest)
+          raw_sent
+          raw_received
+          final_model)
+  =
+  let ev0 = ConnLocalEvent local in
+  lemma_received_decode_replay_cons_unfold
+    model ev0 (ConnProtectedHandshake step :: rest) raw_sent raw_received final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    legal_event model ev0 /\
+    step_model model ev0 == Some model1 /\
+    event_raw_delta_legal model ev0 delta_sent delta_received /\
+    received_event_nonempty_decode_projection model ev0 delta_received /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_received_decode_replay
+      model1 (ConnProtectedHandshake step :: rest) tail_sent tail_received final_model
+  with
+  ( lemma_single_message_head_step_replay_normalizes
+      model1 step rest tail_sent tail_received final_model;
+    lemma_received_decode_replay_cons
+      model ev0 (head_step_network_event step :: rest)
+      raw_sent raw_received final_model
+      model1 delta_sent delta_received tail_sent tail_received )
+#pop-options
+
+(* ==================================================================== *)
+(* The same normalisation for SENT-seal replays.                        *)
+(*                                                                      *)
+(* A client's own log is replayed both ways: the received-decode replay  *)
+(* accounts the bytes it decoded, the sent-seal replay accounts the      *)
+(* bytes it sealed.  A received head step contributes nothing to the     *)
+(* sent side, exactly like the network event it normalises to.          *)
+(* ==================================================================== *)
+
+let lemma_single_message_head_step_seal
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires
+        sent_event_nonempty_seal_projection
+          model
+          (ConnProtectedHandshake step)
+          raw_sent)
+      (ensures
+        sent_event_nonempty_seal_projection
+          model
+          (head_step_network_event step)
+          raw_sent)
+  = ()
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let lemma_sent_seal_replay_cons
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  (model1:connection_model)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  (tail_sent:B.bytes)
+  (tail_received:B.bytes)
+  : Lemma
+      (requires
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        sent_event_nonempty_seal_projection model ev delta_sent /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_sent_seal_replay model1 rest tail_sent tail_received final_model)
+      (ensures
+        conn_events_sent_seal_replay model (ev :: rest) raw_sent raw_received final_model)
+  =
+  assert (conn_events_sent_seal_replay model (ev :: rest) raw_sent raw_received final_model ==
+      (exists model1 delta_sent delta_received tail_sent tail_received.
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        sent_event_nonempty_seal_projection model ev delta_sent /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_sent_seal_replay model1 rest tail_sent tail_received final_model))
+    by (FStar.Tactics.norm [delta_only [`%conn_events_sent_seal_replay]; zeta; iota];
+        FStar.Tactics.trefl ())
+#pop-options
+
+(* Unfolding equation for a sent-seal replay whose event list is a cons; the
+   received-decode counterpart above explains why it is proved by
+   normalisation rather than left to the SMT solver. *)
+let lemma_sent_seal_replay_cons_unfold
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (conn_events_sent_seal_replay model (ev :: rest) raw_sent raw_received final_model ==
+        (exists model1 delta_sent delta_received tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          sent_event_nonempty_seal_projection model ev delta_sent /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_sent_seal_replay model1 rest tail_sent tail_received final_model))
+  =
+  assert (conn_events_sent_seal_replay model (ev :: rest) raw_sent raw_received final_model ==
+      (exists model1 delta_sent delta_received tail_sent tail_received.
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        sent_event_nonempty_seal_projection model ev delta_sent /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_sent_seal_replay model1 rest tail_sent tail_received final_model))
+    by (FStar.Tactics.norm [delta_only [`%conn_events_sent_seal_replay]; zeta; iota];
+        FStar.Tactics.trefl ())
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let lemma_single_message_head_step_seal_replay_normalizes
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        single_message_head_step_shape step /\
+        conn_events_sent_seal_replay
+          model
+          (ConnProtectedHandshake step :: rest)
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        conn_events_sent_seal_replay
+          model
+          (head_step_network_event step :: rest)
+          raw_sent
+          raw_received
+          final_model)
+  =
+  let ev = ConnProtectedHandshake step in
+  lemma_sent_seal_replay_cons_unfold model ev rest raw_sent raw_received final_model;
+  eliminate exists model1 delta_sent delta_received tail_sent tail_received.
+    legal_event model ev /\
+    step_model model ev == Some model1 /\
+    event_raw_delta_legal model ev delta_sent delta_received /\
+    sent_event_nonempty_seal_projection model ev delta_sent /\
+    Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+    Seq.equal raw_received (B.append delta_received tail_received) /\
+    conn_events_sent_seal_replay model1 rest tail_sent tail_received final_model
+  with
+  ( lemma_single_message_head_step_legal model step;
+    lemma_single_message_head_step_model model step;
+    lemma_single_message_head_step_raw_delta model step delta_sent delta_received;
+    lemma_single_message_head_step_seal model step delta_sent;
+    lemma_sent_seal_replay_cons
+      model (head_step_network_event step) rest
+      raw_sent raw_received final_model
+      model1 delta_sent delta_received tail_sent tail_received )
+#pop-options
+
+(* The converse accounting transport: an implementation call site knows the
+   record delta in the ORDINARY network-event form; the head step it actually
+   emits accounts for exactly the same bytes. *)
+let lemma_single_message_head_step_raw_delta_converse
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        legal_protected_handshake_step model step /\
+        single_message_head_step_shape step /\
+        event_raw_delta_legal model (head_step_network_event step) raw_sent raw_received)
+      (ensures
+        event_raw_delta_legal model (ConnProtectedHandshake step) raw_sent raw_received)
+  = ()

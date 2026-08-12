@@ -129,6 +129,7 @@ fn next_local_action
   let sign_certificate_verify_ready = CQ.can_sign_certificate_verify_runtime s;
   let send_certificate_verify_ready = CQ.can_send_certificate_verify_runtime s;
   let send_server_finished_ready = CQ.can_send_server_finished_runtime s;
+  let key_update_response_ready = CQ.server_key_update_response_ready_runtime s;
   fold (connection_exactly s 'st0);
   let server_handshake_write_keys_ready =
     (control.CR.snapshot_control_tag = 1uy) &&
@@ -483,6 +484,20 @@ fn next_local_action
         ST.next_local_kind = ST.LocalFail;
         ST.next_local_payload = ST.LocalPayloadNone;
       }
+    }
+  } else if key_update_response_ready {
+    // RFC 8446 4.6.3: a received KeyUpdate with update_requested obliges us to
+    // send our own update_not_requested.  server_key_update_response_ready_runtime
+    // exposes exactly the conjuncts of next_local_action_sound/LocalSendKeyUpdate.
+    assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure ('st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalSendKeyUpdate;
+      ST.next_local_payload = ST.LocalPayloadNone;
     }
   } else {
     {

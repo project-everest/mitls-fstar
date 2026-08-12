@@ -36,6 +36,13 @@ type local_event =
   | ServerSendCertificateVerify
   | ServerSendServerFinished
   | ServerSendApplicationData of B.bytes
+  (**
+    Send a KeyUpdate.  RFC 8446 §4.6.3 puts the two endpoints on an equal
+    footing here: a server may answer a client's [update_requested], and may
+    equally initiate a rotation of its own sending key.  The request form is
+    part of the action, exactly as for [ClientSendKeyUpdate].
+   **)
+  | ServerSendKeyUpdate of M.key_update_request
   | ServerSendCloseNotify
   | ServerFail
 
@@ -77,6 +84,9 @@ let server_local_event_matches
       (match msg.CL.message_value with
        | M.TlsHandshake (M.Finished _) -> True
        | _ -> False)
+  | ServerSendKeyUpdate req, CS.ConnNetworkEvent msg ->
+      msg.CL.message_direction == CL.Sent /\
+      msg.CL.message_value == M.TlsKeyUpdate req
   | ServerSendCloseNotify, CS.ConnNetworkEvent msg ->
       msg.CL.message_direction == CL.Sent /\
       msg.CL.message_value == M.TlsAlert T.Close_notify

@@ -5,6 +5,7 @@ module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
+module CM = TLS13.Impl.ConnectionState.Model
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
@@ -128,8 +129,13 @@ type local_event_kind =
   | LocalSendClientFinished
   | LocalSendApplicationData
   | LocalSendKeyUpdate
+  (** Spontaneous, client-initiated rotation carrying [update_requested];
+      [LocalSendKeyUpdate] is the [update_not_requested] response form. *)
+  | LocalSendKeyUpdateRequested
   | LocalSendCloseNotify
   | LocalFail
+  (** Internal event; see [EC.ClientProcessPendingHandshake]. *)
+  | LocalProcessPendingHandshake
 
 type local_payload_kind =
   | LocalPayloadNone
@@ -625,6 +631,8 @@ let sent_protected_event_write_key_schedule_projection
        CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
     then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection st0.CS.cs_model
     else True
+  | CS.ConnProtectedHandshake _ ->
+    True
   | CS.ConnLocalEvent _ ->
     True
 
@@ -1440,6 +1448,283 @@ let protected_decoder_fragment_relation
        WS.parse_plaintext opened == Some plaintext /\
        decoder_fragment_matches_plaintext content_type fragment plaintext))
 
+let lemma_protected_head_decoder_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        protected_decoder_fragment_relation
+          st0 content_type fragment raw_received /\
+        (exists outer_fragment.
+          WS.parse_record raw_received ==
+            Some
+              (T.Application_data,
+               outer_fragment,
+               B.length raw_received)) /\
+        L.content_type_matches content_type T.Handshake /\
+        Seq.equal step.protected_handshake_fragment fragment /\
+        step.protected_handshake_buffering == false /\
+        step.protected_handshake_offset == 0 /\
+        step.protected_handshake_head /\
+        WS.parse_handshake fragment ==
+          Some
+            (step.protected_handshake_message,
+             step.protected_handshake_consumed))
+      (ensures
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          raw_received)
+=
+  assert (exists outer_fragment.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
+    (exists opened.
+      protected_record_opened st0 raw_received outer_fragment opened /\
+      (exists plaintext.
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext)));
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun outer_fragment ->
+        WS.parse_record_wire raw_received ==
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
+        (exists opened.
+          protected_record_opened st0 raw_received outer_fragment opened /\
+          (exists plaintext.
+            WS.parse_plaintext opened == Some plaintext /\
+            decoder_fragment_matches_plaintext content_type fragment plaintext))) in
+  let parsed_outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun parsed_outer_fragment ->
+        WS.parse_record raw_received ==
+          Some
+            (T.Application_data,
+             parsed_outer_fragment,
+             B.length raw_received)) in
+  CSL.lemma_parse_record_full_raw_records_exactly
+    raw_received
+    T.Application_data
+    parsed_outer_fragment;
+  assert (exists opened.
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    (exists plaintext.
+      WS.parse_plaintext opened == Some plaintext /\
+      decoder_fragment_matches_plaintext content_type fragment plaintext));
+  let opened =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun opened ->
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        (exists plaintext.
+          WS.parse_plaintext opened == Some plaintext /\
+          decoder_fragment_matches_plaintext content_type fragment plaintext)) in
+  let plaintext =
+    ID.indefinite_description_ghost
+      M.plaintext
+      (fun plaintext ->
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext) in
+  assert (L.content_type_matches content_type plaintext.M.content_type);
+  assert (plaintext.M.content_type == T.Handshake);
+  assert (Seq.equal fragment plaintext.M.fragment);
+  Seq.lemma_eq_elim fragment plaintext.M.fragment;
+  Seq.lemma_eq_elim step.protected_handshake_fragment fragment;
+  assert (Seq.slice
+    step.protected_handshake_fragment
+    0
+    (B.length step.protected_handshake_fragment) ==
+      step.protected_handshake_fragment);
+  assert (TLS13.Spec.StateMachine.Canonical.received_record_opened
+    st0.CS.cs_model
+    raw_received
+    outer_fragment
+    opened);
+  assert (Seq.equal plaintext.M.fragment step.protected_handshake_fragment);
+  assert (WS.parse_handshake
+    (Seq.slice
+      step.protected_handshake_fragment
+      step.protected_handshake_offset
+      (B.length step.protected_handshake_fragment)) ==
+    Some
+      (step.protected_handshake_message,
+       step.protected_handshake_consumed));
+  assert (exists outer_fragment' opened' plaintext'.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment', B.length raw_received) /\
+    TLS13.Spec.StateMachine.Canonical.received_record_opened
+      st0.CS.cs_model
+      raw_received
+      outer_fragment'
+      opened' /\
+    WS.parse_plaintext opened' == Some plaintext' /\
+    plaintext'.M.content_type == T.Handshake /\
+    Seq.equal plaintext'.M.fragment step.protected_handshake_fragment /\
+    step.protected_handshake_offset <=
+      B.length step.protected_handshake_fragment /\
+    WS.parse_handshake
+      (Seq.slice
+        step.protected_handshake_fragment
+        step.protected_handshake_offset
+        (B.length step.protected_handshake_fragment)) ==
+      Some
+        (step.protected_handshake_message,
+         step.protected_handshake_consumed));
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_protected_handshake_head_decode
+      st0.CS.cs_model
+      step
+      raw_received);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      (CS.ConnProtectedHandshake step)
+      raw_received)
+
+(* The buffering analogue of [lemma_protected_head_decoder_projection].  A
+   buffering step claims only that this record opened to handshake plaintext
+   equal to its fragment; it delivers no message, so there is nothing to
+   parse and no [parse_handshake] hypothesis to discharge.  That is precisely
+   what makes it usable when the accumulated plaintext does not yet contain a
+   whole message. *)
+let lemma_protected_buffer_decoder_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        protected_decoder_fragment_relation
+          st0 content_type fragment raw_received /\
+        (exists outer_fragment.
+          WS.parse_record raw_received ==
+            Some
+              (T.Application_data,
+               outer_fragment,
+               B.length raw_received)) /\
+        L.content_type_matches content_type T.Handshake /\
+        Seq.equal step.protected_handshake_fragment fragment /\
+        step.protected_handshake_buffering == true /\
+        step.protected_handshake_head)
+      (ensures
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          raw_received)
+=
+  assert (exists outer_fragment.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
+    (exists opened.
+      protected_record_opened st0 raw_received outer_fragment opened /\
+      (exists plaintext.
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext)));
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun outer_fragment ->
+        WS.parse_record_wire raw_received ==
+          Some (T.Application_data, outer_fragment, B.length raw_received) /\
+        (exists opened.
+          protected_record_opened st0 raw_received outer_fragment opened /\
+          (exists plaintext.
+            WS.parse_plaintext opened == Some plaintext /\
+            decoder_fragment_matches_plaintext content_type fragment plaintext))) in
+  let parsed_outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun parsed_outer_fragment ->
+        WS.parse_record raw_received ==
+          Some
+            (T.Application_data,
+             parsed_outer_fragment,
+             B.length raw_received)) in
+  CSL.lemma_parse_record_full_raw_records_exactly
+    raw_received
+    T.Application_data
+    parsed_outer_fragment;
+  assert (exists opened.
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    (exists plaintext.
+      WS.parse_plaintext opened == Some plaintext /\
+      decoder_fragment_matches_plaintext content_type fragment plaintext));
+  let opened =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun opened ->
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        (exists plaintext.
+          WS.parse_plaintext opened == Some plaintext /\
+          decoder_fragment_matches_plaintext content_type fragment plaintext)) in
+  let plaintext =
+    ID.indefinite_description_ghost
+      M.plaintext
+      (fun plaintext ->
+        WS.parse_plaintext opened == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext) in
+  assert (L.content_type_matches content_type plaintext.M.content_type);
+  assert (plaintext.M.content_type == T.Handshake);
+  Seq.lemma_eq_elim fragment plaintext.M.fragment;
+  Seq.lemma_eq_elim step.protected_handshake_fragment fragment;
+  assert (TLS13.Spec.StateMachine.Canonical.received_record_opened
+    st0.CS.cs_model
+    raw_received
+    outer_fragment
+    opened);
+  assert (exists outer_fragment' opened' plaintext'.
+    WS.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment', B.length raw_received) /\
+    TLS13.Spec.StateMachine.Canonical.received_record_opened
+      st0.CS.cs_model
+      raw_received
+      outer_fragment'
+      opened' /\
+    WS.parse_plaintext opened' == Some plaintext' /\
+    plaintext'.M.content_type == T.Handshake /\
+    Seq.equal plaintext'.M.fragment step.protected_handshake_fragment);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_protected_handshake_buffer_decode
+      st0.CS.cs_model
+      step
+      raw_received);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_protected_handshake_head_decode
+      st0.CS.cs_model
+      step
+      raw_received);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received);
+  assert (
+    TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      (CS.ConnProtectedHandshake step)
+      raw_received)
+
 let protected_record_decodes_to_message
   (st0:CS.connection_state)
   (raw_received:B.bytes)
@@ -1977,8 +2262,8 @@ let parsed_message_wire_success_for
     Seq.equal fragment (WS.serialize_handshake (M.CertificateVerify cv))
   | L.LTlsHandshake (L.LCertificateVerify _), _ ->
     False
-  | L.LTlsHandshake (L.LFinished _), M.TlsHandshake (M.Finished _) ->
-    True
+  | L.LTlsHandshake (L.LFinished _), M.TlsHandshake (M.Finished fin) ->
+    Seq.equal fragment (WS.serialize_handshake (M.Finished fin))
   | L.LTlsHandshake (L.LFinished _), _ ->
     False
   | L.LTlsIgnoredPostHandshake _, M.TlsIgnoredPostHandshake _ ->
@@ -2045,6 +2330,9 @@ let local_event_kind_matches
   | LocalSendKeyUpdate, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
     msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+  | LocalSendKeyUpdateRequested, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateRequested
   | LocalStartHandshake, CS.ConnLocalEvent (CS.LocalStartHandshake _) -> True
   | LocalDeriveSharedSecret, CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> True
   | LocalInstallClientHandshakeTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
@@ -2065,6 +2353,8 @@ let local_event_kind_matches
     st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv
   | LocalVerifyFinished, CS.ConnLocalEvent (CS.LocalVerifyFinished _) -> True
   | LocalFail, CS.ConnLocalEvent (CS.LocalFail _) -> True
+  | LocalProcessPendingHandshake, CS.ConnProtectedHandshake step ->
+    step.CS.protected_handshake_head == false
   | _, _ -> False
 
 let local_payload_matches_app_sent_delta
@@ -2457,6 +2747,179 @@ let response_stuttered
   st1 == st0 /\
   Seq.equal network_out old_network_out /\
   Seq.equal app_out old_app_out
+
+let protected_handshake_step_correct
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == StepOk /\
+  resp.network_out_len == 0sz /\
+  resp.app_out_len == 0sz /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out /\
+  TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    raw_received
+
+let pending_protected_handshake_result_correct
+  (st0 st1:CS.connection_state)
+  (result:option client_response)
+  : prop =
+  match result with
+  | None ->
+    (* The drain reports [None] exactly when the pending buffer holds no
+       unprocessed plaintext.  Exposing that here is what lets the internal
+       primitive claim InternalQuiescent rather than merely "no change". *)
+    st1 == st0 /\
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+      B.length
+        st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes
+  | Some resp ->
+    resp.network_out_len == 0sz /\
+    resp.app_out_len == 0sz /\
+    (match resp.status with
+     | StepOk ->
+       exists step.
+         protected_handshake_step_correct
+           st0 st1 resp step B.empty B.empty B.empty
+     | NeedMoreInput ->
+       (* The pending buffer holds the start of a handshake message whose
+          remaining bytes are still in flight.  Cross-record reassembly makes
+          this a normal, recoverable outcome rather than a decode failure: the
+          drain simply stops, leaving the state untouched, so that the driver
+          reads more network bytes and buffers them onto the same message. *)
+       st1 == st0
+     | DecodeError
+     | IllegalTransition ->
+       st1 == st0
+     | _ ->
+       False)
+
+let lemma_legal_protected_handshake_step_some
+  (model:CS.connection_model)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_event model (CS.ConnProtectedHandshake step))
+      (ensures Some? (CS.step_protected_handshake model step))
+=
+  if step.CS.protected_handshake_buffering
+  then ()
+  else
+  match step.CS.protected_handshake_message with
+  | M.EncryptedExtensions _ -> ()
+  | M.Certificate _ -> ()
+  | M.CertificateVerify _ -> ()
+  | M.Finished _ -> ()
+  | _ -> assert False
+
+let lemma_protected_handshake_step_correct_intro
+  (st0:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        resp.status == StepOk /\
+        resp.network_out_len == 0sz /\
+        resp.app_out_len == 0sz /\
+        CS.legal_event
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step) /\
+        Some? (CS.step_protected_handshake st0.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          raw_received /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0)
+      (ensures
+        protected_handshake_step_correct
+          st0
+          (CM.protected_handshake_state st0 step raw_received)
+          resp
+          step
+          raw_received
+          network_out
+          app_out)
+=
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice network_out 0 0);
+  Seq.lemma_len_slice app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice app_out 0 0);
+  CM.lemma_protected_handshake_state_evolves st0 step raw_received
+
+let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        protected_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    (CS.ConnProtectedHandshake step)
+    B.empty);
+  lemma_legal_response_for_event_client_state_correct
+    st0
+    st1
+    resp
+    (CS.ConnProtectedHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out;
+  lemma_client_state_correct_raw_to_message_replay st1
+
+// Conditional form of the lemma above.  The protected-handshake head path needs
+// client_end_to_end_invariant only to prove its *postcondition* -- no state
+// update depends on it -- so callers that cannot supply the invariant (notably
+// the buffered driver, which propagates it as `held before ==> holds after`
+// rather than carrying it) can still use that path and simply propagate the
+// implication.
+let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_conditional
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        protected_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1)
+=
+  introduce client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1
+  with
+    lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+      st0 st1 resp step raw_received network_out app_out
 
 let network_event_step_correct
   (st0:CS.connection_state)
@@ -3120,6 +3583,87 @@ let network_bytes_end_to_end_correct
    TLS13.Spec.StateMachine.Replay.connection_state_sent_seal_replay_consistent st1) /\
   (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st0 ==>
    TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1)
+
+let coalesced_network_bytes_end_to_end_correct
+  (st0 st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out network_out:B.bytes)
+  (old_app_out app_out:B.bytes)
+  : prop =
+  network_bytes_end_to_end_correct
+    st0
+    st1
+    buffer_resp
+    network_input
+    old_network_out
+    network_out
+    old_app_out
+    app_out \/
+  (exists step.
+    0 < SZ.v buffer_resp.consumed_len /\
+    SZ.v buffer_resp.consumed_len <= B.length network_input /\
+    protected_handshake_step_correct
+      st0
+      st1
+      buffer_resp.response
+      step
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out /\
+    Seq.equal network_out old_network_out /\
+    Seq.equal app_out old_app_out)
+
+let lemma_coalesced_network_bytes_end_to_end_correct_preserves_invariant
+  (st0 st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out network_out:B.bytes)
+  (old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        coalesced_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  if network_bytes_end_to_end_correct
+      st0
+      st1
+      buffer_resp
+      network_input
+      old_network_out
+      network_out
+      old_app_out
+      app_out
+  then ()
+  else (
+    let step =
+      ID.indefinite_description_ghost
+        CS.protected_handshake_step
+        (fun step ->
+          0 < SZ.v buffer_resp.consumed_len /\
+          SZ.v buffer_resp.consumed_len <= B.length network_input /\
+          protected_handshake_step_correct
+            st0
+            st1
+            buffer_resp.response
+            step
+            (network_consumed_prefix network_input buffer_resp.consumed_len)
+            network_out
+            app_out /\
+          Seq.equal network_out old_network_out /\
+          Seq.equal app_out old_app_out) in
+    lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+      st0
+      st1
+      buffer_resp.response
+      step
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out
+  )
 
 let lemma_network_bytes_end_to_end_correct_preserves_config
   (st0:CS.connection_state)
@@ -3842,7 +4386,7 @@ let lemma_network_bytes_consumed_input_event_projection
         app_out)
   )
 
-#push-options "--split_queries always --z3refresh"
+#push-options "--split_queries always"
 let lemma_network_bytes_protected_record_key_schedule_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3981,7 +4525,7 @@ let lemma_network_bytes_protected_record_key_schedule_projection
 #pop-options
 
 
-#push-options "--split_queries always --z3refresh"
+#push-options "--split_queries always"
 let lemma_network_bytes_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4305,6 +4849,38 @@ let lemma_decoded_message_event_response_received_decode_projection
       app_out
   )
 
+let lemma_local_event_kind_matches_network_is_sent
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (msg:CS.directed_message M.tls_message)
+  : Lemma
+      (requires local_event_kind_matches st kind payload (CS.ConnNetworkEvent msg))
+      (ensures msg.CL.message_direction == CL.Sent)
+=
+  match kind with
+  | LocalSendApplicationData
+  | LocalSendClientHello
+  | LocalSendClientFinished
+  | LocalSendCloseNotify
+  | LocalSendKeyUpdate
+  | LocalSendKeyUpdateRequested -> ()
+  | _ -> ()
+
+let lemma_local_event_kind_matches_protected_is_tail
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (step:CS.protected_handshake_step)
+  : Lemma
+      (requires
+        local_event_kind_matches st kind payload (CS.ConnProtectedHandshake step))
+      (ensures step.CS.protected_handshake_head == false)
+=
+  match kind with
+  | LocalProcessPendingHandshake -> ()
+  | _ -> ()
+
 let lemma_legal_handled_local_response_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4354,13 +4930,20 @@ let lemma_legal_handled_local_response_received_decode_projection
     | CS.ConnLocalEvent _ ->
       assert (Seq.equal raw_received B.empty);
       Seq.lemma_eq_elim raw_received B.empty
+    | CS.ConnProtectedHandshake step ->
+      (* Reachable only for the internal event, whose matcher pins the step to
+         a tail step; [event_raw_delta_legal] then forces empty raw input. *)
+      assert (local_event_kind_matches st0 kind payload ev);
+      lemma_local_event_kind_matches_protected_is_tail st0 kind payload step;
+      assert (Seq.equal raw_received B.empty);
+      Seq.lemma_eq_elim raw_received B.empty
     | CS.ConnNetworkEvent msg ->
       (match msg.CL.message_direction with
        | CL.Sent ->
          assert (Seq.equal raw_received B.empty);
          Seq.lemma_eq_elim raw_received B.empty
        | CL.Received ->
-         assert (local_event_kind_matches st0 kind payload ev);
+         lemma_local_event_kind_matches_network_is_sent st0 kind payload msg;
          assert False);
     assert (B.length raw_received == 0);
     assert (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
@@ -4451,6 +5034,8 @@ let lemma_legal_handled_local_response_app_data_supported_projection
            assert (B.length payload <= SM.max_application_data_fragment_len);
            assert (CS.protected_record_count CL.Sent (M.TlsApplicationData payload) == 1)
          | _ -> assert False)
+      | CS.ConnProtectedHandshake _ ->
+        assert False
       | CS.ConnLocalEvent _ ->
         assert False
     )
@@ -5004,7 +5589,7 @@ let lemma_network_bytes_step_correct_sent_seal_replay_consistent
       app_out
   )
 
-#push-options "--split_queries always --z3refresh --z3rlimit_factor 4"
+#push-options "--split_queries always --z3rlimit_factor 4"
 let lemma_network_bytes_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5394,7 +5979,7 @@ let lemma_local_event_step_correct_client_end_to_end_invariant
   assert (client_state_correct st1);
   lemma_client_state_correct_raw_to_message_replay st1
 
-#push-options "--split_queries always --z3refresh --z3rlimit 10"
+#push-options "--split_queries always --z3rlimit 10"
 let lemma_local_event_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -6008,7 +6593,7 @@ let driver_trace_end_to_end
   driver_trace_accepted_wire_log_delta st0 st1 steps /\
   driver_trace_rejected_input_witnesses steps
 
-#push-options "--split_queries always --z3refresh"
+#push-options "--split_queries always"
 let lemma_network_bytes_end_to_end_correct_rejected_input_witness
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -6595,3 +7180,319 @@ let lemma_driver_trace_from_initial_end_to_end
     (CS.initial cfg)
     st1
     steps
+
+(**
+  Control-state preservation for live (successful) steps.
+
+  These pure lemmas expose that a successful protocol step keeps the connection
+  control state "not failed".  The state machine only ever produces
+  [ControlFailed] via a failing event ([LocalFail] / a fatal received alert);
+  a [StepOk] application-data send, or any network step that delivered
+  application-data output, is necessarily an ApplicationData transition and
+  therefore preserves [connection_control_not_failed].
+**)
+
+#push-options "--z3rlimit 20 --split_queries always"
+
+(* A successful TLS application-data message step keeps control = ControlApplicationData. *)
+let lemma_step_tls_app_data_control
+  (model0 model1:CS.connection_model) (dir:CS.direction) (bytes:B.bytes)
+  : Lemma
+      (requires CS.step_tls_message model0 dir (M.TlsApplicationData bytes) == Some model1)
+      (ensures model1.CS.model_control == CS.ControlApplicationData)
+=
+  match model0.CS.model_control with
+  | CS.ControlApplicationData ->
+    (match dir with
+     | CL.Sent -> ()
+     | CL.Received -> ())
+  | _ -> assert False
+
+(* A successful LocalDeliverApplicationData step keeps control = ControlApplicationData. *)
+let lemma_step_local_deliver_app_data_control
+  (model0 model1:CS.connection_model) (bytes:B.bytes)
+  : Lemma
+      (requires CS.step_local_event model0 (CS.LocalDeliverApplicationData bytes) == Some model1)
+      (ensures model1.CS.model_control == CS.ControlApplicationData)
+=
+  match model0.CS.model_control with
+  | CS.ControlApplicationData -> ()
+  | _ -> assert False
+
+(* SEND: a StepOk LocalSendApplicationData local event preserves not-failed control. *)
+let lemma_local_send_application_data_stepok_preserves_not_failed
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        local_event_end_to_end_correct
+          st0 st1 resp LocalSendApplicationData payload network_out app_out /\
+        resp.status == StepOk)
+      (ensures connection_control_not_failed st1)
+=
+  assert (legal_handled_local_response
+    st0 st1 resp LocalSendApplicationData payload network_out app_out);
+  assert (exists ev raw_sent raw_received.
+    legal_local_response
+      st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_local_response
+          st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_local_response
+          st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_local_response
+          st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out) in
+  assert (legal_local_response
+    st0 st1 resp LocalSendApplicationData payload ev raw_sent raw_received network_out app_out);
+  assert (local_event_kind_matches st0 LocalSendApplicationData payload ev);
+  assert (legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData bytes ->
+       assert (CS.step_tls_message
+         st0.CS.cs_model msg.CL.message_direction (M.TlsApplicationData bytes)
+         == Some st1.CS.cs_model);
+       lemma_step_tls_app_data_control
+         st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction bytes
+     | _ -> assert False)
+  | CS.ConnProtectedHandshake _ -> assert False
+  | CS.ConnLocalEvent _ -> assert False
+
+(* A successful TLS KeyUpdate message step keeps control = ControlApplicationData. *)
+let lemma_step_tls_key_update_control
+  (model0 model1:CS.connection_model) (dir:CS.direction) (req:M.key_update_request)
+  : Lemma
+      (requires CS.step_tls_message model0 dir (M.TlsKeyUpdate req) == Some model1)
+      (ensures model1.CS.model_control == CS.ControlApplicationData)
+=
+  match model0.CS.model_control with
+  | CS.ControlApplicationData ->
+    (match dir with
+     | CL.Sent -> ()
+     | CL.Received -> ())
+  | _ -> assert False
+
+(* A successful client-initiated KeyUpdate send preserves not-failed control.
+   Mirrors [lemma_local_send_application_data_stepok_preserves_not_failed];
+   [kind] stays symbolic over the two KeyUpdate ABI kinds, so the event-shape
+   obligations are discharged under an explicit case split. *)
+let lemma_local_send_key_update_stepok_preserves_not_failed
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        (kind == LocalSendKeyUpdate \/ kind == LocalSendKeyUpdateRequested) /\
+        local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out /\
+        resp.status == StepOk)
+      (ensures connection_control_not_failed st1)
+=
+  assert (legal_handled_local_response
+    st0 st1 resp kind payload network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+  assert (legal_local_response
+    st0 st1 resp kind payload ev raw_sent raw_received network_out app_out);
+  assert (local_event_kind_matches st0 kind payload ev);
+  assert (legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsKeyUpdate req ->
+       assert (CS.step_tls_message
+         st0.CS.cs_model msg.CL.message_direction (M.TlsKeyUpdate req)
+         == Some st1.CS.cs_model);
+       lemma_step_tls_key_update_control
+         st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction req
+     | _ ->
+       (match kind with
+        | LocalSendKeyUpdate -> assert False
+        | LocalSendKeyUpdateRequested -> assert False))
+  | CS.ConnProtectedHandshake _ ->
+    (match kind with
+     | LocalSendKeyUpdate -> assert False
+     | LocalSendKeyUpdateRequested -> assert False)
+  | CS.ConnLocalEvent _ ->
+    (match kind with
+     | LocalSendKeyUpdate -> assert False
+     | LocalSendKeyUpdateRequested -> assert False)
+
+(* A KeyUpdate send never touches the application log.  Whichever event the
+   response is legal for -- the KeyUpdate network event on success, a
+   [LocalFail] on either failure branch -- has empty application sent/received
+   deltas, so [model_app_log_delta] degenerates to equality.  This is what lets
+   a receive-path auto-response compose with [CI.receive_transition], whose log
+   equation must be left untouched by the inserted send. *)
+let lemma_local_send_key_update_preserves_app_log
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload network_out app_out:B.bytes)
+  : Lemma
+      (requires
+        (kind == LocalSendKeyUpdate \/ kind == LocalSendKeyUpdateRequested) /\
+        local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out)
+      (ensures
+        st1.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent ==
+          st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent /\
+        st1.CS.cs_model.CS.model_application.CS.app_log.CL.app_received ==
+          st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received)
+=
+  FStar.List.Tot.append_l_nil
+    st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent;
+  FStar.List.Tot.append_l_nil
+    st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received;
+  assert (legal_handled_local_response
+    st0 st1 resp kind payload network_out app_out);
+  if resp.status = StepOk
+  then begin
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    assert (local_event_kind_matches st0 kind payload ev);
+    lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    match ev with
+    | CS.ConnNetworkEvent msg ->
+      (match msg.CL.message_direction, msg.CL.message_value with
+       | CL.Sent, M.TlsKeyUpdate _ -> ()
+       | _, _ ->
+         (match kind with
+          | LocalSendKeyUpdate -> assert False
+          | LocalSendKeyUpdateRequested -> assert False))
+    | CS.ConnProtectedHandshake _ ->
+      (match kind with
+       | LocalSendKeyUpdate -> assert False
+       | LocalSendKeyUpdateRequested -> assert False)
+    | CS.ConnLocalEvent _ ->
+      (match kind with
+       | LocalSendKeyUpdate -> assert False
+       | LocalSendKeyUpdateRequested -> assert False)
+  end
+  else if resp.status = IllegalTransition
+  then
+    lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp
+      (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+      B.empty B.empty network_out app_out
+  else
+    lemma_legal_response_for_event_app_log_delta
+      st0 st1 resp
+      (CS.ConnLocalEvent (CS.LocalFail tls_bad_finished_error))
+      B.empty B.empty network_out app_out
+
+#pop-options
+
+#push-options "--z3rlimit 30 --split_queries always --fuel 2 --ifuel 2"
+
+(* RECEIVE: a network step that produced application-data output preserves not-failed control. *)
+let lemma_network_bytes_app_out_positive_not_failed
+  (st0 st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input old_network_out network_out old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
+        SZ.v buffer_resp.response.app_out_len > 0)
+      (ensures connection_control_not_failed st1)
+=
+  let resp = buffer_resp.response in
+  assert (network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  assert (~(response_stuttered
+    st0 st1 resp old_network_out network_out old_app_out app_out));
+  assert (some_legal_response st0 st1 resp network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  assert (legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (SZ.v resp.app_out_len <= B.length app_out);
+  assert (B.length (response_app_out resp app_out) == SZ.v resp.app_out_len);
+  assert (Seq.equal (response_app_out resp app_out) (event_api_app_out ev));
+  assert (B.length (event_api_app_out ev) > 0);
+  assert (~(TLS13.Spec.StateMachine.Log.conn_event_app_received_delta ev == []));
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Received, M.TlsApplicationData bytes ->
+       assert (CS.step_tls_message
+         st0.CS.cs_model msg.CL.message_direction (M.TlsApplicationData bytes)
+         == Some st1.CS.cs_model);
+       lemma_step_tls_app_data_control
+         st0.CS.cs_model st1.CS.cs_model msg.CL.message_direction bytes
+     | _, _ -> assert False)
+  | CS.ConnProtectedHandshake _ -> assert False
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData bytes ->
+       assert (CS.step_local_event
+         st0.CS.cs_model (CS.LocalDeliverApplicationData bytes)
+         == Some st1.CS.cs_model);
+       lemma_step_local_deliver_app_data_control
+         st0.CS.cs_model st1.CS.cs_model bytes
+     | _ -> assert False)
+
+#pop-options

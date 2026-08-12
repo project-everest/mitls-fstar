@@ -140,8 +140,14 @@ let finished_key (base_key:B.bytes) : C.secret =
 let finished_verify_data (base_key:B.bytes) (transcript_hash:B.bytes) : C.digest32 =
   C.hmac_sha256 (finished_key base_key) transcript_hash
 
-let derive_aead_key (secret:B.bytes) : C.aead_key =
-  C.hkdf_expand_label secret label_key B.empty 32
+(**
+  The AEAD traffic key.  The expansion length is part of the HKDF-Expand-Label
+  `info` string, so a 16-byte AES-128-GCM key is *not* a prefix of the 32-byte
+  ChaCha20-Poly1305 key: the algorithm must be threaded here rather than
+  recovered by truncation.
+**)
+let derive_aead_key (a:C.aead_alg) (secret:B.bytes) : C.aead_key a =
+  C.hkdf_expand_label secret label_key B.empty (C.aead_key_len a)
 
 let derive_aead_iv (secret:B.bytes) : C.aead_nonce =
   C.hkdf_expand_label secret label_iv B.empty 12

@@ -37,9 +37,21 @@ type local_event =
   | ClientSendClientHello
   | ClientSendClientFinished
   | ClientSendApplicationData of B.bytes
-  | ClientSendKeyUpdate
+  (**
+    Send a KeyUpdate.  The request form is part of the action: a client may
+    answer a peer's [update_requested] with [update_not_requested], and may
+    also rotate spontaneously with either form (RFC 8446 §4.6.3).
+   **)
+  | ClientSendKeyUpdate of M.key_update_request
   | ClientSendCloseNotify
   | ClientFail
+  (**
+    Internal event: process one handshake message already retained in the
+    pending-plaintext buffer.  It consumes no wire input and produces no wire
+    output; the message it processes is determined by the pending buffer, not
+    by the event.
+   **)
+  | ClientProcessPendingHandshake
 
 let validation_peer
   (st:CS.connection_state)
@@ -79,9 +91,9 @@ let client_local_event_matches
   | ClientSendCloseNotify, CS.ConnNetworkEvent msg ->
       msg.CL.message_direction == CL.Sent /\
       msg.CL.message_value == M.TlsAlert TLS13.Types.Close_notify
-  | ClientSendKeyUpdate, CS.ConnNetworkEvent msg ->
+  | ClientSendKeyUpdate req, CS.ConnNetworkEvent msg ->
       msg.CL.message_direction == CL.Sent /\
-      msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+      msg.CL.message_value == M.TlsKeyUpdate req
   | ClientStartHandshake,
     CS.ConnLocalEvent (CS.LocalStartHandshake _) ->
       True
@@ -115,6 +127,8 @@ let client_local_event_matches
       True
   | ClientFail, CS.ConnLocalEvent (CS.LocalFail _) ->
       True
+  | ClientProcessPendingHandshake, CS.ConnProtectedHandshake step ->
+      step.CS.protected_handshake_head == false
   | _, _ ->
       False
 
@@ -163,6 +177,33 @@ let network_input_message_projection
       msg
       (W.wire_serialize wire)
 
+(**
+  The connection event a client's receipt of one record may induce.
+
+  Either a semantic received message — a cleartext message, or a protected
+  record whose plaintext is a single non-handshake message — or the *head* step
+  of a protected handshake record, whose remaining plaintext is retained as
+  pending state and drained by subsequent internal events.
+
+  Both shapes describe exactly one physical record: [event_raw_delta_legal]
+  pins a head [ConnProtectedHandshake] to [raw_records_exactly _
+  Application_data 1], and a received [ConnNetworkEvent] to its own raw shape.
+  Having one [WireEvent] case covering both is what removes the receive-path
+  fork; see INTERNAL_EVENT_PLAN.md §1.1.
+ **)
+let client_wire_received_event
+  (st0:CS.connection_state)
+  (wire:W.wire_message)
+  (conn_ev:CS.conn_event)
+  : GTot prop =
+  match conn_ev with
+  | CS.ConnNetworkEvent tm ->
+    tm.CL.message_direction == CL.Received /\
+    network_input_message_projection st0 wire tm.CL.message_value
+  | CS.ConnProtectedHandshake step ->
+    step.CS.protected_handshake_head == true
+  | CS.ConnLocalEvent _ -> False
+
 let client_step
   (#local_event_repr:Type0)
   {| client_event_representation local_event_repr |}
@@ -173,19 +214,14 @@ let client_step
   : GTot prop =
   match ev with
   | SM.WireEvent wire ->
-    exists msg.
-      let conn_ev =
-        CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = msg;
-        } in
+    exists conn_ev.
+      client_wire_received_event st0 wire conn_ev /\
       SMCan.canonical_wire_step
         st0
         st1
         conn_ev
         (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
         (W.wire_serialize wire) /\
-      network_input_message_projection st0 wire msg /\
       client_local_outputs_match conn_ev out.SM.so_local_outputs
   | SM.LocalEvent local ->
     exists conn_ev raw_sent.
@@ -198,6 +234,90 @@ let client_step
         conn_ev
         raw_sent
         B.empty
+
+(**
+  Introduction: a received-network-message witness yields a client wire step.
+  This is the pre-existing shape of [client_step]'s [WireEvent] case, retained
+  as a lemma so producers need not know about the generalised disjunction.
+ **)
+let lemma_client_wire_step_from_network_witness
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0 st1:CS.connection_state)
+  (wire:W.wire_message)
+  (msg:M.tls_message)
+  (out:SM.step_output W.wire_message API.local_output)
+  : Lemma
+      (requires (
+        let conn_ev =
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          } in
+        SMCan.canonical_wire_step
+          st0 st1 conn_ev
+          (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+          (W.wire_serialize wire) /\
+        network_input_message_projection st0 wire msg /\
+        client_local_outputs_match conn_ev out.SM.so_local_outputs))
+      (ensures
+        client_step #local_event_repr st0 (SM.WireEvent wire) st1 out)
+  =
+  let conn_ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = msg;
+    } in
+  assert (client_wire_received_event st0 wire conn_ev)
+
+(**
+  Introduction: the head step of a protected handshake record yields a client
+  wire step.  This is the disjunct that removes the receive-path fork.
+ **)
+let lemma_client_wire_step_from_protected_head_witness
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0 st1:CS.connection_state)
+  (wire:W.wire_message)
+  (step:CS.protected_handshake_step)
+  (out:SM.step_output W.wire_message API.local_output)
+  : Lemma
+      (requires
+        step.CS.protected_handshake_head == true /\
+        SMCan.canonical_wire_step
+          st0 st1 (CS.ConnProtectedHandshake step)
+          (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+          (W.wire_serialize wire) /\
+        client_local_outputs_match
+          (CS.ConnProtectedHandshake step)
+          out.SM.so_local_outputs)
+      (ensures
+        client_step #local_event_repr st0 (SM.WireEvent wire) st1 out)
+  =
+  assert (client_wire_received_event st0 wire (CS.ConnProtectedHandshake step))
+
+(**
+  Elimination: a client wire step is described by exactly one connection event,
+  which is either a received network message or a protected-handshake head.
+ **)
+let lemma_client_wire_step_inversion
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0 st1:CS.connection_state)
+  (wire:W.wire_message)
+  (out:SM.step_output W.wire_message API.local_output)
+  : Lemma
+      (requires
+        client_step #local_event_repr st0 (SM.WireEvent wire) st1 out)
+      (ensures
+        exists conn_ev.
+          client_wire_received_event st0 wire conn_ev /\
+          SMCan.canonical_wire_step
+            st0 st1 conn_ev
+            (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+            (W.wire_serialize wire) /\
+          client_local_outputs_match conn_ev out.SM.so_local_outputs)
+  = ()
 
 type client_initial_state =
   st:CS.connection_state{

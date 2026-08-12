@@ -3,6 +3,7 @@ module TLS13.Impl.Client.ChannelImplementation
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Class.Duplicable
 
 module B = TLS13.Bytes
 module C = TLS13.Impl.Client
@@ -13,8 +14,10 @@ module CPI = Common.ProtocolImplementation
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.Spec.StateMachine.Log
 module CT = TLS13.Impl.Client.Types
+module D = TLS13.Impl.Client.Drain
 module DS = TLS13.Impl.Client.Driver.State
 module ID = FStar.IndefiniteDescription
+module IO = Common.TCP
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
 module Seq = FStar.Seq
@@ -28,17 +31,11 @@ let send_succeeded (status:DS.driver_workflow_status) : bool =
   | DS.DriverWorkflowOk -> true
   | _ -> false
 
-let send_reusable (_status:DS.driver_workflow_status) : bool = true
-
-let lemma_send_reusable (status:DS.driver_workflow_status)
-  : Lemma (send_reusable status == true)
-=
-  ()
-
 let lemma_channel_state_valid
   (d:DS.client_driver)
-  (raw_received:B.bytes)
-  (raw_sent:B.bytes)
+  (wire_received:B.bytes)
+  (wire_sent:B.bytes)
+  (pending:B.bytes)
   (app_log:CI.application_log B.bytes)
   (st:CS.connection_state)
   : Lemma
@@ -46,10 +43,14 @@ let lemma_channel_state_valid
         Common.WireFormatStateMachine.valid_byte_trace
           (CP.client_protocol_implementation.CPI.pi_system
             (DS.client_driver_canonical d))
-          raw_received
+          st.CS.cs_wire_log.CL.raw_received
           st
-          raw_sent
+          st.CS.cs_wire_log.CL.raw_sent
           Seq.empty /\
+        Seq.equal
+          wire_received
+          (B.append st.CS.cs_wire_log.CL.raw_received pending) /\
+        Seq.equal wire_sent st.CS.cs_wire_log.CL.raw_sent /\
         app_log == TChannel.application_log st)
       (ensures
         CI.channel_state_valid
@@ -57,18 +58,26 @@ let lemma_channel_state_valid
           DS.client_driver_canonical
           TChannel.application_log
           d
-          raw_received
-          raw_sent
+          wire_received
+          wire_sent
+          pending
           app_log)
 =
-  assert (exists state residual_input.
+  Seq.lemma_eq_elim wire_sent st.CS.cs_wire_log.CL.raw_sent;
+  Seq.lemma_eq_elim
+    wire_received
+    (B.append st.CS.cs_wire_log.CL.raw_received pending);
+  assert (exists state consumed_received.
+    Seq.equal
+      wire_received
+      (Seq.append consumed_received pending) /\
     Common.WireFormatStateMachine.valid_byte_trace
       (CP.client_protocol_implementation.CPI.pi_system
         (DS.client_driver_canonical d))
-      raw_received
+      consumed_received
       state
-      raw_sent
-      residual_input /\
+      wire_sent
+      Seq.empty /\
     app_log == TChannel.application_log state)
 
 let lemma_channel_snapshot_ahead
@@ -362,6 +371,10 @@ let lemma_legal_response_observable_receive_log
        TChannel.lemma_observable_received_append
          st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
          [])
+  | CS.ConnProtectedHandshake _ ->
+    TChannel.lemma_observable_received_append
+      st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+      []
   | CS.ConnLocalEvent local ->
     (match local with
      | CS.LocalDeliverApplicationData bytes ->
@@ -393,20 +406,25 @@ let lemma_non_application_local_event_deltas
   | CT.LocalSendApplicationData, _ -> assert False
   | _, _ -> ()
 
-#push-options "--split_queries always --z3refresh --z3rlimit 50"
+#push-options "--split_queries always --z3rlimit 50"
 let lemma_network_response_app_out_length
   (st0 st1:CS.connection_state)
   (buffer_resp:CT.client_buffer_response)
   (network_input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        D.drained_network_bytes_end_to_end_correct
           st0 st1 buffer_resp network_input
           old_network_out network_out old_app_out app_out)
       (ensures
         B.length (CT.response_app_out buffer_resp.CT.response app_out) ==
           SZ.v buffer_resp.CT.response.CT.app_out_len)
 =
+  let st_mid =
+    D.drained_network_middle
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out in
+  let st1 = st_mid in
   let resp = buffer_resp.CT.response in
   assert (CT.network_bytes_step_correct
     st0 st1 buffer_resp network_input
@@ -457,7 +475,7 @@ let lemma_receive_observation_app_out_length
 =
   if obs.DS.client_receive_observed_status == DS.DriverWorkflowOk then (
     assert (exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
-      CT.network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.DS.client_receive_observed_response
@@ -472,7 +490,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         CS.connection_state
         (fun st_before -> exists st_network input old_network_out network_out old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -487,7 +505,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun input -> exists st_network old_network_out network_out old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -502,7 +520,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun old_network_out -> exists st_network network_out old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -517,7 +535,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun network_out -> exists st_network old_app_out observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -532,7 +550,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun old_app_out -> exists st_network observed_app_out.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -547,7 +565,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         B.bytes
         (fun observed_app_out -> exists st_network.
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -559,7 +577,7 @@ let lemma_receive_observation_app_out_length
           st_network == st1 /\
           Seq.equal observed_app_out app_out) in
     assert (exists st_network.
-      CT.network_bytes_end_to_end_correct
+      D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
         obs.DS.client_receive_observed_response
@@ -574,7 +592,7 @@ let lemma_receive_observation_app_out_length
       ID.indefinite_description_ghost
         CS.connection_state
         (fun st_network ->
-          CT.network_bytes_end_to_end_correct
+          D.drained_network_bytes_end_to_end_correct
             st_before
             st_network
             obs.DS.client_receive_observed_response
@@ -689,13 +707,64 @@ let lemma_optional_receive_local_application_log
   else
     assert (st1 == st0)
 
-let lemma_network_bytes_application_log
+(** ---------------------------------------------------------------------- *)
+(** Drain steps are application-invisible                                   *)
+(** ---------------------------------------------------------------------- *)
+
+/// A drain step carries a [ConnProtectedHandshake] event with no application
+/// bytes, so it leaves the channel's application log untouched.  This is the
+/// property that lets a drained receive call keep the channel specification it
+/// had before the drain was introduced.
+let lemma_drain_step_application_log (st0 st1:CS.connection_state)
+  : Lemma
+      (requires D.drain_step st0 st1)
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  let (resp, step) = D.drain_step_witness st0 st1 in
+  assert (B.length (CT.response_app_out resp B.empty) == 0);
+  lemma_legal_response_observable_receive_log
+    st0 st1 resp (CS.ConnProtectedHandshake step)
+    B.empty B.empty B.empty B.empty
+
+#push-options "--fuel 2 --ifuel 2"
+let rec lemma_drain_chain_application_log (n:nat) (st0 st1:CS.connection_state)
+  : Lemma
+      (requires D.drain_chain n st0 st1)
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+      (decreases n)
+=
+  if n = 0
+  then ()
+  else
+  let m : nat = n - 1 in
+    eliminate
+      (st1 == st0) \/ (exists st'. D.drain_step st0 st' /\ D.drain_chain m st' st1)
+    with ()
+    and
+      (let st' =
+         ID.indefinite_description_ghost
+           CS.connection_state
+           (fun st' -> D.drain_step st0 st' /\ D.drain_chain m st' st1) in
+       lemma_drain_step_application_log st0 st';
+       lemma_drain_chain_application_log m st' st1)
+#pop-options
+
+let lemma_drained_application_log (st0 st1:CS.connection_state)
+  : Lemma
+      (requires D.drained st0 st1)
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  let n =
+    ID.indefinite_description_ghost nat (fun n -> D.drain_chain n st0 st1) in
+  lemma_drain_chain_application_log n st0 st1
+
+let lemma_network_bytes_application_log_undrained
   (st0 st1:CS.connection_state)
   (buffer_resp:CT.client_buffer_response)
   (network_input old_network_out network_out old_app_out app_out:B.bytes)
   : Lemma
       (requires
-        CT.network_bytes_end_to_end_correct
+        CT.coalesced_network_bytes_end_to_end_correct
           st0 st1 buffer_resp network_input
           old_network_out network_out old_app_out app_out)
       (ensures
@@ -706,6 +775,22 @@ let lemma_network_bytes_application_log
             else CI.append_received (TChannel.application_log st0) output)))
 =
   let resp = buffer_resp.CT.response in
+  if not (CT.network_bytes_end_to_end_correct
+            st0 st1 buffer_resp network_input
+            old_network_out network_out old_app_out app_out)
+  then (
+    // Head protected-handshake step: the event carries no application bytes.
+    let step =
+      CP.lemma_client_coalesced_head_step
+        st0 st1 buffer_resp network_input
+        old_network_out network_out old_app_out app_out in
+    let raw_received =
+      CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
+    lemma_legal_response_observable_receive_log
+      st0 st1 resp
+      (CS.ConnProtectedHandshake step)
+      B.empty raw_received network_out app_out
+  ) else (
   assert (CT.network_bytes_step_correct
     st0 st1 buffer_resp network_input
     old_network_out network_out old_app_out app_out);
@@ -795,288 +880,484 @@ let lemma_network_bytes_application_log
         app_out
     )
   )
+  )
 #pop-options
 
-ghost fn pack_channel_invariant
-  (d:DS.client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  (st:Ghost.erased CS.connection_state)
-  (transport_received:Ghost.erased B.bytes)
-  (transport_sent:Ghost.erased B.bytes)
-  (ch:Ghost.erased Common.TCP.channel)
-  (buffered:Ghost.erased B.bytes)
-  (buffered_len:Ghost.erased FStar.SizeT.t)
-  requires
-    CP.client_invariant
-      (DS.client_driver_canonical d)
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      (Ghost.reveal st) **
-    TLS13.OpenSSL.is_auth_context d.DS.client_driver_auth **
-    Pulse.Lib.Box.pts_to
-      d.DS.client_driver_channel
-      (Some (Ghost.reveal ch)) **
-    Common.TCP.is_channel
-      (Ghost.reveal ch)
-      (Ghost.reveal transport_received)
-      (Ghost.reveal transport_sent) **
-    DS.client_driver_buffers
-      d
-      (Ghost.reveal buffered)
-      (Ghost.reveal buffered_len) **
-    pure (
-      DS.client_driver_wire_logs_match
-        (Ghost.reveal st)
-        (Ghost.reveal transport_received)
-        (Ghost.reveal transport_sent)
-        (Ghost.reveal buffered)
-        (Ghost.reveal buffered_len) /\
-      (Ghost.reveal app_log) ==
-        TChannel.application_log (Ghost.reveal st))
-  ensures
-    DS.client_channel_inv
-      d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      (Ghost.reveal app_log)
-{
-  fold (DS.client_channel_inv
-    d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
-    (Ghost.reveal app_log))
-}
+/// The drained form.  The drain adds no application bytes, so the channel's
+/// application log after the whole call is the one the undrained step already
+/// characterised.
+let lemma_network_bytes_application_log
+  (st0 st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input old_network_out network_out old_app_out app_out:B.bytes)
+  : Lemma
+      (requires
+        D.drained_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input
+          old_network_out network_out old_app_out app_out)
+      (ensures
+        (let output = CT.response_app_out buffer_resp.CT.response app_out in
+         TChannel.application_log st1 ==
+           (if B.length output == 0
+            then TChannel.application_log st0
+            else CI.append_received (TChannel.application_log st0) output)))
+=
+  let st_mid =
+    D.drained_network_middle
+      st0 st1 buffer_resp network_input
+      old_network_out network_out old_app_out app_out in
+  lemma_network_bytes_application_log_undrained
+    st0 st_mid buffer_resp network_input
+    old_network_out network_out old_app_out app_out;
+  lemma_drained_application_log st_mid st1
 
-ghost fn pack_channel_terminal
-  (d:DS.client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  (st:Ghost.erased CS.connection_state)
-  (transport_received:Ghost.erased B.bytes)
-  (transport_sent:Ghost.erased B.bytes)
-  (ch:Ghost.erased Common.TCP.channel)
-  (buffered:Ghost.erased B.bytes)
-  (buffered_len:Ghost.erased FStar.SizeT.t)
-  requires
-    CP.client_invariant
-      (DS.client_driver_canonical d)
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      (Ghost.reveal st) **
-    TLS13.OpenSSL.is_auth_context d.DS.client_driver_auth **
-    Pulse.Lib.Box.pts_to
-      d.DS.client_driver_channel
-      (Some (Ghost.reveal ch)) **
-    Common.TCP.is_channel
-      (Ghost.reveal ch)
-      (Ghost.reveal transport_received)
-      (Ghost.reveal transport_sent) **
-    DS.client_driver_buffers
-      d
-      (Ghost.reveal buffered)
-      (Ghost.reveal buffered_len) **
-    pure (
-      DS.client_driver_wire_logs_match
-        (Ghost.reveal st)
-        (Ghost.reveal transport_received)
-        (Ghost.reveal transport_sent)
-        (Ghost.reveal buffered)
-        (Ghost.reveal buffered_len) /\
-      (Ghost.reveal app_log) ==
-        TChannel.application_log (Ghost.reveal st))
-  ensures
-    DS.client_channel_terminal
-      d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      (Ghost.reveal app_log)
-{
-  fold (DS.client_channel_terminal
-    d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
-    (Ghost.reveal app_log))
-}
+
 
 ghost fn open_channel_invariant
   (d:DS.client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   requires
     DS.client_channel_inv
       d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
       (Ghost.reveal app_log)
   ensures
-    exists* st transport_received transport_sent.
+    exists* st.
       DS.client_driver_connected
         d
         st
-        transport_received
-        transport_sent **
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent) **
       pure (
+        (Ghost.reveal app_log) == TChannel.application_log st /\
+        CT.connection_control_not_failed st /\
         Seq.equal
-          (Ghost.reveal raw_received)
-          st.CS.cs_wire_log.CL.raw_received /\
-        Seq.equal
-          (Ghost.reveal raw_sent)
-          st.CS.cs_wire_log.CL.raw_sent /\
-        (Ghost.reveal app_log) == TChannel.application_log st)
+          (Ghost.reveal wire_received)
+          (B.append st.CS.cs_wire_log.CL.raw_received (Ghost.reveal pending)) /\
+        Seq.equal (Ghost.reveal wire_sent) st.CS.cs_wire_log.CL.raw_sent)
 {
   unfold (DS.client_channel_inv
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
     (Ghost.reveal app_log));
-  with st transport_received transport_sent ch buffered buffered_len.
-    assert (CP.client_invariant
-      (DS.client_driver_canonical d)
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      st);
+  with st channel model committed buffered_len. _;
+  unfold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
   unfold (CP.client_invariant
     (DS.client_driver_canonical d)
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
     st);
   fold (DS.client_driver_canonical_progress d st);
+  rewrite
+    (DS.client_driver_canonical_progress d st)
+    as
+    (DS.buffered_driver_canonical_progress
+      (DS.client_buffered_driver d channel)
+      st);
+  fold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d channel)
+    st
+    (Common.BufferedTCP.pending model)
+    buffered_len
+    model
+    (Ghost.reveal wire_received)
+    committed
+    (Ghost.reveal wire_sent));
+  fold (DS.client_driver_connected_indexed
+    d
+    st
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    channel
+    model
+    committed
+    buffered_len);
   fold (DS.client_driver_connected
-    d st transport_received transport_sent)
+    d st (Ghost.reveal wire_received) (Ghost.reveal wire_sent))
+}
+
+ghost fn open_io_channel
+  (d:DS.client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.client_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  returns ch:IO.channel
+  ensures
+    IO.is_channel
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent) **
+    DS.client_channel_io_frame
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+{
+  unfold (DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  with st channel model committed buffered_len. _;
+  unfold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  let ch = Common.BufferedTCP.open_io_channel channel;
+  fold (DS.client_channel_io_frame_indexed
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_io_frame
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  ch
+}
+
+ghost fn close_io_channel
+  (d:DS.client_driver)
+  (ch:IO.channel)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    IO.is_channel
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent) **
+    DS.client_channel_io_frame
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+  ensures
+    DS.client_channel_inv
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+{
+  unfold (DS.client_channel_io_frame
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log));
+  with st channel model committed buffered_len.
+    assert (DS.client_channel_io_frame_indexed
+      d
+      ch
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
+      (Ghost.reveal app_log)
+      st
+      channel
+      model
+      committed
+      buffered_len);
+  unfold (DS.client_channel_io_frame_indexed
+    d
+    ch
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  Common.BufferedTCP.close_io_channel channel ch;
+  fold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log))
 }
 
 ghost fn pack_connected_channel_invariant
   (d:DS.client_driver)
   (st:Ghost.erased CS.connection_state)
-  (transport_received:Ghost.erased B.bytes)
-  (transport_sent:Ghost.erased B.bytes)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
   requires
     DS.client_driver_connected
       d
       (Ghost.reveal st)
-      (Ghost.reveal transport_received)
-      (Ghost.reveal transport_sent)
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    pure (CT.connection_control_not_failed (Ghost.reveal st))
   ensures
-    DS.client_channel_inv
-      d
-      (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
-      (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
-      (TChannel.application_log (Ghost.reveal st))
+    exists* pending.
+      DS.client_channel_inv
+        d
+        (Ghost.reveal received)
+        (Ghost.reveal sent)
+        pending
+        (TChannel.application_log (Ghost.reveal st))
 {
   unfold (DS.client_driver_connected
     d
     (Ghost.reveal st)
-    (Ghost.reveal transport_received)
-    (Ghost.reveal transport_sent));
-  with ch buffered buffered_len.
-    assert (
-      Pulse.Lib.Box.pts_to d.DS.client_driver_channel (Some ch) **
-      Common.TCP.is_channel
-        ch
-        (Ghost.reveal transport_received)
-        (Ghost.reveal transport_sent) **
-      DS.client_driver_buffers d buffered buffered_len **
-      pure (DS.client_driver_wire_logs_match
-        (Ghost.reveal st)
-        (Ghost.reveal transport_received)
-        (Ghost.reveal transport_sent)
-        buffered
-        buffered_len));
-  unfold (DS.client_driver_canonical_progress d (Ghost.reveal st));
+    (Ghost.reveal received)
+    (Ghost.reveal sent));
+  with channel model committed buffered_len. _;
+  unfold (DS.client_driver_connected_indexed
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    channel
+    model
+    committed
+    buffered_len);
+  unfold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d channel)
+    (Ghost.reveal st)
+    (Common.BufferedTCP.pending model)
+    buffered_len
+    model
+    (Ghost.reveal received)
+    committed
+    (Ghost.reveal sent));
+  let consumed =
+    DS.choose_wire_logs_match_witness
+      (Ghost.reveal st)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (Common.BufferedTCP.pending model)
+      buffered_len;
+  assert (pure (
+    Seq.equal
+      (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+      (Ghost.reveal consumed)));
+  Seq.lemma_eq_elim
+    (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+    (Ghost.reveal consumed);
+  assert (pure (
+    Seq.equal
+      (Ghost.reveal received)
+      (B.append
+        (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
+        (Common.BufferedTCP.pending model))));
+  unfold (DS.buffered_driver_canonical_progress
+    (DS.client_buffered_driver d channel)
+    (Ghost.reveal st));
   fold (CP.client_invariant
     (DS.client_driver_canonical d)
     (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
     (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
     (Ghost.reveal st));
-  assert (CP.client_invariant
+  assert (pure (
+    DS.client_driver_wire_logs_match_witness
+      (Ghost.reveal st)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      committed
+      (Common.BufferedTCP.pending model)
+      buffered_len /\
+    SZ.v buffered_len ==
+      B.length (Common.BufferedTCP.pending model)));
+  fold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Common.BufferedTCP.pending model)
+    (TChannel.application_log (Ghost.reveal st))
+    (Ghost.reveal st)
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_inv
+    d
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (Common.BufferedTCP.pending model)
+    (TChannel.application_log (Ghost.reveal st)))
+}
+
+ghost fn pack_connected_channel_terminal
+  (d:DS.client_driver)
+  (st:Ghost.erased CS.connection_state)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
+  requires
+    DS.client_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+  ensures
+    DS.client_channel_terminal
+      d
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      (TChannel.application_log (Ghost.reveal st))
+{
+  unfold (DS.client_driver_connected
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal received)
+    (Ghost.reveal sent));
+  with channel model committed buffered_len. _;
+  unfold (DS.client_driver_connected_indexed
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    channel
+    model
+    committed
+    buffered_len);
+  unfold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d channel)
+    (Ghost.reveal st)
+    (Common.BufferedTCP.pending model)
+    buffered_len
+    model
+    (Ghost.reveal received)
+    committed
+    (Ghost.reveal sent));
+  unfold (DS.buffered_driver_canonical_progress
+    (DS.client_buffered_driver d channel)
+    (Ghost.reveal st));
+  fold (CP.client_invariant
     (DS.client_driver_canonical d)
     (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
     (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
     (Ghost.reveal st));
   assert (pure (
-    DS.client_driver_wire_logs_match
+    DS.client_driver_wire_logs_match_witness
       (Ghost.reveal st)
-      (Ghost.reveal transport_received)
-      (Ghost.reveal transport_sent)
-      buffered
+      (Ghost.reveal received)
+      (Ghost.reveal sent)
+      committed
+      (Common.BufferedTCP.pending model)
       buffered_len /\
-    TChannel.application_log (Ghost.reveal st) ==
-      TChannel.application_log (Ghost.reveal st)));
-  fold (DS.client_channel_inv
+    SZ.v buffered_len ==
+      B.length (Common.BufferedTCP.pending model)));
+  fold (DS.client_channel_terminal_indexed
     d
-    (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
-    (Ghost.reveal st).CS.cs_wire_log.CL.raw_sent
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
+    (TChannel.application_log (Ghost.reveal st))
+    (Ghost.reveal st)
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_terminal
+    d
+    (Ghost.reveal received)
+    (Ghost.reveal sent)
     (TChannel.application_log (Ghost.reveal st)))
 }
 
 ghost fn pack_connected_channel
   (d:DS.client_driver)
   (st:Ghost.erased CS.connection_state)
-  (transport_received:Ghost.erased B.bytes)
-  (transport_sent:Ghost.erased B.bytes)
+  (received:Ghost.erased B.bytes)
+  (sent:Ghost.erased B.bytes)
   requires
     DS.client_driver_connected
       d
       (Ghost.reveal st)
-      (Ghost.reveal transport_received)
-      (Ghost.reveal transport_sent)
+      (Ghost.reveal received)
+      (Ghost.reveal sent) **
+    pure (CT.connection_control_not_failed (Ghost.reveal st))
   ensures
-    exists* raw_received raw_sent app_log.
-      DS.client_channel_inv d raw_received raw_sent app_log
+    exists* wire_received wire_sent pending app_log.
+      DS.client_channel_inv d wire_received wire_sent pending app_log
 {
   pack_connected_channel_invariant
-    d st transport_received transport_sent
-}
-
-ghost fn pack_channel_snapshot
-  (d:DS.client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
-  (app_log:Ghost.erased (CI.application_log B.bytes))
-  (st:Ghost.erased CS.connection_state)
-  requires
-    CP.client_snapshot
-      (DS.client_driver_canonical d)
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      (Ghost.reveal st) **
-    pure (
-      (Ghost.reveal app_log) ==
-        TChannel.application_log (Ghost.reveal st))
-  ensures
-    DS.client_channel_snapshot
-      d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      (Ghost.reveal app_log)
-{
-  fold (DS.client_channel_snapshot
-    d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
-    (Ghost.reveal app_log))
+    d st received sent
 }
 
 ghost fn channel_invariant_valid
   (d:DS.client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   requires
     DS.client_channel_inv
       d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
       (Ghost.reveal app_log)
   ensures
     DS.client_channel_inv
       d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
       (Ghost.reveal app_log) **
     pure (
       CI.channel_state_valid
@@ -1084,103 +1365,165 @@ ghost fn channel_invariant_valid
         DS.client_driver_canonical
         TChannel.application_log
         d
-        (Ghost.reveal raw_received)
-        (Ghost.reveal raw_sent)
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent)
+        (Ghost.reveal pending)
         (Ghost.reveal app_log))
 {
   unfold (DS.client_channel_inv
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
     (Ghost.reveal app_log));
-  with st transport_received transport_sent ch buffered buffered_len.
-    assert (CP.client_invariant
-      (DS.client_driver_canonical d)
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      st);
+  with st channel model committed buffered_len. _;
+  unfold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
   CP.client_invariant_valid
     (DS.client_driver_canonical d)
-    raw_received
-    raw_sent
+    (Ghost.hide st.CS.cs_wire_log.CL.raw_received)
+    (Ghost.hide st.CS.cs_wire_log.CL.raw_sent)
     (Ghost.hide st);
   lemma_channel_state_valid
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
     (Ghost.reveal app_log)
     st;
-  assert (pure (CI.channel_state_valid
-    CP.client_protocol_implementation
-    DS.client_driver_canonical
-    TChannel.application_log
+  fold (DS.client_channel_inv_indexed
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
-    (Ghost.reveal app_log)));
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
   fold (DS.client_channel_inv
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log))
+}
+
+ghost fn pack_channel_snapshot
+  (d:DS.client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  (st:Ghost.erased CS.connection_state)
+  requires
+    CP.client_snapshot
+      (DS.client_driver_canonical d)
+      st.CS.cs_wire_log.CL.raw_received
+      st.CS.cs_wire_log.CL.raw_sent
+      st **
+    MR.snapshot
+      d.DS.client_driver_tcp_history
+      (DS.wire_history (Ghost.reveal wire_received) (Ghost.reveal wire_sent)) **
+    pure ((Ghost.reveal app_log) == TChannel.application_log st)
+  ensures
+    DS.client_channel_snapshot
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+{
+  fold (DS.client_channel_snapshot
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
     (Ghost.reveal app_log))
 }
 
 ghost fn take_channel_snapshot
   (d:DS.client_driver)
-  (raw_received:Ghost.erased B.bytes)
-  (raw_sent:Ghost.erased B.bytes)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (pending:Ghost.erased B.bytes)
   (app_log:Ghost.erased (CI.application_log B.bytes))
   requires
     DS.client_channel_inv
       d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
       (Ghost.reveal app_log)
   ensures
     DS.client_channel_inv
       d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal pending)
       (Ghost.reveal app_log) **
     DS.client_channel_snapshot
       d
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
       (Ghost.reveal app_log)
 {
   unfold (DS.client_channel_inv
     d
-    (Ghost.reveal raw_received)
-    (Ghost.reveal raw_sent)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
     (Ghost.reveal app_log));
-  with st transport_received transport_sent ch buffered buffered_len.
-    assert (CP.client_invariant
-      (DS.client_driver_canonical d)
-      (Ghost.reveal raw_received)
-      (Ghost.reveal raw_sent)
-      st);
+  with st channel model committed buffered_len. _;
+  unfold (DS.client_channel_inv_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
   CP.take_client_snapshot
     (DS.client_driver_canonical d)
-    raw_received
-    raw_sent
+    (Ghost.hide st.CS.cs_wire_log.CL.raw_received)
+    (Ghost.hide st.CS.cs_wire_log.CL.raw_sent)
     (Ghost.hide st);
+  MR.take_snapshot
+    d.DS.client_driver_tcp_history
+    (DS.wire_history (Ghost.reveal wire_received) (Ghost.reveal wire_sent));
   pack_channel_snapshot
     d
-    raw_received
-    raw_sent
+    wire_received
+    wire_sent
     app_log
     (Ghost.hide st);
-  pack_channel_invariant
+  fold (DS.client_channel_inv_indexed
     d
-    raw_received
-    raw_sent
-    app_log
-    (Ghost.hide st)
-    (Ghost.hide transport_received)
-    (Ghost.hide transport_sent)
-    (Ghost.hide ch)
-    (Ghost.hide buffered)
-    (Ghost.hide buffered_len)
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_inv
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal pending)
+    (Ghost.reveal app_log))
 }
 
 ghost fn recall_channel_snapshot
@@ -1190,6 +1533,7 @@ ghost fn recall_channel_snapshot
   (old_log:Ghost.erased (CI.application_log B.bytes))
   (new_received:Ghost.erased B.bytes)
   (new_sent:Ghost.erased B.bytes)
+  (new_pending:Ghost.erased B.bytes)
   (new_log:Ghost.erased (CI.application_log B.bytes))
   requires
     DS.client_channel_snapshot
@@ -1201,6 +1545,7 @@ ghost fn recall_channel_snapshot
       d
       (Ghost.reveal new_received)
       (Ghost.reveal new_sent)
+      (Ghost.reveal new_pending)
       (Ghost.reveal new_log)
   ensures
     DS.client_channel_snapshot
@@ -1212,6 +1557,7 @@ ghost fn recall_channel_snapshot
       d
       (Ghost.reveal new_received)
       (Ghost.reveal new_sent)
+      (Ghost.reveal new_pending)
       (Ghost.reveal new_log) **
     pure (
       CI.channel_snapshot_ahead
@@ -1231,59 +1577,71 @@ ghost fn recall_channel_snapshot
     (Ghost.reveal old_received)
     (Ghost.reveal old_sent)
     (Ghost.reveal old_log));
-  with old_st.
-    assert (CP.client_snapshot
-      (DS.client_driver_canonical d)
-      (Ghost.reveal old_received)
-      (Ghost.reveal old_sent)
-      old_st);
+  with old_st. _;
+  dup (MR.snapshot
+    d.DS.client_driver_tcp_history
+    (DS.wire_history (Ghost.reveal old_received) (Ghost.reveal old_sent))) ();
   unfold (CP.client_snapshot
     (DS.client_driver_canonical d)
-    (Ghost.reveal old_received)
-    (Ghost.reveal old_sent)
+    old_st.CS.cs_wire_log.CL.raw_received
+    old_st.CS.cs_wire_log.CL.raw_sent
     old_st);
   assert (pure (CSL.connection_state_app_log_consistent old_st));
   fold (CP.client_snapshot
     (DS.client_driver_canonical d)
-    (Ghost.reveal old_received)
-    (Ghost.reveal old_sent)
+    old_st.CS.cs_wire_log.CL.raw_received
+    old_st.CS.cs_wire_log.CL.raw_sent
     old_st);
   unfold (DS.client_channel_inv
     d
     (Ghost.reveal new_received)
     (Ghost.reveal new_sent)
+    (Ghost.reveal new_pending)
     (Ghost.reveal new_log));
-  with new_st transport_received transport_sent ch buffered buffered_len.
-    assert (CP.client_invariant
-      (DS.client_driver_canonical d)
-      (Ghost.reveal new_received)
-      (Ghost.reveal new_sent)
-      new_st);
-  unfold (CP.client_invariant
-    (DS.client_driver_canonical d)
+  with new_st channel model committed buffered_len. _;
+  unfold (DS.client_channel_inv_indexed
+    d
     (Ghost.reveal new_received)
     (Ghost.reveal new_sent)
+    (Ghost.reveal new_pending)
+    (Ghost.reveal new_log)
+    new_st
+    channel
+    model
+    committed
+    buffered_len);
+  unfold (CP.client_invariant
+    (DS.client_driver_canonical d)
+    new_st.CS.cs_wire_log.CL.raw_received
+    new_st.CS.cs_wire_log.CL.raw_sent
     new_st);
   assert (pure (CSL.connection_state_app_log_consistent new_st));
   fold (CP.client_invariant
     (DS.client_driver_canonical d)
-    (Ghost.reveal new_received)
-    (Ghost.reveal new_sent)
+    new_st.CS.cs_wire_log.CL.raw_received
+    new_st.CS.cs_wire_log.CL.raw_sent
     new_st);
   CP.recall_client_snapshot
     (DS.client_driver_canonical d)
-    old_received
-    old_sent
+    (Ghost.hide old_st.CS.cs_wire_log.CL.raw_received)
+    (Ghost.hide old_st.CS.cs_wire_log.CL.raw_sent)
     (Ghost.hide old_st)
-    new_received
-    new_sent
+    (Ghost.hide new_st.CS.cs_wire_log.CL.raw_received)
+    (Ghost.hide new_st.CS.cs_wire_log.CL.raw_sent)
     (Ghost.hide new_st);
-  assert (pure (
-    CSL.connection_state_app_log_consistent old_st /\
-    CSL.connection_state_app_log_consistent new_st /\
-    TChannel.event_log_extends
-      old_st.CS.cs_event_log
-      new_st.CS.cs_event_log));
+  MR.recall_snapshot
+    d.DS.client_driver_tcp_history
+    #1.0R
+    #(DS.wire_history (Ghost.reveal new_received) (Ghost.reveal new_sent))
+    #(DS.wire_history (Ghost.reveal old_received) (Ghost.reveal old_sent));
+  CI.lemma_io_history_preorder_extends
+    (DS.wire_history (Ghost.reveal old_received) (Ghost.reveal old_sent))
+    (DS.wire_history (Ghost.reveal new_received) (Ghost.reveal new_sent));
+  assert (pure (CPI.histories_ahead
+    (Ghost.reveal old_received)
+    (Ghost.reveal old_sent)
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent)));
   TChannel.lemma_application_log_extends_from_event_logs old_st new_st;
   lemma_channel_snapshot_ahead
     d
@@ -1295,32 +1653,211 @@ ghost fn recall_channel_snapshot
     (Ghost.reveal new_log)
     old_st
     new_st;
-  assert (pure (CI.channel_snapshot_ahead
-    CP.client_protocol_implementation
-    DS.client_driver_canonical
-    TChannel.application_log
-    d
-    (Ghost.reveal old_received)
-    (Ghost.reveal old_sent)
-    (Ghost.reveal old_log)
-    (Ghost.reveal new_received)
-    (Ghost.reveal new_sent)
-    (Ghost.reveal new_log)));
   pack_channel_snapshot
     d
     old_received
     old_sent
     old_log
     (Ghost.hide old_st);
-  pack_channel_invariant
+  fold (DS.client_channel_inv_indexed
     d
-    new_received
-    new_sent
-    new_log
-    (Ghost.hide new_st)
-    (Ghost.hide transport_received)
-    (Ghost.hide transport_sent)
-    (Ghost.hide ch)
-    (Ghost.hide buffered)
-    (Ghost.hide buffered_len)
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent)
+    (Ghost.reveal new_pending)
+    (Ghost.reveal new_log)
+    new_st
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_channel_inv
+    d
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent)
+    (Ghost.reveal new_pending)
+    (Ghost.reveal new_log))
+}
+
+ghost fn recall_tcp_history
+  (d:DS.client_driver)
+  (old_received:Ghost.erased B.bytes)
+  (old_sent:Ghost.erased B.bytes)
+  (old_log:Ghost.erased (CI.application_log B.bytes))
+  (st:Ghost.erased CS.connection_state)
+  (new_received:Ghost.erased B.bytes)
+  (new_sent:Ghost.erased B.bytes)
+  requires
+    DS.client_channel_snapshot
+      d
+      (Ghost.reveal old_received)
+      (Ghost.reveal old_sent)
+      (Ghost.reveal old_log) **
+    DS.client_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal new_received)
+      (Ghost.reveal new_sent)
+  ensures
+    DS.client_channel_snapshot
+      d
+      (Ghost.reveal old_received)
+      (Ghost.reveal old_sent)
+      (Ghost.reveal old_log) **
+    DS.client_driver_connected
+      d
+      (Ghost.reveal st)
+      (Ghost.reveal new_received)
+      (Ghost.reveal new_sent) **
+    pure (
+      CPI.histories_ahead
+        (Ghost.reveal old_received)
+        (Ghost.reveal old_sent)
+        (Ghost.reveal new_received)
+        (Ghost.reveal new_sent))
+{
+  unfold (DS.client_channel_snapshot
+    d
+    (Ghost.reveal old_received)
+    (Ghost.reveal old_sent)
+    (Ghost.reveal old_log));
+  with old_st. _;
+  dup (MR.snapshot
+    d.DS.client_driver_tcp_history
+    (DS.wire_history (Ghost.reveal old_received) (Ghost.reveal old_sent))) ();
+  unfold (DS.client_driver_connected
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent));
+  with channel model committed buffered_len. _;
+  unfold (DS.client_driver_connected_indexed
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent)
+    channel
+    model
+    committed
+    buffered_len);
+  unfold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d channel)
+    (Ghost.reveal st)
+    (Common.BufferedTCP.pending model)
+    buffered_len
+    model
+    (Ghost.reveal new_received)
+    committed
+    (Ghost.reveal new_sent));
+  MR.recall_snapshot
+    d.DS.client_driver_tcp_history
+    #1.0R
+    #(DS.wire_history (Ghost.reveal new_received) (Ghost.reveal new_sent))
+    #(DS.wire_history (Ghost.reveal old_received) (Ghost.reveal old_sent));
+  CI.lemma_io_history_preorder_extends
+    (DS.wire_history (Ghost.reveal old_received) (Ghost.reveal old_sent))
+    (DS.wire_history (Ghost.reveal new_received) (Ghost.reveal new_sent));
+  fold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d channel)
+    (Ghost.reveal st)
+    (Common.BufferedTCP.pending model)
+    buffered_len
+    model
+    (Ghost.reveal new_received)
+    committed
+    (Ghost.reveal new_sent));
+  fold (DS.client_driver_connected_indexed
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent)
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_driver_connected
+    d
+    (Ghost.reveal st)
+    (Ghost.reveal new_received)
+    (Ghost.reveal new_sent));
+  pack_channel_snapshot
+    d
+    old_received
+    old_sent
+    old_log
+    (Ghost.hide old_st)
+}
+
+(* Re-open a hard-failed (terminal) channel as a [client_driver_connected]
+   bundle so the ordinary abort/cleanup path can consume it. Unlike
+   [open_channel_invariant] this makes no claim about [connection_control_not_failed]
+   or the pending decomposition, so it applies to StepFailed/Closed states whose
+   control may be failed; [client_driver_connected] does not require a live
+   connection, only that the physical transport is still owned. *)
+ghost fn open_terminal
+  (d:DS.client_driver)
+  (wire_received:Ghost.erased B.bytes)
+  (wire_sent:Ghost.erased B.bytes)
+  (app_log:Ghost.erased (CI.application_log B.bytes))
+  requires
+    DS.client_channel_terminal
+      d
+      (Ghost.reveal wire_received)
+      (Ghost.reveal wire_sent)
+      (Ghost.reveal app_log)
+  ensures
+    exists* st.
+      DS.client_driver_connected
+        d
+        st
+        (Ghost.reveal wire_received)
+        (Ghost.reveal wire_sent)
+{
+  unfold (DS.client_channel_terminal
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal app_log));
+  with st channel model committed buffered_len. _;
+  unfold (DS.client_channel_terminal_indexed
+    d
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    (Ghost.reveal app_log)
+    st
+    channel
+    model
+    committed
+    buffered_len);
+  unfold (CP.client_invariant
+    (DS.client_driver_canonical d)
+    st.CS.cs_wire_log.CL.raw_received
+    st.CS.cs_wire_log.CL.raw_sent
+    st);
+  fold (DS.client_driver_canonical_progress d st);
+  rewrite
+    (DS.client_driver_canonical_progress d st)
+    as
+    (DS.buffered_driver_canonical_progress
+      (DS.client_buffered_driver d channel)
+      st);
+  fold (DS.buffered_driver_indexed
+    (DS.client_buffered_driver d channel)
+    st
+    (Common.BufferedTCP.pending model)
+    buffered_len
+    model
+    (Ghost.reveal wire_received)
+    committed
+    (Ghost.reveal wire_sent));
+  fold (DS.client_driver_connected_indexed
+    d
+    st
+    (Ghost.reveal wire_received)
+    (Ghost.reveal wire_sent)
+    channel
+    model
+    committed
+    buffered_len);
+  fold (DS.client_driver_connected
+    d st (Ghost.reveal wire_received) (Ghost.reveal wire_sent))
 }

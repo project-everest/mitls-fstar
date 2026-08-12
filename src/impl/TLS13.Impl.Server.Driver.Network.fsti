@@ -3,61 +3,15 @@ module TLS13.Impl.Server.Driver.Network
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
-module CR = TLS13.Impl.ConnectionState.Repr
 module DS = TLS13.Impl.Server.Driver.State
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
-module U8 = FStar.UInt8
 
-type server_driver_network_loop_result = {
-  server_driver_network_loop_last: ST.server_buffer_response;
-  server_driver_network_loop_exhausted: bool;
-}
-
-type server_driver_client_hello_wait_result = {
-  server_driver_client_hello_wait_last: ST.server_buffer_response;
-  server_driver_client_hello_wait_ready: bool;
-  server_driver_client_hello_wait_exhausted: bool;
-}
-
-val pending_after_consumed (buffered_len consumed_len:SZ.t)
-  : r:SZ.t {
-      (SZ.v consumed_len <= SZ.v buffered_len ==>
-        SZ.v r == SZ.v buffered_len - SZ.v consumed_len) /\
-      (SZ.v consumed_len <= SZ.v buffered_len ==>
-        SZ.v r + SZ.v consumed_len == SZ.v buffered_len)
-    }
-
-fn compact_buffer_suffix
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (buffered_len:SZ.t)
-  (consumed_len:SZ.t)
-  requires pts_to raw 'raw_bytes **
-           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
-                 SZ.v consumed_len <= SZ.v buffered_len /\
-                 SZ.v buffered_len <= SZ.v raw_capacity)
-  returns new_len:SZ.t
-  ensures exists* raw_after.
-           pts_to raw raw_after **
-           pure (B.length raw_after == SZ.v raw_capacity /\
-                 B.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
-                 SZ.v consumed_len <= SZ.v buffered_len /\
-                 SZ.v buffered_len <= SZ.v raw_capacity /\
-                 new_len == pending_after_consumed buffered_len consumed_len /\
-                 SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
-                 SZ.v new_len <= SZ.v buffered_len /\
-                 Seq.equal
-                   (Seq.slice raw_after 0 (SZ.v new_len))
-                   (Seq.slice (Ghost.reveal 'raw_bytes)
-                     (SZ.v consumed_len)
-                     (SZ.v buffered_len)))
 
 noextract
 let server_driver_network_process_correct
@@ -118,241 +72,6 @@ let server_driver_network_process_correct_for_app_out
         sent
         (ST.response_network_out resp.ST.response network_out_bytes))
 
-fn process_buffered_network_bytes_compact_once
-  (d:DS.server_driver)
-  requires DS.server_driver_connected
-             d
-             'st0
-             'certificate_chain
-             'credential_identity
-             'received
-             'sent
-  returns resp:ST.server_buffer_response
-  ensures exists* st1 sent' app_out_bytes.
-          DS.server_driver_connected_with_app_out
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            'received
-            sent'
-            app_out_bytes **
-          pure (server_driver_network_process_correct
-            'st0
-            st1
-            resp
-            (Ghost.reveal 'sent)
-            sent' /\
-            server_driver_network_process_correct_for_app_out
-             'st0
-             st1
-             resp
-             (Ghost.reveal 'sent)
-             sent'
-             app_out_bytes)
-
-fn read_and_process_network_once
-  (d:DS.server_driver)
-  requires DS.server_driver_connected
-            d
-            'st0
-            'certificate_chain
-            'credential_identity
-            'received
-            'sent
-  returns resp:ST.server_buffer_response
-  ensures exists* st1 received' sent' app_out_bytes.
-          DS.server_driver_connected_with_app_out
-           d
-           st1
-           'certificate_chain
-           'credential_identity
-           received'
-           sent'
-           app_out_bytes **
-          pure (server_driver_network_process_correct
-           'st0
-           st1
-           resp
-           (Ghost.reveal 'sent)
-           sent' /\
-           server_driver_network_process_correct_for_app_out
-            'st0
-            st1
-            resp
-            (Ghost.reveal 'sent)
-            sent'
-            app_out_bytes)
-
-fn process_buffered_or_read_network_once
-  (d:DS.server_driver)
-  requires DS.server_driver_connected
-            d
-            'st0
-            'certificate_chain
-            'credential_identity
-            'received
-            'sent
-  returns resp:ST.server_buffer_response
-  ensures exists* st1 received' sent' app_out_bytes.
-          DS.server_driver_connected_with_app_out
-           d
-           st1
-           'certificate_chain
-           'credential_identity
-           received'
-           sent'
-           app_out_bytes **
-          pure (server_driver_network_process_correct
-           'st0
-           st1
-           resp
-           (Ghost.reveal 'sent)
-           sent' /\
-           server_driver_network_process_correct_for_app_out
-            'st0
-            st1
-            resp
-            (Ghost.reveal 'sent)
-            sent'
-            app_out_bytes)
-
-fn server_driver_control_snapshot
-  (d:DS.server_driver)
-  requires DS.server_driver_connected
-           d
-           'st0
-           'certificate_chain
-           'credential_identity
-           'received
-           'sent
-  returns snapshot:CR.control_snapshot
-  ensures DS.server_driver_connected
-           d
-           'st0
-           'certificate_chain
-           'credential_identity
-           'received
-           'sent **
-          pure (CR.control_snapshot_matches snapshot 'st0)
-
-fn read_process_network_until_ready_into
-  (d:DS.server_driver)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  (fuel:SZ.t)
-  requires DS.server_driver_connected_with_output
-             d
-             'st0
-             'certificate_chain
-             'credential_identity
-             'received
-             'sent
-             app_out
-             app_out_len
-             'old_app_out
-  returns result:server_driver_network_loop_result
-  ensures exists* st1 received' sent' app_out_bytes.
-          DS.server_driver_connected_with_output
-           d
-           st1
-           'certificate_chain
-           'credential_identity
-           received'
-           sent'
-           app_out
-           app_out_len
-           app_out_bytes **
-          pure (st1.CS.cs_model.CS.model_config ==
-                 'st0.CS.cs_model.CS.model_config /\
-            (result.server_driver_network_loop_exhausted == true ==>
-              st1 == 'st0 /\
-              Seq.equal sent' (Ghost.reveal 'sent)) /\
-            (result.server_driver_network_loop_exhausted == false ==>
-            result.server_driver_network_loop_last.ST.response.ST.status <>
-              ST.NeedMoreInput /\
-            server_driver_network_process_correct
-              'st0
-              st1
-              result.server_driver_network_loop_last
-              (Ghost.reveal 'sent)
-              sent' /\
-            server_driver_network_process_correct_for_app_out
-              'st0
-              st1
-              result.server_driver_network_loop_last
-              (Ghost.reveal 'sent)
-              sent'
-              app_out_bytes))
-
-fn read_process_network_until_ready
-  (d:DS.server_driver)
-  (fuel:SZ.t)
-  requires DS.server_driver_connected
-            d
-            'st0
-            'certificate_chain
-            'credential_identity
-            'received
-            'sent
-  returns result:server_driver_network_loop_result
-  ensures exists* st1 received' sent' app_out_bytes.
-          DS.server_driver_connected_with_app_out
-           d
-           st1
-           'certificate_chain
-           'credential_identity
-           received'
-           sent'
-           app_out_bytes **
-          pure (st1.CS.cs_model.CS.model_config ==
-                 'st0.CS.cs_model.CS.model_config /\
-            (result.server_driver_network_loop_exhausted == true ==>
-              st1 == 'st0 /\
-              Seq.equal sent' (Ghost.reveal 'sent)) /\
-            (result.server_driver_network_loop_exhausted == false ==>
-            result.server_driver_network_loop_last.ST.response.ST.status <>
-              ST.NeedMoreInput /\
-            server_driver_network_process_correct
-              'st0
-              st1
-              result.server_driver_network_loop_last
-              (Ghost.reveal 'sent)
-              sent' /\
-            server_driver_network_process_correct_for_app_out
-              'st0
-              st1
-              result.server_driver_network_loop_last
-              (Ghost.reveal 'sent)
-              sent'
-              app_out_bytes))
-
-fn read_until_client_hello_received
-  (d:DS.server_driver)
-  (fuel:SZ.t)
-  requires DS.server_driver_connected
-            d
-            'st0
-            'certificate_chain
-            'credential_identity
-            'received
-            'sent
-  returns result:server_driver_client_hello_wait_result
-  ensures exists* st1 received' sent'.
-          DS.server_driver_connected
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            received'
-            sent' **
-          pure (st1.CS.cs_model.CS.model_config ==
-            'st0.CS.cs_model.CS.model_config /\
-           (result.server_driver_client_hello_wait_ready == true ==>
-            st1.CS.cs_model.CS.model_control ==
-              CS.ControlHandshaking CS.HsClientHelloReceived /\
-            st1.CS.cs_model.CS.model_config ==
-              'st0.CS.cs_model.CS.model_config))
 
 val lemma_server_driver_network_process_correct_intro
   (st0:CS.connection_state)
@@ -449,51 +168,6 @@ val lemma_slice_append_full
         (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s)))
         s)
 
-val lemma_read_append_buffer_matches_raw_prefix_index
-  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
-  (current_len read_len total_len:nat)
-  (k:nat { k < total_len })
-  : Lemma
-    (requires
-      B.length buffered == current_len /\
-      B.length read_chunk == read_len /\
-      B.length raw >= current_len /\
-      B.length raw_tail_after >= read_len /\
-      B.length raw_after_read >= total_len /\
-      total_len == current_len + read_len /\
-      Seq.equal buffered (Seq.slice raw 0 current_len) /\
-      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
-      (forall (i:nat). i < current_len ==>
-        Seq.index raw_after_read i == Seq.index raw i) /\
-      (forall (i:nat). i < read_len ==>
-        Seq.index raw_after_read (current_len + i) ==
-        Seq.index raw_tail_after i))
-    (ensures
-      Seq.index (B.append buffered read_chunk) k ==
-      Seq.index (Seq.slice raw_after_read 0 total_len) k)
-
-val lemma_read_append_buffer_matches_raw_prefix
-  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
-  (current_len read_len total_len:nat)
-  : Lemma
-    (requires
-      B.length buffered == current_len /\
-      B.length read_chunk == read_len /\
-      B.length raw >= current_len /\
-      B.length raw_tail_after >= read_len /\
-      B.length raw_after_read >= total_len /\
-      total_len == current_len + read_len /\
-      Seq.equal buffered (Seq.slice raw 0 current_len) /\
-      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
-      (forall (i:nat). i < current_len ==>
-        Seq.index raw_after_read i == Seq.index raw i) /\
-      (forall (i:nat). i < read_len ==>
-        Seq.index raw_after_read (current_len + i) ==
-        Seq.index raw_tail_after i))
-    (ensures
-      Seq.equal (B.append buffered read_chunk)
-        (Seq.slice raw_after_read 0 total_len))
-
 val lemma_server_network_wire_accounting
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -522,3 +196,35 @@ val lemma_server_network_wire_accounting
           st1.CS.cs_wire_log.CL.raw_received
           (B.append old_consumed
             (ST.server_network_consumed_prefix buffer_resp input)))
+
+val lemma_server_network_logged_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (old_consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        DS.server_driver_wire_logs_match_witness
+          st0
+          received
+          sent
+          old_consumed
+          buffered
+          buffered_len /\
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input network_out app_out)
+      (ensures
+        ST.server_connection_control_not_failed st1 ==>
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append old_consumed
+              (ST.server_network_consumed_prefix buffer_resp input)))

@@ -80,6 +80,49 @@ fn get_control_snapshot
   ensures connection_exactly c st0 **
           pure (control_snapshot_matches snapshot st0)
 
+fn copy_pending_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:option pending_protected_handshake_snapshot
+  ensures connection_exactly c st0 **
+          (match snapshot with
+           | None ->
+             pure (
+               st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed >=
+                 B.length
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes)
+           | Some pending ->
+             exists* fragment.
+               V.pts_to pending.pending_protected_fragment fragment **
+               pure (
+                 V.is_full_vec pending.pending_protected_fragment /\
+                 V.length pending.pending_protected_fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 B.length fragment ==
+                   SZ.v pending.pending_protected_fragment_len /\
+                 Seq.equal
+                   fragment
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len ==
+                   B.length
+                     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_bytes /\
+                 SZ.v pending.pending_protected_fragment_len <=
+                   max_handshake_flight_len /\
+                 SZ.v pending.pending_protected_parsed ==
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_encrypted_server_handshake_parsed /\
+                 SZ.v pending.pending_protected_parsed <
+                   SZ.v pending.pending_protected_fragment_len))
+
+fn protected_handshake_buffer_empty_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns empty:bool
+  ensures connection_exactly c st0 **
+          pure (empty ==>
+            CS.protected_handshake_buffer_empty st0.CS.cs_model)
+
 fn get_key_schedule_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -109,6 +152,49 @@ fn copy_certificate_leaf_der
                 | Some leaf ->
                   SZ.v copied_len == B.length leaf /\
                   Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
+                | None -> False))
+
+fn copy_certificate_chain
+  (c:connection_state)
+  (chain_out:array U8.t)
+  (chain_out_len:SZ.t)
+  (offsets_out:array SZ.t)
+  (offsets_out_len:SZ.t)
+  (lens_out:array SZ.t)
+  (lens_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to chain_out 'old_chain_out **
+           ArrPts.pts_to offsets_out 'old_offsets_out **
+           ArrPts.pts_to lens_out 'old_lens_out **
+           pure (B.length 'old_chain_out == SZ.v chain_out_len /\
+                Seq.length 'old_offsets_out == SZ.v offsets_out_len /\
+                Seq.length 'old_lens_out == SZ.v lens_out_len /\
+                SZ.v chain_out_len == IM.max_certificate_chain_bytes /\
+                SZ.v offsets_out_len == IM.max_certificate_chain_entries /\
+                SZ.v lens_out_len == IM.max_certificate_chain_entries /\
+                Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate)
+  returns snapshot:certificate_chain_snapshot
+  ensures exists* chain_bytes offsets lens.
+          connection_exactly c st0 **
+          ArrPts.pts_to chain_out chain_bytes **
+          ArrPts.pts_to offsets_out offsets **
+          ArrPts.pts_to lens_out lens **
+          pure (B.length chain_bytes == SZ.v chain_out_len /\
+                Seq.length offsets == SZ.v offsets_out_len /\
+                Seq.length lens == SZ.v lens_out_len /\
+                SZ.v snapshot.certificate_chain_bytes_len <= B.length chain_bytes /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length offsets /\
+                SZ.v snapshot.certificate_chain_cert_count <= Seq.length lens /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+                | Some cert ->
+                  IM.certificate_chain_matches
+                    chain_bytes
+                    (SZ.v snapshot.certificate_chain_bytes_len)
+                    offsets
+                    lens
+                    (SZ.v snapshot.certificate_chain_cert_count)
+                    (Sem.certificate_entries cert)
                 | None -> False))
 
 fn copy_certificate_verify_input
@@ -173,6 +259,18 @@ fn get_certificate_verify_signature_snapshot
                   SZ.v snapshot.cv_signature_len == B.length (Sem.certificateVerify_signature_bytes cv)
                 | None -> False))
 
+(** The negotiated AEAD algorithm, read off the accepted ServerHello.  Both
+    endpoints branch on this to derive and install traffic keys.  Before a
+    ServerHello is stored the connection has no negotiated suite, and the ghost
+    [CS.negotiated_aead_alg] defaults to ChaCha20-Poly1305, so this agrees. *)
+fn read_negotiated_aead_alg
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns alg: CryptoSpec.aead_alg
+  ensures connection_exactly c st0 **
+          pure (alg == CS.negotiated_aead_alg st0.CS.cs_model.CS.model_handshake)
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -229,7 +327,7 @@ fn can_send_client_hello_runtime
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
               <= max_transcript_len - max_client_hello_len /\
-            517 <= SZ.v network_out_len)
+            544 <= SZ.v network_out_len)
 
 fn can_receive_server_hello
   (c:connection_state)
@@ -237,7 +335,9 @@ fn can_receive_server_hello
   (#sh:erased GSH.serverHello)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256 /\
+           pure ((exists (cs:T.cipher_suite).
+               Sem.serverHello_cipher_suite sh == Some cs /\
+               H.is_supported_cipher_suite cs) /\
              // Parse-success equation supplied by the caller (see
              // TLS13.Impl.Handle.Handshake): the decoded ServerHello serializes
              // back to the on-the-wire fragment, so its serialized-handshake
@@ -296,6 +396,32 @@ fn can_receive_client_hello
               (CS.ConnNetworkEvent {
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.ClientHello ch);
+              }))
+
+fn can_receive_client_finished
+  (c:connection_state)
+  (#fin:erased GFin.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerFinishedSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+              max_transcript_len /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
               }))
 
 fn can_select_supported_server_parameters_runtime
@@ -407,30 +533,8 @@ fn can_send_server_hello_runtime
                CS.server_selection_key_share_consistent selection /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
               max_transcript_len)
-
-fn can_receive_client_finished
-  (c:connection_state)
-  (#fin:erased GFin.finished)
-  (#st0:erased CS.connection_state)
-  requires connection_exactly c st0
-  returns ok: bool
-  ensures connection_exactly c st0 **
-          pure (ok ==>
-            st0.CS.cs_model.CS.model_control ==
-              CS.ControlHandshaking CS.HsServerFinishedSent /\
-            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-            st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
-            Some?
-              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
-            CS.legal_event
-              st0.CS.cs_model
-              (CS.ConnNetworkEvent {
-                CL.message_direction = CL.Received;
-                CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
-              }))
 
 fn can_receive_application_data
   (c:connection_state)
@@ -519,6 +623,27 @@ fn can_receive_encrypted_extensions
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
               }))
+
+(* The runtime gate for setting a protected record's plaintext aside instead
+   of interpreting it.  It is exactly the buffering guard of
+   [CS.legal_protected_handshake_step] that a caller cannot already discharge
+   from the message it has parsed: the role, the read-sequence room, and the
+   current handshake stage being one of the four at which a client can
+   receive a protected handshake message
+   ([CS.protected_handshake_buffering_stage]). *)
+fn can_buffer_protected_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            (match st0.CS.cs_model.CS.model_control with
+             | CS.ControlHandshaking stage ->
+               CS.protected_handshake_buffering_stage stage
+             | _ -> False))
 
 fn can_send_encrypted_extensions_runtime
   (c:connection_state)
@@ -735,6 +860,10 @@ fn can_receive_server_finished
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished == None /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+              max_transcript_len /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
             CS.legal_event
               st0.CS.cs_model
@@ -878,6 +1007,11 @@ fn can_send_client_finished_runtime
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            // The client must not send its Finished while protected-handshake
+            // plaintext is still pending; legal_handshake_message now requires
+            // this, and without it the client would wedge in
+            // ControlApplicationData holding bytes it can never drain.
+            CS.protected_handshake_buffer_empty st0.CS.cs_model /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
@@ -954,6 +1088,56 @@ fn can_send_endpoint_close_notify_runtime
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             24 <= SZ.v network_out_len)
 
+(* [need_pending] distinguishes the two ways an endpoint reaches a KeyUpdate:
+   responding to a peer [update_requested], which requires the obligation to be
+   outstanding, and initiating spontaneously, which does not. *)
+fn can_send_key_update_runtime_gen
+  (c:connection_state)
+  (network_out_len:SZ.t)
+  (need_pending:bool)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+            (need_pending ==> st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending) /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            27 <= SZ.v network_out_len)
+
+fn server_can_send_key_update_runtime
+  (c:connection_state)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            27 <= SZ.v network_out_len)
+
+(* Server counterpart of the client's response obligation query.  Unlike
+   [server_can_send_key_update_runtime] this checks
+   [app_key_update_response_pending] and imposes *no* output-buffer or
+   sequence-number requirement, so the scheduler (which has no output buffer in
+   hand) can use it to decide whether a mandated KeyUpdate reply is due. *)
+fn server_key_update_response_ready_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+
 fn can_send_key_update_runtime
   (c:connection_state)
   (network_out_len:SZ.t)
@@ -991,3 +1175,21 @@ fn can_receive_close_notify
              st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+
+/// Read the (clamped, 32-byte) legacy_session_id of the stored ClientHello
+/// into [out].  Total: when no ClientHello is stored the mirror still holds
+/// its all-zero initial content, which is what
+/// [Model.stored_client_hello_session_id] reports for such a state.
+fn read_client_hello_session_id
+  (c:connection_state)
+  (out:array U8.t)
+  (#st0:erased CS.connection_state)
+  (#pout:erased (Seq.seq U8.t))
+  requires connection_exactly c st0 **
+           pts_to out pout **
+           pure (B.length pout == 32)
+  ensures exists* (o:Seq.seq U8.t).
+            connection_exactly c st0 **
+            pts_to out o **
+            pure (B.length o == 32 /\
+                  Seq.equal o (stored_client_hello_session_id st0))

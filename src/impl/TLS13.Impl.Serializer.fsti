@@ -64,219 +64,24 @@ fn build_server_certificate_verify_input
                   (Ghost.reveal out_bytes)
                   (WS.serialize_server_certificate_verify_input (Ghost.reveal 'hash_bytes)))
 
-fn serialize_client_hello_from_start
-  (#start: erased CS.handshake_start)
-  (#ch: erased GCH.clientHello)
-  (#rnd: erased B.bytes)
-  (#sni: erased B.bytes)
-  (#ks: erased B.bytes)
-  (#cs: erased GCH.clientHello_cipher_suites)
-  (#sa: erased GECH.extensionClientHello_extension_data_signature_algorithms)
-  (start_random: V.vec U8.t)
-  (start_server_name: V.vec U8.t)
-  (start_server_name_len: box SZ.t)
-  (start_key_share: V.vec U8.t)
-  (start_cipher_suites: V.vec U16.t)
-  (start_cipher_suites_len: box SZ.t)
-  (start_signature_schemes: V.vec U16.t)
-  (start_signature_schemes_len: box SZ.t)
-  (client_hello_present: box bool)
-  (l: L.client_hello)
-  (client_hello_bytes: V.vec U8.t)
-  (client_hello_bytes_len: box SZ.t)
-  (network_out: array U8.t)
-  (network_out_len: SZ.t)
-  requires exists* random server_name server_name_len key_share
-                  cipher_suites cipher_suites_len
-                  signature_schemes signature_schemes_len
-                  old_present old_l_random old_l_server_name old_l_key_share
-                  old_l_cipher_suites old_l_signature_schemes
-                  old_client_hello_bytes_len old_client_hello_bytes old_network_out.
-          V.pts_to start_random random **
-          V.pts_to start_server_name server_name **
-          Box.pts_to start_server_name_len server_name_len **
-          V.pts_to start_key_share key_share **
-          V.pts_to start_cipher_suites cipher_suites **
-          Box.pts_to start_cipher_suites_len cipher_suites_len **
-          V.pts_to start_signature_schemes signature_schemes **
-          Box.pts_to start_signature_schemes_len signature_schemes_len **
-          Box.pts_to client_hello_present old_present **
-          V.pts_to l.L.client_hello_random old_l_random **
-          V.pts_to l.L.client_hello_server_name old_l_server_name **
-          V.pts_to l.L.client_hello_key_share old_l_key_share **
-          V.pts_to l.L.client_hello_cipher_suites old_l_cipher_suites **
-          V.pts_to l.L.client_hello_signature_schemes old_l_signature_schemes **
-          V.pts_to client_hello_bytes old_client_hello_bytes **
-          Box.pts_to client_hello_bytes_len old_client_hello_bytes_len **
-          pts_to network_out old_network_out **
-          pure (old_present == false /\
-                V.is_full_vec start_random /\
-                V.is_full_vec start_server_name /\
-                V.is_full_vec start_key_share /\
-                V.is_full_vec start_cipher_suites /\
-                V.is_full_vec start_signature_schemes /\
-                V.is_full_vec l.L.client_hello_random /\
-                V.is_full_vec l.L.client_hello_server_name /\
-                V.is_full_vec l.L.client_hello_key_share /\
-                V.is_full_vec l.L.client_hello_cipher_suites /\
-                V.is_full_vec l.L.client_hello_signature_schemes /\
-                V.is_full_vec client_hello_bytes /\
-                V.length start_random == 32 /\
-                V.length start_server_name == L.max_server_name_len /\
-                V.length start_key_share == 32 /\
-                V.length start_cipher_suites == L.max_cipher_suites /\
-                V.length start_signature_schemes == L.max_signature_schemes /\
-                V.length l.L.client_hello_random == 32 /\
-                V.length l.L.client_hello_server_name == L.max_server_name_len /\
-                V.length l.L.client_hello_key_share == 32 /\
-                V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
-                V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
-                V.length client_hello_bytes == 512 /\
-                B.length random == 32 /\
-                B.length server_name == L.max_server_name_len /\
-                B.length key_share == 32 /\
-                Seq.length cipher_suites == L.max_cipher_suites /\
-                Seq.length signature_schemes == L.max_signature_schemes /\
-                B.length old_l_random == 32 /\
-                B.length old_l_server_name == L.max_server_name_len /\
-                B.length old_l_key_share == 32 /\
-                Seq.length old_l_cipher_suites == L.max_cipher_suites /\
-                Seq.length old_l_signature_schemes == L.max_signature_schemes /\
-                B.length old_client_hello_bytes == 512 /\
-                B.length old_network_out == SZ.v network_out_len /\
-                517 <= SZ.v network_out_len /\
-                SZ.v server_name_len <= B.length server_name /\
-                SZ.v cipher_suites_len <= Seq.length cipher_suites /\
-                SZ.v signature_schemes_len <= Seq.length signature_schemes /\
-                Seq.equal random (Ghost.reveal start).CS.start_client_random /\
-                B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len /\
-                Seq.equal (Ghost.reveal start).CS.start_server_name (Seq.slice server_name 0 (SZ.v server_name_len)) /\
-                Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public /\
-                L.cipher_suites_match
-                  cipher_suites
-                  (SZ.v cipher_suites_len)
-                  (Ghost.reveal start).CS.start_cipher_suites /\
-                L.signature_schemes_match
-                  signature_schemes
-                  (SZ.v signature_schemes_len)
-                  (Ghost.reveal start).CS.start_signature_schemes /\
-                CS.client_hello_matches_start (Ghost.reveal start) (Ghost.reveal ch) /\
-                Seq.length (Ghost.reveal rnd) == 32 /\
-                Seq.length (Ghost.reveal ks) == 32 /\
-                1 <= Seq.length (Ghost.reveal sni) /\
-                Seq.length (Ghost.reveal sni) <= 255 /\
-                FStar.List.Tot.length (Ghost.reveal cs) <= 16 /\
-                FStar.List.Tot.length (Ghost.reveal sa) <= 16 /\
-                Ghost.reveal ch ==
-                  SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks)
-                    (Ghost.reveal cs) (Ghost.reveal sa))
-  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
-  ensures exists* random server_name server_name_len key_share
-                 cipher_suites cipher_suites_len
-                 signature_schemes signature_schemes_len
-                 handshake_bytes network_out_bytes handshake_len.
-          V.pts_to start_random random **
-          V.pts_to start_server_name server_name **
-          Box.pts_to start_server_name_len server_name_len **
-          V.pts_to start_key_share key_share **
-          V.pts_to start_cipher_suites cipher_suites **
-          Box.pts_to start_cipher_suites_len cipher_suites_len **
-          V.pts_to start_signature_schemes signature_schemes **
-          Box.pts_to start_signature_schemes_len signature_schemes_len **
-          Box.pts_to client_hello_present true **
-          V.pts_to l.L.client_hello_random random **
-          V.pts_to l.L.client_hello_server_name server_name **
-          V.pts_to l.L.client_hello_key_share key_share **
-          V.pts_to l.L.client_hello_cipher_suites cipher_suites **
-          V.pts_to l.L.client_hello_signature_schemes signature_schemes **
-          V.pts_to client_hello_bytes handshake_bytes **
-          Box.pts_to client_hello_bytes_len handshake_len **
-          pts_to network_out network_out_bytes **
-          pure (V.is_full_vec start_random /\
-               V.is_full_vec start_server_name /\
-               V.is_full_vec start_key_share /\
-               V.is_full_vec start_cipher_suites /\
-               V.is_full_vec start_signature_schemes /\
-               V.is_full_vec l.L.client_hello_random /\
-               V.is_full_vec l.L.client_hello_server_name /\
-               V.is_full_vec l.L.client_hello_key_share /\
-               V.is_full_vec l.L.client_hello_cipher_suites /\
-               V.is_full_vec l.L.client_hello_signature_schemes /\
-               V.is_full_vec client_hello_bytes /\
-               V.length start_random == 32 /\
-               V.length start_server_name == L.max_server_name_len /\
-               V.length start_key_share == 32 /\
-               V.length start_cipher_suites == L.max_cipher_suites /\
-               V.length start_signature_schemes == L.max_signature_schemes /\
-               V.length l.L.client_hello_random == 32 /\
-               V.length l.L.client_hello_server_name == L.max_server_name_len /\
-               V.length l.L.client_hello_key_share == 32 /\
-               V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
-               V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
-               V.length client_hello_bytes == 512 /\
-               B.length random == 32 /\
-               B.length server_name == L.max_server_name_len /\
-               B.length key_share == 32 /\
-               Seq.length cipher_suites == L.max_cipher_suites /\
-               Seq.length signature_schemes == L.max_signature_schemes /\
-               B.length handshake_bytes == 512 /\
-               B.length network_out_bytes == SZ.v network_out_len /\
-               SZ.v server_name_len <= B.length server_name /\
-               SZ.v cipher_suites_len <= Seq.length cipher_suites /\
-               SZ.v signature_schemes_len <= Seq.length signature_schemes /\
-               Seq.equal random (Ghost.reveal start).CS.start_client_random /\
-               B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len /\
-               Seq.equal (Ghost.reveal start).CS.start_server_name (CL.raw_slice server_name 0 (SZ.v server_name_len)) /\
-               Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public /\
-               L.cipher_suites_match
-                 cipher_suites
-                 (SZ.v cipher_suites_len)
-                 (Ghost.reveal start).CS.start_cipher_suites /\
-               L.signature_schemes_match
-                 signature_schemes
-                 (SZ.v signature_schemes_len)
-                 (Ghost.reveal start).CS.start_signature_schemes /\
-               Seq.equal random (Sem.clientHello_random (Ghost.reveal ch)) /\
-               L.optional_byte_prefix_matches
-                 true
-                 server_name
-                 server_name_len
-                 (Sem.clientHello_server_name (Ghost.reveal ch)) /\
-               (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
-                | Some k -> B.length k == 32 /\ Seq.equal key_share k
-                | None -> False) /\
-               L.cipher_suites_match
-                 cipher_suites
-                 (SZ.v cipher_suites_len)
-                 (Sem.clientHello_cipher_suites (Ghost.reveal ch)) /\
-               (match Sem.clientHello_sig_algs (Ghost.reveal ch) with
-                | Some sas ->
-                  L.signature_schemes_match
-                    signature_schemes
-                    (SZ.v signature_schemes_len)
-                    sas
-                | None -> False) /\
-               SZ.v handshake_len == B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))) /\
-               SZ.v handshake_len <= B.length handshake_bytes /\
-               Seq.equal
-                 (CL.raw_slice handshake_bytes 0 (SZ.v handshake_len))
-                 (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))) /\
-               SZ.v written ==
-                 B.length (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch)))) /\
-               5 <= SZ.v written /\
-               SZ.v written <= B.length network_out_bytes /\
-               Seq.equal
-                 (CL.raw_slice network_out_bytes 0 (SZ.v written))
-                 (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch)))) /\
-               WS.parse_record (CL.raw_slice network_out_bytes 0 (SZ.v written)) ==
-                 Some
-                   (T.Handshake,
-                    WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)),
-                    SZ.v written) /\
-               CS.raw_records_exactly
-                 (CL.raw_slice network_out_bytes 0 (SZ.v written))
-                 T.Handshake
-                 1)
+fn serialize_finished_handshake
+  (#fin: erased GFin.finished)
+  (lfin: L.finished)
+  (handshake_out: array U8.t)
+  (handshake_out_len: SZ.t)
+  requires L.is_valid_finished lfin (Ghost.reveal fin) **
+           pts_to handshake_out 'old_handshake **
+           pure (B.length 'old_handshake == SZ.v handshake_out_len /\
+                 SZ.v handshake_out_len == 36)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v handshake_out_len})
+  ensures exists* handshake_bytes.
+          L.is_valid_finished lfin (Ghost.reveal fin) **
+          pts_to handshake_out handshake_bytes **
+          pure (B.length handshake_bytes == 36 /\
+                SZ.v written == 36 /\
+                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
+                WS.parse_tls_message T.Handshake handshake_bytes ==
+                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
 
 fn encode_inner_plaintext_no_padding_slice
   (plain: array U8.t)
@@ -491,29 +296,11 @@ fn serialize_client_finished_outputs
                      } ==
                      Some (outer_fragment, R.next_seq 'record_write))))
 
-fn serialize_finished_handshake
-  (#fin: erased GFin.finished)
-  (lfin: L.finished)
-  (handshake_out: array U8.t)
-  (handshake_out_len: SZ.t)
-  requires L.is_valid_finished lfin (Ghost.reveal fin) **
-           pts_to handshake_out 'old_handshake **
-           pure (B.length 'old_handshake == SZ.v handshake_out_len /\
-                 SZ.v handshake_out_len == 36)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v handshake_out_len})
-  ensures exists* handshake_bytes.
-          L.is_valid_finished lfin (Ghost.reveal fin) **
-          pts_to handshake_out handshake_bytes **
-          pure (B.length handshake_bytes == 36 /\
-                SZ.v written == 36 /\
-                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
-                WS.parse_tls_message T.Handshake handshake_bytes ==
-                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
-
 fn serialize_server_hello_from_selection
   (#sh: erased GSH.serverHello)
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
@@ -522,19 +309,20 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 90 /\
+                SZ.v out_len == 122 /\
                 Seq.length (Ghost.reveal rnd) == 32 /\
                 (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                 Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal sid) == 32 /\
                 Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                 Ghost.reveal sh ==
-                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal cs))
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 90 /\
-                SZ.v written == 90 /\
+          pure (B.length out_bytes == 122 /\
+                SZ.v written == 122 /\
                 Seq.equal out_bytes
                  (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
@@ -542,6 +330,7 @@ fn serialize_server_hello_record_from_selection
   (#sh: erased GSH.serverHello)
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
+  (#sid: erased B.bytes)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
@@ -550,19 +339,20 @@ fn serialize_server_hello_record_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                SZ.v out_len == 95 /\
+                SZ.v out_len == 127 /\
                 Seq.length (Ghost.reveal rnd) == 32 /\
                 (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                 Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal sid) == 32 /\
                 Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                 Ghost.reveal sh ==
-                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal cs))
+                  SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 95 /\
-                SZ.v written == 95 /\
+          pure (B.length out_bytes == 127 /\
+                SZ.v written == 127 /\
                 Seq.equal out_bytes
                  (WS.serialize_record
                    T.Handshake
@@ -574,7 +364,7 @@ fn serialize_server_hello_record_from_selection
                  Some
                    (T.Handshake,
                     WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
-                    95) /\
+                    127) /\
                 CS.raw_records_exactly out_bytes T.Handshake 1)
 
 fn serialize_empty_encrypted_extensions
@@ -657,3 +447,235 @@ fn serialize_server_finished
                  (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
                 WS.parse_tls_message T.Handshake out_bytes ==
                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
+
+fn serialize_client_hello_from_start
+  (#start: erased CS.handshake_start)
+  (#ch: erased GCH.clientHello)
+  (#rnd: erased B.bytes)
+  (#sni: erased B.bytes)
+  (#ks: erased B.bytes)
+  (#pks: erased B.bytes)
+  (#cs: erased GCH.clientHello_cipher_suites)
+  (#sa: erased GECH.extensionClientHello_extension_data_signature_algorithms)
+  (start_random: V.vec U8.t)
+  (start_server_name: V.vec U8.t)
+  (start_server_name_len: box SZ.t)
+  (start_key_share: V.vec U8.t)
+  (start_p256_key_share: V.vec U8.t)
+  (start_cipher_suites: V.vec U16.t)
+  (start_cipher_suites_len: box SZ.t)
+  (start_signature_schemes: V.vec U16.t)
+  (start_signature_schemes_len: box SZ.t)
+  (client_hello_present: box bool)
+  (l: L.client_hello)
+  (client_hello_bytes: V.vec U8.t)
+  (client_hello_bytes_len: box SZ.t)
+  (network_out: array U8.t)
+  (network_out_len: SZ.t)
+  requires exists* random server_name server_name_len key_share
+                  cipher_suites cipher_suites_len
+                  signature_schemes signature_schemes_len
+                  old_present old_l_random old_l_session_id old_l_server_name old_l_key_share
+                  old_l_cipher_suites old_l_signature_schemes
+                  old_client_hello_bytes_len old_client_hello_bytes old_network_out.
+          V.pts_to start_random random **
+          V.pts_to start_server_name server_name **
+          Box.pts_to start_server_name_len server_name_len **
+          V.pts_to start_key_share key_share **
+          V.pts_to start_p256_key_share (Ghost.reveal pks) **
+          V.pts_to start_cipher_suites cipher_suites **
+          Box.pts_to start_cipher_suites_len cipher_suites_len **
+          V.pts_to start_signature_schemes signature_schemes **
+          Box.pts_to start_signature_schemes_len signature_schemes_len **
+          Box.pts_to client_hello_present old_present **
+          V.pts_to l.L.client_hello_random old_l_random **
+          V.pts_to l.L.client_hello_session_id old_l_session_id **
+          V.pts_to l.L.client_hello_server_name old_l_server_name **
+          V.pts_to l.L.client_hello_key_share old_l_key_share **
+          V.pts_to l.L.client_hello_cipher_suites old_l_cipher_suites **
+          V.pts_to l.L.client_hello_signature_schemes old_l_signature_schemes **
+          V.pts_to client_hello_bytes old_client_hello_bytes **
+          Box.pts_to client_hello_bytes_len old_client_hello_bytes_len **
+          pts_to network_out old_network_out **
+          pure (old_present == false /\
+                V.is_full_vec start_random /\
+                V.is_full_vec start_server_name /\
+                V.is_full_vec start_key_share /\
+                V.is_full_vec start_p256_key_share /\
+                V.is_full_vec start_cipher_suites /\
+                V.is_full_vec start_signature_schemes /\
+                V.is_full_vec l.L.client_hello_random /\
+                V.is_full_vec l.L.client_hello_session_id /\
+                V.is_full_vec l.L.client_hello_server_name /\
+                V.is_full_vec l.L.client_hello_key_share /\
+                V.is_full_vec l.L.client_hello_cipher_suites /\
+                V.is_full_vec l.L.client_hello_signature_schemes /\
+                V.is_full_vec client_hello_bytes /\
+                V.length start_random == 32 /\
+                V.length start_server_name == L.max_server_name_len /\
+                V.length start_key_share == 32 /\
+                V.length start_p256_key_share == 65 /\
+                                V.length start_cipher_suites == L.max_cipher_suites /\
+                V.length start_signature_schemes == L.max_signature_schemes /\
+                V.length l.L.client_hello_random == 32 /\
+                V.length l.L.client_hello_session_id == 32 /\
+                V.length l.L.client_hello_server_name == L.max_server_name_len /\
+                V.length l.L.client_hello_key_share == 32 /\
+                V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
+                V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
+                V.length client_hello_bytes == 8192 /\
+                B.length random == 32 /\
+                B.length server_name == L.max_server_name_len /\
+                B.length key_share == 32 /\
+                Seq.length cipher_suites == L.max_cipher_suites /\
+                Seq.length signature_schemes == L.max_signature_schemes /\
+                B.length old_l_random == 32 /\
+                B.length old_l_session_id == 32 /\
+                B.length old_l_server_name == L.max_server_name_len /\
+                B.length old_l_key_share == 32 /\
+                Seq.length old_l_cipher_suites == L.max_cipher_suites /\
+                Seq.length old_l_signature_schemes == L.max_signature_schemes /\
+                B.length old_client_hello_bytes == 8192 /\
+                B.length old_network_out == SZ.v network_out_len /\
+                544 <= SZ.v network_out_len /\
+                SZ.v server_name_len <= B.length server_name /\
+                SZ.v cipher_suites_len <= Seq.length cipher_suites /\
+                SZ.v signature_schemes_len <= Seq.length signature_schemes /\
+                Seq.equal random (Ghost.reveal start).CS.start_client_random /\
+                B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len /\
+                Seq.equal (Ghost.reveal start).CS.start_server_name (Seq.slice server_name 0 (SZ.v server_name_len)) /\
+                Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public /\
+                Seq.equal (Ghost.reveal pks) (Ghost.reveal start).CS.start_client_p256_public /\
+                L.cipher_suites_match
+                  cipher_suites
+                  (SZ.v cipher_suites_len)
+                  (Ghost.reveal start).CS.start_cipher_suites /\
+                L.signature_schemes_match
+                  signature_schemes
+                  (SZ.v signature_schemes_len)
+                  (Ghost.reveal start).CS.start_signature_schemes /\
+                CS.client_hello_matches_start (Ghost.reveal start) (Ghost.reveal ch) /\
+                Seq.length (Ghost.reveal rnd) == 32 /\
+                Seq.length (Ghost.reveal ks) == 32 /\
+                Seq.length (Ghost.reveal pks) == 65 /\
+                1 <= Seq.length (Ghost.reveal sni) /\
+                Seq.length (Ghost.reveal sni) <= 255 /\
+                FStar.List.Tot.length (Ghost.reveal cs) <= 16 /\
+                FStar.List.Tot.length (Ghost.reveal sa) <= 16 /\
+                Ghost.reveal ch ==
+                  SerH.poc_canonical_ch (Ghost.reveal rnd) (Ghost.reveal sni) (Ghost.reveal ks)
+                    (Ghost.reveal pks) (Ghost.reveal rnd) (Ghost.reveal cs) (Ghost.reveal sa))
+  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
+  ensures exists* random server_name server_name_len key_share
+                 cipher_suites cipher_suites_len
+                 signature_schemes signature_schemes_len
+                 handshake_bytes network_out_bytes handshake_len.
+          V.pts_to start_random random **
+          V.pts_to start_server_name server_name **
+          Box.pts_to start_server_name_len server_name_len **
+          V.pts_to start_key_share key_share **
+          V.pts_to start_p256_key_share (Ghost.reveal pks) **
+          V.pts_to start_cipher_suites cipher_suites **
+          Box.pts_to start_cipher_suites_len cipher_suites_len **
+          V.pts_to start_signature_schemes signature_schemes **
+          Box.pts_to start_signature_schemes_len signature_schemes_len **
+          Box.pts_to client_hello_present true **
+          V.pts_to l.L.client_hello_random random **
+          V.pts_to l.L.client_hello_session_id random **
+          V.pts_to l.L.client_hello_server_name server_name **
+          V.pts_to l.L.client_hello_key_share key_share **
+          V.pts_to l.L.client_hello_cipher_suites cipher_suites **
+          V.pts_to l.L.client_hello_signature_schemes signature_schemes **
+          V.pts_to client_hello_bytes handshake_bytes **
+          Box.pts_to client_hello_bytes_len handshake_len **
+          pts_to network_out network_out_bytes **
+          pure (V.is_full_vec start_random /\
+               V.is_full_vec start_server_name /\
+               V.is_full_vec start_key_share /\
+               V.is_full_vec start_p256_key_share /\
+               V.is_full_vec start_cipher_suites /\
+               V.is_full_vec start_signature_schemes /\
+               V.is_full_vec l.L.client_hello_random /\
+               V.is_full_vec l.L.client_hello_session_id /\
+               V.is_full_vec l.L.client_hello_server_name /\
+               V.is_full_vec l.L.client_hello_key_share /\
+               V.is_full_vec l.L.client_hello_cipher_suites /\
+               V.is_full_vec l.L.client_hello_signature_schemes /\
+               V.is_full_vec client_hello_bytes /\
+               V.length start_random == 32 /\
+               V.length start_server_name == L.max_server_name_len /\
+               V.length start_key_share == 32 /\
+               V.length start_p256_key_share == 65 /\
+                              V.length start_cipher_suites == L.max_cipher_suites /\
+               V.length start_signature_schemes == L.max_signature_schemes /\
+               V.length l.L.client_hello_random == 32 /\
+               V.length l.L.client_hello_session_id == 32 /\
+               V.length l.L.client_hello_server_name == L.max_server_name_len /\
+               V.length l.L.client_hello_key_share == 32 /\
+               V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
+               V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
+               V.length client_hello_bytes == 8192 /\
+               B.length random == 32 /\
+               B.length server_name == L.max_server_name_len /\
+               B.length key_share == 32 /\
+               Seq.length cipher_suites == L.max_cipher_suites /\
+               Seq.length signature_schemes == L.max_signature_schemes /\
+               B.length handshake_bytes == 8192 /\
+               B.length network_out_bytes == SZ.v network_out_len /\
+               SZ.v server_name_len <= B.length server_name /\
+               SZ.v cipher_suites_len <= Seq.length cipher_suites /\
+               SZ.v signature_schemes_len <= Seq.length signature_schemes /\
+               Seq.equal random (Ghost.reveal start).CS.start_client_random /\
+               B.length (Ghost.reveal start).CS.start_server_name == SZ.v server_name_len /\
+               Seq.equal (Ghost.reveal start).CS.start_server_name (CL.raw_slice server_name 0 (SZ.v server_name_len)) /\
+               Seq.equal key_share (Ghost.reveal start).CS.start_client_key_share_public /\
+               Seq.equal (Ghost.reveal pks) (Ghost.reveal start).CS.start_client_p256_public /\
+               L.cipher_suites_match
+                 cipher_suites
+                 (SZ.v cipher_suites_len)
+                 (Ghost.reveal start).CS.start_cipher_suites /\
+               L.signature_schemes_match
+                 signature_schemes
+                 (SZ.v signature_schemes_len)
+                 (Ghost.reveal start).CS.start_signature_schemes /\
+               Seq.equal random (Sem.clientHello_random (Ghost.reveal ch)) /\
+               L.optional_byte_prefix_matches
+                 true
+                 server_name
+                 server_name_len
+                 (Sem.clientHello_server_name (Ghost.reveal ch)) /\
+               (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
+                | Some k -> B.length k == 32 /\ Seq.equal key_share k
+                | None -> False) /\
+               L.cipher_suites_match
+                 cipher_suites
+                 (SZ.v cipher_suites_len)
+                 (Sem.clientHello_cipher_suites (Ghost.reveal ch)) /\
+               (match Sem.clientHello_sig_algs (Ghost.reveal ch) with
+                | Some sas ->
+                  L.signature_schemes_match
+                    signature_schemes
+                    (SZ.v signature_schemes_len)
+                    sas
+                | None -> False) /\
+               SZ.v handshake_len == B.length (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))) /\
+               SZ.v handshake_len <= B.length handshake_bytes /\
+               Seq.equal
+                 (CL.raw_slice handshake_bytes 0 (SZ.v handshake_len))
+                 (WS.serialize_handshake (M.ClientHello (Ghost.reveal ch))) /\
+               SZ.v written ==
+                 B.length (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch)))) /\
+               5 <= SZ.v written /\
+               SZ.v written <= B.length network_out_bytes /\
+               Seq.equal
+                 (CL.raw_slice network_out_bytes 0 (SZ.v written))
+                 (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch)))) /\
+               WS.parse_record (CL.raw_slice network_out_bytes 0 (SZ.v written)) ==
+                 Some
+                   (T.Handshake,
+                    WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)),
+                    SZ.v written) /\
+               CS.raw_records_exactly
+                 (CL.raw_slice network_out_bytes 0 (SZ.v written))
+                 T.Handshake
+                 1)

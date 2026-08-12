@@ -33,49 +33,51 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open TLS13.Wire.Generated.OfferedVersion
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
-private let pre : squash (LP.vldata_vlarray_precond 2 254 protocolVersion_parser 1 127 == true) = _ by (FStar.Tactics.trefl ())
+private let pre : squash (LP.vldata_vlarray_precond 2 254 offeredVersion_parser 1 127 == true) = _ by (FStar.Tactics.trefl ())
 
 let supportedVersionsClientHello_parser =
-  LP.parse_vlarray 2 254 protocolVersion_serializer 1 127 ()
+  LP.parse_vlarray 2 254 offeredVersion_serializer 1 127 ()
 
 let supportedVersionsClientHello_serializer =
-  LP.serialize_vlarray 2 254 protocolVersion_serializer 1 127 ()
+  LP.serialize_vlarray 2 254 offeredVersion_serializer 1 127 ()
 
 let supportedVersionsClientHello_bytesize_eq x = ()
 
 let supportedVersionsClientHello_validator =
- PPAR.validate_vlarray 2 254 protocolVersion_serializer protocolVersion_validator 1 127 () (PPBI.leaf_read_bounded_integer_1 ()) ()
+ PPAR.validate_vlarray 2 254 offeredVersion_serializer offeredVersion_validator 1 127 () (PPBI.leaf_read_bounded_integer_1 ()) ()
 
 let supportedVersionsClientHello_jumper =
- PPAR.jump_vlarray 2 254 protocolVersion_serializer 1 127 () (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 254)) (PPBI.leaf_read_bounded_integer_1 ())) ()
+ PPAR.jump_vlarray 2 254 offeredVersion_serializer 1 127 () (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 254)) (PPBI.leaf_read_bounded_integer_1 ())) ()
 
-let supportedVersionsClientHello_bytesize_eqn x = LP.length_serialize_vlarray 2 254 protocolVersion_serializer 1 127 () x
+let supportedVersionsClientHello_bytesize_eqn x = LP.length_serialize_vlarray 2 254 offeredVersion_serializer 1 127 () x
 
 let read_supportedVersionsClientHello : PPB.copyful_parse supportedVersionsClientHello_vmatch supportedVersionsClientHello_parser supportedVersionsClientHello_conv =
-  LP.vldata_to_vlarray_inj 2 254 protocolVersion_serializer 1 127 ();
-  LP.vlarray_to_vldata_to_vlarray 2 254 protocolVersion_serializer 1 127 ();
-  assert_norm ((LP.get_parser_kind protocolVersion_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
-  assert_norm ((LP.get_parser_kind protocolVersion_parser).LP.parser_kind_low > 0);
+  LP.vldata_to_vlarray_inj 2 254 offeredVersion_serializer 1 127 ();
+  LP.vlarray_to_vldata_to_vlarray 2 254 offeredVersion_serializer 1 127 ();
+  assert_norm ((LP.get_parser_kind offeredVersion_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
+  assert_norm ((LP.get_parser_kind offeredVersion_parser).LP.parser_kind_low > 0);
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 2 254 (LP.serialize_list _ protocolVersion_serializer)
-       (PPLS.copyful_parse_list read_protocolVersion protocolVersion_jumper ())
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 2 254 (LP.serialize_list _ offeredVersion_serializer)
+       (PPLS.copyful_parse_list read_offeredVersion offeredVersion_jumper ())
        (PPBI.leaf_read_bounded_integer_1 ()))
-    (LP.vldata_to_vlarray 2 254 protocolVersion_serializer 1 127 ())
-    (LP.vlarray_to_vldata 2 254 protocolVersion_serializer 1 127 ())
+    (LP.vldata_to_vlarray 2 254 offeredVersion_serializer 1 127 ())
+    (LP.vlarray_to_vldata 2 254 offeredVersion_serializer 1 127 ())
 
 let free_supportedVersionsClientHello : PPB.free_t supportedVersionsClientHello_vmatch =
-  PPVD.free_vldata_strong 2 254 (LP.serialize_list _ protocolVersion_serializer) (PPVCL.free_vclist (PPB.free_vmatch_conv protocolVersion_vmatch protocolVersion_conv free_protocolVersion))
+  PPVD.free_vldata_strong 2 254 (LP.serialize_list _ offeredVersion_serializer) (PPVCL.free_vclist (PPB.free_vmatch_conv offeredVersion_vmatch offeredVersion_conv free_offeredVersion))
 
 let write_supportedVersionsClientHello : PPB.l2r_safe_writer supportedVersionsClientHello_vmatch supportedVersionsClientHello_serializer supportedVersionsClientHello_conv =
-  LP.vldata_to_vlarray_inj 2 254 protocolVersion_serializer 1 127 ();
-  LP.vlarray_to_vldata_to_vlarray 2 254 protocolVersion_serializer 1 127 ();
-  assert_norm ((LP.get_parser_kind protocolVersion_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
-  assert_norm ((LP.get_parser_kind protocolVersion_parser).LP.parser_kind_low > 0);
+  LP.vldata_to_vlarray_inj 2 254 offeredVersion_serializer 1 127 ();
+  LP.vlarray_to_vldata_to_vlarray 2 254 offeredVersion_serializer 1 127 ();
+  assert_norm ((LP.get_parser_kind offeredVersion_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
+  assert_norm ((LP.get_parser_kind offeredVersion_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 2ul 254 254ul 1 1sz (LP.serialize_list _ protocolVersion_serializer)
-       (PPLS.l2r_safe_writer_list protocolVersion_serializer write_protocolVersion ())) <: PPB.l2r_safe_writer _ (LP.serialize_bounded_vldata_strong 2 254 (LP.serialize_list _ protocolVersion_serializer)) _)
-    (LP.vldata_to_vlarray 2 254 protocolVersion_serializer 1 127 ())
-    (LP.vlarray_to_vldata 2 254 protocolVersion_serializer 1 127 ())
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 2 2ul 254 254ul 1 1sz (LP.serialize_list _ offeredVersion_serializer)
+       (PPLS.l2r_safe_writer_list offeredVersion_serializer write_offeredVersion ())) <: PPB.l2r_safe_writer _ (LP.serialize_bounded_vldata_strong 2 254 (LP.serialize_list _ offeredVersion_serializer)) _)
+    (LP.vldata_to_vlarray 2 254 offeredVersion_serializer 1 127 ())
+    (LP.vlarray_to_vldata 2 254 offeredVersion_serializer 1 127 ())
 

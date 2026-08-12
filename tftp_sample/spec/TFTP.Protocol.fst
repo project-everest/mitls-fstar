@@ -410,10 +410,7 @@ let tftp_server_law_step
   | SM.LocalEvent Server_send ->
     eliminate exists (blk:U16.t) (d:data_payload).
       tftp_server_send st0 st1 blk d /\ out.SM.so_wire_outputs == [Msg_data blk d]
-    returns
-      FT.ft_view_step tftp_block_size (Some 1)
-        (tftp_server_project st0) (tftp_server_project st1)
-    with _.
+    with
     (match st0.tss_pending with
      | [] -> ()
      | h :: rest ->
@@ -483,21 +480,7 @@ let tftp_server_law_data_wire
   | SM.LocalEvent Server_send ->
     eliminate exists (blk:U16.t) (d:data_payload).
       tftp_server_send st0 st1 blk d /\ out.SM.so_wire_outputs == [Msg_data blk d]
-    returns
-      (match tftp_classify msg with
-       | FT.FT_Data index payload ->
-         ((match index with
-           | Some i -> i == L.length (tftp_server_project st0).FT.ftv_blocks + 1
-           | None -> True) /\
-          (tftp_server_project st1).FT.ftv_blocks ==
-            L.append (tftp_server_project st0).FT.ftv_blocks [payload])
-         \/
-         ((tftp_server_project st1).FT.ftv_blocks == (tftp_server_project st0).FT.ftv_blocks /\
-          (match index with
-           | Some i -> FT.ft_block_at (tftp_server_project st0).FT.ftv_blocks i == Some payload
-           | None -> L.memP payload (tftp_server_project st0).FT.ftv_blocks))
-       | _ -> True)
-    with _. ()
+    with ()
   | SM.LocalEvent Server_timeout ->
     ()
   | _ -> ()

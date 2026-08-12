@@ -35,6 +35,10 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
+open YModem.Wire.Generated.Ymodem_tag
+open YModem.Wire.Generated.Ymodem_soh_body
+open YModem.Wire.Generated.Ymodem_empty
+
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection -Pulse -PulseCore' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
 
 // Need high Z3 limits for large sum types

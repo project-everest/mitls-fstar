@@ -16,8 +16,10 @@ module H = TLS13.Handshake.Spec
 module K = TLS13.Keys
 module M = TLS13.Messages
 module Sem = TLS13.Wire.Semantics
+module GCS = TLS13.Wire.Generated.CipherSuite
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
+module GNG = TLS13.Wire.Generated.NamedGroup
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
@@ -98,24 +100,46 @@ type handshake_start = {
   start_client_random: B.bytes_of_len 32;
   start_client_key_share_private: option C.x25519_private;
   start_client_key_share_public: C.x25519_public;
+  (* The client offers an X25519 and a secp256r1 share in the same flight, so a
+     P-256-only server can proceed without a HelloRetryRequest.  Both private
+     keys are held until the server names the group it chose. *)
+  start_client_p256_private: option C.p256_private;
+  start_client_p256_public: C.p256_public;
   start_cipher_suites: list T.cipher_suite;
   start_signature_schemes: list T.signature_scheme;
 }
+(**
+  `traffic_alg` is the AEAD algorithm this material was derived under.  It is
+  retained rather than recovered from `traffic_key`'s length: the algorithm is
+  a negotiated parameter and a key length is not a substitute for it.
+**)
 type traffic_key_material = {
   traffic_secret: K.traffic_secret;
-  traffic_key: C.aead_key;
+  traffic_alg: C.aead_alg;
+  traffic_key: C.aead_key traffic_alg;
   traffic_iv: C.aead_nonce;
 }
-let traffic_key_material_for_secret (secret:K.traffic_secret) : traffic_key_material =
+let traffic_key_material_for_secret
+  (a:C.aead_alg)
+  (secret:K.traffic_secret)
+  : traffic_key_material =
   {
     traffic_secret = secret;
-    traffic_key = K.derive_aead_key secret;
+    traffic_alg = a;
+    traffic_key = K.derive_aead_key a secret;
     traffic_iv = K.derive_aead_iv secret;
   }
+(**
+  A key update re-derives from the updated traffic secret under the *same*
+  AEAD algorithm; the negotiated cipher suite cannot change mid-connection.
+  The algorithm is carried on the material being replaced, so it survives the
+  update by construction.
+**)
 let updated_traffic_key_material
   (old:traffic_key_material)
   : traffic_key_material =
   traffic_key_material_for_secret
+    old.traffic_alg
     (K.application_traffic_secret_update old.traffic_secret)
 type key_schedule_state = {
   ks_early_secret: option C.secret;
@@ -207,6 +231,27 @@ let empty_handshake_state : handshake_state = {
   hs_buffers = empty_handshake_buffer_state;
   hs_keys = empty_key_schedule_state;
 }
+(**
+  The AEAD algorithm implied by a negotiated cipher suite.  Both suites ATLAS
+  offers use SHA-256 for the key schedule, so the suite determines only the
+  record-layer AEAD.  An unknown suite maps to the ChaCha20-Poly1305 default;
+  the ServerHello checks reject any suite the client did not offer, so this
+  fallback is never reached on an accepted connection.
+**)
+let aead_alg_of_cipher_suite (cs:GCS.cipherSuite) : C.aead_alg =
+  match cs with
+  | GCS.TLS_AES_128_GCM_SHA256 -> C.AEAD_AES128_GCM
+  | _ -> C.AEAD_CHACHA20_POLY1305
+
+(** The AEAD algorithm for a connection, read off the accepted ServerHello. *)
+let negotiated_aead_alg (hs:handshake_state) : C.aead_alg =
+  match hs.hs_server_hello with
+  | Some sh ->
+    (match Sem.serverHello_cipher_suite sh with
+     | Some cs -> aead_alg_of_cipher_suite cs
+     | None -> C.AEAD_CHACHA20_POLY1305)
+  | None -> C.AEAD_CHACHA20_POLY1305
+
 let client_hello_key_share (ch:GCH.clientHello) : option C.x25519_public =
   match Sem.clientHello_key_share_x25519 ch with
   | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
@@ -215,6 +260,84 @@ let server_hello_key_share (sh:GSH.serverHello) : option C.x25519_public =
   match Sem.serverHello_key_share_x25519 sh with
   | Some k -> if B.length k = 32 then Some (k <: C.x25519_public) else None
   | None -> None
+
+let client_hello_p256_key_share (ch:GCH.clientHello) : option C.p256_public =
+  match Sem.clientHello_key_share_secp256r1 ch with
+  | Some k -> if B.length k = 65 then Some (k <: C.p256_public) else None
+  | None -> None
+let server_hello_p256_key_share (sh:GSH.serverHello) : option C.p256_public =
+  match Sem.serverHello_key_share_secp256r1 sh with
+  | Some k -> if B.length k = 65 then Some (k <: C.p256_public) else None
+  | None -> None
+
+(**
+  The key-exchange group for a connection, read off the `KeyShareEntry` the
+  server echoed.  Like `negotiated_aead_alg` this is a tag the peer put on the
+  wire, not something inferred from the share's length.
+**)
+let kex_group_of_named_group (g:GNG.namedGroup) : C.kex_group =
+  Sem.kex_group_of_named_group g
+
+let negotiated_kex_group (hs:handshake_state) : C.kex_group =
+  match hs.hs_server_hello with
+  | Some sh ->
+    (match Sem.serverHello_key_share_group sh with
+     | Some g -> kex_group_of_named_group g
+     | None -> C.KexX25519)
+  | None -> C.KexX25519
+
+(**
+  The group the server selected together with its share, `None` unless the
+  server picked one of the two groups ATLAS offers *and* sent a share of that
+  group's exact length.  This is the single accessor the client's ECDH and its
+  runtime storage agree on; `server_hello_key_share` above is its X25519
+  special case, kept for the X25519-only server role.
+**)
+let server_hello_kex (sh:GSH.serverHello) : option (g:C.kex_group & C.kex_public g) =
+  match Sem.serverHello_kex_share sh with
+  | Some (GNG.X25519, k) ->
+    if B.length k = 32 then Some (| C.KexX25519, (k <: C.kex_public C.KexX25519) |) else None
+  | Some (GNG.Secp256r1, k) ->
+    if B.length k = 65 then Some (| C.KexP256, (k <: C.kex_public C.KexP256) |) else None
+  | _ -> None
+
+(** [server_hello_kex] is exactly [Sem.serverHello_kex_share] retagged: the
+    wire's `NamedGroup` becomes a `kex_group` and the share keeps its bytes.
+    Stated so callers holding the [Sem]-level accessor (the parser and the
+    runtime validity predicate) can reach the model-level one. **)
+let lemma_server_hello_kex_of_share (sh:GSH.serverHello)
+  : Lemma
+      (ensures (match Sem.serverHello_kex_share sh with
+                | Some (g, k) ->
+                  B.length k == C.kex_public_len (kex_group_of_named_group g) /\
+                  server_hello_kex sh ==
+                    Some (| kex_group_of_named_group g,
+                            (k <: C.kex_public (kex_group_of_named_group g)) |)
+                | None -> server_hello_kex sh == None))
+      [SMTPat (server_hello_kex sh)]
+  = match Sem.serverHello_kex_share sh with
+    | Some (GNG.X25519, _) -> ()
+    | Some (GNG.Secp256r1, _) -> ()
+    | _ -> ()
+
+(** The client's own private/public pair for a group, as offered in its
+    ClientHello.  Both pairs are always generated; the negotiated group selects
+    which one the ECDH uses. **)
+let start_kex_private (start:handshake_start) (g:C.kex_group) : option C.kex_private =
+  match g with
+  | C.KexX25519 -> start.start_client_key_share_private
+  | C.KexP256 -> start.start_client_p256_private
+
+let start_kex_public (start:handshake_start) (g:C.kex_group) : C.kex_public g =
+  match g with
+  | C.KexX25519 -> start.start_client_key_share_public
+  | C.KexP256 -> start.start_client_p256_public
+
+(** The client's offered share for a group, read back off its ClientHello. **)
+let client_hello_kex (ch:GCH.clientHello) (g:C.kex_group) : option (C.kex_public g) =
+  match g with
+  | C.KexX25519 -> client_hello_key_share ch
+  | C.KexP256 -> client_hello_p256_key_share ch
 type record_layer_state = {
   record_read: R.direction_state;
   record_write: R.direction_state;
@@ -287,8 +410,27 @@ type local_event =
   | LocalVerifyClientFinished of GFin.finished
   | LocalDeliverApplicationData of B.bytes
   | LocalFail of T.tls_error
+noextract
+type protected_handshake_step = {
+  protected_handshake_message: M.handshake_msg;
+  protected_handshake_fragment: B.bytes;
+  protected_handshake_offset: nat;
+  protected_handshake_consumed: nat;
+  protected_handshake_head: bool;
+  (* A BUFFERING step takes delivery of a record whose plaintext does not
+     complete a handshake message: it appends the plaintext to the pending
+     buffer, advances the read sequence, and steps nothing else.  It is what
+     makes a message spanning three or more records deliverable -- with only
+     ordinary head steps, reassembly would stall as soon as one record plus
+     the leftover still did not contain a whole message.
+
+     [protected_handshake_message], [protected_handshake_offset] and
+     [protected_handshake_consumed] are inert for such a step. *)
+  protected_handshake_buffering: bool;
+}
 type conn_event =
   | ConnNetworkEvent of directed_message M.tls_message
+  | ConnProtectedHandshake of protected_handshake_step
   | ConnLocalEvent of local_event
 type connection_state = {
   cs_model: connection_model;
@@ -300,6 +442,25 @@ let initial (cfg:connection_config) : connection_state = {
   cs_wire_log = empty_wire_log;
   cs_event_log = [];
 }
+(** A configuration carries a server credential.  This is a PROTOCOL-level
+    well-formedness fact, not an implementation bound: the step relation already
+    demands it at `LocalStartServer` / `ControlNew`, and every server-side
+    transition that reads a credential matches on `config_server`.  Naming it
+    here lets the implementation and the system-level proofs share one
+    definition instead of respelling `Some? ...config_server` inline.
+
+    NOTE the deliberate layering.  This predicate says only that the credential
+    is PRESENT; it says nothing about how large the chain may be.  Any bound on
+    the chain length is a property of a particular implementation's buffers, NOT
+    of the protocol, so it does not belong here -- see
+    `TLS13.Impl.ConnectionState.Repr.server_config_valid`, which conjoins this
+    predicate with the implementation's own bound. **)
+let config_server_present (cfg:connection_config) : prop =
+  Some? cfg.config_server
+
+let server_config_present (st:connection_state) : prop =
+  config_server_present st.cs_model.model_config
+
 let fail_model (model:connection_model) (err:T.tls_error) : connection_model =
   { model with model_control = ControlFailed err; model_failure = Some err }
 let with_handshake_stage
@@ -347,7 +508,7 @@ let install_client_application_write_after_finished
           R.install_keys
             (R.next_seq record.record_write)
             R.Application
-            material.traffic_key
+            material.traffic_alg material.traffic_key
             material.traffic_iv;
     }
   | None ->
@@ -402,13 +563,13 @@ let install_record_keys
     {
       record with
         record_write =
-          R.install_keys record.record_write epoch material.traffic_key material.traffic_iv;
+          R.install_keys record.record_write epoch material.traffic_alg material.traffic_key material.traffic_iv;
     }
   | _, TrafficRead ->
     {
       record with
         record_read =
-          R.install_keys record.record_read epoch material.traffic_key material.traffic_iv;
+          R.install_keys record.record_read epoch material.traffic_alg material.traffic_key material.traffic_iv;
     }
 let install_record_keys_for_role
   (role:endpoint_role)
@@ -421,7 +582,7 @@ let install_record_keys_for_role
     {
     record with
       record_write =
-        R.install_keys record.record_write R.Application material.traffic_key material.traffic_iv;
+        R.install_keys record.record_write R.Application material.traffic_alg material.traffic_key material.traffic_iv;
     }
   | _, _, _ ->
     install_record_keys record install
@@ -429,6 +590,7 @@ let traffic_material_matches_record_direction
   (material:traffic_key_material)
   (st:R.direction_state)
   : prop =
+  st.R.alg == material.traffic_alg /\
   st.R.key == Some material.traffic_key /\
   st.R.static_iv == Some material.traffic_iv
 let traffic_material_for_label
@@ -736,25 +898,76 @@ let step_handshake_message
         msg)
       HsCertificateVerifyReceived)
   | CL.Received, M.Finished fin, ControlHandshaking HsCertificateVerifyVerified ->
-    Some (with_handshake_stage
-      { model with
-          model_record =
-            { model.model_record with
-                record_read = R.next_seq model.model_record.record_read;
-            };
-      }
-      { hs with hs_server_finished = Some fin }
-      HsServerFinishedReceived)
+    // Fix 1 (atomic): the client processes the server Finished in a single step -
+    // append it to the transcript, mark it verified, and install the server's
+    // application read keys (record read epoch -> Application) so that no window
+    // exists in which the server can send an application-keys record the client
+    // cannot decrypt. The application traffic secret is derived from the transcript
+    // THROUGH the server Finished, so the append happens before the derivation.
+    let hs_v =
+      append_handshake_to_transcript
+        { hs with
+            hs_server_finished = Some fin;
+            hs_server_finished_verified = true;
+        }
+        (M.Finished fin) in
+    (match hs_v.hs_keys.ks_master_secret with
+     | Some master ->
+       let secret = K.server_application_traffic_secret master (Tr.hash hs_v.hs_transcript) in
+       let material = traffic_key_material_for_secret (negotiated_aead_alg hs) secret in
+       Some (with_handshake_stage
+         { model with
+             model_record =
+               { model.model_record with
+                   record_read =
+                     R.install_keys
+                       model.model_record.record_read
+                       R.Application
+                       material.traffic_alg material.traffic_key
+                       material.traffic_iv;
+               };
+         }
+         { hs_v with
+             hs_keys =
+               { hs_v.hs_keys with ks_server_application_traffic = Some material };
+         }
+         HsServerFinishedVerified)
+     | None -> None)
   | CL.Received, M.Finished fin, ControlHandshaking HsServerFinishedSent ->
-    Some (with_handshake_stage
-      { model with
-          model_record =
-            { model.model_record with
-                record_read = R.next_seq model.model_record.record_read;
-            };
-      }
-      { hs with hs_client_finished = Some fin }
-      HsClientFinishedReceived)
+    // Fix 1 (atomic, mirror): the server processes the client Finished in a single
+    // step - install the client's application read keys (record read epoch ->
+    // Application) and advance to ControlApplicationData, closing the mirror window
+    // in which the client could send an application-keys record the server cannot
+    // decrypt. The application traffic secret is derived from the transcript THROUGH
+    // the server Finished (already present), so it is computed BEFORE appending the
+    // client Finished to the transcript.
+    (match hs.hs_keys.ks_master_secret with
+     | Some master ->
+       let secret = K.client_application_traffic_secret master (Tr.hash hs.hs_transcript) in
+       let material = traffic_key_material_for_secret (negotiated_aead_alg hs) secret in
+       let hs_v =
+         append_handshake_to_transcript
+           { hs with hs_client_finished = Some fin }
+           (M.Finished fin) in
+       Some {
+         model with
+           model_control = ControlApplicationData;
+           model_record =
+             { model.model_record with
+                 record_read =
+                   R.install_keys
+                     model.model_record.record_read
+                     R.Application
+                     material.traffic_alg material.traffic_key
+                     material.traffic_iv;
+             };
+           model_handshake =
+             { hs_v with
+                 hs_keys =
+                   { hs_v.hs_keys with ks_client_application_traffic = Some material };
+             };
+       }
+     | None -> None)
   | CL.Sent, M.Finished fin, ControlHandshaking HsServerFinishedVerified ->
     Some {
       model with
@@ -770,6 +983,80 @@ let step_handshake_message
     Some (fail_model model T.HelloRetryRequestRejected)
   | _, _, _ ->
     None
+(** RFC 8446 §4.6.3.  A KeyUpdate rotates exactly one direction's application
+    traffic secret.  Which key-schedule slot that is depends on the endpoint's
+    role: [TrafficWrite] names our own sending secret, [TrafficRead] the peer's.
+    Sending a KeyUpdate rotates our write key; receiving one rotates our read
+    key.  Going through [traffic_label_for_endpoint_direction] rather than
+    naming [ks_client_application_traffic] / [ks_server_application_traffic]
+    directly is what makes this arm correct for a server as well as a client.
+
+    The [next_seq] is immaterial to the result — [R.install_keys] resets the
+    sequence number to zero, as §5.3 requires on a key change — but it is kept
+    so the shape matches the other record-advancing arms.
+
+    Marked [unfold] on purpose: downstream invariants routinely need to see
+    that rotation touches only [model_record] and [model_handshake.hs_keys]
+    (control state, config, transcript and application state are all
+    preserved).  Behind an ordinary [let] that fact costs an extra unfolding
+    in every such proof, which is enough to push several of the larger
+    reachability lemmas over their rlimit. *)
+unfold
+let rotate_application_traffic
+  (model:connection_model)
+  (tdir:traffic_direction)
+  : option connection_model =
+  let hs = model.model_handshake in
+  let label =
+    traffic_label_for_endpoint_direction model.model_config.config_role tdir in
+  match traffic_material_for_label hs.hs_keys TrafficApplication label with
+  | None -> None
+  | Some old ->
+    let updated = updated_traffic_key_material old in
+    let record =
+      match tdir with
+      | TrafficRead ->
+        { model.model_record with
+            record_read =
+              R.install_keys
+                (R.next_seq model.model_record.record_read)
+                R.Application
+                updated.traffic_alg updated.traffic_key
+                updated.traffic_iv }
+      | TrafficWrite ->
+        { model.model_record with
+            record_write =
+              R.install_keys
+                (R.next_seq model.model_record.record_write)
+                R.Application
+                updated.traffic_alg updated.traffic_key
+                updated.traffic_iv } in
+    Some {
+      model with
+        model_record = record;
+        model_handshake = {
+          hs with
+            hs_keys =
+              update_key_schedule_with_label
+                hs.hs_keys TrafficApplication label updated;
+        };
+    }
+
+(** Sending a KeyUpdate discharges a pending response obligation exactly when it
+    is the response form.  §4.6.3 requires the reply to a [update_requested] to
+    carry [update_not_requested]; a spontaneous [update_requested] therefore
+    leaves any outstanding obligation in place rather than silently clearing
+    it. *)
+let sent_key_update_response
+  (app:application_state)
+  (req:M.key_update_request)
+  : application_state =
+  match req with
+  | M.UpdateNotRequested ->
+    { app with app_key_update_response_pending = false }
+  | M.UpdateRequested ->
+    app
+
 let step_tls_message
   (model:connection_model)
   (dir:direction)
@@ -816,65 +1103,32 @@ let step_tls_message
        }
      | CL.Sent -> None)
   | M.TlsKeyUpdate req, ControlApplicationData ->
-   (match dir, req with
-    | CL.Received, _ ->
-      (match hs.hs_keys.ks_server_application_traffic with
-       | Some old_server_app ->
-         let new_server_app = updated_traffic_key_material old_server_app in
+   (match dir with
+    | CL.Received ->
+      (* The peer rotated its sending key, so rotate our read key.  Only an
+         [update_requested] obliges us to answer (§4.6.3); answering an
+         [update_not_requested] would make the two endpoints ping-pong. *)
+      (match rotate_application_traffic model TrafficRead with
+       | Some model' ->
          Some {
-           model with
-             model_record = {
-               model.model_record with
-                 record_read =
-                   R.install_keys
-                     (R.next_seq model.model_record.record_read)
-                     R.Application
-                     new_server_app.traffic_key
-                     new_server_app.traffic_iv;
-             };
-             model_handshake = {
-               hs with
-                 hs_keys = {
-                   hs.hs_keys with
-                     ks_server_application_traffic = Some new_server_app;
-                 };
-             };
+           model' with
              model_application =
                received_key_update_pending model.model_application req;
          }
        | None -> None)
-    | CL.Sent, M.UpdateNotRequested ->
-      (match hs.hs_keys.ks_client_application_traffic with
-       | Some old_client_app ->
-         if model.model_application.app_key_update_response_pending then
-           let new_client_app = updated_traffic_key_material old_client_app in
-           Some {
-             model with
-               model_record = {
-                 model.model_record with
-                   record_write =
-                     R.install_keys
-                       (R.next_seq model.model_record.record_write)
-                       R.Application
-                       new_client_app.traffic_key
-                       new_client_app.traffic_iv;
-               };
-               model_handshake = {
-                 hs with
-                   hs_keys = {
-                     hs.hs_keys with
-                       ks_client_application_traffic = Some new_client_app;
-                   };
-               };
-               model_application = {
-                 model.model_application with
-                   app_key_update_response_pending = false;
-               };
-           }
-         else None
-       | None -> None)
-    | CL.Sent, M.UpdateRequested ->
-      None)
+    | CL.Sent ->
+      (* Rotate our own sending key.  This arm is deliberately not conditioned
+         on an outstanding response obligation: an endpoint may initiate a
+         KeyUpdate spontaneously, which is what keeps a long-lived connection
+         inside the AEAD usage limits of §5.5. *)
+      (match rotate_application_traffic model TrafficWrite with
+       | Some model' ->
+         Some {
+           model' with
+             model_application =
+               sent_key_update_response model.model_application req;
+         }
+       | None -> None))
   | M.TlsAlert T.Close_notify, ControlApplicationData ->
     (match dir with
      | CL.Sent ->
@@ -907,16 +1161,195 @@ let step_tls_message
            };
        }
      | CL.Sent -> None)
+  | M.TlsAlert alert, ControlFailed _ ->
+    // A failed connection is dead: it sends nothing further (a `Sent` alert from
+    // `ControlFailed` is illegal / not a real transition).  Receiving an alert on
+    // an already-failed connection is passive and stays failed (idempotent).
+    (match dir with
+     | CL.Sent -> None
+     | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsAlert alert, _ ->
-    Some (fail_model model (T.AlertError alert))
+    // Stream-integrity fix (RECORD level).  This catch-all used to be
+    // DIRECTION-BLIND: `Some (fail_model ...)` for BOTH directions, at EVERY
+    // remaining control.  That made a `CL.Sent` alert a legal transition at, e.g.,
+    // `ControlNew` / `HsClientHelloSent`, where `record_write.R.epoch == R.Initial`
+    // and `record_write.R.key == None`.  Since `network_message_is_cleartext`
+    // (below) classifies EVERY alert as NON-cleartext, the protected branch of
+    // `network_message_raw_delta_legal` then permitted a "garbage protected"
+    // `Application_data` record sealed under no key at all.  Consequences:
+    //   * protected-record COUNTS stopped witnessing "the peer sent its Finished"
+    //     (an alert inflates the count identically), which killed every counting
+    //     route to the cross-endpoint handshake facts; and
+    //   * `~cleartext sent` no longer implied `~(R.Initial? (snap_wr p).R.epoch)`,
+    //     so the ToServer handshake-seal bridge could not be fired for a payload
+    //     whose message identity was not already known.
+    // The fix COMPLETES the pattern the `ControlFailed` arm immediately above
+    // already uses (:961-967): make the catch-all direction-explicit and REFUSE
+    // the send.  It is faithful — an endpoint's own failure is modelled by the
+    // `LocalFail` local event, which emits nothing on the wire; the only alert any
+    // endpoint ever SENDS is `Close_notify`, whose `CL.Sent` arm is live exactly at
+    // `ControlApplicationData` (:929) and is `None` at `ControlClosing` (:949).
+    // Because a consistent endpoint at `ControlApplicationData` has both
+    // application record epochs installed
+    // (`lemma_connection_appdata_keys_installed_for_role` then
+    // `lemma_connection_application_ready_record_epochs_installed`), "non-cleartext
+    // SEND ==> write key present ==> ~Initial write epoch" is now DERIVABLE rather
+    // than assumed.  Removing a transition only SHRINKS the reachable set, so no
+    // invariant preservation can be made harder by this change.
+    (match dir with
+     | CL.Sent -> None
+     | CL.Received -> Some (fail_model model (T.AlertError alert)))
   | M.TlsChangeCipherSpec, ControlHandshaking _ ->
     Some model
   | _, _ ->
     None
+let protected_handshake_message_supported (msg:M.handshake_msg) : bool =
+  match msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ -> true
+  | _ -> false
+
+(* ==================================================================== *)
+(* Cross-record handshake reassembly.                                   *)
+(*                                                                      *)
+(* TLS 1.3 permits a single handshake message to span several records,  *)
+(* so a record's plaintext may end part-way through a message.  The     *)
+(* unconsumed tail is held in the pending buffer and the NEXT record's  *)
+(* plaintext is appended to it before parsing resumes.                  *)
+(*                                                                      *)
+(* The step record deliberately keeps [protected_handshake_fragment]    *)
+(* equal to the RECORD PLAINTEXT for a head step.  That identity is     *)
+(* what [TLS13.Spec.StateMachine.Canonical]'s decode projection relates *)
+(* to the wire, and it is relied on by the receiver-side pairing        *)
+(* proofs.  The concatenation with the leftover is derived here rather  *)
+(* than stored in the step, so the wire relation is untouched.          *)
+(* ==================================================================== *)
+
+(* The unparsed suffix of the pending protected-handshake plaintext.
+
+   [set_pending_protected_handshake] keeps [parsed < length bytes] whenever the
+   buffer is non-empty and otherwise clears it to ([B.empty], 0), so this slice
+   is empty exactly when [protected_handshake_buffer_empty] holds. *)
+let pending_protected_handshake_leftover (model:connection_model) : B.bytes =
+  let hb = model.model_handshake.hs_buffers in
+  let bytes = hb.hb_encrypted_server_handshake_bytes in
+  let parsed = hb.hb_encrypted_server_handshake_parsed in
+  if parsed <= B.length bytes
+  then Seq.slice bytes parsed (B.length bytes)
+  else B.empty
+
+(* The byte stream a step parses out of.
+
+   A HEAD step resumes at the front of the leftover and continues into the
+   record it takes delivery of, so its stream is [leftover ++ fragment].  A
+   TAIL step continues inside the buffer already published by its head, whose
+   fragment IS that buffer, so its stream is the fragment itself.
+
+   When the pending buffer is empty the leftover is empty and a head step's
+   stream is exactly its fragment, which is the pre-reassembly behaviour. *)
+let protected_handshake_stream
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : B.bytes =
+  if step.protected_handshake_head
+  then
+    B.append
+      (pending_protected_handshake_leftover model)
+      step.protected_handshake_fragment
+  else step.protected_handshake_fragment
+
+let set_pending_protected_handshake
+  (model:connection_model)
+  (fragment:B.bytes)
+  (parsed:nat)
+  : connection_model =
+  let hs = model.model_handshake in
+  let buffers =
+    if parsed < B.length fragment
+    then
+      { hs.hs_buffers with
+          hb_encrypted_server_handshake_bytes = fragment;
+          hb_encrypted_server_handshake_parsed = parsed;
+      }
+    else
+      { hs.hs_buffers with
+          hb_encrypted_server_handshake_bytes = B.empty;
+          hb_encrypted_server_handshake_parsed = 0;
+      } in
+  { model with model_handshake = { hs with hs_buffers = buffers } }
+(* A buffering step consumes one record and nothing else: the read sequence
+   advances (exactly as it does for a head step that carries a message, since
+   in both cases one protected record has been opened), the record's plaintext
+   is appended to whatever the previous record left unparsed, and the parse
+   position resets to the front of the accumulated stream.
+
+   Resetting [parsed] to 0 also COMPACTS the buffer: the bytes of messages
+   already delivered are dropped, so the pending buffer only ever holds the
+   prefix of the one message still being assembled. *)
+let step_protected_handshake_buffer
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot connection_model =
+  let advanced =
+    { model with
+        model_record =
+          { model.model_record with
+              record_read = R.next_seq model.model_record.record_read;
+          };
+    } in
+  set_pending_protected_handshake
+    advanced
+    (protected_handshake_stream model step)
+    0
+
+let step_protected_handshake
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot (option connection_model) =
+  if step.protected_handshake_buffering
+  then
+    (if step.protected_handshake_head
+     then Some (step_protected_handshake_buffer model step)
+     else None)
+  else if protected_handshake_message_supported step.protected_handshake_message
+  then
+    match
+      step_handshake_message
+        model
+        CL.Received
+        step.protected_handshake_message
+    with
+    | None -> None
+    | Some stepped ->
+      let consumed_to =
+        step.protected_handshake_offset + step.protected_handshake_consumed in
+      let record_adjusted =
+        if step.protected_handshake_head
+        then stepped
+        else
+          match step.protected_handshake_message with
+          | M.Finished _ -> stepped
+          | _ ->
+            { stepped with
+                model_record =
+                  { stepped.model_record with
+                      record_read = model.model_record.record_read;
+                  };
+            } in
+      Some
+        (set_pending_protected_handshake
+          record_adjusted
+          step.protected_handshake_fragment
+          consumed_to)
+  else None
 let step_model (model:connection_model) (ev:conn_event) : GTot (option connection_model) =
   match ev with
   | ConnNetworkEvent msg ->
     step_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnProtectedHandshake step ->
+    step_protected_handshake model step
   | ConnLocalEvent local ->
     step_local_event model local
 let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
@@ -980,18 +1413,47 @@ let start_matches_config (cfg:connection_config) (start:handshake_start) : prop 
   start.start_cipher_suites == cfg.config_cipher_suites /\
   start.start_signature_schemes == cfg.config_signature_schemes
 let handshake_start_key_share_consistent (start:handshake_start) : prop =
-  match start.start_client_key_share_private with
-  | Some sk ->
-    Seq.equal
-      start.start_client_key_share_public
-      (C.x25519_public_from_private sk)
-  | None ->
-    True
+  (match start.start_client_key_share_private with
+   | Some sk ->
+     Seq.equal
+       start.start_client_key_share_public
+       (C.x25519_public_from_private sk)
+   | None ->
+     True) /\
+  (match start.start_client_p256_private with
+   | Some sk ->
+     Seq.equal
+       start.start_client_p256_public
+       (C.p256_public_from_private sk)
+   | None ->
+     True)
+(** [handshake_start_key_share_consistent] states the private/public agreement
+    per group; this is its group-dispatched reading, which is what the ECDH
+    implementation needs once the negotiated group has selected a keypair. **)
+let lemma_start_kex_public_from_private (start:handshake_start) (g:C.kex_group)
+  : Lemma
+      (requires handshake_start_key_share_consistent start /\
+                Some? (start_kex_private start g))
+      (ensures C.kex_public_from_private g (Some?.v (start_kex_private start g)) ==
+               start_kex_public start g)
+  = match g with
+    | C.KexX25519 ->
+      Seq.lemma_eq_elim
+        start.start_client_key_share_public
+        (C.x25519_public_from_private (Some?.v start.start_client_key_share_private))
+    | C.KexP256 ->
+      Seq.lemma_eq_elim
+        start.start_client_p256_public
+        (C.p256_public_from_private (Some?.v start.start_client_p256_private))
+
 let client_hello_matches_start (start:handshake_start) (ch:GCH.clientHello) : prop =
   Seq.equal (Sem.clientHello_random ch) start.start_client_random /\
   Sem.clientHello_server_name ch == Some start.start_server_name /\
   (match Sem.clientHello_key_share_x25519 ch with
    | Some k -> B.length k = 32 /\ Seq.equal k start.start_client_key_share_public
+   | None -> False) /\
+  (match Sem.clientHello_key_share_secp256r1 ch with
+   | Some k -> B.length k = 65 /\ Seq.equal k start.start_client_p256_public
    | None -> False) /\
   Sem.clientHello_cipher_suites ch == start.start_cipher_suites /\
   Sem.clientHello_sig_algs ch == Some start.start_signature_schemes /\
@@ -1071,7 +1533,7 @@ let traffic_install_matches_key_schedule
   : GTot prop =
   match expected_traffic_secret hs install.install_epoch install.install_direction with
   | Some secret ->
-    install.install_material == traffic_key_material_for_secret secret
+    install.install_material == traffic_key_material_for_secret (negotiated_aead_alg hs) secret
   | None -> False
 let traffic_install_matches_key_schedule_for_role
   (role:endpoint_role)
@@ -1084,7 +1546,7 @@ let traffic_install_matches_key_schedule_for_role
           install.install_epoch
           install.install_direction with
   | Some secret ->
-    install.install_material == traffic_key_material_for_secret secret
+    install.install_material == traffic_key_material_for_secret (negotiated_aead_alg hs) secret
   | None -> False
 let application_traffic_available_for_role
   (role:endpoint_role)
@@ -1148,10 +1610,16 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     (match hs.hs_start, hs.hs_server_hello with
      | Some start, Some sh ->
        handshake_start_key_share_consistent start /\
-       (match start.start_client_key_share_private with
-        | Some sk ->
-          (match server_hello_key_share sh with
-           | Some k -> C.x25519_shared sk k == Some shared
+       (* Dispatch on the group the server named in its KeyShareEntry.  The
+          client generated a keypair for every group it offered, so the
+          negotiated group selects which private key the ECDH runs with; no
+          parameter is recovered from a share's length. *)
+       (match server_hello_kex sh with
+        | Some (| g, server_share |) ->
+          (match start_kex_private start g with
+           | Some sk ->
+             C.kex_public_from_private g sk == start_kex_public start g /\
+             C.kex_shared g sk server_share == Some shared
            | None -> False)
         | None -> False)
      | _, _ -> False)
@@ -1202,6 +1670,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
     model.model_config.config_role == ServerEndpoint /\
     hs.hs_certificate_verify == None /\
+    W.certificateVerify_representable cv /\
     (match hs.hs_certificate, hs.hs_server_selection with
      | Some _, Some selection ->
        server_certificate_verify_signature_valid selection hs cv /\
@@ -1225,12 +1694,74 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        H.verify_finished client_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
      | _, _ -> False)
   | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    (* NOTE (application-data stream integrity): `app_pending_plaintext` is set
+       once to `B.empty` in `empty_application_state` and never written again by
+       any step, so this legality guard forces `bytes == B.empty`.  The
+       TLS-to-host-application delivery hop is thus unimplemented: it can only
+       ever append an empty chunk to `app_received`, leaving the received byte
+       stream (the concatenation) unchanged.  The Pulse drivers statically
+       exclude this event. *)
     exists pending.
       Seq.equal model.model_application.app_pending_plaintext (B.append bytes pending)
   | LocalFail _, _ ->
     True
   | _, _ ->
     False
+let protected_handshake_buffer_empty (model:connection_model) : prop =
+  Seq.equal
+    model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes
+    B.empty /\
+  model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed == 0
+
+(* An empty pending buffer leaves nothing to prepend, so a step's parse stream
+   is exactly its fragment.  This is the bridge that keeps every property
+   proved before cross-record reassembly applicable: such properties carry
+   [protected_handshake_buffer_empty] (directly, or via the reachability
+   invariants that establish it), and under it the generalised
+   [legal_protected_handshake_step] and [step_protected_handshake] coincide
+   with the fragment-only versions they replace. *)
+let lemma_protected_handshake_stream_of_buffer_empty
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : Lemma
+      (requires protected_handshake_buffer_empty model)
+      (ensures
+        Seq.equal
+          (protected_handshake_stream model step)
+          step.protected_handshake_fragment)
+      [SMTPat (protected_handshake_stream model step);
+       SMTPat (protected_handshake_buffer_empty model)]
+  = Seq.append_empty_l step.protected_handshake_fragment
+
+(* A tail step never prepends: its stream is its fragment unconditionally. *)
+let lemma_protected_handshake_stream_tail
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : Lemma
+      (requires step.protected_handshake_head == false)
+      (ensures
+        protected_handshake_stream model step ==
+        step.protected_handshake_fragment)
+  = ()
+
+(* Local events never touch the protected-handshake reassembly buffer.  The
+   only [hs_buffers] field any of them writes is [hb_certificate_verify_input]
+   (at [LocalSignCertificateVerify]).  This is what lets a normalisation proved
+   at one model be transported across an intervening local event, e.g. the
+   client's traffic-key install ahead of the server flight. *)
+let lemma_local_event_preserves_protected_handshake_buffer
+  (model:connection_model)
+  (ev:local_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_local_event model ev == Some model1)
+      (ensures
+        model1.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes ==
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
+        model1.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed ==
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed)
+  = ()
+
 let legal_handshake_message
   (model:connection_model)
   (dir:direction)
@@ -1273,6 +1804,7 @@ let legal_handshake_message
     hs.hs_encrypted_extensions <> None /\
     hs.hs_certificate == None /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
+    W.certificate_representable cert /\
     (match model.model_config.config_server with
      | Some cfg -> certificate_msg_matches_server_config cfg cert
      | None -> False)
@@ -1281,6 +1813,7 @@ let legal_handshake_message
     hs.hs_certificate <> None /\
     hs.hs_certificate_verify_verified == false /\
     Some? hs.hs_keys.ks_server_handshake_traffic /\
+    W.certificateVerify_representable cv /\
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv
      | None -> False)
@@ -1302,15 +1835,63 @@ let legal_handshake_message
     Some? hs.hs_validated_peer
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
     model.model_config.config_role == ClientEndpoint /\
-    Some? hs.hs_keys.ks_server_handshake_traffic
+    Some? hs.hs_keys.ks_server_handshake_traffic /\
+    Some? hs.hs_keys.ks_master_secret
   | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
     model.model_config.config_role == ServerEndpoint /\
-    Some? hs.hs_keys.ks_client_handshake_traffic
+    Some? hs.hs_keys.ks_client_handshake_traffic /\
+    Some? hs.hs_keys.ks_master_secret /\
+    // Stream-integrity fix: a server may not accept the client Finished (and
+    // thereby atomically enter ControlApplicationData) until it has installed its
+    // own application WRITE key.  Faithful to TLS 1.3 (both application traffic
+    // secrets are derived together, through the server Finished), and it removes a
+    // Fix-1 atomicity wart whereby a server could reach application data
+    // permanently unable to send.  The Pulse server driver already installs this
+    // key (LocalInstallServerApplicationTrafficKeys at HsServerFinishedSent) before
+    // it can process the client Finished, so this guard is always satisfied by the
+    // implementation.
+    Some? hs.hs_keys.ks_server_application_traffic
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
+    // The client may not declare the handshake finished while it still holds
+    // unconsumed protected-handshake plaintext.  Without this guard the client
+    // reaches ControlApplicationData with a non-empty pending buffer, and
+    // because legal_handshake_message admits no message at all in
+    // ControlApplicationData that plaintext can never be drained: the endpoint
+    // is wedged, holding bytes no legal step can ever consume.
+    protected_handshake_buffer_empty model /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
-    Some? hs.hs_keys.ks_server_application_traffic
+    Some? hs.hs_keys.ks_server_application_traffic /\
+    // Stream-integrity fix (RECORD level, not slot level).  The three conjuncts
+    // above are SLOT-level (key-schedule slots); they say nothing about the
+    // RECORD layer.  The client's handshake-WRITE record install is an OPTIONAL
+    // local (`traffic_install_allowed_at_stage_for_role` only *permits* it at
+    // `HsServerHelloReceived`; nothing compels it), so without this conjunct a
+    // client could legally send its Finished with
+    // `model_record.record_write.epoch == Initial` and no write key.  `Sent,
+    // Finished` is not cleartext, so the protected branch of
+    // `network_message_raw_delta_legal` would then tie the wire bytes to no seal
+    // at all -- a "garbage protected" record -- which makes the ToServer
+    // handshake-seal bridge genuinely FALSE, not merely underivable.  The server
+    // side has no such hole because its handshake-write install is control-forced
+    // (`lemma_server_handshake_write_record_has_keys`).
+    //
+    // This is the same move as the `Received, Finished, HsServerFinishedSent` arm
+    // immediately above, one level down.  It is faithful to TLS 1.3: a client
+    // cannot send an encrypted Finished without its handshake write keys.  The
+    // Pulse client driver selects `LocalInstallClientHandshakeTrafficKeys`
+    // (TrafficHandshake + TrafficWrite) at `HsServerHelloReceived`, well before
+    // the Finished send, so the guard is always satisfied by the implementation.
+    //
+    // WEAKEST SUFFICIENT GUARD: only `Some? key` is demanded, not `Some?
+    // static_iv` and not an epoch pin.  Under `connection_state_consistent`,
+    // `Some? key` already excludes `R.Initial` (the Initial arm forces
+    // `key == None`) and the committed negative-epoch lemmas exclude
+    // `R.Application`, so `lemma_client_finished_verified_write_epoch_handshake`
+    // yields `epoch == R.Handshake`; consistency's Handshake arm then supplies
+    // the full traffic-material match, hence `static_iv` too.
+    Some? model.model_record.record_write.R.key
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
     model.model_config.config_role == ClientEndpoint /\
     True
@@ -1324,6 +1905,14 @@ let legal_tls_message
   let hs = model.model_handshake in
   match msg, model.model_control with
   | M.TlsHandshake handshake_msg, _ ->
+    (* Note: a client-received PROTECTED handshake message may also be
+       delivered by [ConnProtectedHandshake] with [protected_handshake_head],
+       including when the record carries exactly one message.  The two
+       descriptions denote the SAME transition -- see
+       [TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_replay_normalizes].
+       The implementation emits only the head/tail form, so there is one
+       receive path; this route is retained so that the pairing proofs can
+       normalise into it. *)
     legal_handshake_message model dir handshake_msg
   | M.TlsApplicationData _, ControlApplicationData ->
     application_traffic_available_for_role
@@ -1334,15 +1923,19 @@ let legal_tls_message
     model.model_config.config_role == ClientEndpoint /\
     dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
   | M.TlsKeyUpdate req, ControlApplicationData ->
-    model.model_config.config_role == ClientEndpoint /\
-    (match dir, req with
-     | CL.Received, _ ->
-       Some? hs.hs_keys.ks_server_application_traffic
-     | CL.Sent, M.UpdateNotRequested ->
-       Some? hs.hs_keys.ks_client_application_traffic /\
-       model.model_application.app_key_update_response_pending
-     | CL.Sent, M.UpdateRequested ->
-       False)
+    (* Either endpoint may rotate, and either may initiate.  The material that
+       has to exist is exactly the one this direction rotates -- our read key
+       on receive, our write key on send -- which keeps this predicate in step
+       with [rotate_application_traffic]'s success condition. *)
+    Some?
+      (traffic_material_for_label
+         hs.hs_keys
+         TrafficApplication
+         (traffic_label_for_endpoint_direction
+            model.model_config.config_role
+            (match dir with
+             | CL.Received -> TrafficRead
+             | CL.Sent -> TrafficWrite)))
   | M.TlsAlert T.Close_notify, ControlApplicationData ->
     True
   | M.TlsAlert T.Close_notify, ControlClosing ->
@@ -1353,10 +1946,130 @@ let legal_tls_message
     True
   | _, _ ->
     False
+(* The largest accumulated protected-handshake plaintext a client will hold
+   while reassembling a message that spans several records.  It matches the
+   implementation's [max_handshake_flight_len].
+
+   A cap is not a convenience: without one, a peer could feed unboundedly
+   many records that each merely extend the pending buffer, and the number of
+   records a client accepts in the handshake-receiving region would no longer
+   be bounded by the number of messages it has taken delivery of.  Capping
+   the buffer restores a bound -- messages plus buffered bytes -- because
+   every buffered record contributes at least one byte. *)
+let max_pending_protected_handshake : nat = 32768
+
+(* The stages at which a CLIENT can receive a protected handshake message,
+   and hence the only stages at which it may set protected plaintext aside.
+
+   These are exactly the [CL.Received] client arms of
+   [legal_handshake_message] for the four supported protected messages:
+   [EncryptedExtensions], [Certificate], [CertificateVerify] and [Finished].
+   Deriving the buffering guard from them is what keeps buffering from
+   weakening any stage-gated property.  In particular
+   [HsCertificateReceived] is absent -- the pipeline is genuinely blocked
+   there until [LocalValidateCertificate] runs -- so "receiving Certificate
+   blocks the pipeline" survives unchanged. *)
+let protected_handshake_buffering_stage (stage:handshake_stage) : bool =
+  match stage with
+  | HsServerHelloReceived
+  | HsEncryptedExtensionsReceived
+  | HsCertificateValidated
+  | HsCertificateVerifyVerified -> true
+  | _ -> false
+
+let legal_protected_handshake_step
+  (model:connection_model)
+  (step:protected_handshake_step)
+  : GTot prop =
+  let offset = step.protected_handshake_offset in
+  let consumed = step.protected_handshake_consumed in
+  model.model_config.config_role == ClientEndpoint /\
+  (if step.protected_handshake_buffering
+   then
+     (* A BUFFERING step takes delivery of a record and sets its plaintext
+        aside without interpreting it.  It is what makes a handshake message
+        spanning three or more records deliverable: with only message-bearing
+        steps, reassembly stalls the moment one record plus the accumulated
+        leftover still does not contain a whole message, because no step is
+        then enabled and the record cannot be left undecrypted (opening it
+        advances the read sequence irreversibly).
+
+        It carries no message, so [protected_handshake_message],
+        [protected_handshake_offset] and [protected_handshake_consumed] say
+        nothing and are pinned to inert values.
+
+        Buffering is confined to the stages at which the client can actually
+        receive a protected handshake message (see
+        [protected_handshake_buffering_stage]).  Anywhere else the buffer
+        could never be drained, so admitting it would be a way to wedge the
+        endpoint while still consuming records. *)
+     step.protected_handshake_head == true /\
+     offset == 0 /\
+     consumed == 0 /\
+     0 < B.length step.protected_handshake_fragment /\
+     B.length (protected_handshake_stream model step) <=
+       max_pending_protected_handshake /\
+     (match model.model_control with
+      | ControlHandshaking stage -> protected_handshake_buffering_stage stage
+      | _ -> False) /\
+     (* Buffering is a LAST RESORT, not an alternative to delivering a
+        message: it is legal only when a head step is genuinely unavailable.
+        Either there is already pending plaintext (the head rule demands
+        [protected_handshake_buffer_empty], so a non-empty buffer forces this
+        step to be a buffering one), or this record's own plaintext, taken
+        alone, does not parse as a whole handshake message (so the head rule
+        cannot fire on it either).  Without this conjunct a client could
+        legally buffer a record that *does* carry a complete message instead
+        of delivering it, letting it accept arbitrarily many records-worth of
+        already-decodable messages while never advancing past a single
+        buffering-eligible control -- which is exactly the reassembly
+        mechanism, but pointed at messages that need no reassembly at all. *)
+     (~ (protected_handshake_buffer_empty model) \/
+      W.parse_handshake step.protected_handshake_fragment == None)
+   else
+     offset < B.length step.protected_handshake_fragment /\
+     0 < consumed /\
+     offset + consumed <= B.length step.protected_handshake_fragment /\
+     protected_handshake_message_supported step.protected_handshake_message /\
+     W.parse_handshake
+       (Seq.slice
+         step.protected_handshake_fragment
+         offset
+         (B.length step.protected_handshake_fragment)) ==
+       Some (step.protected_handshake_message, consumed) /\
+     legal_handshake_message model CL.Received step.protected_handshake_message /\
+     (if step.protected_handshake_head
+      then
+        (* The head step takes delivery of a whole record, so its offset comes
+           off the wire rather than from state, and nothing may be pending.
+
+           [consumed] is NOT required to be strictly less than the fragment
+           length.  That strict inequality was what forced a record carrying
+           exactly one message down the [ConnNetworkEvent] path and created
+           the fork; dropping it lets the head step describe such a record,
+           with the pending buffer left empty by
+           [set_pending_protected_handshake] and no tail steps following.
+
+           A message spanning several records is NOT handled here: the head
+           step reads only this record's plaintext.  It is handled by
+           BUFFERING steps, which accumulate plaintext until a whole message
+           is present and then let ordinary TAIL steps drain it.  Keeping the
+           head rule exactly as it was is what leaves every sender/receiver
+           pairing proof untouched. *)
+        protected_handshake_buffer_empty model /\
+        offset == 0
+      else
+        Seq.equal
+          step.protected_handshake_fragment
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_bytes /\
+        offset ==
+          model.model_handshake.hs_buffers.hb_encrypted_server_handshake_parsed))
 let legal_event (model:connection_model) (ev:conn_event) : GTot prop =
   match ev with
   | ConnNetworkEvent msg ->
     legal_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnProtectedHandshake step ->
+    legal_protected_handshake_step model step
   | ConnLocalEvent local ->
     legal_local_event model local
 let rec all_records_outer_type
@@ -1435,6 +2148,11 @@ let event_raw_delta_legal
   | ConnLocalEvent _ ->
     Seq.equal raw_sent B.empty /\
     Seq.equal raw_received B.empty
+  | ConnProtectedHandshake step ->
+    Seq.equal raw_sent B.empty /\
+    (if step.protected_handshake_head
+     then raw_records_exactly raw_received T.Application_data 1
+     else Seq.equal raw_received B.empty)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction with
      | CL.Sent ->

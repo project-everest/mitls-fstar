@@ -116,6 +116,8 @@ val lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
         Seq.equal
           server_flight_sender.CS.model_handshake.CS.hs_transcript
           server_flight_receiver.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_flight_sender.CS.model_handshake ==
+          CS.negotiated_aead_alg server_flight_receiver.CS.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\
@@ -480,6 +482,8 @@ val lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged
         Seq.equal
           server_flight_sender.CS.model_handshake.CS.hs_transcript
           server_flight_receiver.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_flight_sender.CS.model_handshake ==
+          CS.negotiated_aead_alg server_flight_receiver.CS.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\
@@ -1156,6 +1160,8 @@ val lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contig
         Seq.equal
           server_flight_sender.CS.model_handshake.CS.hs_transcript
           server_flight_receiver.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_flight_sender.CS.model_handshake ==
+          CS.negotiated_aead_alg server_flight_receiver.CS.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\
@@ -1528,6 +1534,8 @@ val lemma_paired_protected_handshake_event_projection_pair_witnesses_from_contig
         Seq.equal
           server_flight_sender.CS.model_handshake.CS.hs_transcript
           server_flight_receiver.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_flight_sender.CS.model_handshake ==
+          CS.negotiated_aead_alg server_flight_receiver.CS.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\

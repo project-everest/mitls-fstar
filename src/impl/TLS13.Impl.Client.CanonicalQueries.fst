@@ -1072,6 +1072,10 @@ ensures
         client_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
         return_client_payload_free_action cc cfg frame CT.LocalSendKeyUpdate local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
       }
+      CT.LocalSendKeyUpdateRequested -> {
+        client_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
+        return_client_payload_free_action cc cfg frame CT.LocalSendKeyUpdateRequested local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)
+      }
       CT.LocalSendCloseNotify -> {
         client_internal_ready_implies_kind_ready (Ghost.reveal st) tls_action;
         return_client_payload_free_action cc cfg frame CT.LocalSendCloseNotify local_frame received sent st (Ghost.hide network_current) (Ghost.hide local_current)

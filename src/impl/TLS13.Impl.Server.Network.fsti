@@ -58,9 +58,10 @@ fn process_client_hello
                  Seq.equal
                   (Ghost.reveal 'fragment_bytes)
                   (TLS13.Wire.Spec.serialize_handshake (M.ClientHello ch)) /\
-                 lch.IM.client_hello_has_server_name == true /\
-                 CM.client_hello_server_name_len_for ch ==
-                  lch.IM.client_hello_server_name_len /\
+                 lch.IM.client_hello_has_server_name == CM.client_hello_has_sni ch /\
+                 (lch.IM.client_hello_has_server_name ==>
+                    CM.client_hello_server_name_len_for ch ==
+                      lch.IM.client_hello_server_name_len) /\
                  CM.client_hello_cipher_suites_len_for ch ==
                   lch.IM.client_hello_cipher_suites_len /\
                  CM.client_hello_signature_schemes_len_for ch ==
@@ -195,5 +196,9 @@ fn process_network_bytes
                    network_out_bytes
                    app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                   W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
+                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+                  Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)) /\
+                (buffer_resp.ST.response.ST.status == ST.StepOk ==>
+                  0 < SZ.v buffer_resp.ST.consumed_len))

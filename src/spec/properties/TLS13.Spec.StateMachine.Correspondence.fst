@@ -118,6 +118,8 @@ let conn_event_is_key_update (ev:conn_event) : bool =
     (match msg.CL.message_value with
      | M.TlsKeyUpdate _ -> true
      | _ -> false)
+  | ConnProtectedHandshake _ ->
+    false
   | ConnLocalEvent _ ->
     false
 let rec conn_events_no_key_update (events:list conn_event) : bool =
@@ -229,7 +231,12 @@ let paired_x25519_key_shares
           C.x25519_public_from_private client_sk == start.start_client_key_share_public /\
           C.x25519_public_from_private server_sk == selection.server_key_share_public /\
           C.x25519_shared client_sk sh_ks == Some client_shared /\
-          C.x25519_shared server_sk ch_ks == Some server_shared
+          C.x25519_shared server_sk ch_ks == Some server_shared /\
+          // The two endpoints negotiated the same AEAD algorithm.  Both read it
+          // off their own stored ServerHello; the server's is the message it
+          // sent and the client's is the message it received, so this holds for
+          // any pair of genuinely peered endpoints.
+          negotiated_aead_alg client_hs == negotiated_aead_alg server_hs
         | _, _ -> False)
      | _, _, _, _ -> False)
   | _, _, _, _ -> False
@@ -244,15 +251,17 @@ let client_x25519_key_share_projection
     hs.hs_keys.ks_shared_secret
   with
   | Some start, Some ch, Some sh, Some shared ->
-    (match start.start_client_key_share_private with
-     | Some client_sk ->
-      (match client_hello_key_share ch, server_hello_key_share sh with
-       | Some ch_ks, Some sh_ks ->
-        ch_ks == start.start_client_key_share_public /\
-        C.x25519_public_from_private client_sk ==
-          start.start_client_key_share_public /\
-        C.x25519_shared client_sk sh_ks == Some shared
-       | _, _ -> False)
+    (match server_hello_kex sh with
+     | Some (| g, sh_ks |) ->
+      (match start_kex_private start g with
+       | Some client_sk ->
+        (match client_hello_kex ch g with
+         | Some ch_ks ->
+          ch_ks == start_kex_public start g /\
+          C.kex_public_from_private g client_sk == start_kex_public start g /\
+          C.kex_shared g client_sk sh_ks == Some shared
+         | None -> False)
+       | None -> False)
      | None ->
       False)
   | _, _, _, _ ->
@@ -263,13 +272,13 @@ let client_x25519_pre_shared_secret_projection
   let hs = client.cs_model.model_handshake in
   match hs.hs_start, hs.hs_client_hello with
   | Some start, Some ch ->
-    client_hello_key_share ch == Some start.start_client_key_share_public /\
-    (match start.start_client_key_share_private with
-     | Some client_sk ->
-       C.x25519_public_from_private client_sk ==
-         start.start_client_key_share_public
-     | None ->
-       True)
+    (forall (g:C.kex_group).
+      client_hello_kex ch g == Some (start_kex_public start g) /\
+      (match start_kex_private start g with
+       | Some client_sk ->
+         C.kex_public_from_private g client_sk == start_kex_public start g
+       | None ->
+         True))
   | _, _ ->
     False
 let client_x25519_key_share_projection_stable_control

@@ -1,6 +1,7 @@
 module TLS13.ConnectionState.ProtectedWireRecordAlignment
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CSL = TLS13.ConnectionState.Lemmas
 module K = TLS13.Keys
@@ -439,13 +440,13 @@ let lemma_server_handshake_write_client_handshake_read_install_aligned
     R.install_keys
       server.model_record.record_write
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv);
   assert (client_after.model_record.record_read ==
     R.install_keys
       client.model_record.record_read
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv)
 
 let lemma_server_handshake_write_client_handshake_read_install_materials_aligned
@@ -485,13 +486,13 @@ let lemma_server_handshake_write_client_handshake_read_install_materials_aligned
     R.install_keys
       server.model_record.record_write
       R.Handshake
-      server_material.traffic_key
+      server_material.traffic_alg server_material.traffic_key
       server_material.traffic_iv);
   assert (client_after.model_record.record_read ==
     R.install_keys
       client.model_record.record_read
       R.Handshake
-      client_material.traffic_key
+      client_material.traffic_alg client_material.traffic_key
       client_material.traffic_iv)
 
 let lemma_server_handshake_install_materials_agree_from_key_schedule
@@ -510,6 +511,7 @@ let lemma_server_handshake_install_materials_agree_from_key_schedule
         | _, _ ->
           False) /\
         Seq.equal server_hs.hs_transcript client_hs.hs_transcript /\
+        negotiated_aead_alg server_hs == negotiated_aead_alg client_hs /\
         traffic_install_matches_key_schedule_for_role
           ServerEndpoint
           server_hs
@@ -539,11 +541,13 @@ let lemma_server_handshake_install_materials_agree_from_key_schedule
     Seq.lemma_eq_elim server_hs.hs_transcript client_hs.hs_transcript;
     assert (server_material ==
       traffic_key_material_for_secret
+        (negotiated_aead_alg server_hs)
         (K.server_handshake_traffic_secret
           server_secret
           (Tr.hash server_hs.hs_transcript)));
     assert (client_material ==
       traffic_key_material_for_secret
+        (negotiated_aead_alg client_hs)
         (K.server_handshake_traffic_secret
           client_secret
           (Tr.hash client_hs.hs_transcript)));
@@ -572,6 +576,8 @@ let lemma_server_handshake_write_client_handshake_read_install_aligned_from_key_
         Seq.equal
           server.model_handshake.hs_transcript
           client.model_handshake.hs_transcript /\
+        negotiated_aead_alg server.model_handshake ==
+          negotiated_aead_alg client.model_handshake /\
         traffic_install_matches_key_schedule_for_role
           ServerEndpoint
           server.model_handshake
@@ -654,13 +660,13 @@ let lemma_client_handshake_write_server_handshake_read_install_aligned
     R.install_keys
       client.model_record.record_write
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv);
   assert (server_after.model_record.record_read ==
     R.install_keys
       server.model_record.record_read
       R.Handshake
-      material.traffic_key
+      material.traffic_alg material.traffic_key
       material.traffic_iv)
 
 let lemma_client_handshake_write_server_handshake_read_install_materials_aligned
@@ -700,13 +706,13 @@ let lemma_client_handshake_write_server_handshake_read_install_materials_aligned
     R.install_keys
       client.model_record.record_write
       R.Handshake
-      client_material.traffic_key
+      client_material.traffic_alg client_material.traffic_key
       client_material.traffic_iv);
   assert (server_after.model_record.record_read ==
     R.install_keys
       server.model_record.record_read
       R.Handshake
-      server_material.traffic_key
+      server_material.traffic_alg server_material.traffic_key
       server_material.traffic_iv)
 
 let lemma_client_handshake_install_materials_agree_from_key_schedule
@@ -725,6 +731,7 @@ let lemma_client_handshake_install_materials_agree_from_key_schedule
         | _, _ ->
           False) /\
         Seq.equal client_hs.hs_transcript server_hs.hs_transcript /\
+        negotiated_aead_alg client_hs == negotiated_aead_alg server_hs /\
         traffic_install_matches_key_schedule
           client_hs
           {
@@ -754,11 +761,13 @@ let lemma_client_handshake_install_materials_agree_from_key_schedule
     Seq.lemma_eq_elim client_hs.hs_transcript server_hs.hs_transcript;
     assert (client_material ==
       traffic_key_material_for_secret
+        (negotiated_aead_alg client_hs)
         (K.client_handshake_traffic_secret
           client_secret
           (Tr.hash client_hs.hs_transcript)));
     assert (server_material ==
       traffic_key_material_for_secret
+        (negotiated_aead_alg server_hs)
         (K.client_handshake_traffic_secret
           server_secret
           (Tr.hash server_hs.hs_transcript)));
@@ -787,6 +796,8 @@ let lemma_client_handshake_write_server_handshake_read_install_aligned_from_key_
         Seq.equal
           client.model_handshake.hs_transcript
           server.model_handshake.hs_transcript /\
+        negotiated_aead_alg client.model_handshake ==
+          negotiated_aead_alg server.model_handshake /\
         traffic_install_matches_key_schedule
           client.model_handshake
           {

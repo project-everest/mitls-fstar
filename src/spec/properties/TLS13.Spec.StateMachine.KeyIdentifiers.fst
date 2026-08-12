@@ -12,6 +12,7 @@ module TLS13.Spec.StateMachine.KeyIdentifiers
 **)
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 
 open TLS13.Spec.StateMachine
 
@@ -53,6 +54,7 @@ type transcript_checkpoint =
   | TH_SF
   | TH_CF
 type record_key_iv_material = {
+  record_material_alg: C.aead_alg;
   record_material_key: B.bytes;
   record_material_iv: B.bytes;
 }

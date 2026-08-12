@@ -2,6 +2,7 @@
 
 #include "TLS13_Impl_ConnectionState_Bounds.h"
 #include "TLS13_Impl_Server_Driver.h"
+#include "atlas_trace.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,9 @@ enum tls13_server_driver_state {
 struct tls13_server_driver_s {
   TLS13_Impl_Server_Driver_server_driver verified_driver;
   enum tls13_server_driver_state state;
+#if ATLAS_ENABLE_LOGGING
+  uint64_t trace_connection;
+#endif
   char last_error[256];
 };
 
@@ -73,13 +77,13 @@ static int driver_fail_status(
         "%s: %s",
         operation,
         driver_status_message(status));
+    /* Failures on the accept path free the driver before the caller can read
+       last_error, so make the reason observable for debugging. */
+    if (getenv("TLS13_SERVER_DRIVER_DEBUG") != NULL) {
+      fprintf(stderr, "tls13_server_driver: %s\n", driver->last_error);
+    }
   }
   return 1;
-}
-
-static void abort_connected_driver(tls13_server_driver *driver) {
-  TLS13_Impl_Server_Driver_abort(driver->verified_driver);
-  driver->state = TLS13_SERVER_DRIVER_CLOSED;
 }
 
 int tls13_server_config_new(
@@ -189,8 +193,12 @@ int tls13_server_driver_accept_with_config(
   if (driver == NULL) {
     return 1;
   }
+#if ATLAS_ENABLE_LOGGING
+  driver->trace_connection = atlas_trace_new_connection();
+  atlas_trace_set_connection(driver->trace_connection);
+#endif
 
-  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_server_driver created =
+  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_top_server_driver created =
       TLS13_Impl_Server_Driver_new_server_with_credentials(
           config->verified_credentials,
           config->certificate_chain,
@@ -215,11 +223,7 @@ int tls13_server_driver_accept_with_config(
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
   if (status != TLS13_Impl_Server_Driver_ServerWorkflowOk) {
     (void)driver_fail_status(driver, "accept", status);
-    if (status != TLS13_Impl_Server_Driver_ServerWorkflowClosed) {
-      abort_connected_driver(driver);
-    } else {
-      driver->state = TLS13_SERVER_DRIVER_CLOSED;
-    }
+    driver->state = TLS13_SERVER_DRIVER_CLOSED;
     TLS13_Impl_Server_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
@@ -274,6 +278,7 @@ int tls13_server_driver_send_application_data(
   uint8_t empty_payload = 0u;
   uint8_t *payload_input =
       payload_len == 0u ? &empty_payload : (uint8_t *)(void *)payload;
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Server_Driver_server_workflow_status status =
       TLS13_Impl_Server_Driver_send(
           driver->verified_driver, payload_input, payload_len);
@@ -285,7 +290,29 @@ int tls13_server_driver_send_application_data(
       TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge) {
     return 1;
   }
-  abort_connected_driver(driver);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
+  return 1;
+}
+
+int tls13_server_driver_send_key_update(
+    tls13_server_driver *driver,
+    bool request_peer_update) {
+  if (driver == NULL) {
+    return 1;
+  }
+  if (driver->state != TLS13_SERVER_DRIVER_READY) {
+    return driver_fail(driver, "key_update: TLS channel is closed");
+  }
+
+  atlas_trace_set_connection(driver->trace_connection);
+  TLS13_Impl_Server_Driver_server_workflow_status status =
+      TLS13_Impl_Server_Driver_send_key_update(
+          driver->verified_driver, request_peer_update);
+  if (status == TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+    return 0;
+  }
+  (void)driver_fail_status(driver, "key_update", status);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
   return 1;
 }
 
@@ -305,6 +332,7 @@ int tls13_server_driver_receive_application_data(
   }
   *out_len = 0u;
 
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Server_Driver_server_receive_result result =
       TLS13_Impl_Server_Driver_receive(
           driver->verified_driver,
@@ -328,8 +356,7 @@ int tls13_server_driver_receive_application_data(
        so the connection remains usable for retry. */
     return 1;
   }
-  /* Hard failure (StepFailed or unknown): abort the connection. */
-  abort_connected_driver(driver);
+  driver->state = TLS13_SERVER_DRIVER_CLOSED;
   return 1;
 }
 
@@ -341,6 +368,7 @@ int tls13_server_driver_close(tls13_server_driver *driver, bool wait_for_peer) {
     return 0;
   }
 
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Server_Driver_server_workflow_status status =
       TLS13_Impl_Server_Driver_close(
           driver->verified_driver,
@@ -367,6 +395,7 @@ void tls13_server_driver_free(tls13_server_driver *driver) {
   if (driver->state == TLS13_SERVER_DRIVER_READY) {
     (void)tls13_server_driver_close(driver, false);
   }
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Server_Driver_free(driver->verified_driver);
   free(driver);
 }

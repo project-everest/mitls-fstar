@@ -13,6 +13,7 @@ module B = TLS13.Bytes
 module CS = TLS13.Spec.StateMachine
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
+module H = TLS13.Handshake.Spec
 module M = TLS13.Messages
 module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
@@ -20,14 +21,16 @@ module T = TLS13.Types
 module W = TLS13.Wire.Spec
 
 (**
-  The supported ClientHello profile: it offers the single supported cipher suite
-  and signature scheme and (optionally) an SNI hostname within the extracted
-  serializer's fixed buffer.
+  The supported ClientHello profile: it offers the single supported cipher suite,
+  the supported signature schemes and (optionally) an SNI hostname within the
+  extracted serializer's fixed buffer.
 **)
 noextract
 let supported_client_hello_fields_profile (ch:GCH.clientHello) : prop =
-  Sem.clientHello_cipher_suites ch == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-  Sem.clientHello_sig_algs ch == Some [T.Rsa_pss_rsae_sha256] /\
+  Sem.clientHello_cipher_suites ch ==
+    [T.TLS_CHACHA20_POLY1305_SHA256; T.TLS_AES_128_GCM_SHA256] /\
+  Sem.clientHello_sig_algs ch ==
+    Some [T.Rsa_pss_rsae_sha256; T.Ecdsa_secp256r1_sha256] /\
   (match Sem.clientHello_server_name ch with
    | None -> True
    | Some hostname -> B.length hostname <= 255)
@@ -61,7 +64,7 @@ let supported_server_hello_fields_profile (sh:GSH.serverHello) : prop =
    | Some k -> B.length k == 32
    | None -> False) /\
   (match Sem.serverHello_cipher_suite sh with
-   | Some cs -> cs == T.TLS_CHACHA20_POLY1305_SHA256
+   | Some cs -> H.is_supported_cipher_suite cs
    | None -> False)
 
 (**
@@ -89,8 +92,10 @@ noextract
 let supported_client_config_wire_profile (cfg:CS.connection_config) : prop =
   cfg.CS.config_role == CS.ClientEndpoint /\
   B.length cfg.CS.config_server_name <= 255 /\
-  cfg.CS.config_cipher_suites == [T.TLS_CHACHA20_POLY1305_SHA256] /\
-  cfg.CS.config_signature_schemes == [T.Rsa_pss_rsae_sha256]
+  cfg.CS.config_cipher_suites ==
+    [T.TLS_CHACHA20_POLY1305_SHA256; T.TLS_AES_128_GCM_SHA256] /\
+  cfg.CS.config_signature_schemes ==
+    [T.Rsa_pss_rsae_sha256; T.Ecdsa_secp256r1_sha256]
 
 noextract
 let client_hello_server_name_wire_equivalent
@@ -166,7 +171,10 @@ let paired_cleartext_hello_key_shares
   with
   | Some client_ch, Some server_ch, Some client_sh, Some server_sh ->
     CS.client_hello_key_share client_ch == CS.client_hello_key_share server_ch /\
-    CS.server_hello_key_share client_sh == CS.server_hello_key_share server_sh
+    CS.server_hello_key_share client_sh == CS.server_hello_key_share server_sh /\
+    // Both endpoints read the negotiated AEAD algorithm off their own stored
+    // ServerHello, so peering must pin the selected cipher suite as well.
+    Sem.serverHello_cipher_suite client_sh == Sem.serverHello_cipher_suite server_sh
   | _, _, _, _ ->
     False
 

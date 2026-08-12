@@ -41,6 +41,7 @@ module GFin = TLS13.Wire.Generated.Finished
 module U8 = FStar.UInt8
 module LL = FStar.List.Tot
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GHN = TLS13.Wire.Generated.HostName
 module GSN = TLS13.Wire.Generated.ServerName
 module GSNL = TLS13.Wire.Generated.ServerNameList
@@ -116,11 +117,20 @@ val lemma_signature_schemes_match_first_rsa_offer
                 U16.v (Seq.index wire 0) == 0x0804)
       (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
 
+
 noextract
 let client_hello_server_name_len_for (m:GCH.clientHello) : SZ.t =
   match Sem.clientHello_server_name m with
   | Some sn -> bounded_u16_sizet (B.length sn)
   | None -> 0sz
+
+(* Whether the ClientHello actually carried a server_name (SNI) extension.  The
+   extension is optional in RFC 6066 and absent whenever a client connects to a
+   bare IP literal, so this is genuinely a property of the message rather than a
+   precondition the server may impose. *)
+noextract
+let client_hello_has_sni (m:GCH.clientHello) : bool =
+  Some? (Sem.clientHello_server_name m)
 
 noextract
 let client_hello_cipher_suites_len_for (m:GCH.clientHello) : SZ.t =
@@ -149,6 +159,84 @@ val lemma_cipher_suites_match_first_chacha_offer
                 0 < len /\
                 len <= Seq.length wire /\
                 U16.v (Seq.index wire 0) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+
+/// Generalisation of [lemma_signature_schemes_match_first_rsa_offer] from the head
+/// of the offered list to an arbitrary position.  Real clients (curl, browsers)
+/// send rsa_pss_rsae_sha256 somewhere in the middle of a ~14-entry list, so the
+/// server has to be able to *select* it rather than require it first.
+val lemma_signature_schemes_match_index_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+/// Generalisation of [lemma_cipher_suites_match_first_chacha_offer] from the head
+/// of the offered list to an arbitrary position; see the signature-scheme analog.
+val lemma_cipher_suites_match_index_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1303)
+      (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
+
+/// AES-128-GCM analogues of the chacha offer lemmas above.  The client now
+/// offers both supported suites, so the ServerHello gate has to be able to
+/// prove "the selected suite was offered" for either one.
+val lemma_cipher_suites_match_first_aes_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x1301)
+      (ensures CS.cipher_suite_offered suites T.TLS_AES_128_GCM_SHA256)
+
+val lemma_cipher_suites_match_index_aes_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (i:nat)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                i < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire i) == 0x1301)
+      (ensures CS.cipher_suite_offered suites T.TLS_AES_128_GCM_SHA256)
+
+/// Existential forms, which is what a runtime linear scan can produce: the scan
+/// reports "some entry below [len] equals the target" without carrying the index.
+val lemma_signature_schemes_match_exists_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
+      (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+val lemma_cipher_suites_match_exists_chacha_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x1303))
       (ensures CS.cipher_suite_offered suites T.TLS_CHACHA20_POLY1305_SHA256)
 
 noextract
@@ -215,7 +303,7 @@ let cho_sn_ext (sni: B.bytes { 1 <= Seq.length sni /\ Seq.length sni <= 255 })
 
 noextract
 let cho_sg_ext : GECH.extensionClientHello
-  = GECH.Extension_data_supported_groups ([GNG.X25519] <: GECH.extensionClientHello_extension_data_supported_groups)
+  = GECH.Extension_data_supported_groups ([GNG.X25519; GNG.Secp256r1] <: GECH.extensionClientHello_extension_data_supported_groups)
 
 noextract
 let cho_sa_data (l: list GSS.signatureScheme { 1 <= LL.length l /\ LL.length l <= 16 })
@@ -229,20 +317,26 @@ let cho_sa_ext (sa: GECH.extensionClientHello_extension_data_signature_algorithm
   = GECH.Extension_data_signature_algorithms sa
 
 noextract
-let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 })
+let cho_ks_ext (ks: B.bytes { Seq.length ks == 32 }) (pks: B.bytes { Seq.length pks == 65 })
   : GECH.extensionClientHello
   = let ke : GKSE.keyShareEntry_key_exchange = ks in
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
+    let pke : GKSE.keyShareEntry_key_exchange = pks in
+    let pkse : GKSE.keyShareEntry = { GKSE.group = GNG.Secp256r1; GKSE.key_exchange = pke } in
     GKSCH.keyShareClientHello_list_bytesize_nil;
-    GKSCH.keyShareClientHello_list_bytesize_cons kse [];
+    GKSCH.keyShareClientHello_list_bytesize_cons pkse [];
+    GKSCH.keyShareClientHello_list_bytesize_cons kse [pkse];
     GKSE.keyShareEntry_bytesize_eqn kse;
+    GKSE.keyShareEntry_bytesize_eqn pkse;
     GNG.namedGroup_bytesize_eq GNG.X25519;
+    GNG.namedGroup_bytesize_eq GNG.Secp256r1;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
-    GECH.Extension_data_key_share ([kse] <: GECH.extensionClientHello_extension_data_key_share)
+    GKSE.keyShareEntry_key_exchange_bytesize_eqn pke;
+    GECH.Extension_data_key_share ([kse; pkse] <: GECH.extensionClientHello_extension_data_key_share)
 
 noextract
 let cho_sv_ext : GECH.extensionClientHello
-  = GECH.Extension_data_supported_versions ([GPV.TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
+  = GECH.Extension_data_supported_versions ([GOV.Offered_TLS_1p3] <: GECH.extensionClientHello_extension_data_supported_versions)
 
 noextract
 let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
@@ -251,10 +345,11 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
     let sa = cho_sa_data (cho_sa_list start) in
     let r32 : Seq.lseq U8.t 32 = start.CS.start_client_random in
     let ks = start.CS.start_client_key_share_public in
+    let pks = start.CS.start_client_p256_public in
     let sn_ext = cho_sn_ext sni in
     let sg_ext = cho_sg_ext in
     let sa_ext = cho_sa_ext sa in
-    let ks_ext = cho_ks_ext ks in
+    let ks_ext = cho_ks_ext ks pks in
     let sv_ext = cho_sv_ext in
     GCH.clientHello_extensions_list_bytesize_nil;
     GCH.clientHello_extensions_list_bytesize_cons sv_ext [];
@@ -264,7 +359,12 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
     GCH.clientHello_extensions_list_bytesize_cons sn_ext [sg_ext; sa_ext; ks_ext; sv_ext];
     let exts : GCH.clientHello_extensions = [sn_ext; sg_ext; sa_ext; ks_ext; sv_ext] in
     let comp : GCH.clientHello_legacy_compression_methods = Seq.create 1 0uy in
-    let sid : GCH.clientHello_legacy_session_id = B.empty in
+    (* RFC 8446 D.4 middlebox compatibility: send a non-empty, 32-byte
+       legacy_session_id.  Any 32-byte value is legal (RFC 8446 4.1.2), and both
+       fields travel in the same cleartext message, so we reuse the client
+       random rather than carrying a second 32-byte secret through the whole
+       handshake_start plumbing. *)
+    let sid : GCH.clientHello_legacy_session_id = r32 in
     { GCH.legacy_version = GPV.TLS_1p2;
       GCH.random = r32;
       GCH.legacy_session_id = sid;
@@ -304,6 +404,26 @@ let sho_random (sel:CS.server_handshake_selection)
           assert_norm (Seq.index GSHB.serverHello_body_cst 0 == 0xcfuy);
           Seq.create 32 0uy)
 
+(* The 32-byte legacy_session_id of the ClientHello currently stored in the
+   connection state -- i.e. exactly what the ServerHello must echo back for
+   RFC 8446 D.4 middlebox compatibility.  Ghost-only: the runtime value is
+   read out of the stored ClientHello mirror.  Defined for every state (the
+   all-zero default is never observable, because the ServerHello send path
+   runs only in HsClientHelloReceived). *)
+noextract
+let stored_client_hello_session_id (st:CS.connection_state)
+  : (b:Seq.seq U8.t { Seq.length b == 32 })
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch -> Sem.clientHello_session_id_32 ch
+    | None -> Seq.create 32 0uy
+
+(* clamp: the echoed legacy_session_id is fixed at 32 bytes (identity under
+   valid_selection; see the middlebox-compatibility note above). *)
+noextract
+let sho_session_id (sel:CS.server_handshake_selection)
+  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b == 32 })
+  = Sem.clientHello_session_id_32 sel.CS.server_selected_client_hello
+
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
 let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
@@ -324,7 +444,7 @@ let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHe
     GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     let exts : GSHBody.serverHelloBody_extensions = [ks_ext; sv_ext] in
-    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = B.empty in
+    let sid : GSHBody.serverHelloBody_legacy_session_id_echo = sho_session_id sel in
     let body : GSHBody.serverHelloBody = {
       GSHBody.legacy_session_id_echo = sid;
       GSHBody.cipher_suite = cs;
@@ -506,7 +626,7 @@ val lemma_client_hello_of_start_matches
 
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
-// exactly 90 bytes (legacy_version TLS_1p2 + 32-byte random + empty session-id +
+// exactly 122 bytes (legacy_version TLS_1p2 + 32-byte random + 32-byte session-id echo +
 // CHACHA cipher suite + null compression + [X25519 key_share; supported_versions]).
 // Reveals serialize_handshake to the generated serializer and computes the
 // bytesize; used to discharge the transcript-length obligation inside
@@ -516,14 +636,14 @@ val lemma_server_hello_of_selection_bytesize
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 90)
+              (M.ServerHello (server_hello_of_selection sel))) == 122)
 
 // Server mirror: under valid_selection, the canonical server_hello_of_selection
 // satisfies the spec's server_hello_matches_selection: every
 // TLS13.Wire.Semantics accessor returns the corresponding `selection` field (the
 // clamp in server_hello_of_selection is an identity under valid_selection).
 // The <= 16640 conjunct in server_hello_matches_selection is discharged from the
-// exact 90-byte bytesize above (lemma_server_hello_of_selection_bytesize).
+// exact 122-byte bytesize above (lemma_server_hello_of_selection_bytesize).
 val lemma_server_hello_of_selection_matches
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)
@@ -1140,17 +1260,46 @@ let received_client_finished_state
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   let msg = M.Finished fin in
+  // Fix 1 (atomic Finished delivery, server mirror): on delivery of the client
+  // Finished the server derives the client-application traffic secret from the
+  // CURRENT transcript (already through the server Finished), installs the
+  // client-application READ keys, populates the client-application traffic slot,
+  // appends the client Finished to the transcript, and advances directly to
+  // ControlApplicationData.  This mirrors the step_handshake_message transition.
+  let new_model =
+    match hs0.CS.hs_keys.CS.ks_master_secret with
+    | Some master ->
+      let secret =
+        K.client_application_traffic_secret master (Tr.hash hs0.CS.hs_transcript) in
+      let material =
+        CS.traffic_key_material_for_secret (CS.negotiated_aead_alg hs0) secret in
+      let hs_v =
+        CS.append_handshake_to_transcript
+          { hs0 with CS.hs_client_finished = Some fin }
+          msg in
+      {
+        model0 with
+          CS.model_control = CS.ControlApplicationData;
+          CS.model_record =
+            { model0.CS.model_record with
+                CS.record_read =
+                  R.install_keys
+                    model0.CS.model_record.CS.record_read
+                    R.Application
+                    material.CS.traffic_alg material.CS.traffic_key
+                    material.CS.traffic_iv;
+            };
+          CS.model_handshake =
+            { hs_v with
+                CS.hs_keys =
+                  { hs_v.CS.hs_keys with
+                      CS.ks_client_application_traffic = Some material };
+            };
+      }
+    | None -> model0
+  in
   {
-    CS.cs_model =
-      CS.with_handshake_stage
-        { model0 with
-            CS.model_record =
-              { model0.CS.model_record with
-                  CS.record_read = R.next_seq model0.CS.model_record.CS.record_read;
-              };
-        }
-        { hs0 with CS.hs_client_finished = Some fin }
-        CS.HsClientFinishedReceived;
+    CS.cs_model = new_model;
     CS.cs_wire_log = {
       CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
       CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
@@ -1174,6 +1323,10 @@ let can_receive_client_finished
   st.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
   Some?
     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+  Some?
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+    max_transcript_len /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
   CS.legal_event
     st.CS.cs_model
@@ -1414,23 +1567,52 @@ let received_server_finished_state
   (st:CS.connection_state)
   (fin:GFin.finished)
   (raw_received:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   let msg = M.Finished fin in
-  let model1 = {
-    model0 with
-      CS.model_record = {
-        model0.CS.model_record with
-          CS.record_read = R.next_seq model0.CS.model_record.CS.record_read;
-      };
-  } in
-  {
-    CS.cs_model =
+  // Fix 1 (atomic Finished delivery): on delivery of the server Finished the
+  // client appends it to the transcript, marks it verified, derives the
+  // server-application traffic secret from the transcript THROUGH the server
+  // Finished, installs the server-application READ keys, populates the
+  // server-application traffic slot, and advances to HsServerFinishedVerified.
+  // This mirrors the step_handshake_message transition.
+  let hs_v =
+    CS.append_handshake_to_transcript
+      { hs0 with
+          CS.hs_server_finished = Some fin;
+          CS.hs_server_finished_verified = true;
+      }
+      msg in
+  let new_model =
+    match hs_v.CS.hs_keys.CS.ks_master_secret with
+    | Some master ->
+      let secret =
+        K.server_application_traffic_secret master (Tr.hash hs_v.CS.hs_transcript) in
+      let material =
+        CS.traffic_key_material_for_secret (CS.negotiated_aead_alg hs0) secret in
       CS.with_handshake_stage
-        model1
-        { hs0 with CS.hs_server_finished = Some fin }
-        CS.HsServerFinishedReceived;
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_read =
+                    R.install_keys
+                      model0.CS.model_record.CS.record_read
+                      R.Application
+                      material.CS.traffic_alg material.CS.traffic_key
+                      material.CS.traffic_iv;
+              };
+        }
+        { hs_v with
+            CS.hs_keys =
+              { hs_v.CS.hs_keys with
+                  CS.ks_server_application_traffic = Some material };
+        }
+        CS.HsServerFinishedVerified
+    | None -> model0
+  in
+  {
+    CS.cs_model = new_model;
     CS.cs_wire_log = {
       CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
       CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
@@ -1442,6 +1624,26 @@ let received_server_finished_state
         CL.message_value = M.TlsHandshake msg;
       }];
   }
+
+noextract
+let protected_handshake_state
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  match CS.step_protected_handshake st.CS.cs_model step with
+  | None -> st
+  | Some model1 ->
+    {
+      CS.cs_model = model1;
+      CS.cs_wire_log = {
+        CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+        CL.raw_received =
+          B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+      };
+      CS.cs_event_log =
+        st.CS.cs_event_log @ [CS.ConnProtectedHandshake step];
+    }
 
 let verified_server_finished_state
   (st:CS.connection_state)
@@ -1699,7 +1901,7 @@ let received_key_update_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_read)
                 R.Application
-                new_server_app.CS.traffic_key
+                new_server_app.CS.traffic_alg new_server_app.CS.traffic_key
                 new_server_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -1707,6 +1909,60 @@ let received_key_update_state
             CS.hs_keys = {
               hs0.CS.hs_keys with
                 CS.ks_server_application_traffic = Some new_server_app;
+            };
+        };
+        CS.model_application =
+          CS.received_key_update_pending
+            model0.CS.model_application
+            req;
+    } in
+    {
+      CS.cs_model = model1;
+      CS.cs_wire_log = {
+        CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+        CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+      };
+      CS.cs_event_log =
+        st.CS.cs_event_log @
+        [CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsKeyUpdate req;
+        }];
+    }
+  | None ->
+    st
+
+(* Server mirror of [received_key_update_state]: a server's read key is the
+   *client* application traffic label, so receiving a peer KeyUpdate rotates
+   [ks_client_application_traffic] rather than the server slot.  The record
+   layer side is the same -- both endpoints rotate their read key on receive. *)
+noextract
+let server_received_key_update_state
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_received:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  match hs0.CS.hs_keys.CS.ks_client_application_traffic with
+  | Some old_client_app ->
+    let new_client_app = CS.updated_traffic_key_material old_client_app in
+    let model1 = {
+      model0 with
+        CS.model_record = {
+          model0.CS.model_record with
+            CS.record_read =
+              R.install_keys
+                (R.next_seq model0.CS.model_record.CS.record_read)
+                R.Application
+                new_client_app.CS.traffic_alg new_client_app.CS.traffic_key
+                new_client_app.CS.traffic_iv;
+        };
+        CS.model_handshake = {
+          hs0 with
+            CS.hs_keys = {
+              hs0.CS.hs_keys with
+                CS.ks_client_application_traffic = Some new_client_app;
             };
         };
         CS.model_application =
@@ -1738,8 +1994,9 @@ let received_key_update_not_requested_state
   received_key_update_state st M.UpdateNotRequested raw_received
 
 noextract
-let sent_key_update_response_state
+let sent_key_update_state
   (st:CS.connection_state)
+  (req:M.key_update_request)
   (raw_sent:B.bytes)
   : CS.connection_state =
   let model0 = st.CS.cs_model in
@@ -1755,7 +2012,7 @@ let sent_key_update_response_state
               R.install_keys
                 (R.next_seq model0.CS.model_record.CS.record_write)
                 R.Application
-                new_client_app.CS.traffic_key
+                new_client_app.CS.traffic_alg new_client_app.CS.traffic_key
                 new_client_app.CS.traffic_iv;
         };
         CS.model_handshake = {
@@ -1765,10 +2022,8 @@ let sent_key_update_response_state
                 CS.ks_client_application_traffic = Some new_client_app;
             };
         };
-        CS.model_application = {
-          model0.CS.model_application with
-            CS.app_key_update_response_pending = false;
-        };
+        CS.model_application =
+          CS.sent_key_update_response model0.CS.model_application req;
     } in
     {
       CS.cs_model = model1;
@@ -1780,11 +2035,99 @@ let sent_key_update_response_state
         st.CS.cs_event_log @
         [CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+          CL.message_value = M.TlsKeyUpdate req;
         }];
     }
   | None ->
     st
+
+noextract
+let sent_key_update_response_state
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : CS.connection_state =
+  sent_key_update_state st M.UpdateNotRequested raw_sent
+
+(* Server mirror of [sent_key_update_state].  A KeyUpdate rotates the
+   *sender's write* traffic key, which on a server is the server
+   application-traffic slot. *)
+let server_sent_key_update_state
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_sent:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  match hs0.CS.hs_keys.CS.ks_server_application_traffic with
+  | Some old_server_app ->
+    let new_server_app = CS.updated_traffic_key_material old_server_app in
+    let model1 = {
+      model0 with
+        CS.model_record = {
+          model0.CS.model_record with
+            CS.record_write =
+              R.install_keys
+                (R.next_seq model0.CS.model_record.CS.record_write)
+                R.Application
+                new_server_app.CS.traffic_alg new_server_app.CS.traffic_key
+                new_server_app.CS.traffic_iv;
+        };
+        CS.model_handshake = {
+          hs0 with
+            CS.hs_keys = {
+              hs0.CS.hs_keys with
+                CS.ks_server_application_traffic = Some new_server_app;
+            };
+        };
+        CS.model_application =
+          CS.sent_key_update_response model0.CS.model_application req;
+    } in
+    {
+      CS.cs_model = model1;
+      CS.cs_wire_log = {
+        CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+        CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+      };
+      CS.cs_event_log =
+        st.CS.cs_event_log @
+        [CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsKeyUpdate req;
+        }];
+    }
+  | None ->
+    st
+
+let server_can_send_key_update
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate req;
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate req;
+    })
+    raw_sent
+    B.empty /\
+  TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate req;
+    })
+    raw_sent
 
 noextract
 let delivered_application_data_state
@@ -1916,10 +2259,53 @@ val lemma_close_notify_alert_fragment_generated:
       GA.description = GAD.Close_notify;
     })
 
-noextract
+(* Mirrors [CS.sent_key_update_response] at the bool level so the Pulse code can
+   compute the new flag without a ghost read.  This one is genuinely
+   extractable -- [try_send_key_update] calls it to compute the new pending
+   flag -- so it must be [inline_for_extraction], not [noextract]. *)
+inline_for_extraction
+let key_update_clears_pending (req:M.key_update_request) (cur:bool) : bool =
+  match req with
+  | M.UpdateNotRequested -> false
+  | M.UpdateRequested -> cur
 
 let key_update_response_fragment : B.bytes =
   B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]
+
+let key_update_fragment (req:M.key_update_request) : B.bytes =
+  B.of_list [24uy; 0uy; 0uy; 1uy; W.key_update_request_byte req]
+
+(* Case-split so that each [assert_norm] sees a fully concrete list; the
+   statement itself stays general in [req]. *)
+let lemma_key_update_fragment_bytes (req:M.key_update_request)
+  : Lemma (B.length (key_update_fragment req) == 5 /\
+           Seq.index (key_update_fragment req) 0 == 24uy /\
+           Seq.index (key_update_fragment req) 1 == 0uy /\
+           Seq.index (key_update_fragment req) 2 == 0uy /\
+           Seq.index (key_update_fragment req) 3 == 1uy /\
+           Seq.index (key_update_fragment req) 4 == W.key_update_request_byte req)
+=
+  match req with
+  | M.UpdateNotRequested ->
+    assert_norm (B.length (key_update_fragment M.UpdateNotRequested) == 5);
+    assert_norm (Seq.index (key_update_fragment M.UpdateNotRequested) 0 == 24uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateNotRequested) 1 == 0uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateNotRequested) 2 == 0uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateNotRequested) 3 == 1uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateNotRequested) 4 == 0uy)
+  | M.UpdateRequested ->
+    assert_norm (B.length (key_update_fragment M.UpdateRequested) == 5);
+    assert_norm (Seq.index (key_update_fragment M.UpdateRequested) 0 == 24uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateRequested) 1 == 0uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateRequested) 2 == 0uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateRequested) 3 == 1uy);
+    assert_norm (Seq.index (key_update_fragment M.UpdateRequested) 4 == 1uy)
+
+let lemma_key_update_fragment_response ()
+  : Lemma (key_update_fragment M.UpdateNotRequested == key_update_response_fragment)
+=
+  assert_norm (key_update_fragment M.UpdateNotRequested == key_update_response_fragment)
+
 
 let can_send_close_notify
   (st:CS.connection_state)
@@ -1953,25 +2339,32 @@ let can_send_close_notify
     })
     raw_sent
 
-let can_send_key_update
+let can_send_key_update_gen
   (st:CS.connection_state)
+  (req:M.key_update_request)
   (raw_sent:B.bytes)
   : GTot prop =
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-  st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+  (* [step_tls_message] rotates the slot named by the *local role's* write
+     label, so the client-specific [ks_client_application_traffic] below is
+     the right slot only for a client.  The runtime guard
+     [can_send_key_update_runtime] already establishes this, and the receive
+     counterpart [lemma_received_key_update_state_evolves] carries the same
+     hypothesis. *)
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
   Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   CS.legal_event
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+      CL.message_value = M.TlsKeyUpdate req;
     }) /\
   CS.event_raw_delta_legal
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+      CL.message_value = M.TlsKeyUpdate req;
     })
     raw_sent
     B.empty /\
@@ -1979,9 +2372,20 @@ let can_send_key_update
     st.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+      CL.message_value = M.TlsKeyUpdate req;
     })
     raw_sent
+
+(* Responding to a peer KeyUpdate additionally requires the response to be
+   outstanding.  Spontaneous initiation uses [can_send_key_update_gen]
+   directly: the spec admits it for either endpoint and either request form,
+   so no pending-response flag is involved. *)
+let can_send_key_update
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+  can_send_key_update_gen st M.UpdateNotRequested raw_sent
 
 let can_send_application_data_sizes
   (payload_len:SZ.t)
@@ -2242,6 +2646,7 @@ val lemma_client_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.client_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2264,6 +2669,7 @@ val lemma_server_handshake_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.server_handshake_traffic_secret
                   handshake_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2288,6 +2694,7 @@ val lemma_server_role_server_handshake_write_traffic_install_legal
              CS.install_direction = CS.TrafficWrite;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.server_handshake_traffic_secret
                    handshake_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2313,6 +2720,7 @@ val lemma_server_role_client_handshake_read_traffic_install_legal
              CS.install_direction = CS.TrafficRead;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.client_handshake_traffic_secret
                    handshake_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2336,6 +2744,7 @@ val lemma_client_application_traffic_install_legal
             CS.install_direction = CS.TrafficWrite;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.client_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2358,6 +2767,7 @@ val lemma_server_application_traffic_install_legal
             CS.install_direction = CS.TrafficRead;
             CS.install_material =
               CS.traffic_key_material_for_secret
+                (CS.negotiated_aead_alg model.CS.model_handshake)
                 (K.server_application_traffic_secret
                   master_secret
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2382,6 +2792,7 @@ val lemma_server_role_server_application_write_traffic_install_legal
              CS.install_direction = CS.TrafficWrite;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.server_application_traffic_secret
                    master_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2407,6 +2818,7 @@ val lemma_server_role_client_application_read_traffic_install_legal
              CS.install_direction = CS.TrafficRead;
              CS.install_material =
                CS.traffic_key_material_for_secret
+                 (CS.negotiated_aead_alg model.CS.model_handshake)
                  (K.client_application_traffic_secret
                    master_secret
                    (Tr.hash model.CS.model_handshake.CS.hs_transcript));
@@ -2904,6 +3316,8 @@ val lemma_received_server_finished_state_evolves
                   CS.ClientEndpoint /\
       Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
       CS.event_raw_delta_legal
         st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -2929,6 +3343,35 @@ val lemma_received_server_finished_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_server_finished_state st fin raw_received))
+
+val lemma_protected_handshake_state_evolves
+  (st:CS.connection_state)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnProtectedHandshake step) /\
+        Some? (CS.step_protected_handshake st.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st.CS.cs_model
+          (CS.ConnProtectedHandshake step)
+          B.empty
+          raw_received)
+      (ensures
+        TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+          st
+          (protected_handshake_state st step raw_received) /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+          (protected_handshake_state st step raw_received) /\
+        CS.legal_connection_delta
+          st
+          {
+            CS.delta_event = CS.ConnProtectedHandshake step;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = raw_received;
+          }
+          (protected_handshake_state st step raw_received))
 
 val lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)
@@ -3220,6 +3663,42 @@ val lemma_received_ignored_post_handshake_state_evolves
                  }
                  (received_ignored_post_handshake_state st body raw_received))
 
+val lemma_server_received_key_update_state_evolves
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ServerEndpoint /\
+                Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsKeyUpdate req;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+                 st
+                 (server_received_key_update_state st req raw_received) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+                 (server_received_key_update_state st req raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsKeyUpdate req;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (server_received_key_update_state st req raw_received))
+
 val lemma_received_key_update_state_evolves
   (st:CS.connection_state)
   (req:M.key_update_request)
@@ -3290,6 +3769,56 @@ val lemma_received_key_update_not_requested_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_key_update_not_requested_state st raw_received))
+
+val lemma_sent_key_update_state_evolves
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+                can_send_key_update_gen st req raw_sent)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+                 st
+                 (sent_key_update_state st req raw_sent) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+                 (sent_key_update_state st req raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsKeyUpdate req;
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_key_update_state st req raw_sent))
+
+val lemma_server_sent_key_update_state_evolves
+  (st:CS.connection_state)
+  (req:M.key_update_request)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+                server_can_send_key_update st req raw_sent)
+      (ensures TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+                 st
+                 (server_sent_key_update_state st req raw_sent) /\
+               TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+                 (server_sent_key_update_state st req raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsKeyUpdate req;
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (server_sent_key_update_state st req raw_sent))
 
 val lemma_sent_key_update_response_state_evolves
   (st:CS.connection_state)

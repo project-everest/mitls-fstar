@@ -33,6 +33,8 @@ module SMKM = TLS13.Spec.StateMachine.KeyMaterial
 module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
 module WFL = TLS13.Spec.WireFormatLemmas
+module MP  = Common.MachineProduct
+module CCShape = TLS13.ConnectionState.ClientCanonicalShape
 
 open TLS13.System
 
@@ -46,7 +48,8 @@ open TLS13.System
     antecedent (rather than pinned inside the step relation) — the honest run
     never rekeys, so it still fires along every real run. **)
 let record_material_agrees_when_ready_scoped : T.sprop tls_system_state = fun s ->
-  (tls_no_rekeying s /\ tls_quiescent s /\ tls_application_ready s) ==>
+  (tls_no_rekeying s /\ tls_quiescent s /\ tls_application_ready s /\
+   CCShape.no_buffering_steps s.client.CS.cs_event_log) ==>
     (SMKM.peer_record_material_agrees
        (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s.client s.server /\
      SMKM.peer_record_material_agrees
@@ -61,12 +64,13 @@ val lemma_inv_implies_agreement (s:tls_system_state)
           (ensures record_material_agrees_when_ready_scoped s)
 let lemma_inv_implies_agreement s =
   introduce
-    (tls_no_rekeying s /\ tls_quiescent s /\ tls_application_ready s) ==>
+    (tls_no_rekeying s /\ tls_quiescent s /\ tls_application_ready s /\
+     CCShape.no_buffering_steps s.client.CS.cs_event_log) ==>
       (SMKM.peer_record_material_agrees
          (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s.client s.server /\
        SMKM.peer_record_material_agrees
          (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s.client s.server)
-  with _pf. begin
+  with begin
     lemma_ready_quiescent_agrees s;
     // SMKM.supported_profile_application_record_material_agrees s.client s.server
     // unfolds definitionally to the two peer_record_material_agrees conjuncts.
@@ -98,14 +102,15 @@ let lemma_flagship_record_material_agreement cfg_c cfg_s =
   with begin
     introduce
       T.reachable tls_sys_step s0 s' ==> record_material_agrees_when_ready_scoped s'
-    with _reach. begin
+    with begin
       introduce
-        (tls_no_rekeying s' /\ tls_quiescent s' /\ tls_application_ready s') ==>
+        (tls_no_rekeying s' /\ tls_quiescent s' /\ tls_application_ready s' /\
+         CCShape.no_buffering_steps s'.client.CS.cs_event_log) ==>
           (SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ClientTraffic) s'.client s'.server /\
            SMKM.peer_record_material_agrees
              (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s'.client s'.server)
-      with _ant. begin
+      with begin
         // tls_no_rekeying s' (from _ant) unlocks the combined-invariant reachability.
         lemma_reachable_inv cfg_c cfg_s s';
         lemma_inv_implies_agreement s'
@@ -136,7 +141,8 @@ let lemma_x_delivery_completes p i =
   let a = p i in
   let b = p (i + 1) in
   assert (tls_sys_step a b);        // from is_run at index i
-  assert (TlsInFlight? a.channel);  // a is in flight
-  // sends and local steps require TlsQuiet? a.channel, so only a deliver step
-  // is enabled, and every deliver step sets the channel to TlsQuiet.
+  assert (MP.ToServer? a.channel \/ MP.ToClient? a.channel);  // a is in flight
+  // the product's channel discipline gates sends and local steps on
+  // `MP.Quiet? a.channel`, so only a deliver step is enabled from an in-flight
+  // state, and every deliver step returns the channel to `MP.Quiet`.
   assert (T.shift p i 1 == b)

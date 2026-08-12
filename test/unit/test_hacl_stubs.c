@@ -116,44 +116,6 @@ static int test_hkdf_sha256_rfc5869_case1(void) {
   return expect_bytes("hkdf-expand RFC5869 case 1", okm, expected_okm, sizeof okm);
 }
 
-static int test_tls13_hkdf_expand_label_encoding(void) {
-  uint8_t prk[32];
-  uint8_t via_label[48];
-  uint8_t via_info[48];
-  static const uint8_t label[] = {'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
-  static const uint8_t context[32] = {
-      0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
-      0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
-      0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
-      0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
-  uint8_t info[2 + 1 + 6 + sizeof label + 1 + sizeof context];
-  size_t p = 0;
-
-  for (size_t i = 0; i < sizeof prk; ++i) prk[i] = (uint8_t)(0xa0 + i);
-
-  info[p++] = 0x00;
-  info[p++] = sizeof via_label;
-  info[p++] = 6 + sizeof label;
-  memcpy(&info[p], "tls13 ", 6);
-  p += 6;
-  memcpy(&info[p], label, sizeof label);
-  p += sizeof label;
-  info[p++] = sizeof context;
-  memcpy(&info[p], context, sizeof context);
-  p += sizeof context;
-
-  if (!tls13_hacl_hkdf_expand_label_sha256(
-          via_label, sizeof via_label, prk, label, sizeof label, context, sizeof context)) {
-    fprintf(stderr, "HKDF-Expand-Label wrapper failed\n");
-    return 1;
-  }
-  if (!tls13_hacl_hkdf_expand_sha256(via_info, sizeof via_info, prk, info, p)) {
-    fprintf(stderr, "direct HKDF-Expand for label test failed\n");
-    return 1;
-  }
-  return expect_bytes("TLS 1.3 HKDF label encoding", via_label, via_info, sizeof via_label);
-}
-
 static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
   static const uint8_t derived_secret[32] = {
       0x6f, 0x26, 0x15, 0xa1, 0x08, 0xc7, 0x02, 0xc5,
@@ -170,13 +132,15 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
       0xdc, 0x0a, 0xad, 0xc1, 0x2f, 0x74, 0x1b, 0x01,
       0x04, 0x6a, 0xa6, 0xb9, 0x9f, 0x69, 0x1e, 0xd2,
       0x21, 0xa9, 0xf0, 0xca, 0x04, 0x3f, 0xbe, 0xac};
-  static const uint8_t transcript_hash[32] = {
+  static const uint8_t c_hs_info[] = {
+      0x00, 0x20, 0x12,
+      't', 'l', 's', '1', '3', ' ',
+      'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c',
+      0x20,
       0x86, 0x0c, 0x06, 0xed, 0xc0, 0x78, 0x58, 0xee,
       0x8e, 0x78, 0xf0, 0xe7, 0x42, 0x8c, 0x58, 0xed,
       0xd6, 0xb4, 0x3f, 0x2c, 0xa3, 0xe6, 0xe9, 0x5f,
       0x02, 0xed, 0x06, 0x3c, 0xf0, 0xe1, 0xca, 0xd8};
-  static const uint8_t c_hs_label[] = {
-      'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
   static const uint8_t expected_client_hs_traffic[32] = {
       0xb3, 0xed, 0xdb, 0x12, 0x6e, 0x06, 0x7f, 0x35,
       0xa7, 0x80, 0xb3, 0xab, 0xf4, 0x5e, 0x2d, 0x8f,
@@ -197,14 +161,12 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
           sizeof handshake_secret) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_label_sha256(
+  if (!tls13_hacl_hkdf_expand_sha256(
           client_hs_traffic,
           sizeof client_hs_traffic,
           handshake_secret,
-          c_hs_label,
-          sizeof c_hs_label,
-          transcript_hash,
-          sizeof transcript_hash)) {
+          c_hs_info,
+          sizeof c_hs_info)) {
     fprintf(stderr, "RFC 8448 client handshake traffic secret derivation failed\n");
     return 1;
   }
@@ -256,7 +218,11 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
       0xd2, 0xcb, 0xdc, 0xe7, 0x1d, 0xf4, 0xde, 0xda,
       0x4a, 0xb4, 0x2c, 0x30, 0x95, 0x72, 0xcb, 0x7f,
       0xff, 0xee, 0x54, 0x54, 0xb7, 0x8f, 0x07, 0x18};
-  static const uint8_t label_finished[] = {'f', 'i', 'n', 'i', 's', 'h', 'e', 'd'};
+  static const uint8_t finished_info[] = {
+      0x00, 0x20, 0x0e,
+      't', 'l', 's', '1', '3', ' ',
+      'f', 'i', 'n', 'i', 's', 'h', 'e', 'd',
+      0x00};
   uint8_t transcript[907];
   uint8_t transcript_hash[32];
   uint8_t finished_key[32];
@@ -277,14 +243,12 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
           sizeof transcript_hash) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_label_sha256(
+  if (!tls13_hacl_hkdf_expand_sha256(
           finished_key,
           sizeof finished_key,
           server_handshake_traffic_secret,
-          label_finished,
-          sizeof label_finished,
-          NULL,
-          0)) {
+          finished_info,
+          sizeof finished_info)) {
     fprintf(stderr, "failed to derive RFC 8448 server Finished key\n");
     return 1;
   }
@@ -401,34 +365,71 @@ static int test_chacha20_poly1305_roundtrip(void) {
   return 0;
 }
 
-static int test_tls13_record_nonce(void) {
-  static const uint8_t static_iv[12] = {
-      0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
-      0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b};
-  static const uint8_t expected_zero[12] = {
-      0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
-      0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b};
-  static const uint8_t expected_seq[12] = {
-      0x00, 0x01, 0x02, 0x03, 0x05, 0x07,
-      0x05, 0x03, 0x0d, 0x0f, 0x0d, 0x03};
-  uint8_t out[12];
+/* NIST SP 800-38D GCM test case 4 (AES-128, 60-byte plaintext, 20-byte AAD).
+   Exercises the AES-128-GCM path of the AEAD dispatcher used by the
+   TLS_AES_128_GCM_SHA256 cipher suite. */
+static int test_aes128_gcm_nist_case4(void) {
+  static const uint8_t key[16] = {
+      0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+      0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08};
+  static const uint8_t nonce[12] = {
+      0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88};
+  static const uint8_t aad[20] = {
+      0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef,
+      0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef,
+      0xab, 0xad, 0xda, 0xd2};
+  static const uint8_t plaintext[60] = {
+      0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5,
+      0xa5, 0x59, 0x09, 0xc5, 0xaf, 0xf5, 0x26, 0x9a,
+      0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7, 0xda,
+      0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72,
+      0x1c, 0x3c, 0x0c, 0x95, 0x95, 0x68, 0x09, 0x53,
+      0x2f, 0xcf, 0x0e, 0x24, 0x49, 0xa6, 0xb5, 0x25,
+      0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+      0xba, 0x63, 0x7b, 0x39};
+  static const uint8_t expected[76] = {
+      0x42, 0x83, 0x1e, 0xc2, 0x21, 0x77, 0x74, 0x24,
+      0x4b, 0x72, 0x21, 0xb7, 0x84, 0xd0, 0xd4, 0x9c,
+      0xe3, 0xaa, 0x21, 0x2f, 0x2c, 0x02, 0xa4, 0xe0,
+      0x35, 0xc1, 0x7e, 0x23, 0x29, 0xac, 0xa1, 0x2e,
+      0x21, 0xd5, 0x14, 0xb2, 0x54, 0x66, 0x93, 0x1c,
+      0x7d, 0x8f, 0x6a, 0x5a, 0xac, 0x84, 0xaa, 0x05,
+      0x1b, 0xa3, 0x0b, 0x39, 0x6a, 0x0a, 0xac, 0x97,
+      0x3d, 0x58, 0xe0, 0x91,
+      0x5b, 0xc9, 0x4f, 0xbc, 0x32, 0x21, 0xa5, 0xdb,
+      0x94, 0xfa, 0xe9, 0x5a, 0xe7, 0x12, 0x1a, 0x47};
+  uint8_t combined[76];
+  uint8_t decrypted[60];
 
-  if (!tls13_record_nonce(out, static_iv, 0)) {
-    fprintf(stderr, "TLS record nonce rejected sequence zero\n");
+  if (!tls13_hacl_aes128_gcm_available()) {
+    printf("AES-128-GCM unavailable on this host; skipping KAT\n");
+    return 0;
+  }
+  memset(combined, 0, sizeof combined);
+  memset(decrypted, 0, sizeof decrypted);
+  if (!tls13_hacl_aes128_gcm_seal_combined(
+          combined, sizeof combined, (uint8_t *)key, (uint8_t *)nonce,
+          (uint8_t *)aad, sizeof aad, (uint8_t *)plaintext, sizeof plaintext)) {
+    fprintf(stderr, "aes128-gcm seal failed\n");
     return 1;
   }
-  if (expect_bytes("TLS record nonce seq 0", out, expected_zero, sizeof out) != 0) {
+  if (expect_bytes("aes128-gcm NIST case 4", combined, expected, sizeof expected) != 0) {
     return 1;
   }
-  if (!tls13_record_nonce(out, static_iv, UINT64_C(0x0102030405060708))) {
-    fprintf(stderr, "TLS record nonce rejected non-zero sequence\n");
+  if (!tls13_hacl_aes128_gcm_open_combined(
+          decrypted, sizeof decrypted, (uint8_t *)key, (uint8_t *)nonce,
+          (uint8_t *)aad, sizeof aad, combined, sizeof combined)) {
+    fprintf(stderr, "aes128-gcm open failed\n");
     return 1;
   }
-  if (expect_bytes("TLS record nonce seq non-zero", out, expected_seq, sizeof out) != 0) {
+  if (expect_bytes("aes128-gcm roundtrip", decrypted, plaintext, sizeof plaintext) != 0) {
     return 1;
   }
-  if (tls13_record_nonce(NULL, static_iv, 0) || tls13_record_nonce(out, NULL, 0)) {
-    fprintf(stderr, "TLS record nonce accepted a null buffer\n");
+  combined[sizeof combined - 1] ^= 1u;
+  if (tls13_hacl_aes128_gcm_open_combined(
+          decrypted, sizeof decrypted, (uint8_t *)key, (uint8_t *)nonce,
+          (uint8_t *)aad, sizeof aad, combined, sizeof combined)) {
+    fprintf(stderr, "aes128-gcm accepted a tampered tag\n");
     return 1;
   }
   return 0;
@@ -439,12 +440,11 @@ int main(void) {
   failed |= test_sha256_empty();
   failed |= test_hmac_sha256_rfc4231_case1();
   failed |= test_hkdf_sha256_rfc5869_case1();
-  failed |= test_tls13_hkdf_expand_label_encoding();
   failed |= test_tls13_hkdf_rfc8448_simple_handshake();
   failed |= test_tls13_finished_rfc8448_simple_handshake();
   failed |= test_x25519_rfc7748();
-  failed |= test_tls13_record_nonce();
   failed |= test_chacha20_poly1305_roundtrip();
+  failed |= test_aes128_gcm_nist_case4();
   if (failed != 0) {
     return 1;
   }

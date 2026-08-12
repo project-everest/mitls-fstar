@@ -205,6 +205,48 @@ fn verify_certificate_signature_for_local_event
                   CT.LocalVerifyCertificateSignature
                   B.empty)
 
+(** Hand the auth context the certificates the peer sent alongside its leaf.
+
+    Public CAs issue end-entity certificates from intermediate CAs, so a peer's
+    leaf is essentially never signed directly by a configured trust anchor.
+    Without the intermediates the validator cannot build a chain and rejects
+    every real-world server.  The certificates supplied here are untrusted
+    chain-building material only: which chains are acceptable remains entirely
+    a function of the trust anchors configured in the [auth_config].
+
+    [chain] holds the DER encoding of every certificate the peer sent, with
+    entry [i] occupying [chain[offsets[i] .. offsets[i] + lens[i])] and entry 0
+    being the leaf.  This is exactly the layout [copy_certificate_chain]
+    produces.
+
+    The call is a hint: it constrains nothing about the connection state, and
+    so carries no postcondition beyond preserving its arguments.  Certificate
+    acceptance is still decided by [validate_certificate_for_local_event],
+    whose specification is unchanged. *)
+fn set_peer_certificate_chain
+  (ctx:auth_context)
+  (chain:array U8.t)
+  (chain_capacity:SZ.t)
+  (chain_len:SZ.t)
+  (offsets:array SZ.t)
+  (lens:array SZ.t)
+  (entries_capacity:SZ.t)
+  (count:SZ.t)
+  requires is_auth_context ctx **
+           pts_to chain 'chain_bytes **
+           pts_to offsets 'offsets_seq **
+           pts_to lens 'lens_seq **
+           pure (B.length 'chain_bytes == SZ.v chain_capacity /\
+                 SZ.v chain_len <= SZ.v chain_capacity /\
+                 Seq.length 'offsets_seq == SZ.v entries_capacity /\
+                 Seq.length 'lens_seq == SZ.v entries_capacity /\
+                 SZ.v count <= SZ.v entries_capacity)
+  returns _:unit
+  ensures is_auth_context ctx **
+          pts_to chain 'chain_bytes **
+          pts_to offsets 'offsets_seq **
+          pts_to lens 'lens_seq
+
 fn auth_context_free (ctx:auth_context)
   requires is_auth_context ctx
   ensures emp

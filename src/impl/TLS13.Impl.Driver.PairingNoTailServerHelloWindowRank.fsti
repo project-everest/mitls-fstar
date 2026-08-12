@@ -42,11 +42,13 @@ module PNI = TLS13.Impl.Driver.PairingNoTailInversion
   [server_hello_window_rank] below fixes this by tracking
   [hs_certificate_verify] (the local sign step) as its own obligation, in
   addition to [hs_encrypted_extensions], [hs_certificate] and
-  [hs_certificate_verify_verified]. With this fix the rank is *exactly* 11 at
+  [hs_certificate_verify_verified]. With this fix the rank is *exactly* 9 at
   a fresh [HsServerHelloSent] model (see
-  [lemma_server_hello_window_rank_fresh_is_eleven]) and decreases by
-  *exactly* 1 on every one of the 11 events of the minimal completion path to
-  [CS.ControlApplicationData], with zero slack anywhere -- this was checked
+  [lemma_server_hello_window_rank_fresh_is_nine]) and decreases by
+  *exactly* 1 on every one of the 9 events of the minimal completion path to
+  [CS.ControlApplicationData] (Model-Fix-1 made recv-Finished atomic, merging
+  the old 3-step client-Finished delivery into a single event and shortening
+  the window by 2), with zero slack anywhere -- this was checked
   by hand against every legal transition in
   [TLS13.Spec.StateMachine.legal_event]/[step_model] for the
   [ServerEndpoint] role at these stages (see
@@ -130,25 +132,36 @@ let server_hello_window_rank
   | CS.ControlApplicationData ->
     final_rank
   | CS.ControlHandshaking CS.HsServerHelloSent ->
-    3 +
+    1 +
     server_hello_window_late_flight_progress hs +
     server_hello_window_handshake_traffic_obligation_rank keys +
     final_rank
   | CS.ControlHandshaking CS.HsServerEncryptedFlightSent ->
-    3 +
+    1 +
     server_hello_window_late_flight_progress hs +
     PNI.option_missing keys.CS.ks_client_handshake_traffic +
     final_rank
   | CS.ControlHandshaking CS.HsServerFinishedSent ->
     PNI.option_missing keys.CS.ks_client_handshake_traffic +
-    2 +
     final_rank
   | CS.ControlHandshaking CS.HsClientFinishedReceived ->
     1 + final_rank
   | _ ->
     0
 
-val lemma_server_hello_window_rank_fresh_is_eleven
+noextract
+let server_hello_window_control
+  (control:CS.connection_control_state)
+  : bool =
+  match control with
+  | CS.ControlHandshaking CS.HsServerHelloSent
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
+  | CS.ControlHandshaking CS.HsServerFinishedSent
+  | CS.ControlHandshaking CS.HsClientFinishedReceived
+  | CS.ControlApplicationData -> true
+  | _ -> false
+
+val lemma_server_hello_window_rank_fresh_is_nine
   (model:CS.connection_model)
   : Lemma
       (requires
@@ -162,7 +175,7 @@ val lemma_server_hello_window_rank_fresh_is_eleven
         model.CS.model_handshake.CS.hs_certificate == None /\
         model.CS.model_handshake.CS.hs_certificate_verify == None /\
         model.CS.model_handshake.CS.hs_certificate_verify_verified == false)
-      (ensures server_hello_window_rank model == 11)
+      (ensures server_hello_window_rank model == 9)
 
 val lemma_server_hello_window_rank_application_data_installed_zero
   (model:CS.connection_model)
@@ -225,7 +238,7 @@ val lemma_server_hello_window_after_server_cleartext_prefix_fresh
         model5.CS.model_handshake.CS.hs_certificate == None /\
         model5.CS.model_handshake.CS.hs_certificate_verify == None /\
         model5.CS.model_handshake.CS.hs_certificate_verify_verified == false /\
-        server_hello_window_rank model5 == 11)
+        server_hello_window_rank model5 == 9)
 
 val lemma_server_hello_window_rank_step
   (model:CS.connection_model)
@@ -242,7 +255,8 @@ val lemma_server_hello_window_rank_step
         CS.step_model model ev == Some model')
       (ensures
         CS.ControlFailed? model'.CS.model_control \/
-        server_hello_window_rank model <= server_hello_window_rank model' + 1)
+        (server_hello_window_rank model <= server_hello_window_rank model' + 1 /\
+         server_hello_window_control model'.CS.model_control))
 
 val lemma_server_hello_window_rank_replay_lower_bound
   (model:CS.connection_model)

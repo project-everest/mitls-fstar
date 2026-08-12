@@ -24,6 +24,7 @@ module GESG = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported
 module GHS = TLS13.Wire.Generated.Handshake
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
@@ -277,7 +278,7 @@ val lemma_ch_extensions_cons_sv:
   sv:bool ->
   ss:list T.signature_scheme ->
   Lemma (ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-         (if FStar.List.Tot.mem GPV.TLS_1p3 svl
+         (if FStar.List.Tot.mem GOV.Offered_TLS_1p3 svl
           then ch_extensions tl sn ks true ss
           else None))
 
@@ -360,11 +361,9 @@ val lemma_certificateVerify_representable (b:GCV.certificateVerify)
 
 val lemma_serverHello_representable (b:GSH.serverHello)
   : Lemma (serverHello_representable b ==
-           ((match TLS13.Wire.Semantics.serverHello_key_share_x25519 b with
-             | Some k -> B.length k = 32
-             | None -> false) &&
+           (Some? (TLS13.Wire.Semantics.serverHello_kex_share b) &&
             (match TLS13.Wire.Semantics.serverHello_cipher_suite b with
-             | Some cs -> cs = T.TLS_CHACHA20_POLY1305_SHA256
+             | Some cs -> H.is_supported_cipher_suite cs
              | None -> false)))
 
 val lemma_encryptedExtensions_representable (b:GEE.encryptedExtensions)
@@ -401,6 +400,19 @@ val parse_handshake_msg:
   input:B.bytes ->
   GTot (option (M.handshake_msg & nat))
 
+val lemma_parse_handshake_strong_prefix:
+  prefix:B.bytes ->
+  input:B.bytes ->
+  msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake prefix == Some (msg, consumed) /\
+      consumed == B.length prefix /\
+      B.length prefix <= B.length input /\
+      Seq.equal prefix (Seq.slice input 0 (B.length prefix)))
+    (ensures parse_handshake input == Some (msg, consumed))
+
 val serialize_handshake:
   msg:M.handshake_msg ->
   GTot B.bytes
@@ -426,6 +438,32 @@ val parse_record:
 val parse_record_wire:
   input:B.bytes ->
   GTot (option (T.content_type & M.sealed_record & nat))
+
+(**
+  The exact streaming condition under which another transport read is
+  warranted: either the five-byte record header is incomplete, or a valid,
+  bounded header is present but its declared fragment has not fully arrived.
+  Malformed complete headers do not satisfy this predicate.
+**)
+let record_prefix_incomplete (input:B.bytes) : GTot prop =
+  if B.length input < 5 then
+    True
+  else
+    let b0 = Seq.index input 0 in
+    let b1 = Seq.index input 1 in
+    let b2 = Seq.index input 2 in
+    let fragment_len = read_u16 input 3 in
+    b1 == 0x03uy /\
+    (b2 == 0x03uy \/ (b0 == 0x16uy /\ b2 == 0x01uy)) /\
+    fragment_len <= 16640 /\
+    (b0 == 0x14uy \/ b0 == 0x15uy \/ b0 == 0x16uy \/ b0 == 0x17uy) /\
+    B.length input < 5 + fragment_len
+
+val lemma_record_prefix_incomplete_bound:
+  input:B.bytes ->
+  Lemma
+    (requires record_prefix_incomplete input)
+    (ensures B.length input < 5 + 16640)
 
 val lemma_parse_record_implies_parse_record_wire:
   input:B.bytes ->
@@ -545,12 +583,12 @@ val lemma_parse_supported_server_hello_fields:
     (ensures (
       match parse_supported_server_hello input with
       | Some sh ->
-        sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+        sh.cipher_suite == SHC.server_hello_selected_suite input /\
         Seq.equal sh.random (Seq.slice input 6 38) /\
-        ((SHC.server_hello_ok_52 input /\
-          Seq.equal sh.key_share (Seq.slice input 52 84)) \/
-         (SHC.server_hello_ok_58 input /\
-          Seq.equal sh.key_share (Seq.slice input 58 90)))
+        ((SHC.server_hello_ok_84 input /\
+          Seq.equal sh.key_share (Seq.slice input 84 116)) \/
+         (SHC.server_hello_ok_90 input /\
+          Seq.equal sh.key_share (Seq.slice input 90 122)))
       | None -> False))
 
 val parse_sealed_record:
@@ -565,6 +603,43 @@ val parse_tls_message:
   content_type:T.content_type ->
   fragment:B.bytes ->
   GTot (option M.tls_message)
+
+val lemma_parse_tls_message_handshake_some:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  Lemma
+    (requires
+      parse_tls_message T.Handshake fragment ==
+        Some (M.TlsHandshake msg))
+    (ensures
+      parse_handshake fragment ==
+        Some (msg, B.length fragment))
+
+val lemma_parse_tls_message_handshake_partial_none:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake fragment == Some (msg, consumed) /\
+      consumed < B.length fragment)
+    (ensures parse_tls_message T.Handshake fragment == None)
+
+val lemma_parse_handshake_serialize_protected_consumes_all:
+  sent_msg:M.handshake_msg ->
+  parsed_msg:M.handshake_msg ->
+  consumed:nat ->
+  Lemma
+    (requires
+      (match sent_msg with
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _ -> True
+       | _ -> False) /\
+      parse_handshake (serialize_handshake sent_msg) ==
+        Some (parsed_msg, consumed))
+    (ensures consumed == B.length (serialize_handshake sent_msg))
 
 (* The generated [Invalid] content type (wire byte 0) never carries a TLS
    message: the spec parser rejects it.  Exposed so consumers can discharge the
@@ -600,6 +675,83 @@ val lemma_ptm_handshake_fallback:
           | Some body -> Some (M.TlsIgnoredPostHandshake body)
           | None -> None)))
 
+(* --- Streaming handshake-content parser ------------------------------------
+
+   [parse_tls_message T.Handshake] is a WHOLE-FRAGMENT parser: it succeeds only
+   when the message occupies the record fragment exactly, so it cannot describe
+   a record whose plaintext coalesces several handshake messages.  The internal-
+   event pipeline needs a STREAMING parser: one that reads the first message of
+   a handshake-content plaintext and reports how many bytes it consumed, so the
+   remainder can be re-parsed by a subsequent internal step.
+
+   [parse_handshake] is already streaming but ranges over [M.handshake_msg],
+   which excludes the post-handshake messages ([TlsKeyUpdate],
+   [TlsIgnoredPostHandshake]) that [parse_tls_message] handles by fallback.
+   [parse_handshake_stream] closes that gap: it ranges over the full
+   [M.tls_message] and always reports a consumed length.
+
+   Note the post-handshake fallbacks are themselves whole-input parsers, so on
+   that branch the reported length is [B.length input] and the residual is
+   empty.  This is exactly the pre-existing behaviour, now made explicit rather
+   than implicit in the record framing. *)
+val parse_handshake_stream:
+  input:B.bytes ->
+  GTot (option (M.tls_message & nat))
+
+val lemma_parse_handshake_stream_def:
+  input:B.bytes ->
+  Lemma (parse_handshake_stream input ==
+    (match parse_handshake input with
+     | Some (msg, consumed) -> Some (M.TlsHandshake msg, consumed)
+     | None ->
+       (match parse_key_update input with
+        | Some req -> Some (M.TlsKeyUpdate req, B.length input)
+        | None ->
+          (match parse_ignored_post_handshake input with
+           | Some body -> Some (M.TlsIgnoredPostHandshake body, B.length input)
+           | None -> None))))
+
+(* The consumed length is strictly positive and within the input.  Strict
+   positivity is what makes an internal-step loop over a pending plaintext
+   terminate: each step strictly decreases the residual length. *)
+val lemma_parse_handshake_stream_bounds:
+  input:B.bytes ->
+  msg:M.tls_message ->
+  consumed:nat ->
+  Lemma
+    (requires parse_handshake_stream input == Some (msg, consumed))
+    (ensures 0 < consumed /\ consumed <= B.length input)
+
+(* Agreement with the whole-fragment parser: on a plaintext holding exactly one
+   message the two coincide, and when the streaming parser leaves a residual the
+   whole-fragment parser rejects.  This is the bridge that lets the pipeline
+   subsume the existing single-message receive path without changing its
+   semantics. *)
+val lemma_parse_handshake_stream_whole:
+  input:B.bytes ->
+  Lemma (parse_tls_message T.Handshake input ==
+    (match parse_handshake_stream input with
+     | Some (msg, consumed) -> if consumed = B.length input then Some msg else None
+     | None -> None))
+
+(* A streaming parse of a prefix is stable under extension of the input, so a
+   message parsed out of a pending plaintext is the same message that would be
+   parsed out of the whole record.  Mirrors [lemma_parse_handshake_strong_prefix]
+   at [tls_message] range. *)
+val lemma_parse_handshake_stream_strong_prefix:
+  prefix:B.bytes ->
+  input:B.bytes ->
+  msg:M.tls_message ->
+  consumed:nat ->
+  Lemma
+    (requires
+      parse_handshake_stream prefix == Some (msg, consumed) /\
+      consumed == B.length prefix /\
+      M.TlsHandshake? msg /\
+      B.length prefix <= B.length input /\
+      Seq.equal prefix (Seq.slice input 0 (B.length prefix)))
+    (ensures parse_handshake_stream input == Some (msg, consumed))
+
 val serialize_tls_message:
   msg:M.tls_message ->
   GTot (T.content_type & B.bytes)
@@ -632,6 +784,29 @@ val lemma_serialize_tls_message_key_update_not_requested:
   unit ->
   Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==
     (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]))
+
+(* The KeyUpdate body is a single byte carrying the request form; the two
+   encodings differ only in that byte.  [key_update_request_byte] names it so
+   that the serialisation lemma can be stated once, for both forms. *)
+(* [inline_for_extraction] matters here: as a standalone extracted function this
+   would put a TLS13.Messages dependency inside the Wire.Spec bundle, which
+   already depends on TLS13.Messages the other way round, and KaRaMeL rejects
+   the resulting bundle cycle.  Inlining leaves no declaration behind. *)
+inline_for_extraction
+let key_update_request_byte (req:M.key_update_request) : B.byte =
+  match req with
+  | M.UpdateNotRequested -> 0uy
+  | M.UpdateRequested -> 1uy
+
+val lemma_serialize_tls_message_key_update_requested:
+  unit ->
+  Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateRequested) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 1uy]))
+
+val lemma_serialize_tls_message_key_update:
+  req:M.key_update_request ->
+  Lemma (serialize_tls_message (M.TlsKeyUpdate req) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; key_update_request_byte req]))
 
 val parse_tls_record:
   input:B.bytes ->
@@ -686,12 +861,41 @@ val lemma_parse_tls_message_round_trip:
         Seq.equal fragment (serialize_handshake (M.Certificate c))
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | Some (M.TlsHandshake (M.Finished fin)) ->
+        Seq.equal fragment (serialize_handshake (M.Finished fin))
       | _ -> True))
 
 
 (* --- synth_client_hello: the ClientHello accept/reject gate.  Re-targeted to
        return the generated wire record itself ([Some b] iff representable),
        matching how [synth_handshake_msg_of] wraps [M.ClientHello b]. --- *)
+
+
+(* A handshake fragment that parses AS A WHOLE MESSAGE is the serialisation
+   of that message, and re-parsing that serialisation returns the message and
+   consumes all of it.
+
+   Callers need this to describe a received single-message protected record
+   as a [ConnProtectedHandshake] head step whose fragment is written
+   [serialize_handshake msg]: it says that doing so loses no information
+   about the bytes that actually arrived. *)
+val lemma_parse_handshake_serialize_round_trip:
+  fragment:B.bytes ->
+  msg:M.handshake_msg ->
+  Lemma
+    (requires
+      parse_tls_message T.Handshake fragment == Some (M.TlsHandshake msg) /\
+      (match msg with
+       | M.EncryptedExtensions _
+       | M.Certificate _
+       | M.CertificateVerify _
+       | M.Finished _ -> True
+       | _ -> False))
+    (ensures
+      Seq.equal fragment (serialize_handshake msg) /\
+      0 < B.length (serialize_handshake msg) /\
+      parse_handshake (serialize_handshake msg) ==
+        Some (msg, B.length (serialize_handshake msg)))
 
 val synth_client_hello:
   c:GCH.clientHello ->

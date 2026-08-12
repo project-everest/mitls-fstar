@@ -58,6 +58,8 @@ let lemma_protected_handshake_event_projection_pair_after_client_write_server_re
         Seq.equal
           client.model_handshake.hs_transcript
           server.model_handshake.hs_transcript /\
+        negotiated_aead_alg client.model_handshake ==
+          negotiated_aead_alg server.model_handshake /\
         Seq.equal client_raw_sent server_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -193,34 +195,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_write_server_re
       client_sent_after_install
       client_received_after_install
       client_final
-  returns
-    exists client_after' server_after client_after_head server_after_head pair
-      client_tail_sent client_tail_received
-      server_tail_sent server_tail_received.
-      step_model client client_install_ev == Some client_after' /\
-      step_model server server_install_ev == Some server_after /\
-      step_model client_after' sent_ev == Some client_after_head /\
-      step_model server_after received_ev == Some server_after_head /\
-      pair.pm_sender == client_after' /\
-      pair.pm_receiver == server_after /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      Seq.equal client_tail_sent server_tail_received /\
-      conn_events_sent_seal_replay
-        client_after_head
-        client_rest
-        client_tail_sent
-        client_tail_received
-        client_final /\
-      conn_events_received_decode_replay
-        server_after_head
-        server_rest
-        server_tail_sent
-        server_tail_received
-        server_final
-  with _.
+  with
   ( lemma_received_replay_skip_empty_head_preserves_peer_stream
       client_sent_after_install
       server
@@ -242,34 +217,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_write_server_re
         server_sent_after_install
         server_received_after_install
         server_final
-    returns
-      exists client_after' server_after' client_after_head server_after_head pair
-        client_tail_sent client_tail_received
-        server_tail_sent server_tail_received.
-        step_model client client_install_ev == Some client_after' /\
-        step_model server server_install_ev == Some server_after' /\
-        step_model client_after' sent_ev == Some client_after_head /\
-        step_model server_after' received_ev == Some server_after_head /\
-        pair.pm_sender == client_after' /\
-        pair.pm_receiver == server_after' /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg /\
-        Seq.equal client_tail_sent server_tail_received /\
-        conn_events_sent_seal_replay
-          client_after_head
-          client_rest
-          client_tail_sent
-          client_tail_received
-          client_final /\
-        conn_events_received_decode_replay
-          server_after_head
-          server_rest
-          server_tail_sent
-          server_tail_received
-          server_final
-    with _.
+    with
     ( assert (traffic_install_matches_key_schedule
         client.model_handshake
         {
@@ -336,34 +284,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_write_server_re
           server_tail_sent
           server_tail_received
           server_final
-      returns
-        exists client_after' server_after' client_after_head server_after_head pair
-          client_tail_sent' client_tail_received'
-          server_tail_sent' server_tail_received'.
-          step_model client client_install_ev == Some client_after' /\
-          step_model server server_install_ev == Some server_after' /\
-          step_model client_after' sent_ev == Some client_after_head /\
-          step_model server_after' received_ev == Some server_after_head /\
-          pair.pm_sender == client_after' /\
-          pair.pm_receiver == server_after' /\
-          protected_handshake_event_projection_pair
-            pair
-            sent_msg
-            received_msg /\
-          Seq.equal client_tail_sent' server_tail_received' /\
-          conn_events_sent_seal_replay
-            client_after_head
-            client_rest
-            client_tail_sent'
-            client_tail_received'
-            client_final /\
-          conn_events_received_decode_replay
-            server_after_head
-            server_rest
-            server_tail_sent'
-            server_tail_received'
-            server_final
-      with _.
+      with
       ( introduce exists
           (client_after':connection_model)
           (server_after':connection_model)
@@ -601,29 +522,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_finished_local_
       client_sent_after_verify
       client_received_after_verify
       client_final
-  returns
-    exists pair client_tail_sent client_tail_received
-      server_tail_sent server_tail_received.
-      pair.pm_sender == client_after_app_read /\
-      pair.pm_receiver == server_after_app_write /\
-      protected_handshake_event_projection_pair
-        pair
-        sent_msg
-        received_msg /\
-      Seq.equal client_tail_sent server_tail_received /\
-      conn_events_sent_seal_replay
-        client_after_finished
-        client_rest
-        client_tail_sent
-        client_tail_received
-        client_final /\
-      conn_events_received_decode_replay
-        server_after_finished
-        server_rest
-        server_tail_sent
-        server_tail_received
-        server_final
-  with _.
+  with
   ( assert (client_after_verify0 == client_after_verify);
     lemma_step_sender_local_event_preserves_write_read_record_material_alignment
       client
@@ -652,29 +551,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_finished_local_
         client_sent_after_app_write
         client_received_after_app_write
         client_final
-    returns
-      exists pair client_tail_sent client_tail_received
-        server_tail_sent server_tail_received.
-        pair.pm_sender == client_after_app_read /\
-        pair.pm_receiver == server_after_app_write /\
-        protected_handshake_event_projection_pair
-          pair
-          sent_msg
-          received_msg /\
-        Seq.equal client_tail_sent server_tail_received /\
-        conn_events_sent_seal_replay
-          client_after_finished
-          client_rest
-          client_tail_sent
-          client_tail_received
-          client_final /\
-        conn_events_received_decode_replay
-          server_after_finished
-          server_rest
-          server_tail_sent
-          server_tail_received
-          server_final
-    with _.
+    with
     ( assert (client_after_app_write0 == client_after_app_write);
       lemma_step_sender_local_event_preserves_write_read_record_material_alignment
         client_after_verify
@@ -703,29 +580,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_finished_local_
           client_sent_after_app_read
           client_received_after_app_read
           client_final
-      returns
-        exists pair client_tail_sent client_tail_received
-          server_tail_sent server_tail_received.
-          pair.pm_sender == client_after_app_read /\
-          pair.pm_receiver == server_after_app_write /\
-          protected_handshake_event_projection_pair
-            pair
-            sent_msg
-            received_msg /\
-          Seq.equal client_tail_sent server_tail_received /\
-          conn_events_sent_seal_replay
-            client_after_finished
-            client_rest
-            client_tail_sent
-            client_tail_received
-            client_final /\
-          conn_events_received_decode_replay
-            server_after_finished
-            server_rest
-            server_tail_sent
-            server_tail_received
-            server_final
-      with _.
+      with
       ( assert (client_after_app_read0 == client_after_app_read);
         lemma_step_sender_local_event_preserves_write_read_record_material_alignment
           client_after_app_write
@@ -753,29 +608,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_finished_local_
             server_sent_after_app_write
             server_received_after_app_write
             server_final
-        returns
-          exists pair client_tail_sent client_tail_received
-            server_tail_sent server_tail_received.
-            pair.pm_sender == client_after_app_read /\
-            pair.pm_receiver == server_after_app_write /\
-            protected_handshake_event_projection_pair
-              pair
-              sent_msg
-              received_msg /\
-            Seq.equal client_tail_sent server_tail_received /\
-            conn_events_sent_seal_replay
-              client_after_finished
-              client_rest
-              client_tail_sent
-              client_tail_received
-              client_final /\
-            conn_events_received_decode_replay
-              server_after_finished
-              server_rest
-              server_tail_sent
-              server_tail_received
-              server_final
-        with _.
+        with
         ( assert (server_after_app_write0 == server_after_app_write);
           lemma_step_receiver_local_event_preserves_write_read_record_material_alignment
             client_after_app_read
@@ -828,29 +661,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_finished_local_
               server_tail_sent
               server_tail_received
               server_final
-          returns
-            exists pair client_tail_sent' client_tail_received'
-              server_tail_sent' server_tail_received'.
-              pair.pm_sender == client_after_app_read /\
-              pair.pm_receiver == server_after_app_write /\
-              protected_handshake_event_projection_pair
-                pair
-                sent_msg
-                received_msg /\
-              Seq.equal client_tail_sent' server_tail_received' /\
-              conn_events_sent_seal_replay
-                client_after_finished
-                client_rest
-                client_tail_sent'
-                client_tail_received'
-                client_final /\
-              conn_events_received_decode_replay
-                server_after_finished
-                server_rest
-                server_tail_sent'
-                server_tail_received'
-                server_final
-          with _.
+          with
           ( assert (client_after_finished0 == client_after_finished);
             assert (server_after_finished0 == server_after_finished);
             introduce exists

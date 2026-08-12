@@ -34,22 +34,35 @@ Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse
 export PATH := $(Z3_DIR):$(PATH)
 
+# Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
+# Pinned in scripts/z3-version.txt at the repo root -- single source of truth
+# shared with the root Makefile, scripts/install-z3.sh and the CI dev-container
+# cache key.
+Z3_VERSION_FILE ?= ../scripts/z3-version.txt
+Z3_VERSION ?= $(strip $(shell cat $(Z3_VERSION_FILE)))
+ifeq ($(Z3_VERSION),)
+$(error Could not read the pinned Z3 version from $(Z3_VERSION_FILE))
+endif
+
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
 IMPL_DIR    = impl
+EXTERN_DIR  = ../src/impl/extern
 OUTPUT_DIR  = _output
 EXTRACT_DIR = _extract
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include ../common \
+  --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse \
   --include $(SPEC_DIR) \
   --include $(IMPL_DIR)
 
 FSTAR_FLAGS = \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
@@ -64,9 +77,10 @@ FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
 COMMON_FILES = $(wildcard ../common/*.fst ../common/*.fsti)
+EXTERN_FILES = $(EXTERN_DIR)/Common.Memmove.fsti
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
 IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES)
+ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 .PHONY: all verify clean check-admits help
 

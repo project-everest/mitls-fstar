@@ -1,6 +1,7 @@
 #include "tls13_client_driver.h"
 
 #include "TLS13_Impl_Client_Driver.h"
+#include "atlas_trace.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +16,9 @@
 struct tls13_client_driver_s {
   TLS13_Impl_Client_Driver_client_driver verified_driver;
   bool connected;
+#if ATLAS_ENABLE_LOGGING
+  uint64_t trace_connection;
+#endif
   char last_error[256];
 };
 
@@ -71,10 +75,9 @@ static int driver_fail_status(
   return 1;
 }
 
-/* abort has no application-ready precondition, so it is the only safe cleanup
- * operation after a non-retryable verified workflow status. */
 static void abort_connected_driver(tls13_client_driver *driver) {
   if (driver != NULL && driver->connected) {
+    atlas_trace_set_connection(driver->trace_connection);
     TLS13_Impl_Client_Driver_abort(driver->verified_driver);
     driver->connected = false;
   }
@@ -143,11 +146,16 @@ void tls13_client_config_free(tls13_client_config *config) {
   free(config);
 }
 
-int tls13_client_driver_connect_with_config(
+static int connect_with_config_reporting(
     tls13_client_driver **out,
     const char *connect_host,
     uint16_t port,
-    const tls13_client_config *config) {
+    const tls13_client_config *config,
+    char *error_out,
+    size_t error_cap) {
+  if (error_out != NULL && error_cap != 0u) {
+    error_out[0] = '\0';
+  }
   if (out == NULL) {
     return 1;
   }
@@ -165,6 +173,10 @@ int tls13_client_driver_connect_with_config(
   if (driver == NULL) {
     return 1;
   }
+#if ATLAS_ENABLE_LOGGING
+  driver->trace_connection = atlas_trace_new_connection();
+  atlas_trace_set_connection(driver->trace_connection);
+#endif
 
   driver->verified_driver =
       TLS13_Impl_Client_Driver_new_client_with_auth_config(
@@ -185,6 +197,9 @@ int tls13_client_driver_connect_with_config(
           TLS13_DRIVER_WORKFLOW_FUEL);
   if (status != TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
     (void)driver_fail_status(driver, "connect", status);
+    if (error_out != NULL && error_cap != 0u) {
+      (void)snprintf(error_out, error_cap, "%s", driver->last_error);
+    }
     TLS13_Impl_Client_Driver_free(driver->verified_driver);
     free(driver);
     return 1;
@@ -195,14 +210,27 @@ int tls13_client_driver_connect_with_config(
   return 0;
 }
 
-int tls13_client_driver_connect(
+int tls13_client_driver_connect_with_config(
+    tls13_client_driver **out,
+    const char *connect_host,
+    uint16_t port,
+    const tls13_client_config *config) {
+  return connect_with_config_reporting(out, connect_host, port, config, NULL, 0u);
+}
+
+int tls13_client_driver_connect_reporting(
     tls13_client_driver **out,
     const char *connect_host,
     uint16_t port,
     const char *server_name,
     const uint8_t *trust_anchor_pem,
     size_t trust_anchor_pem_len,
-    size_t validation_time_seconds) {
+    size_t validation_time_seconds,
+    char *error_out,
+    size_t error_cap) {
+  if (error_out != NULL && error_cap != 0u) {
+    error_out[0] = '\0';
+  }
   tls13_client_config *config = NULL;
   if (tls13_client_config_new(
           &config,
@@ -213,12 +241,29 @@ int tls13_client_driver_connect(
     if (out != NULL) {
       *out = NULL;
     }
+    if (error_out != NULL && error_cap != 0u) {
+      (void)snprintf(error_out, error_cap, "%s",
+                     "client config rejected (hostname or trust store too large)");
+    }
     return 1;
   }
-  int result =
-      tls13_client_driver_connect_with_config(out, connect_host, port, config);
+  int result = connect_with_config_reporting(
+      out, connect_host, port, config, error_out, error_cap);
   tls13_client_config_free(config);
   return result;
+}
+
+int tls13_client_driver_connect(
+    tls13_client_driver **out,
+    const char *connect_host,
+    uint16_t port,
+    const char *server_name,
+    const uint8_t *trust_anchor_pem,
+    size_t trust_anchor_pem_len,
+    size_t validation_time_seconds) {
+  return tls13_client_driver_connect_reporting(
+      out, connect_host, port, server_name, trust_anchor_pem,
+      trust_anchor_pem_len, validation_time_seconds, NULL, 0u);
 }
 
 int tls13_client_driver_send_application_data(
@@ -243,6 +288,7 @@ int tls13_client_driver_send_application_data(
   uint8_t empty_payload = 0u;
   uint8_t *payload_input =
       payload_len == 0u ? &empty_payload : (uint8_t *)(void *)payload;
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_send(
           driver->verified_driver, payload_input, payload_len);
@@ -257,9 +303,29 @@ int tls13_client_driver_send_application_data(
      * single-record (<=16384 byte) chunks. */
     return 1;
   }
-  /* Any other non-Ok status is a real protocol failure: release the
-   * transport rather than leaving the C wrapper marked connected. */
-  abort_connected_driver(driver);
+  driver->connected = false;
+  return 1;
+}
+
+int tls13_client_driver_send_key_update(
+    tls13_client_driver *driver,
+    bool request_peer_update) {
+  if (driver == NULL) {
+    return 1;
+  }
+  if (!driver->connected) {
+    return driver_fail(driver, "key_update: TLS channel is closed");
+  }
+
+  atlas_trace_set_connection(driver->trace_connection);
+  TLS13_Impl_Client_Driver_driver_workflow_status status =
+      TLS13_Impl_Client_Driver_send_key_update(
+          driver->verified_driver, request_peer_update);
+  if (status == TLS13_Impl_Client_Driver_State_DriverWorkflowOk) {
+    return 0;
+  }
+  (void)driver_fail_status(driver, "key_update", status);
+  driver->connected = false;
   return 1;
 }
 
@@ -269,11 +335,6 @@ static bool receive_status_is_retryable(
          status == TLS13_Impl_Client_Driver_State_DriverWorkflowExhausted ||
          status ==
              TLS13_Impl_Client_Driver_State_DriverWorkflowOutputBufferTooSmall;
-}
-
-static bool receive_status_is_closed(
-    TLS13_Impl_Client_Driver_driver_workflow_status status) {
-  return status == TLS13_Impl_Client_Driver_State_DriverWorkflowClosed;
 }
 
 int tls13_client_driver_receive_application_data(
@@ -292,6 +353,7 @@ int tls13_client_driver_receive_application_data(
   }
   *out_len = 0u;
 
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_client_receive_result result =
       TLS13_Impl_Client_Driver_receive(
           driver->verified_driver,
@@ -310,14 +372,7 @@ int tls13_client_driver_receive_application_data(
      * bounded-progress outcomes, so callers may retry. */
     return 1;
   }
-  if (receive_status_is_closed(result.client_receive_status)) {
-    /* A peer close_notify reaches ControlClosed.  Release the still-owned TCP
-     * transport rather than leaving the C wrapper marked connected. */
-    abort_connected_driver(driver);
-    return 1;
-  }
-  /* StepFailed (and any future unknown status) is non-retryable. */
-  abort_connected_driver(driver);
+  driver->connected = false;
   return 1;
 }
 
@@ -331,6 +386,7 @@ int tls13_client_driver_close(
     return 0;
   }
 
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_close(
           driver->verified_driver,
@@ -357,6 +413,7 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
   if (driver->connected) {
     abort_connected_driver(driver);
   }
+  atlas_trace_set_connection(driver->trace_connection);
   TLS13_Impl_Client_Driver_free(driver->verified_driver);
   free(driver);
 }

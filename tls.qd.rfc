@@ -40,6 +40,20 @@ enum {
     (0xFFFF)
 } ProtocolVersion;
 
+enum /*@open*/ {
+    /* [covered: 0x0304 selected; every other value must round-trip as
+       unsupported] The versions a ClientHello *offers* are a list the server
+       picks from, and RFC 8446 4.2.1 requires it to ignore the ones it does not
+       recognise.  Chrome and Edge rely on that: RFC 8701 (GREASE) has them send
+       a reserved 0x?A?A value as the first entry, so a closed enum here rejects
+       the whole ClientHello.  [ProtocolVersion] stays closed for the single
+       fixed-value fields (legacy_version, selected_version), where strictness
+       is correct. */
+    Offered_TLS_1p2(0x0303),
+    Offered_TLS_1p3(0x0304),
+    (0xFFFF)
+} OfferedVersion;
+
 enum {
     invalid(0),
     change_cipher_spec(20),
@@ -50,15 +64,23 @@ enum {
 } ContentType;
 
 enum /*@open*/ {
-    /* [covered: 0x1303 selected; others (e.g. the 0x00FF SCSV that OpenSSL
-       always includes) must round-trip as unsupported so a peer ClientHello
-       offering extra suites still parses] */
+    /* [covered: 0x1301 and 0x1303 are selectable; others (e.g. the 0x00FF SCSV
+       that OpenSSL always includes) must round-trip as unsupported so a peer
+       ClientHello offering extra suites still parses.
+
+       Both suites use SHA-256 for the key schedule and a 12-byte nonce /
+       16-byte tag for the record layer, so they differ only in the AEAD and
+       its key length (16 vs 32 bytes). */
+    TLS_AES_128_GCM_SHA256(0x1301),
     TLS_CHACHA20_POLY1305_SHA256(0x1303),
     (0xFFFF)
 } CipherSuite;
 
 enum /*@open*/ {
-    /* [covered: x25519 only; others round-trip as unsupported] */
+    /* [covered: x25519 and secp256r1; others round-trip as unsupported].
+       The ClientHello carries a key share for both, so a server that supports
+       only one of them can proceed without a HelloRetryRequest. */
+    secp256r1(0x0017),
     x25519(0x001D),
     (0xFFFF)
 } NamedGroup;
@@ -188,7 +210,7 @@ struct {
 /* extension_type == supported_versions(43), ClientHello side
    [covered: { 0x0304 }] */
 struct {
-    ProtocolVersion versions<2..254>;
+    OfferedVersion versions<2..254>;
 } SupportedVersionsClientHello;
 
 /* extension_type == supported_versions(43), ServerHello side */

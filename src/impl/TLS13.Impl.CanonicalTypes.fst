@@ -11,6 +11,7 @@ module CT = TLS13.Impl.Client.Types
 module EC = TLS13.Spec.Endpoint.Client
 module ET = TLS13.Impl.Endpoint.Types
 module ES = TLS13.Spec.Endpoint.Server
+module M = TLS13.Messages
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -87,11 +88,15 @@ let client_api_event_semantic
   | CT.LocalSendApplicationData ->
       EC.ClientSendApplicationData api.client_local_payload
   | CT.LocalSendKeyUpdate ->
-      EC.ClientSendKeyUpdate
+      EC.ClientSendKeyUpdate M.UpdateNotRequested
+  | CT.LocalSendKeyUpdateRequested ->
+      EC.ClientSendKeyUpdate M.UpdateRequested
   | CT.LocalSendCloseNotify ->
       EC.ClientSendCloseNotify
   | CT.LocalFail ->
       EC.ClientFail
+  | CT.LocalProcessPendingHandshake ->
+      EC.ClientProcessPendingHandshake
 
 noextract
 let client_local_event_semantic
@@ -135,8 +140,11 @@ let lemma_client_api_event_semantic_exact
   | CT.LocalSendClientFinished
   | CT.LocalSendApplicationData
   | CT.LocalSendKeyUpdate
+  | CT.LocalSendKeyUpdateRequested
   | CT.LocalSendCloseNotify
   | CT.LocalFail ->
+      ()
+  | CT.LocalProcessPendingHandshake ->
       ()
 
 noextract
@@ -244,6 +252,10 @@ let server_api_event_semantic
       ES.ServerSendApplicationData api.server_local_payload
   | ST.LocalSendCloseNotify ->
       ES.ServerSendCloseNotify
+  | ST.LocalSendKeyUpdate ->
+      ES.ServerSendKeyUpdate M.UpdateNotRequested
+  | ST.LocalSendKeyUpdateRequested ->
+      ES.ServerSendKeyUpdate M.UpdateRequested
   | ST.LocalFail ->
       ES.ServerFail
 
@@ -289,6 +301,8 @@ let lemma_server_api_event_semantic_exact
   | ST.LocalSendServerFinished
   | ST.LocalSendApplicationData
   | ST.LocalSendCloseNotify
+  | ST.LocalSendKeyUpdate
+  | ST.LocalSendKeyUpdateRequested
   | ST.LocalFail ->
       ()
 

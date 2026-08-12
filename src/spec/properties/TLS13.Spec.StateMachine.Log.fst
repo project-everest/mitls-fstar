@@ -29,6 +29,7 @@ let conn_event_sent_tls_delta (ev:conn_event) : list M.tls_message =
     (match msg.CL.message_direction with
      | CL.Sent -> [msg.CL.message_value]
      | CL.Received -> [])
+  | ConnProtectedHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
   match ev with
@@ -36,6 +37,12 @@ let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
     (match msg.CL.message_direction with
      | CL.Sent -> []
      | CL.Received -> [msg.CL.message_value])
+  | ConnProtectedHandshake step ->
+    (* A buffering step delivers no message, so it contributes nothing to the
+       received-message log; its message field is inert. *)
+    if step.protected_handshake_buffering
+    then []
+    else [M.TlsHandshake step.protected_handshake_message]
   | ConnLocalEvent _ -> []
 let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -43,6 +50,7 @@ let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Sent, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
+  | ConnProtectedHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_app_received_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -50,6 +58,7 @@ let conn_event_app_received_delta (ev:conn_event) : list B.bytes =
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Received, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
+  | ConnProtectedHandshake _ -> []
   | ConnLocalEvent local ->
     (match local with
      | LocalDeliverApplicationData bytes -> [bytes]
@@ -72,6 +81,17 @@ let state_event_of_conn_event (ev:conn_event) : GTot (option S.event) =
      | _, M.TlsAlert alert -> Some (S.Fail (T.AlertError alert))
      | _, M.TlsChangeCipherSpec -> None
      | _, _ -> None)
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_buffering
+    then None
+    else
+    (match step.protected_handshake_message with
+     | M.ServerHello sh -> Some (S.RecvServerHello sh)
+     | M.EncryptedExtensions ee -> Some (S.RecvEncryptedExtensions ee)
+     | M.Certificate cert -> Some (S.RecvCertificate cert)
+     | M.CertificateVerify cv -> Some (S.RecvCertificateVerify cv)
+     | M.Finished fin -> Some (S.RecvServerFinished fin)
+     | _ -> None)
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (S.ValidateCertificate peer)
@@ -128,7 +148,17 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
        W.serialize_handshake (M.CertificateVerify cv)
      | CL.Sent, M.TlsHandshake (M.Finished fin) ->
        W.serialize_handshake (M.Finished fin)
+     | CL.Received, M.TlsHandshake (M.Finished fin) ->
+      // Fix 1 (atomic delivery): receiving the peer Finished appends it to the
+      // transcript as part of the single delivery step.
+      W.serialize_handshake (M.Finished fin)
      | _, _ -> B.empty)
+  | ConnProtectedHandshake step ->
+    (* Buffering appends nothing to the transcript: the transcript records
+       delivered handshake messages, and a buffering step delivers none. *)
+    if step.protected_handshake_buffering
+    then B.empty
+    else W.serialize_handshake step.protected_handshake_message
   | ConnLocalEvent local ->
     (match local with
      | LocalVerifyFinished fin -> W.serialize_handshake (M.Finished fin)
@@ -170,6 +200,8 @@ let key_update_response_pending_step
      | CL.Received, M.TlsKeyUpdate M.UpdateRequested -> true
      | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested -> false
      | _, _ -> pending)
+  | ConnProtectedHandshake _ ->
+    pending
   | ConnLocalEvent _ ->
     pending
 let rec key_update_response_pending_after_events_from
@@ -284,11 +316,15 @@ let projected_record_layer_step_for_role
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Received, M.TlsHandshake (M.Certificate _)
      | CL.Received, M.TlsHandshake (M.CertificateVerify _)
-     | CL.Received, M.TlsHandshake (M.Finished _)
      | CL.Received, M.TlsApplicationData _
      | CL.Received, M.TlsIgnoredPostHandshake _
      | CL.Received, M.TlsAlert T.Close_notify ->
        { record with projected_read = projected_next_seq record.projected_read }
+     | CL.Received, M.TlsHandshake (M.Finished _) ->
+       // Fix 1 (atomic delivery): receiving the peer Finished installs the peer's
+       // application READ keys (record read epoch -> Application, seq reset to 0),
+       // mirroring the real record-layer transition in step_handshake_message.
+       { record with projected_read = projected_install_keys R.Application }
      | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
      | CL.Sent, M.TlsHandshake (M.Certificate _)
      | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
@@ -305,12 +341,30 @@ let projected_record_layer_step_for_role
                (S.application_data_record_count bytes) }
      | CL.Received, M.TlsKeyUpdate _ ->
        { record with projected_read = projected_install_keys R.Application }
-     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
+     | CL.Sent, M.TlsKeyUpdate _ ->
+       (* Both request forms rotate the sender's write key: a spontaneous
+          [update_requested] installs new Application write keys just as the
+          [update_not_requested] response does (RFC 8446 §4.6.3). *)
        { record with projected_write = projected_install_keys R.Application }
      | CL.Sent, M.TlsAlert T.Close_notify ->
        { record with projected_write = projected_next_seq record.projected_write }
      | _, _ ->
        record)
+  | ConnProtectedHandshake step ->
+    (* A buffering step carries no message -- its message field is inert -- so
+       the dispatch below must not be reached for one, or a buffering step
+       whose field happened to hold [Finished] would appear to install the
+       application read keys.  Buffering only bumps the read sequence. *)
+    if step.protected_handshake_buffering
+    then { record with projected_read = projected_next_seq record.projected_read }
+    else
+    (match step.protected_handshake_message with
+     | M.Finished _ ->
+      { record with projected_read = projected_install_keys R.Application }
+     | _ ->
+      if step.protected_handshake_head
+      then { record with projected_read = projected_next_seq record.projected_read }
+      else record)
 let projected_record_layer_step
   (record:projected_record_layer_state)
   (ev:conn_event)
@@ -493,6 +547,15 @@ let model_app_log_delta
 let connection_log_event_of_conn_event (ev:conn_event) : option CL.host_event =
   match ev with
   | ConnNetworkEvent msg -> Some (CL.NetworkEvent msg)
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_buffering
+    then None
+    else
+      Some
+        (CL.NetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = M.TlsHandshake step.protected_handshake_message;
+        })
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (CL.LocalEvent (CL.LocalValidateCertificate peer))

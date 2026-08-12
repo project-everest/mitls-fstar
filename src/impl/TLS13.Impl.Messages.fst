@@ -5,11 +5,13 @@ module TLS13.Impl.Messages
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module H = TLS13.Handshake.Spec
 module L = FStar.List.Tot
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module Sem = TLS13.Wire.Semantics
+module CryptoSpec = TLS13.Crypto.Spec
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
@@ -42,10 +44,10 @@ noextract
 let max_alpn_len : nat = 255
 
 noextract
-let max_cipher_suites : nat = 16
+let max_cipher_suites : nat = 64
 
 noextract
-let max_signature_schemes : nat = 16
+let max_signature_schemes : nat = 32
 
 noextract
 let max_certificate_chain_bytes : nat = 32768
@@ -56,6 +58,10 @@ inline_for_extraction let max_certificate_chain_bytes_sz : SZ.t = 32768sz
 
 noextract
 let max_certificate_chain_entries : nat = 8
+
+(* [SZ.t] companion (sz literal), for the same extraction reason as
+   [max_certificate_chain_bytes_sz]. *)
+inline_for_extraction let max_certificate_chain_entries_sz : SZ.t = 8sz
 
 noextract
 let max_signature_len : nat = 4096
@@ -68,6 +74,7 @@ let max_record_fragment_len : nat = 16640
 noeq
 type client_hello = {
   client_hello_random: V.vec U8.t;
+  client_hello_session_id: V.vec U8.t;
   client_hello_server_name: V.vec U8.t;
   client_hello_server_name_len: SZ.t;
   client_hello_has_server_name: bool;
@@ -81,7 +88,13 @@ type client_hello = {
 noeq
 type server_hello = {
   server_hello_random: V.vec U8.t;
+  server_hello_session_id: V.vec U8.t;
+  (* 65 bytes: the widest group ATLAS offers, with the share zero-padded.
+     [server_hello_kex_group] is the group the server named in its
+     `KeyShareEntry` and says which prefix is the logical share; it is never
+     recovered from the buffer's length. *)
   server_hello_key_share: V.vec U8.t;
+  server_hello_kex_group: CryptoSpec.kex_group;
   server_hello_cipher_suite: U16.t;
 }
 
@@ -219,6 +232,13 @@ type decoded_network_record_result =
   | NetworkRecordOk of decoded_network_record
 
 noeq
+type parsed_handshake_prefix = {
+  parsed_handshake_message: tls_message;
+  parsed_handshake_consumed: SZ.t;
+  parsed_handshake_fragment: V.vec U8.t;
+}
+
+noeq
 type decoded_network_buffer = {
   decoded_buffer_raw_record: V.vec U8.t;
   decoded_buffer_raw_record_len: SZ.t;
@@ -227,6 +247,7 @@ type decoded_network_buffer = {
   decoded_buffer_fragment: V.vec U8.t;
   decoded_buffer_fragment_len: SZ.t;
   decoded_buffer_parsed: option tls_message;
+  decoded_buffer_protected: bool;
 }
 
 noeq
@@ -322,7 +343,9 @@ noextract
 let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
   match suite with
   | T.TLS_CHACHA20_POLY1305_SHA256 -> U16.v wire == 0x1303
-  | T.Unknown_cipherSuite n -> U16.v wire == U16.v n /\ U16.v n <> 0x1303
+  | T.TLS_AES_128_GCM_SHA256 -> U16.v wire == 0x1301
+  | T.Unknown_cipherSuite n ->
+    U16.v wire == U16.v n /\ U16.v n <> 0x1303 /\ U16.v n <> 0x1301
 
 noextract
 let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =
@@ -424,14 +447,19 @@ let rec certificate_chain_matches
   else False
 
 let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slprop =
-  exists* random server_name key_share cipher_suites signature_schemes.
+  exists* random session_id server_name key_share cipher_suites signature_schemes.
     V.pts_to l.client_hello_random random **
+    V.pts_to l.client_hello_session_id session_id **
     V.pts_to l.client_hello_server_name server_name **
     V.pts_to l.client_hello_key_share key_share **
     V.pts_to l.client_hello_cipher_suites cipher_suites **
     V.pts_to l.client_hello_signature_schemes signature_schemes **
     pure (
       V.is_full_vec l.client_hello_random /\
+      V.is_full_vec l.client_hello_session_id /\
+      V.length l.client_hello_session_id == 32 /\
+      B.length session_id == 32 /\
+      Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
       V.is_full_vec l.client_hello_server_name /\
       V.is_full_vec l.client_hello_key_share /\
       V.is_full_vec l.client_hello_cipher_suites /\
@@ -471,24 +499,32 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
        | None -> False))
 
 let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slprop =
-  exists* random key_share.
+  exists* random session_id key_share.
     V.pts_to l.server_hello_random random **
+    V.pts_to l.server_hello_session_id session_id **
     V.pts_to l.server_hello_key_share key_share **
     pure (
       V.is_full_vec l.server_hello_random /\
+      V.is_full_vec l.server_hello_session_id /\
+      V.length l.server_hello_session_id == 32 /\
+      B.length session_id == 32 /\
+      Seq.equal session_id (Sem.serverHello_session_id_echo_32 m) /\
       V.is_full_vec l.server_hello_key_share /\
       V.length l.server_hello_random == 32 /\
-      V.length l.server_hello_key_share == 32 /\
+      V.length l.server_hello_key_share == 65 /\
       (match Sem.serverHello_random m with
        | Some r -> Seq.equal random r
        | None -> False) /\
-      (match Sem.serverHello_key_share_x25519 m with
-       | Some k -> B.length k == 32 /\ Seq.equal key_share k
+      (match Sem.serverHello_kex_share m with
+       | Some (g, k) ->
+         Seq.equal key_share (CryptoSpec.pad_share_65 k) /\
+         l.server_hello_kex_group == Sem.kex_group_of_named_group g /\
+         B.length k == CryptoSpec.kex_public_len l.server_hello_kex_group
        | None -> False) /\
       (match Sem.serverHello_cipher_suite m with
        | Some cs ->
          cipher_suite_matches l.server_hello_cipher_suite cs /\
-         cs == T.TLS_CHACHA20_POLY1305_SHA256
+         H.is_supported_cipher_suite cs
        | None -> False))
 
 let is_valid_encrypted_extensions
@@ -630,8 +666,9 @@ fn free_client_hello
   ensures emp
 {
   with m. unfold (is_valid_client_hello l m);
-  with random server_name key_share cipher_suites signature_schemes. _;
+  with random session_id server_name key_share cipher_suites signature_schemes. _;
   V.free l.client_hello_random;
+  V.free l.client_hello_session_id;
   V.free l.client_hello_server_name;
   V.free l.client_hello_key_share;
   V.free l.client_hello_cipher_suites;
@@ -644,8 +681,9 @@ fn free_server_hello
   ensures emp
 {
   with m. unfold (is_valid_server_hello l m);
-  with random key_share. _;
+  with random session_id key_share. _;
   V.free l.server_hello_random;
+  V.free l.server_hello_session_id;
   V.free l.server_hello_key_share;
 }
 

@@ -63,6 +63,15 @@ make verify-symbolic # verify TLS symbolic modules with Z3 4.13.3
 make verify          # verify all F*/Pulse and symbolic modules
 make extract-tls13-bundle  # extract the unified client/server driver bundle
 make test            # verify, check echo stubs, and run OpenSSL echo interop
+make test-chromium-client-demo  # async HTTPS/1.1 Chromium adapter demo
+make chromium-browser            # build Chromium with the verified provider
+make test-chromium-browser       # actual browser HTTPS smoke test
+make test-chromium-browser-public # network-dependent Google/Microsoft smoke
+make chromium-browser-logging    # build Chromium with ATLAS JSONL tracing
+make test-chromium-browser-logging # capture and analyze a browser trace
+make chromium-demo-bundle        # transferable Linux x86_64 browser/server demo
+make chromium-demo-bundle-logging # trace-capable transferable demo
+make test-chromium-demo-bundle   # test the freshly extracted demo archive
 ```
 
 The QuackyDucky pipeline can also be driven stage by stage with
@@ -70,6 +79,18 @@ The QuackyDucky pipeline can also be driven stage by stage with
 
 `make test-openssl-echo` runs the controlled local OpenSSL TLS 1.3 echo interop
 scenario. The main test sources live in `test/` and `test/unit/`.
+
+The verified browser path is documented in `runtime/chromium/README.md`. It
+includes the portable asynchronous adapter demo, a pinned Chromium overlay with
+a concrete `net::SSLClientSocket`, and a transferable Linux x86_64
+browser/server demo bundle; none gives the verified engine socket or browser
+trust-policy ownership.
+
+ATLAS tracing is compile-time controlled with `ATLAS_LOGGING=0` by default.
+Logging builds emit connection-correlated JSONL metadata from verified
+handshake, engine, and record-layer control flow. Analyze traces with
+`runtime/analyze_atlas_trace.py`; see `runtime/chromium/README.md` for the trace
+schema, safety boundary, and browser workflow.
 
 For the methodology reference:
 

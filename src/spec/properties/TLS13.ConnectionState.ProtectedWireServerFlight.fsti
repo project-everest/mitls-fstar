@@ -12,6 +12,100 @@ module WFL = TLS13.Spec.WireFormatLemmas
 
 open TLS13.ConnectionState.ProtectedWireBase
 
+val lemma_single_message_sender_after_server_write_client_read_install_normalizes_received_head
+  (server:CS.connection_model)
+  (client:CS.connection_model)
+  (server_material:CS.traffic_key_material)
+  (client_material:CS.traffic_key_material)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (client_head:CS.conn_event)
+  (server_rest:list CS.conn_event)
+  (client_rest:list CS.conn_event)
+  (server_raw_sent:B.bytes)
+  (server_raw_received:B.bytes)
+  (client_raw_sent:B.bytes)
+  (client_raw_received:B.bytes)
+  (server_final:CS.connection_model)
+  (client_final:CS.connection_model)
+  : Lemma
+      (requires
+        (match
+          server.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret,
+          client.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret
+        with
+        | Some server_secret, Some client_secret ->
+          Seq.equal server_secret client_secret
+        | _, _ ->
+          False) /\
+        Seq.equal
+          server.CS.model_handshake.CS.hs_transcript
+          client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
+        CS.protected_handshake_buffer_empty client /\
+        Seq.equal server_raw_sent client_raw_received /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        (match client_head with
+         | CS.ConnNetworkEvent directed ->
+           directed.CL.message_direction == CL.Received /\
+           directed.CL.message_value == M.TlsHandshake received_msg
+         | CS.ConnProtectedHandshake step ->
+           (* A BUFFERING step delivers no message and its
+              [protected_handshake_message] field is inert, so a caller
+              reasoning about the client step that DELIVERS [received_msg]
+              must say the step is not a buffering one.  Buffering steps are
+              skipped, not paired, by the flight inversion. *)
+           step.CS.protected_handshake_buffering == false /\
+           step.CS.protected_handshake_message == received_msg
+         | CS.ConnLocalEvent _ ->
+           False) /\
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
+          server
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeysForRole {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = server_material;
+              };
+            }) :: CS.ConnNetworkEvent {
+              CL.message_direction = CL.Sent;
+              CL.message_value = M.TlsHandshake sent_msg;
+            } :: server_rest)
+          server_raw_sent
+          server_raw_received
+          server_final /\
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+          client
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = client_material;
+            }) :: client_head :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
+      (ensures
+        TLS13.ConnectionState.ProtectedWireHead.received_handshake_head_normal_form
+          received_msg client_head /\
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+          client
+          (CS.ConnLocalEvent
+            (CS.LocalInstallTrafficKeys {
+              CS.install_epoch = CS.TrafficHandshake;
+              CS.install_direction = CS.TrafficRead;
+              CS.install_material = client_material;
+            }) :: CS.ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake received_msg;
+            } :: client_rest)
+          client_raw_sent
+          client_raw_received
+          client_final)
+
 val lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
   (server:CS.connection_model)
   (client:CS.connection_model)
@@ -40,6 +134,8 @@ val lemma_protected_handshake_event_projection_pair_after_server_write_client_re
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -387,6 +483,8 @@ val lemma_protected_handshake_event_projection_pair_after_sender_preserve_write_
         Seq.equal
           server_after_skip.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_after_skip.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         local_event_preserves_record_write sender_skip /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
@@ -632,6 +730,8 @@ val lemma_protected_handshake_event_projection_pair_after_server_write_client_re
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg /\
         protected_handshake_wire_round_trip_message received_msg /\
@@ -761,6 +861,8 @@ val lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         Seq.equal server_raw_sent client_raw_received /\
         protected_handshake_wire_round_trip_message sent_msg0 /\
         protected_handshake_wire_round_trip_message received_msg0 /\
@@ -928,6 +1030,8 @@ val lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         local_event_does_not_install_record_keys server_skip /\
         local_event_does_not_install_record_keys client_skip /\
         Seq.equal server_raw_sent client_raw_received /\
@@ -1137,6 +1241,8 @@ val lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         local_event_does_not_install_record_keys server_auth_skip /\
         local_event_does_not_install_record_keys client_auth_skip /\
         local_event_does_not_install_record_keys client_verify_skip /\

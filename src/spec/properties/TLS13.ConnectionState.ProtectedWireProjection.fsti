@@ -87,6 +87,53 @@ val lemma_protected_handshake_wire_equal_from_event_projections_peer
           (W.serialize_handshake sent_msg)
           (W.serialize_handshake received_msg))
 
+(* The sender sealed exactly ONE protected handshake message into this
+   record, so a head step describing the record consumes its whole fragment:
+   there is nothing left for a tail step.  This is what lets the receiver's
+   head step be normalised into the corresponding network event. *)
+val lemma_single_protected_message_seal_saturates_protected_head
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (step:CS.protected_handshake_step)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        sender.CS.model_record.CS.record_write.R.seq ==
+          receiver.CS.model_record.CS.record_read.R.seq /\
+        (match
+          TLS13.Spec.StateMachine.KeyMaterial.record_direction_material sender.CS.model_record.CS.record_write,
+          TLS13.Spec.StateMachine.KeyMaterial.record_direction_material receiver.CS.model_record.CS.record_read
+        with
+        | Some sender_write, Some receiver_read ->
+          TLS13.Spec.StateMachine.KeyMaterial.record_key_iv_material_agrees sender_write receiver_read
+        | _, _ ->
+          False) /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        TLS13.Spec.StateMachine.Canonical.sent_single_protected_message_seal
+          sender
+          (M.TlsHandshake sent_msg)
+          raw /\
+        step.CS.protected_handshake_head /\
+        (* A BUFFERING step delivers no message: it sets a record's plaintext
+           aside so that a handshake message spanning several records can be
+           reassembled.  Its [protected_handshake_offset] and
+           [protected_handshake_consumed] are pinned to 0 by legality and say
+           nothing about the record, so "the head step consumes the whole
+           fragment" is simply not a statement about it.  Callers that reach
+           this lemma are reasoning about a step that DELIVERS [sent_msg], and
+           must say so. *)
+        step.CS.protected_handshake_buffering == false /\
+        CS.legal_event receiver (CS.ConnProtectedHandshake step) /\
+        TLS13.Spec.StateMachine.Canonical.received_event_decode_projection
+          receiver
+          (CS.ConnProtectedHandshake step)
+          raw)
+      (ensures
+        step.CS.protected_handshake_offset == 0 /\
+        step.CS.protected_handshake_consumed ==
+          B.length step.CS.protected_handshake_fragment)
+
 val lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:CS.connection_model)
   (receiver:CS.connection_model)

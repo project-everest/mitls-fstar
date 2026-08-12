@@ -26,6 +26,176 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
+(* The ABI local-event path is always an *explicit* request to send a
+   KeyUpdate, either from the public API (spontaneous initiation) or from the
+   scheduler, which performs its own [app_key_update_response_pending] check
+   before emitting [LocalSendKeyUpdate].  So neither request form requires the
+   response obligation to be outstanding here: [can_send_key_update_gen] admits
+   both, and gating on the pending flag would make the spontaneous API call
+   unusable.  (Contrast [CM.can_send_key_update], the response-only form.) *)
+fn dispatch_send_key_update
+  (c:CR.connection_state)
+  (kind:CT.local_event_kind)
+  (req:M.key_update_request)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (#app_out_ghost:erased B.bytes)
+  (#payload_ghost:erased B.bytes)
+  requires CR.connection_exactly c 'st0 **
+           pts_to network_out 'old_network_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 ((kind == CT.LocalSendKeyUpdate /\
+                   req == M.UpdateNotRequested) \/
+                  (kind == CT.LocalSendKeyUpdateRequested /\
+                   req == M.UpdateRequested)))
+  returns resp: CT.client_response
+  ensures exists* st1 network_out_bytes.
+          CR.connection_exactly c st1 **
+          pts_to network_out network_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                CT.some_legal_response
+                  'st0
+                  st1
+                  resp
+                  network_out_bytes
+                  (Ghost.reveal app_out_ghost) /\
+                CT.legal_handled_local_response
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal payload_ghost)
+                  network_out_bytes
+                  (Ghost.reveal app_out_ghost) /\
+                CT.response_network_out_parse_success resp network_out_bytes /\
+                (resp.CT.status == CT.StepOk \/
+                 resp.CT.status == CT.IllegalTransition \/
+                 resp.CT.status == CT.ConnectionFailed))
+{
+
+    let ok =
+      CLS.try_send_key_update
+        c
+        network_out
+        network_out_len
+        req
+        false;
+    if ok {
+      with raw_sent network_out_bytes.
+        assert (pts_to network_out network_out_bytes);
+      assert (CR.connection_exactly
+        c
+        (CM.sent_key_update_state
+          'st0
+          req
+          raw_sent));
+      assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+      assert (pure (27 <= B.length network_out_bytes));
+      assert (pure (CM.can_send_key_update_gen
+        'st0
+        req
+        raw_sent));
+      assert (pure (Seq.equal
+        raw_sent
+        (Seq.slice network_out_bytes 0 27)));
+      let resp = {
+        CT.network_out_len = 27sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice network_out_bytes 0 27;
+      assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
+      Seq.lemma_len_slice (Ghost.reveal app_out_ghost) 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice (Ghost.reveal app_out_ghost) 0 0);
+      CM.lemma_sent_key_update_state_evolves 'st0 req raw_sent;
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (CM.sent_key_update_state
+          'st0
+          req
+          raw_sent)
+        resp
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsKeyUpdate req;
+        })
+        raw_sent
+        B.empty
+        network_out_bytes
+        (Ghost.reveal app_out_ghost)));
+      assert (pure (CT.legal_local_response
+        'st0
+        (CM.sent_key_update_state
+          'st0
+          req
+          raw_sent)
+        resp
+        kind
+        (Ghost.reveal payload_ghost)
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsKeyUpdate req;
+        })
+        raw_sent
+        B.empty
+        network_out_bytes
+        (Ghost.reveal app_out_ghost)));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (CM.sent_key_update_state
+          'st0
+          req
+          raw_sent)
+        resp
+        kind
+        (Ghost.reveal payload_ghost)
+        network_out_bytes
+        (Ghost.reveal app_out_ghost)));
+      assert (pure (CT.some_legal_response
+        'st0
+        (CM.sent_key_update_state
+          'st0
+          req
+          raw_sent)
+        resp
+        network_out_bytes
+        (Ghost.reveal app_out_ghost)));
+      resp
+    } else {
+      CF.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        (Ghost.reveal app_out_ghost)));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+        resp
+        kind
+        (Ghost.reveal payload_ghost)
+        'old_network_out
+        (Ghost.reveal app_out_ghost)));
+      assert (pure (CT.some_legal_response
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        (Ghost.reveal app_out_ghost)));
+      resp
+    }
+
+}
+
 fn handle_local_event
   (c:CR.connection_state)
   (kind:CT.local_event_kind)
@@ -1443,118 +1613,24 @@ fn handle_local_event
     }
   }
     LocalSendKeyUpdate -> {
-    let ok =
-      CLS.try_send_key_update
-        c
-        network_out
-        network_out_len;
-    if ok {
-      with raw_sent network_out_bytes.
-        assert (pts_to network_out network_out_bytes);
-      assert (CR.connection_exactly
-        c
-        (CM.sent_key_update_response_state
-          'st0
-          raw_sent));
-      assert (pure (B.length network_out_bytes == SZ.v network_out_len));
-      assert (pure (27 <= B.length network_out_bytes));
-      assert (pure (CM.can_send_key_update
-        'st0
-        raw_sent));
-      assert (pure (Seq.equal
-        raw_sent
-        (Seq.slice network_out_bytes 0 27)));
-      let resp = {
-        CT.network_out_len = 27sz;
-        CT.app_out_len = 0sz;
-        CT.status = CT.StepOk;
-      };
-      Seq.lemma_len_slice network_out_bytes 0 27;
-      assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
-      Seq.lemma_len_slice 'old_app_out 0 0;
-      Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-      CM.lemma_sent_key_update_response_state_evolves 'st0 raw_sent;
-      assert (pure (CT.legal_response_for_event
-        'st0
-        (CM.sent_key_update_response_state
-          'st0
-          raw_sent)
-        resp
-        (CS.ConnNetworkEvent {
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
-        })
-        raw_sent
-        B.empty
-        network_out_bytes
-        'old_app_out));
-      assert (pure (CT.legal_local_response
-        'st0
-        (CM.sent_key_update_response_state
-          'st0
-          raw_sent)
-        resp
-        CT.LocalSendKeyUpdate
-        (Ghost.reveal 'payload_bytes)
-        (CS.ConnNetworkEvent {
-          CL.message_direction = CL.Sent;
-          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
-        })
-        raw_sent
-        B.empty
-        network_out_bytes
-        'old_app_out));
-      assert (pure (CT.legal_handled_local_response
-        'st0
-        (CM.sent_key_update_response_state
-          'st0
-          raw_sent)
-        resp
-        CT.LocalSendKeyUpdate
-        (Ghost.reveal 'payload_bytes)
-        network_out_bytes
-        'old_app_out));
-      assert (pure (CT.some_legal_response
-        'st0
-        (CM.sent_key_update_response_state
-          'st0
-          raw_sent)
-        resp
-        network_out_bytes
-        'old_app_out));
-      resp
-    } else {
-      CF.mark_unexpected_message c;
-      let resp = {
-        CT.network_out_len = 0sz;
-        CT.app_out_len = 0sz;
-        CT.status = CT.IllegalTransition;
-      };
-      Seq.lemma_len_slice 'old_network_out 0 0;
-      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
-      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-      assert (pure (CT.unexpected_message_response
-        'st0
-        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
-        resp
-        'old_network_out
-        'old_app_out));
-      assert (pure (CT.legal_handled_local_response
-        'st0
-        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
-        resp
-        CT.LocalSendKeyUpdate
-        (Ghost.reveal 'payload_bytes)
-        'old_network_out
-        'old_app_out));
-      assert (pure (CT.some_legal_response
-        'st0
-        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
-        resp
-        'old_network_out
-        'old_app_out));
-      resp
-    }
+    dispatch_send_key_update
+      c
+      CT.LocalSendKeyUpdate
+      M.UpdateNotRequested
+      network_out
+      network_out_len
+      #'old_app_out
+      #'payload_bytes
+  }
+    LocalSendKeyUpdateRequested -> {
+    dispatch_send_key_update
+      c
+      CT.LocalSendKeyUpdateRequested
+      M.UpdateRequested
+      network_out
+      network_out_len
+      #'old_app_out
+      #'payload_bytes
   }
     LocalSendCloseNotify -> {
     let ok =

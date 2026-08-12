@@ -40,6 +40,7 @@ module SM = TLS13.Spec.StateMachine.ClientTrace
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module Tr = TLS13.Transcript
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -48,26 +49,35 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 
+(* The server_name extension is optional (RFC 6066), and absent whenever a client
+   connects to a bare IP literal, so this is stated for both cases: [present]
+   always reflects whether the message carried an SNI, and the stored length is
+   only meaningful when it did. *)
 let lemma_client_hello_sni_len_for
+  (present:bool)
   (storage:B.bytes)
   (len:SZ.t)
   (ch:GCH.clientHello)
   : Lemma
-      (requires IM.optional_byte_prefix_matches true storage len (Sem.clientHello_server_name ch) /\
+      (requires IM.optional_byte_prefix_matches present storage len (Sem.clientHello_server_name ch) /\
                 B.length storage < 65536)
-      (ensures CM.client_hello_server_name_len_for ch == len)
+      (ensures present == CM.client_hello_has_sni ch /\
+               (present ==> CM.client_hello_server_name_len_for ch == len))
 =
-  match Sem.clientHello_server_name ch with
-  | Some sn ->
-    assert (IM.byte_prefix_matches storage len sn);
-    assert (Seq.equal sn (Seq.slice storage 0 (SZ.v len)));
-    Seq.lemma_len_slice storage 0 (SZ.v len);
-    assert (B.length sn == SZ.v len);
-    assert (B.length sn < 65536);
-    CM.lemma_bounded_u16_sizet_of_sizet (B.length sn) len;
-    assert (CM.client_hello_server_name_len_for ch == len)
-  | None ->
-    assert False
+  if present then
+    match Sem.clientHello_server_name ch with
+    | Some sn ->
+      assert (IM.byte_prefix_matches storage len sn);
+      assert (Seq.equal sn (Seq.slice storage 0 (SZ.v len)));
+      Seq.lemma_len_slice storage 0 (SZ.v len);
+      assert (B.length sn == SZ.v len);
+      assert (B.length sn < 65536);
+      CM.lemma_bounded_u16_sizet_of_sizet (B.length sn) len;
+      assert (CM.client_hello_server_name_len_for ch == len)
+    | None ->
+      assert False
+  else
+    assert (Sem.clientHello_server_name ch == None)
 
 inline_for_extraction
 fn process_client_hello
@@ -101,9 +111,10 @@ fn process_client_hello
                Seq.equal
                  (Ghost.reveal 'fragment_bytes)
                  (W.serialize_handshake (M.ClientHello ch)) /\
-               lch.IM.client_hello_has_server_name == true /\
-               CM.client_hello_server_name_len_for ch ==
-                 lch.IM.client_hello_server_name_len /\
+               lch.IM.client_hello_has_server_name == CM.client_hello_has_sni ch /\
+               (lch.IM.client_hello_has_server_name ==>
+                  CM.client_hello_server_name_len_for ch ==
+                    lch.IM.client_hello_server_name_len) /\
                CM.client_hello_cipher_suites_len_for ch ==
                  lch.IM.client_hello_cipher_suites_len /\
                CM.client_hello_signature_schemes_len_for ch ==
@@ -616,6 +627,23 @@ fn process_application_data
   assert (pure (ST.server_end_to_end_invariant
     (CM.received_application_data_state 'st0 (Ghost.reveal app_payload) (Ghost.reveal 'raw_bytes))));
 
+  assert (pure (SZ.v resp.ST.network_out_len == B.length B.empty));
+  assert (pure (SZ.v resp.ST.app_out_len <= B.length app_out_bytes));
+  Seq.lemma_eq_elim B.empty (ST.response_network_out resp 'old_network_out);
+  assert (pure (Seq.equal
+    (ST.response_network_out resp 'old_network_out)
+    B.empty));
+  Seq.lemma_eq_elim
+    (Ghost.reveal app_payload)
+    (ST.response_app_out resp app_out_bytes);
+  CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+  Seq.lemma_eq_elim
+    (Ghost.reveal app_payload)
+    (CL.concat_bytes [Ghost.reveal app_payload]);
+  assert (pure (ST.response_app_out_matches_event
+    resp
+    (ST.received_message_event (M.TlsApplicationData (Ghost.reveal app_payload)))
+    app_out_bytes));
   assert (pure (ST.legal_response_for_event
     'st0
     (CM.received_application_data_state 'st0 (Ghost.reveal app_payload) (Ghost.reveal 'raw_bytes))
@@ -810,6 +838,186 @@ fn process_close_notify
     'old_app_out));
   resp
 }
+
+fn process_key_update
+  (s:server)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (requested:bool)
+  (#req:erased M.key_update_request)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 'st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+                 (requested ==> reveal req == M.UpdateRequested) /\
+                 (requested == false ==> reveal req == M.UpdateNotRequested) /\
+                 U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                 CT.received_tls_raw_delta_legal
+                   'st0
+                   (M.TlsKeyUpdate (reveal req))
+                   (Ghost.reveal 'raw_bytes) /\
+                 TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+                   'st0.CS.cs_model
+                   (ST.received_message_event
+                     (M.TlsKeyUpdate (reveal req)))
+                   (Ghost.reveal 'raw_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.server_received_key_update_state
+                    'st0
+                    (reveal req)
+                    (Ghost.reveal 'raw_bytes) /\
+                ST.server_network_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  (M.TlsKeyUpdate (reveal req))
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  unfold (connection_exactly s 'st0);
+  CN.mark_server_received_key_update
+    s
+    raw
+    requested
+    #req;
+  fold (connection_exactly
+    s
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes)));
+
+  let resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.StepOk;
+  };
+
+  CM.lemma_server_received_key_update_state_evolves
+    'st0
+    (reveal req)
+    (Ghost.reveal 'raw_bytes);
+  assert (pure (CS.legal_connection_delta
+    'st0
+    (ST.received_message_delta
+      (M.TlsKeyUpdate (reveal req))
+      (Ghost.reveal 'raw_bytes))
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes))));
+
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    (ST.received_message_delta
+      (M.TlsKeyUpdate (reveal req))
+      (Ghost.reveal 'raw_bytes))
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsKeyUpdate (reveal req))
+      (Ghost.reveal 'raw_bytes))
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsKeyUpdate (reveal req))
+      (Ghost.reveal 'raw_bytes))
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsKeyUpdate (reveal req))
+      (Ghost.reveal 'raw_bytes))
+    (CM.server_received_key_update_state
+      'st0
+      (reveal req)
+      (Ghost.reveal 'raw_bytes));
+
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+  assert (pure (Seq.equal B.empty (ST.response_network_out resp 'old_network_out)));
+  assert (pure (Seq.equal B.empty (ST.response_app_out resp 'old_app_out)));
+
+  assert (pure ((CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes))));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes))));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes))));
+
+  assert (pure (ST.legal_response_for_event
+    'st0
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes))
+    resp
+    (ST.received_message_event (M.TlsKeyUpdate (reveal req)))
+    B.empty
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.legal_network_response
+    'st0
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes))
+    resp
+    (M.TlsKeyUpdate (reveal req))
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.server_network_event_end_to_end_correct
+    'st0
+    (CM.server_received_key_update_state 'st0 (reveal req) (Ghost.reveal 'raw_bytes))
+    resp
+    (M.TlsKeyUpdate (reveal req))
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  resp
+}
+
 
 inline_for_extraction
 fn process_alert_failure
@@ -1304,14 +1512,26 @@ fn process_network_bytes
                    network_out_bytes
                   app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                 W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                  W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-                 Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
+                 Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+                 Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)) /\
+                (buffer_resp.ST.response.ST.status == ST.StepOk ==>
+                 0 < SZ.v buffer_resp.ST.consumed_len))
 {
+  Trace.emit Trace.server_network_begin
+    (SZ.sizet_to_uint64 raw_len)
+    0UL
+    0UL;
   unfold (connection_exactly s 'st0);
   let decoded = P.decode_network_buffer s raw raw_len;
   fold (connection_exactly s 'st0);
   match decoded {
     IM.NetworkBufferNeedMoreInput -> {
+      Trace.emit Trace.server_network_need_more
+        (SZ.sizet_to_uint64 raw_len)
+        0UL
+        0UL;
       let resp = {
         ST.network_out_len = 0sz;
         ST.app_out_len = 0sz;
@@ -1331,12 +1551,19 @@ fn process_network_bytes
       assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
         buffer_resp.ST.consumed_len == 0sz));
       assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+        W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
         W.parse_record_wire (Ghost.reveal 'raw_bytes) == None));
       assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
         Seq.equal (Ghost.reveal 'old_network_out) (Ghost.reveal 'old_network_out)));
+      assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+        Seq.equal (Ghost.reveal 'old_app_out) (Ghost.reveal 'old_app_out)));
       buffer_resp
     }
     IM.NetworkBufferDecodeError -> {
+      Trace.emit Trace.server_network_decode_error
+        (SZ.sizet_to_uint64 raw_len)
+        0UL
+        0UL;
       let resp =
         process_decode_error
           s
@@ -1384,6 +1611,13 @@ fn process_network_bytes
       buffer_resp
     }
     IM.NetworkBufferOk decoded_buffer -> {
+      Trace.emit Trace.server_network_record
+        (FStar.Int.Cast.uint8_to_uint64
+          decoded_buffer.IM.decoded_buffer_content_type)
+        (SZ.sizet_to_uint64
+          decoded_buffer.IM.decoded_buffer_raw_record_len)
+        (SZ.sizet_to_uint64
+          decoded_buffer.IM.decoded_buffer_fragment_len);
       with raw_record_bytes fragment_bytes.
         assert (V.pts_to decoded_buffer.IM.decoded_buffer_raw_record raw_record_bytes **
                 V.pts_to decoded_buffer.IM.decoded_buffer_fragment fragment_bytes);
@@ -1443,6 +1677,19 @@ fn process_network_bytes
         Some l -> {
           match l {
             IM.LTlsHandshake lhs -> {
+              Trace.emit Trace.server_handshake_message
+                (match lhs with
+                 | IM.LClientHello _ -> 1UL
+                 | IM.LServerHello _ -> 2UL
+                 | IM.LEncryptedExtensions _ -> 8UL
+                 | IM.LCertificate _ -> 11UL
+                 | IM.LCertificateVerify _ -> 15UL
+                 | IM.LFinished _ -> 20UL
+                 | IM.LHelloRetryRequest -> 254UL)
+                (FStar.Int.Cast.uint8_to_uint64
+                  decoded_buffer.IM.decoded_buffer_content_type)
+                (SZ.sizet_to_uint64
+                  decoded_buffer.IM.decoded_buffer_fragment_len);
               with m. assert (pure True);
               unfold (IM.is_valid_tls_message (IM.LTlsHandshake lhs) m);
               with mhs. _;
@@ -1467,7 +1714,7 @@ fn process_network_bytes
                 (M.TlsHandshake (M.ClientHello ch))
                 raw_record_bytes));
               unfold (IM.is_valid_client_hello lch ch);
-              with random server_name key_share cipher_suites signature_schemes. _;
+              with random session_id server_name key_share cipher_suites signature_schemes. _;
               CM.lemma_cipher_suites_match_length
                 cipher_suites
                 (SZ.v lch.IM.client_hello_cipher_suites_len)
@@ -1492,17 +1739,15 @@ fn process_network_bytes
                 lch.IM.client_hello_signature_schemes_len;
               assert (pure (CM.client_hello_signature_schemes_len_for ch ==
                 lch.IM.client_hello_signature_schemes_len));
-              let has_sni = lch.IM.client_hello_has_server_name;
-              if has_sni {
-                assert (pure (lch.IM.client_hello_has_server_name == true));
                 assert (pure (IM.optional_byte_prefix_matches
-                    true
+                    lch.IM.client_hello_has_server_name
                     server_name
                     lch.IM.client_hello_server_name_len
                     (Sem.clientHello_server_name ch)));
                 assert (pure (B.length server_name == IM.max_server_name_len));
                 assert (pure (B.length server_name < 65536));
                 lemma_client_hello_sni_len_for
+                    lch.IM.client_hello_has_server_name
                     server_name
                     lch.IM.client_hello_server_name_len
                     ch;
@@ -1686,33 +1931,6 @@ fn process_network_bytes
                     buffer_resp.ST.consumed_len == 0sz));
                   buffer_resp
                 }
-              } else {
-                fold (IM.is_valid_client_hello lch ch);
-                IM.free_client_hello lch;
-                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
-                V.free decoded_buffer.IM.decoded_buffer_fragment;
-                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
-                V.free decoded_buffer.IM.decoded_buffer_raw_record;
-                let resp = {
-                  ST.network_out_len = 0sz;
-                  ST.app_out_len = 0sz;
-                  ST.status = ST.IllegalTransition;
-                };
-                let buffer_resp = {
-                  ST.response = resp;
-                  ST.consumed_len = 0sz;
-                };
-                assert (pure (ST.server_network_bytes_end_to_end_correct
-                  'st0
-                  'st0
-                  buffer_resp
-                  (Ghost.reveal 'raw_bytes)
-                  'old_network_out
-                  'old_app_out));
-                assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-                  buffer_resp.ST.consumed_len == 0sz));
-                buffer_resp
-              }
             }
             IM.LServerHello lsh -> {
               IM.free_handshake_msg (IM.LServerHello lsh);
@@ -2754,30 +2972,183 @@ fn process_network_bytes
             buffer_resp
           }
           IM.LTlsKeyUpdate lreq -> {
-            IM.free_tls_message (IM.LTlsKeyUpdate lreq);
-            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
-            V.free decoded_buffer.IM.decoded_buffer_fragment;
-            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
-            V.free decoded_buffer.IM.decoded_buffer_raw_record;
-            let resp = {
-              ST.network_out_len = 0sz;
-              ST.app_out_len = 0sz;
-              ST.status = ST.IllegalTransition;
-            };
-            let buffer_resp = {
-              ST.response = resp;
-              ST.consumed_len = 0sz;
-            };
-            assert (pure (ST.server_network_bytes_end_to_end_correct
+            with m. assert (pure True);
+            unfold (IM.is_valid_tls_message (IM.LTlsKeyUpdate lreq) m);
+            with req. _;
+            assert (pure (m == M.TlsKeyUpdate req));
+            assert (pure (CT.parsed_message_wire_success_for
+              decoded_buffer.IM.decoded_buffer_content_type
+              fragment_bytes
+              (IM.LTlsKeyUpdate lreq)
+              (M.TlsKeyUpdate req)));
+            assert (pure (CT.wire_parse_success
+              decoded_buffer.IM.decoded_buffer_content_type
+              fragment_bytes
+              (M.TlsKeyUpdate req)));
+            assert (pure (CT.received_tls_raw_delta_legal
               'st0
+              (M.TlsKeyUpdate req)
+              raw_record_bytes));
+            CT.lemma_parsed_message_network_input_projection
               'st0
+              decoded_buffer.IM.decoded_buffer_content_type
+              fragment_bytes
+              (IM.LTlsKeyUpdate lreq)
+              (M.TlsKeyUpdate req)
+              raw_record_bytes;
+            assert (pure (CS.network_message_is_cleartext
+              CL.Received
+              (M.TlsKeyUpdate req) == false));
+            assert (pure (CT.protected_record_decodes_to_message
+              'st0
+              raw_record_bytes
+              (M.TlsKeyUpdate req)));
+            CT.lemma_protected_record_decodes_to_received_single_decode
+              'st0
+              raw_record_bytes
+              (M.TlsKeyUpdate req);
+            assert (pure (TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+              'st0.CS.cs_model
+              (ST.received_message_event
+                (M.TlsKeyUpdate req))
+              raw_record_bytes));
+            assert (pure (IM.key_update_request_matches lreq req));
+            let requested = lreq = 1uy;
+            if requested {
+              assert (pure (req == M.UpdateRequested));
+            } else {
+              assert (pure (requested == false));
+              assert (pure (req == M.UpdateNotRequested));
+            };
+            unfold (connection_exactly s 'st0);
+            let ready =
+              CQ.can_receive_endpoint_application_data
+                s
+                #'st0;
+            fold (connection_exactly s 'st0);
+            if ready {
+              assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+              assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+              (* On a server the read direction names the *client* traffic
+                 label, which is precisely the slot [process_key_update]
+                 rotates. *)
+              assert (pure (CS.application_traffic_available_for_role
+                CS.ServerEndpoint
+                'st0.CS.cs_model.CS.model_handshake
+                CL.Received));
+              assert (pure (Some?
+                'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+              assert (pure (U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+              let resp =
+                process_key_update
+                  s
+                  (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record)
+                  decoded_buffer.IM.decoded_buffer_raw_record_len
+                  requested
+                  #req
+                  network_out
+                  network_out_len
+                  app_out
+                  app_out_len;
+              let buffer_resp = {
+                ST.response = resp;
+                ST.consumed_len = decoded_buffer.IM.decoded_buffer_consumed_len;
+              };
+              with st1 network_out_bytes app_out_bytes.
+                assert (connection_exactly s st1 **
+                        pts_to (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record) raw_record_bytes **
+                        pts_to network_out network_out_bytes **
+                        pts_to app_out app_out_bytes);
+              assert (pure (SZ.v decoded_buffer.IM.decoded_buffer_consumed_len <=
+                B.length (Ghost.reveal 'raw_bytes)));
+              assert (pure (st1 ==
+                CM.server_received_key_update_state
+                  'st0
+                  req
+                  raw_record_bytes));
+              assert (pure (Seq.equal
+                raw_record_bytes
+                (Seq.slice
+                  (Ghost.reveal 'raw_bytes)
+                  0
+                  (SZ.v buffer_resp.ST.consumed_len))));
+              assert (pure (Seq.equal
+                raw_record_bytes
+                (ST.server_network_consumed_prefix
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes))));
+              assert (pure (ST.server_decoded_message_event_projection
+                'st0
+                st1
+                resp
+                (M.TlsKeyUpdate req)
+                raw_record_bytes
+                network_out_bytes
+                app_out_bytes));
+              ST.lemma_server_state_correct_record_read_key_schedule_projection
+                'st0;
+              assert (pure (ST.server_protected_record_decode_correct
+                'st0
+                raw_record_bytes
+                (M.TlsKeyUpdate req)));
+              assert (pure (ST.server_network_step_ok_received_decode_projection
+                'st0
+                st1
+                buffer_resp
+                (Ghost.reveal 'raw_bytes)
+                network_out_bytes
+                app_out_bytes));
+              assert (pure (ST.server_network_step_ok_consumed_prefix
+                'st0
+                st1
+                buffer_resp
+                (Ghost.reveal 'raw_bytes)));
+              assert (pure (ST.server_network_bytes_end_to_end_correct
+                'st0
+                st1
+                buffer_resp
+                (Ghost.reveal 'raw_bytes)
+                network_out_bytes
+                app_out_bytes));
+              assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                buffer_resp.ST.consumed_len == 0sz));
+              assert (pure (ST.server_network_consumed_input_projection
+                'st0
+                st1
+                buffer_resp
+                (Ghost.reveal 'raw_bytes)
+                network_out_bytes
+                app_out_bytes));
+              V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+              V.free decoded_buffer.IM.decoded_buffer_fragment;
+              V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+              V.free decoded_buffer.IM.decoded_buffer_raw_record;
               buffer_resp
-              (Ghost.reveal 'raw_bytes)
-              'old_network_out
-              'old_app_out));
-            assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-              buffer_resp.ST.consumed_len == 0sz));
-            buffer_resp
+            } else {
+              V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+              V.free decoded_buffer.IM.decoded_buffer_fragment;
+              V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+              V.free decoded_buffer.IM.decoded_buffer_raw_record;
+              let resp = {
+                ST.network_out_len = 0sz;
+                ST.app_out_len = 0sz;
+                ST.status = ST.IllegalTransition;
+              };
+              let buffer_resp = {
+                ST.response = resp;
+                ST.consumed_len = 0sz;
+              };
+              assert (pure (ST.server_network_bytes_end_to_end_correct
+                'st0
+                'st0
+                buffer_resp
+                (Ghost.reveal 'raw_bytes)
+                'old_network_out
+                'old_app_out));
+              assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                buffer_resp.ST.consumed_len == 0sz));
+              buffer_resp
+            }
           }
         }
       }

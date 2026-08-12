@@ -465,7 +465,10 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
           assert (C.x25519_public_from_private server_sk ==
             selection.CS.server_key_share_public);
           assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+          // The ServerHello correspondence above pins the cipher suite, hence
+          // the negotiated AEAD algorithm, on both sides.
+          assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
         | _, _ -> assert False)
      | _, _ ->
        assert False)
@@ -515,6 +518,18 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
          CS.server_hello_key_share client_sh
        with
        | Some ch_ks, Some sh_ks ->
+         (* ATLAS's own server role only ever selects X25519, and the paired
+            ServerHello correspondence carries that choice to the client, so the
+            client's group-agile projection collapses to its X25519 instance. *)
+         CS.lemma_server_hello_kex_of_share client_sh;
+         assert (CS.server_hello_kex client_sh ==
+           Some (| C.KexX25519, (sh_ks <: C.kex_public C.KexX25519) |));
+         assert (CS.start_kex_private start C.KexX25519 ==
+           start.CS.start_client_key_share_private);
+         assert (CS.start_kex_public start C.KexX25519 ==
+           start.CS.start_client_key_share_public);
+         assert (CS.client_hello_kex client_ch C.KexX25519 ==
+           CS.client_hello_key_share client_ch);
          assert (ch_ks == start.CS.start_client_key_share_public);
          assert (sh_ks == selection.CS.server_key_share_public);
          assert (C.x25519_public_from_private client_sk ==
@@ -522,14 +537,17 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
          assert (C.x25519_public_from_private server_sk ==
            selection.CS.server_key_share_public);
          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-         assert (C.x25519_shared server_sk ch_ks == Some server_shared)
+         assert (C.x25519_shared server_sk ch_ks == Some server_shared);
+         // The ServerHello correspondence above pins the cipher suite, hence
+         // the negotiated AEAD algorithm, on both sides.
+         assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
        | _, _ -> assert False)
      | _, _ ->
       assert False)
   | _, _, _, _, _, _, _, _ ->
     assert False
 
-#push-options "--z3refresh --split_queries always"
+#push-options "--split_queries always"
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -1890,33 +1908,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_an
       server_cv
       server_finished
       client_finished
-  returns
-    WFL.paired_cleartext_hello_wire_equivalent client server /\
-    WFL.paired_cleartext_hello_key_shares client server /\
-    WFL.paired_protected_handshake_wire_equivalent client server /\
-    paired_handshake_events client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
-    client_server_driver_supported_profile_derived_key_share_projection_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_derived_state_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_state_inputs client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   ( lemma_client_server_application_record_material_agrees_from_cleartext_raw_and_protected_event_projections
       client
       server
@@ -2018,33 +2010,7 @@ let lemma_client_server_application_record_material_agrees_from_cleartext_raw_ke
       server_cv
       server_finished
       client_finished
-  returns
-    WFL.paired_cleartext_hello_wire_equivalent client server /\
-    WFL.paired_cleartext_hello_key_shares client server /\
-    WFL.paired_protected_handshake_wire_equivalent client server /\
-    paired_handshake_events client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveHandshakeTraffic client server /\
-    TLS13.Spec.StateMachine.Correspondence.same_key_derivation_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.DeriveApplicationTraffic client server /\
-    client_server_driver_supported_profile_derived_key_share_projection_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_derived_state_inputs
-      client
-      server /\
-    client_server_driver_supported_profile_state_inputs client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_inputs_agree
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.supported_profile_client_server_key_material_agrees client server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ClientTraffic)
-      client
-      server /\
-    TLS13.Spec.StateMachine.KeyMaterial.peer_record_material_agrees
-      (TLS13.Spec.StateMachine.KeyIdentifiers.traffic_id CS.TrafficApplication CS.ServerTraffic)
-      client
-      server
-  with _.
+  with
   (
     PWP.lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
       client

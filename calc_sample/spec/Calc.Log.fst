@@ -340,6 +340,12 @@ let rec lemma_all_parse_append b1 b2 =
   end
 #pop-options
 
+(* The six `step_log_*_consistent` lemmas below are structurally identical and
+   had all been left at F*'s default rlimit of 5, which they only just fit under
+   Z3 4.13.3.  Give the whole family the same budget as the neighbouring lemmas
+   in this file (20) rather than leaving them on a knife edge. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 20"
+
 (** Lemma: step_log_push preserves consistency **)
 val lemma_step_log_push_consistent
   (value: int)
@@ -371,7 +377,10 @@ let lemma_step_log_push_consistent value req_bytes resp_bytes log =
   lemma_parse_requests_append_one log.input_bytes req_bytes req;
   assert (parse_requests new_log.input_bytes == new_log.requests);
   
-  // Length invariants (needed for all_parse refinement)
+  // Length invariants (needed for all_parse refinement).  State the append
+  // lengths explicitly rather than leaving them to the `% 5` obligations.
+  Seq.lemma_len_append log.input_bytes req_bytes;
+  Seq.lemma_len_append log.output_bytes resp_bytes;
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
   
@@ -446,7 +455,10 @@ let lemma_step_log_peek_consistent req_bytes resp_bytes log =
   lemma_parse_requests_single req_bytes req;
   lemma_parse_requests_append_one log.input_bytes req_bytes req;
   
-  // Length invariants (needed for all_parse refinement)
+  // Length invariants (needed for all_parse refinement).  State the append
+  // lengths explicitly rather than leaving them to the `% 5` obligations.
+  Seq.lemma_len_append log.input_bytes req_bytes;
+  Seq.lemma_len_append log.output_bytes resp_bytes;
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
   
@@ -489,7 +501,10 @@ let lemma_step_log_add_consistent req_bytes resp_bytes log =
   lemma_parse_requests_single req_bytes req;
   lemma_parse_requests_append_one log.input_bytes req_bytes req;
   
-  // Length invariants (needed for all_parse refinement)
+  // Length invariants (needed for all_parse refinement).  State the append
+  // lengths explicitly rather than leaving them to the `% 5` obligations.
+  Seq.lemma_len_append log.input_bytes req_bytes;
+  Seq.lemma_len_append log.output_bytes resp_bytes;
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
   
@@ -528,7 +543,10 @@ let lemma_step_log_sub_consistent req_bytes resp_bytes log =
   lemma_parse_requests_single req_bytes Sub;
   lemma_parse_requests_append_one log.input_bytes req_bytes Sub;
   
-  // Length invariants (needed for all_parse refinement)
+  // Length invariants (needed for all_parse refinement).  State the append
+  // lengths explicitly rather than leaving them to the `% 5` obligations.
+  Seq.lemma_len_append log.input_bytes req_bytes;
+  Seq.lemma_len_append log.output_bytes resp_bytes;
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
   
@@ -566,7 +584,10 @@ let lemma_step_log_mul_consistent req_bytes resp_bytes log =
   lemma_parse_requests_single req_bytes Mul;
   lemma_parse_requests_append_one log.input_bytes req_bytes Mul;
   
-  // Length invariants (needed for all_parse refinement)
+  // Length invariants (needed for all_parse refinement).  State the append
+  // lengths explicitly rather than leaving them to the `% 5` obligations.
+  Seq.lemma_len_append log.input_bytes req_bytes;
+  Seq.lemma_len_append log.output_bytes resp_bytes;
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
   
@@ -604,7 +625,10 @@ let lemma_step_log_div_consistent req_bytes resp_bytes log =
   lemma_parse_requests_single req_bytes Div;
   lemma_parse_requests_append_one log.input_bytes req_bytes Div;
   
-  // Length invariants (needed for all_parse refinement)
+  // Length invariants (needed for all_parse refinement).  State the append
+  // lengths explicitly rather than leaving them to the `% 5` obligations.
+  Seq.lemma_len_append log.input_bytes req_bytes;
+  Seq.lemma_len_append log.output_bytes resp_bytes;
   assert (Seq.length new_log.input_bytes % 5 == 0);
   assert (Seq.length new_log.output_bytes % 5 == 0);
   
@@ -622,3 +646,4 @@ val lemma_step_log_div_evolves
   : Lemma (log_single_step log (step_log_div req_bytes resp_bytes log))
 
 let lemma_step_log_div_evolves req_bytes resp_bytes log = ()
+#pop-options

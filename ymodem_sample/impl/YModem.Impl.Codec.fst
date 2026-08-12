@@ -226,9 +226,7 @@ let recv_block_parse_exists (i o': Seq.seq U8.t) (blk: U8.t)
   lemma_ymodem_parse_serialize_exact (Body_soh body0);
   eliminate exists (parsed:ymodem_message).
      (ymodem_parse (ymodem_serialize (Body_soh body0)) == Some (parsed, Seq.empty) /\ parsed == Body_soh body0)
-  returns (exists (body:ymodem_soh_body) (rest:Seq.seq U8.t).
-             ymodem_parse i == Some (Body_soh body, rest) /\ blk == body.blk /\ o' == body.data)
-  with _.
+  with
   ( introduce exists (body:ymodem_soh_body) (rest:Seq.seq U8.t).
        ymodem_parse i == Some (Body_soh body, rest) /\ blk == body.blk /\ o' == body.data
     with body0 Seq.empty

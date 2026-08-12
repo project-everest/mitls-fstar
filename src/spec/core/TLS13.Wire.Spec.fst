@@ -17,6 +17,7 @@ module GSS = TLS13.Wire.Generated.SignatureScheme
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GSH = TLS13.Wire.Generated.ServerHello
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
 module GCS = TLS13.Wire.Generated.CipherSuite
@@ -301,7 +302,7 @@ let rec ch_extensions
                else None
              | None -> None)
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl
        then ch_extensions tl server_name key_share true signature_schemes
        else None
      | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
@@ -380,9 +381,10 @@ let rec lemma_connect_sn
              | Some raw -> if B.length raw = 32 then lemma_connect_sn tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl then lemma_connect_sn tl sn ks true ss else ()
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_sn tl sn ks true ss else ()
      | _ -> lemma_connect_sn tl sn ks sv ss)
 
+#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
 let rec lemma_connect_ks
   (l:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
@@ -413,8 +415,10 @@ let rec lemma_connect_ks
              | Some raw -> if B.length raw = 32 then lemma_connect_ks tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl then lemma_connect_ks tl sn ks true ss else ()
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_ks tl sn ks true ss else ()
      | _ -> lemma_connect_ks tl sn ks sv ss)
+
+#pop-options
 
 let rec lemma_connect_sa
   (l:list GECH.extensionClientHello)
@@ -446,7 +450,7 @@ let rec lemma_connect_sa
              | Some raw -> if B.length raw = 32 then lemma_connect_sa tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
-       if List.Tot.mem GPV.TLS_1p3 svl then lemma_connect_sa tl sn ks true ss else ()
+       if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_sa tl sn ks true ss else ()
      | _ -> lemma_connect_sa tl sn ks sv ss)
 
 // The total byte size of a certificate chain (sum of the raw DER blob lengths),
@@ -490,15 +494,14 @@ let lemma_ch_extensions_connect (c:GCH.clientHello) =
   lemma_connect_ks (c.GCH.extensions <: list GECH.extensionClientHello) None None false [];
   lemma_connect_sa (c.GCH.extensions <: list GECH.extensionClientHello) None None false []
 
-// A (non-HRR) ServerHello is representable iff it selects an X25519 key share (32
-// bytes) and the CHACHA20_POLY1305_SHA256 cipher suite.  Matches
-// is_valid_server_hello (Sem.serverHello_random is always Some on this arm).
+// A (non-HRR) ServerHello is representable iff it selects a key share at one of
+// the groups ATLAS offers, at that group's exact length, and one of the
+// supported cipher suites.  Matches is_valid_server_hello
+// (Sem.serverHello_random is always Some on this arm).
 let serverHello_representable (b:GSH.serverHello) : GTot bool =
-  (match Sem.serverHello_key_share_x25519 b with
-   | Some k -> B.length k = 32
-   | None -> false) &&
+  Some? (Sem.serverHello_kex_share b) &&
   (match Sem.serverHello_cipher_suite b with
-   | Some cs -> cs = T.TLS_CHACHA20_POLY1305_SHA256
+   | Some cs -> H.is_supported_cipher_suite cs
    | None -> false)
 
 // EncryptedExtensions is representable iff its ALPN protocol name (if any) is <=
@@ -560,6 +563,12 @@ let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
 
 let parse_handshake_msg (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   parse_handshake input
+
+let lemma_parse_handshake_strong_prefix prefix input msg consumed =
+  match LP.parse GHS.handshake_parser prefix with
+  | Some (h, parsed) ->
+    LP.parse_strong_prefix GHS.handshake_parser prefix input
+  | None -> ()
 
 // Serialize a high handshake message by re-wrapping it into the generated
 // [handshake] record and applying the QuackyDucky serializer (the single source
@@ -632,6 +641,17 @@ let parse_record_wire (input:B.bytes) : GTot (option (T.content_type & M.sealed_
         let fragment_len = read_u16 input 3 in
         if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then None
         else Some (T.Handshake, Seq.slice input 5 (5 + fragment_len), 5 + fragment_len)
+
+let lemma_record_prefix_incomplete_bound
+  (input:B.bytes)
+  : Lemma
+      (requires record_prefix_incomplete input)
+      (ensures B.length input < 5 + 16640)
+=
+  if B.length input < 5 then ()
+  else
+    let fragment_len = read_u16 input 3 in
+    assert (fragment_len <= 16640)
 
 let lemma_parse_record_some_consumed_positive
   (input:B.bytes)
@@ -833,22 +853,22 @@ let lemma_parse_plaintext_serialize_plaintext (pt:M.plaintext)
        handshake codec. --- *)
 let parse_supported_server_hello_impl (input:B.bytes)
   : GTot (option supported_server_hello) =
-  if SHC.server_hello_ok_52 input then
-    match take_range input 6 32, take_range input 52 32 with
+  if SHC.server_hello_ok_84 input then
+    match take_range input 6 32, take_range input 84 32 with
     | Some random, Some key_share ->
       Some {
         random = random;
         key_share = key_share;
-        cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        cipher_suite = SHC.server_hello_selected_suite input;
       }
     | _, _ -> None
-  else if SHC.server_hello_ok_58 input then
-    match take_range input 6 32, take_range input 58 32 with
+  else if SHC.server_hello_ok_90 input then
+    match take_range input 6 32, take_range input 90 32 with
     | Some random, Some key_share ->
       Some {
         random = random;
         key_share = key_share;
-        cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        cipher_suite = SHC.server_hello_selected_suite input;
       }
     | _, _ -> None
   else None
@@ -869,27 +889,27 @@ let lemma_parse_supported_server_hello_fields (input:B.bytes)
       (ensures (
         match parse_supported_server_hello input with
         | Some sh ->
-          sh.cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+          sh.cipher_suite == SHC.server_hello_selected_suite input /\
           Seq.equal sh.random (Seq.slice input 6 38) /\
-          ((SHC.server_hello_ok_52 input /\
-            Seq.equal sh.key_share (Seq.slice input 52 84)) \/
-           (SHC.server_hello_ok_58 input /\
-            Seq.equal sh.key_share (Seq.slice input 58 90)))
+          ((SHC.server_hello_ok_84 input /\
+            Seq.equal sh.key_share (Seq.slice input 84 116)) \/
+           (SHC.server_hello_ok_90 input /\
+            Seq.equal sh.key_share (Seq.slice input 90 122)))
         | None -> False))
 =
-  if SHC.server_hello_ok_52 input then
+  if SHC.server_hello_ok_84 input then
     begin
       Seq.lemma_len_slice input 6 38;
       Seq.lemma_eq_intro (Seq.slice input 6 38) (Seq.slice input 6 38);
-      Seq.lemma_len_slice input 52 84;
-      Seq.lemma_eq_intro (Seq.slice input 52 84) (Seq.slice input 52 84)
+      Seq.lemma_len_slice input 84 116;
+      Seq.lemma_eq_intro (Seq.slice input 84 116) (Seq.slice input 84 116)
     end
   else
     begin
       Seq.lemma_len_slice input 6 38;
       Seq.lemma_eq_intro (Seq.slice input 6 38) (Seq.slice input 6 38);
-      Seq.lemma_len_slice input 58 90;
-      Seq.lemma_eq_intro (Seq.slice input 58 90) (Seq.slice input 58 90)
+      Seq.lemma_len_slice input 90 122;
+      Seq.lemma_eq_intro (Seq.slice input 90 122) (Seq.slice input 90 122)
     end
 
 let parse_sealed_record (input:B.bytes) : GTot (option M.sealed_record) =
@@ -928,6 +948,40 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
        else None
      | None -> None)
 
+let lemma_parse_tls_message_handshake_some fragment msg = ()
+
+let lemma_parse_tls_message_handshake_partial_none fragment msg consumed = ()
+
+#push-options "--z3rlimit 20"
+let lemma_parse_handshake_serialize_protected_consumes_all
+  sent_msg
+  parsed_msg
+  consumed
+=
+  match sent_msg with
+  | M.EncryptedExtensions ee ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_encrypted_extensions ee)
+  | M.Certificate cert ->
+    if GCert.certificate_bytesize cert <= 16777215
+    then
+      LP.parse_serialize
+        GHS.handshake_serializer
+        (GHS.Body_certificate (cert <: GHS.handshake_body_certificate))
+    else ()
+  | M.CertificateVerify cv ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_certificate_verify cv)
+  | M.Finished fin ->
+    LP.parse_serialize
+      GHS.handshake_serializer
+      (GHS.Body_finished fin)
+  | _ ->
+    assert False
+#pop-options
+
 let lemma_parse_tls_message_invalid_none fragment = ()
 
 let lemma_parse_handshake_none_of_lp_none fragment = ()
@@ -935,6 +989,39 @@ let lemma_parse_handshake_none_of_lp_none fragment = ()
 let lemma_parse_handshake_none_of_synth_none fragment v consumed = ()
 
 let lemma_ptm_handshake_fallback fragment = ()
+
+let parse_handshake_stream (input:B.bytes) : GTot (option (M.tls_message & nat)) =
+  match parse_handshake input with
+  | Some (msg, consumed) -> Some (M.TlsHandshake msg, consumed)
+  | None ->
+    match parse_key_update input with
+    | Some req -> Some (M.TlsKeyUpdate req, B.length input)
+    | None ->
+      match parse_ignored_post_handshake input with
+      | Some body -> Some (M.TlsIgnoredPostHandshake body, B.length input)
+      | None -> None
+
+let lemma_parse_handshake_stream_def input = ()
+
+let lemma_parse_handshake_stream_bounds input msg consumed =
+  match parse_handshake input with
+  | Some (m, c) ->
+    LP.parser_kind_prop_intro GHS.handshake_parser_kind GHS.handshake_parser;
+    LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
+    assert (LP.parses_at_least 5 GHS.handshake_parser)
+  | None ->
+    (match parse_key_update input with
+     | Some _ -> ()
+     | None -> lemma_parse_ignored_post_handshake_def input)
+
+let lemma_parse_handshake_stream_whole input = ()
+
+let lemma_parse_handshake_stream_strong_prefix prefix input msg consumed =
+  match parse_handshake prefix with
+  | Some (m, c) ->
+    lemma_parse_handshake_strong_prefix prefix input m c
+  | None -> ()
+
 
 let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) =
   match msg with
@@ -996,6 +1083,30 @@ let lemma_serialize_tls_message_key_update_not_requested ()
   Seq.lemma_eq_intro lhs rhs;
   Seq.lemma_eq_elim lhs rhs;
   assert (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) == (T.Handshake, lhs))
+
+let lemma_serialize_tls_message_key_update_requested ()
+  : Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateRequested) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 1uy]))
+=
+  let lhs = append3 (u8 24) (u24 1) (u8 1) in
+  let rhs = B.of_list [24uy; 0uy; 0uy; 1uy; 1uy] in
+  lemma_byte_v 24;
+  lemma_byte_v 0;
+  lemma_byte_v 1;
+  assert (B.length lhs == 5);
+  assert (B.length rhs == 5);
+  assert (forall (i:nat{i < B.length lhs}). Seq.index lhs i == Seq.index rhs i);
+  Seq.lemma_eq_intro lhs rhs;
+  Seq.lemma_eq_elim lhs rhs;
+  assert (serialize_tls_message (M.TlsKeyUpdate M.UpdateRequested) == (T.Handshake, lhs))
+
+let lemma_serialize_tls_message_key_update (req:M.key_update_request)
+  : Lemma (serialize_tls_message (M.TlsKeyUpdate req) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; key_update_request_byte req]))
+=
+  match req with
+  | M.UpdateNotRequested -> lemma_serialize_tls_message_key_update_not_requested ()
+  | M.UpdateRequested -> lemma_serialize_tls_message_key_update_requested ()
 
 let parse_tls_record (input:B.bytes) : GTot (option (M.tls_record & nat)) =
   match parse_record input with
@@ -1103,6 +1214,8 @@ let lemma_parse_tls_message_round_trip
         Seq.equal fragment (serialize_handshake (M.Certificate c))
       | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
         Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | Some (M.TlsHandshake (M.Finished fin)) ->
+        Seq.equal fragment (serialize_handshake (M.Finished fin))
       | _ -> True))
 =
   match content_type with
@@ -1137,6 +1250,17 @@ let lemma_parse_tls_message_round_trip
 
 
 (* --- synth_client_hello: accept/reject gate returning the wire record. --- *)
+
+let lemma_parse_handshake_serialize_round_trip fragment msg =
+  lemma_parse_tls_message_round_trip T.Handshake fragment;
+  match msg with
+  | M.EncryptedExtensions _
+  | M.Certificate _
+  | M.CertificateVerify _
+  | M.Finished _ ->
+    Seq.lemma_eq_elim fragment (serialize_handshake msg);
+    LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
+    assert (LP.parses_at_least 5 GHS.handshake_parser)
 
 let synth_client_hello (c:GCH.clientHello) : GTot (option GCH.clientHello) =
   if clientHello_representable c then Some c else None

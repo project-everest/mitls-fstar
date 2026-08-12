@@ -25,6 +25,7 @@ let lemma_step_handshake_message_client_certificate_verify_reachability
   : Lemma
       (requires
         client_certificate_verify_reachability_invariant model /\
+        legal_handshake_message model dir msg /\
         step_handshake_message model dir msg == Some model')
       (ensures client_certificate_verify_reachability_invariant model')
 =
@@ -39,11 +40,18 @@ let lemma_step_handshake_message_client_certificate_verify_reachability
   | CL.Sent, M.Finished _, ControlHandshaking HsServerEncryptedFlightSent
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived
   | CL.Received, M.Certificate _, ControlHandshaking HsEncryptedExtensionsReceived
-  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
     // model'.model_control is not among the CertificateVerify-downstream
     // control states, so the invariant holds vacuously.
     ()
+  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
+    // Fix 1 (atomic server delivery): the server delivering the client Finished
+    // now lands at ControlApplicationData (a CertificateVerify-downstream state).
+    // legal_handshake_message forces config_role == ServerEndpoint here, which
+    // contradicts the ClientEndpoint antecedent of the (client-local) invariant,
+    // so the implication holds vacuously.
+    assert (model.model_config.config_role == ServerEndpoint);
+    assert (model'.model_config == model.model_config)
   | CL.Received, M.CertificateVerify cv, ControlHandshaking HsCertificateValidated ->
     // The base case: a genuine network receipt of CertificateVerify records
     // the witness directly.
@@ -218,7 +226,7 @@ let lemma_connection_state_single_step_client_certificate_verify_reachability
     connection_state_single_step x y ==>
     client_certificate_verify_reachability_invariant y.cs_model
   with
-    introduce _ ==> _ with _.
+    introduce _ ==> _ with
     lemma_connection_delta_client_certificate_verify_reachability x y
 
 let lemma_connection_state_consistent_client_certificate_verify_reachability st =

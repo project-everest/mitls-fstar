@@ -62,6 +62,8 @@ type local_event_kind =
   | LocalSendServerFinished
   | LocalSendApplicationData
   | LocalSendCloseNotify
+  | LocalSendKeyUpdate
+  | LocalSendKeyUpdateRequested
   | LocalFail
 
 type local_payload_kind =
@@ -275,6 +277,22 @@ let next_local_action_sound
        // (TLS13.Impl.Server.Send.lemma_serialize_handshake_finished_len).
        B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
          Bounds.max_transcript_len)
+    | LocalSendKeyUpdate ->
+      // RFC 8446 4.6.3: on receiving a KeyUpdate with update_requested the
+      // peer MUST send its own KeyUpdate with update_not_requested.  This is
+      // the only *scheduled* KeyUpdate on the server: spontaneous initiation
+      // goes through the public driver API, not through next_local_action, so
+      // this arm is gated on the response obligation being outstanding.
+      // The conjuncts below are exactly those of
+      // server_local_event_input_ready st LocalSendKeyUpdate B.empty (plus the
+      // pending flag), so server_internal_ready_implies_kind_ready still holds
+      // definitionally.
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
     | _ ->
       False
   else
@@ -485,6 +503,18 @@ let server_local_event_input_ready
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
     B.length payload <= SM.max_application_data_fragment_len
   | LocalSendCloseNotify ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
+  | LocalSendKeyUpdate ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
+  | LocalSendKeyUpdateRequested ->
     Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -889,6 +919,12 @@ let local_event_kind_matches
   | LocalSendCloseNotify, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
     msg.CL.message_value == M.TlsAlert T.Close_notify
+  | LocalSendKeyUpdate, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
+  | LocalSendKeyUpdateRequested, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateRequested
   | LocalStartServer, CS.ConnLocalEvent CS.LocalStartServer ->
     True
   | LocalSelectServerParameters, CS.ConnLocalEvent (CS.LocalSelectServerParameters _) ->
@@ -950,6 +986,46 @@ let local_event_supported_profile
     False
   | _, _ ->
     True
+
+(* The two KeyUpdate ABI kinds are only ever paired with the matching request
+   form.  Bundling the three kind-indexed obligations here lets the shared
+   send path keep [kind] symbolic. *)
+let lemma_key_update_kind_facts
+  (kind:local_event_kind)
+  (req:M.key_update_request)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        ((kind == LocalSendKeyUpdate /\ req == M.UpdateNotRequested) \/
+         (kind == LocalSendKeyUpdateRequested /\ req == M.UpdateRequested)) /\
+        ev == CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value = M.TlsKeyUpdate req;
+              })
+      (ensures
+        local_event_kind_matches kind payload ev /\
+        local_payload_matches_app_sent_delta kind payload ev /\
+        local_event_supported_profile kind payload ev)
+=
+  ()
+
+let lemma_key_update_kind_input_ready
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+        (kind == LocalSendKeyUpdate \/ kind == LocalSendKeyUpdateRequested) /\
+        server_local_event_input_ready st kind payload)
+      (ensures
+        Seq.equal payload B.empty /\
+        st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+        st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+        Some?
+          st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+=
+  ()
 
 noextract
 let legal_response_for_event
@@ -1238,6 +1314,72 @@ let server_local_event_end_to_end_correct
         else True
       | CS.ConnLocalEvent _ -> True))
 
+(**
+  Introduce `server_local_event_end_to_end_correct` from an *explicit* witness
+  for its existential.
+
+  The definition's second disjunct is `exists ev raw_sent raw_received. ...`.
+  Callers (the Pulse send paths) have already established every conjunct for a
+  specific triple, but leaving Z3 to rediscover that triple by existential
+  instantiation is fragile: under Z3 4.15.3 it no longer succeeds inside the
+  ambient context of `TLS13.Impl.Server.Send`.  Supplying the witness here makes
+  the step deterministic and keeps the callers at the default rlimit.
+ **)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let lemma_server_local_event_end_to_end_correct_intro
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        server_end_to_end_invariant st0 /\
+        server_end_to_end_invariant st1 /\
+        legal_handled_local_response st0 st1 resp kind payload network_out app_out /\
+        legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out /\
+        TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
+          ev raw_sent raw_received /\
+        TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
+          st0.CS.cs_model ev raw_sent /\
+        (match ev with
+         | CS.ConnNetworkEvent msg ->
+            if msg.CL.message_direction = CL.Sent &&
+              CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value = false
+           then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
+                  CS.ServerEndpoint
+                  st0.CS.cs_model
+           else True
+         | CS.ConnLocalEvent _ -> True))
+      (ensures
+        server_local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
+= introduce
+    exists (ev':CS.conn_event) (raw_sent':B.bytes) (raw_received':B.bytes).
+      legal_local_response
+        st0 st1 resp kind payload ev' raw_sent' raw_received' network_out app_out /\
+      TLS13.Spec.StateMachine.Replay.event_protected_raw_segmented_success
+        ev' raw_sent' raw_received' /\
+      TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection
+        st0.CS.cs_model ev' raw_sent' /\
+      (match ev' with
+       | CS.ConnNetworkEvent msg ->
+          if msg.CL.message_direction = CL.Sent &&
+            CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value = false
+         then TLS13.Spec.StateMachine.KeyMaterial.record_write_key_schedule_projection_for_role
+                CS.ServerEndpoint
+                st0.CS.cs_model
+         else True
+       | CS.ConnLocalEvent _ -> True)
+  with ev raw_sent raw_received
+  and ()
+#pop-options
+
 let lemma_legal_local_response_select_payload_irrelevant
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1508,6 +1650,15 @@ let server_network_step_ok_consumed_prefix
       st1 ==
        CM.received_change_cipher_spec_state
          st0
+         raw_received /\
+      Seq.equal
+       raw_received
+       (server_network_consumed_prefix resp input)) \/
+    (exists req raw_received.
+      st1 ==
+       CM.server_received_key_update_state
+         st0
+         req
          raw_received /\
       Seq.equal
        raw_received

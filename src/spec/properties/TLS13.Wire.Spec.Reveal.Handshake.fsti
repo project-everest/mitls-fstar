@@ -38,6 +38,7 @@ module GESK = TLS13.Wire.Generated.ExtensionClientHello_extension_data_key_share
 module GESV = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_versions
 module GESG = TLS13.Wire.Generated.ExtensionClientHello_extension_data_supported_groups
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GOV = TLS13.Wire.Generated.OfferedVersion
 module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GPN = TLS13.Wire.Generated.ProtocolName
@@ -186,7 +187,7 @@ val lemma_reveal_ch_extensions_cons_sv
   (tl:list GECH.extensionClientHello)
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
-           (if FStar.List.Tot.mem GPV.TLS_1p3 svl
+           (if FStar.List.Tot.mem GOV.Offered_TLS_1p3 svl
             then reveal_ch_extensions tl sn ks true ss
             else None))
 
@@ -336,15 +337,40 @@ val lemma_list_drop_length (#a:Type) (l:list a)
 (* ServerHello key-share scan.                                                  *)
 (* ============================================================================ *)
 
+(* The share the server selected, normalised to the widest supported group.  A
+   scan result is a group tag together with the share zero-padded to 65 bytes,
+   so that the accumulator's type -- and the runtime buffer it mirrors -- does
+   not depend on which group the server picked.  The logical share is the
+   [Sem.named_group_share_len]-byte prefix, recovered through the tag and never
+   through the buffer's length. *)
+let sh_kex_share = (GNG.namedGroup & B.bytes_of_len 65)
+
+(* The share of a single [KeyShareEntry], accepted only at a group ATLAS
+   offers and only at that group's exact length. *)
+let reveal_key_exchange_to_share
+  (g:GNG.namedGroup)
+  (ke:GKSE.keyShareEntry_key_exchange)
+  : GTot (option sh_kex_share)
+  = match g with
+    | GNG.X25519 ->
+      if B.length (ke <: B.bytes) = 32
+      then Some (g, TLS13.Crypto.Spec.pad_share_65 (ke <: B.bytes))
+      else None
+    | GNG.Secp256r1 ->
+      if B.length (ke <: B.bytes) = 65
+      then Some (g, TLS13.Crypto.Spec.pad_share_65 (ke <: B.bytes))
+      else None
+    | _ -> None
+
 val reveal_sh_key_share
   (l:list GESH.extensionServerHello)
   (decided:bool)
-  (key_share:option (B.bytes_of_len 32))
-  : GTot (option (B.bytes_of_len 32))
+  (key_share:option sh_kex_share)
+  : GTot (option sh_kex_share)
 
 val lemma_sh_key_share_nil
   (decided:bool)
-  (key_share:option (B.bytes_of_len 32))
+  (key_share:option sh_kex_share)
   : Lemma (ensures reveal_sh_key_share [] decided key_share ==
                    (if decided then key_share else None))
 
@@ -352,29 +378,27 @@ val lemma_sh_key_share_cons
   (e:GESH.extensionServerHello)
   (tl:list GESH.extensionServerHello)
   (decided:bool)
-  (key_share:option (B.bytes_of_len 32))
+  (key_share:option sh_kex_share)
   : Lemma (ensures reveal_sh_key_share (e :: tl) decided key_share ==
       (if decided then key_share
        else (match e with
              | GESH.Extension_data_key_share kse ->
                reveal_sh_key_share tl true
-                 (if GNG.X25519? kse.GKSE.group
-                  then reveal_key_exchange_to_key32 kse.GKSE.key_exchange
-                  else None)
+                 (reveal_key_exchange_to_share kse.GKSE.group kse.GKSE.key_exchange)
              | _ -> reveal_sh_key_share tl false None)))
 
 (* Once [decided], the scan short-circuits to the committed [key_share]. *)
 val lemma_sh_key_share_decided
   (l:list GESH.extensionServerHello)
-  (key_share:option (B.bytes_of_len 32))
+  (key_share:option sh_kex_share)
   : Lemma (ensures reveal_sh_key_share l true key_share == key_share)
 
 (* Bridge: the first-wins [reveal_sh_key_share] agrees with the first-wins
-   [Sem.sh_find_key_share] (with a 32-byte length gate on the X25519 key). *)
+   [Sem.sh_find_kex_share], which applies the same per-group length gate. *)
 val lemma_reveal_sh_key_share_connect (l:list GESH.extensionServerHello)
   : Lemma (reveal_sh_key_share l false None ==
-           (match TLS13.Wire.Semantics.sh_find_key_share l with
-            | Some k -> if B.length k = 32 then Some (k <: B.bytes_of_len 32) else None
+           (match TLS13.Wire.Semantics.sh_find_kex_share l with
+            | Some (g, k) -> Some (g, TLS13.Crypto.Spec.pad_share_65 k)
             | None -> None))
 
 (* ============================================================================ *)

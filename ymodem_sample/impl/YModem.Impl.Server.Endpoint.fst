@@ -358,7 +358,8 @@ returns action:PE.endpoint_action
   CC.ymodem_server_local_frame
 ensures
   CC.ymodem_server_inv i (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st) **
-  ymodem_server_action_frame i cfg frame (Ghost.reveal st) action
+  ymodem_server_action_frame i cfg frame (Ghost.reveal st) action **
+  pure (PE.action_not_internal CC.ymodem_server_protocol_implementation action)
 {
   unfold (CC.ymodem_server_inv i (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   with svs. _;

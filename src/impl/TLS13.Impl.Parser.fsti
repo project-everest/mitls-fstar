@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
@@ -54,6 +55,113 @@ fn parse_tls_message
              pure (forall (ct:T.content_type).
                L.content_type_matches content_type ct ==>
                WS.parse_tls_message ct 'input_bytes == None))
+
+fn parse_handshake_prefix
+  (input: array U8.t)
+  (input_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                SZ.v input_len <= L.max_record_fragment_len)
+  returns r: option L.parsed_handshake_prefix
+  ensures pts_to input 'input_bytes **
+          (match r with
+           | None -> emp
+           | Some parsed ->
+            exists* msg prefix_bytes.
+              V.pts_to parsed.L.parsed_handshake_fragment prefix_bytes **
+              L.is_valid_tls_message
+                parsed.L.parsed_handshake_message
+                (M.TlsHandshake msg) **
+              pure (CT.parsed_message_wire_success_for
+                0x16uy
+                prefix_bytes
+                parsed.L.parsed_handshake_message
+                (M.TlsHandshake msg)) **
+              pure (
+                V.is_full_vec parsed.L.parsed_handshake_fragment /\
+                V.length parsed.L.parsed_handshake_fragment ==
+                  SZ.v parsed.L.parsed_handshake_consumed /\
+                B.length prefix_bytes ==
+                  SZ.v parsed.L.parsed_handshake_consumed /\
+                0 < SZ.v parsed.L.parsed_handshake_consumed /\
+                SZ.v parsed.L.parsed_handshake_consumed <=
+                  B.length (Ghost.reveal 'input_bytes) /\
+                Seq.equal
+                  prefix_bytes
+                  (Seq.slice
+                    (Ghost.reveal 'input_bytes)
+                    0
+                    (SZ.v parsed.L.parsed_handshake_consumed)) /\
+                WS.parse_handshake (Ghost.reveal 'input_bytes) ==
+                  Some
+                    (msg,
+                     SZ.v parsed.L.parsed_handshake_consumed)))
+
+(**
+  A one-sided completeness check: it only ever reports [true] when the
+  LowParse validator for [handshake] rejects [input] outright, which is
+  exactly the case where no prefix of [input] can ever be completed into a
+  handshake message by appending more bytes. Reports [false] whenever the
+  validator accepts (including when a full [parse_handshake_prefix] would
+  still fail downstream, e.g. on an unrepresentable message) so callers must
+  treat [false] as "cannot tell".
+**)
+fn handshake_prefix_absent
+  (input: array U8.t)
+  (input_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len)
+  returns absent: bool
+  ensures pts_to input 'input_bytes **
+          pure (absent ==> WS.parse_handshake (Ghost.reveal 'input_bytes) == None)
+
+fn parse_handshake_prefix_at
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (offset: SZ.t)
+  requires pts_to input 'input_bytes **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 SZ.v offset < SZ.v input_len /\
+                 SZ.v input_len <= Bounds.max_handshake_flight_len)
+  returns r: option L.parsed_handshake_prefix
+  ensures pts_to input 'input_bytes **
+          (match r with
+           | None -> emp
+           | Some parsed ->
+             exists* msg prefix_bytes.
+               V.pts_to parsed.L.parsed_handshake_fragment prefix_bytes **
+               L.is_valid_tls_message
+                 parsed.L.parsed_handshake_message
+                 (M.TlsHandshake msg) **
+               pure (CT.parsed_message_wire_success_for
+                 0x16uy
+                 prefix_bytes
+                 parsed.L.parsed_handshake_message
+                 (M.TlsHandshake msg)) **
+               pure (
+                 V.is_full_vec parsed.L.parsed_handshake_fragment /\
+                 V.length parsed.L.parsed_handshake_fragment ==
+                   SZ.v parsed.L.parsed_handshake_consumed /\
+                 B.length prefix_bytes ==
+                   SZ.v parsed.L.parsed_handshake_consumed /\
+                 0 < SZ.v parsed.L.parsed_handshake_consumed /\
+                 SZ.v offset + SZ.v parsed.L.parsed_handshake_consumed <=
+                   B.length (Ghost.reveal 'input_bytes) /\
+                 Seq.equal
+                   prefix_bytes
+                   (Seq.slice
+                     (Ghost.reveal 'input_bytes)
+                     (SZ.v offset)
+                     (SZ.v offset +
+                       SZ.v parsed.L.parsed_handshake_consumed)) /\
+                 WS.parse_handshake
+                   (Seq.slice
+                     (Ghost.reveal 'input_bytes)
+                     (SZ.v offset)
+                     (B.length (Ghost.reveal 'input_bytes))) ==
+                   Some
+                     (msg,
+                      SZ.v parsed.L.parsed_handshake_consumed)))
 (**
   Extraction-facing record decoder used by the public client driver API.
   On success it returns an owned exact-length fragment vector plus the same
@@ -76,7 +184,9 @@ fn decode_network_record
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkRecordNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkRecordDecodeError -> emp
            | L.NetworkRecordOk decoded ->
             exists* fragment_bytes.
@@ -144,7 +254,9 @@ fn decode_network_buffer
           pts_to raw 'raw_bytes **
           (match r with
            | L.NetworkBufferNeedMoreInput ->
-             pure (WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
+             pure (
+               WS.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
+               WS.parse_record_wire (Ghost.reveal 'raw_bytes) == None)
            | L.NetworkBufferDecodeError -> emp
            | L.NetworkBufferOk decoded ->
             exists* raw_record_bytes fragment_bytes.
@@ -183,6 +295,7 @@ fn decode_network_buffer
                   SZ.v decoded.L.decoded_buffer_raw_record_len /\
                 decoded.L.decoded_buffer_raw_record_len ==
                   decoded.L.decoded_buffer_consumed_len /\
+                0 < SZ.v decoded.L.decoded_buffer_consumed_len /\
                 SZ.v decoded.L.decoded_buffer_consumed_len <=
                   B.length (Ghost.reveal 'raw_bytes) /\
                 Seq.equal
@@ -199,8 +312,22 @@ fn decode_network_buffer
                   SZ.v decoded.L.decoded_buffer_fragment_len /\
                 B.length fragment_bytes ==
                   SZ.v decoded.L.decoded_buffer_fragment_len /\
+                SZ.v decoded.L.decoded_buffer_fragment_len <=
+                  L.max_record_fragment_len /\
                 CT.network_input_wf
                   'st0
                   decoded.L.decoded_buffer_content_type
                   fragment_bytes
-                  raw_record_bytes))
+                  raw_record_bytes /\
+                (decoded.L.decoded_buffer_protected ==>
+                  CT.protected_decoder_fragment_relation
+                    'st0
+                    decoded.L.decoded_buffer_content_type
+                    fragment_bytes
+                    raw_record_bytes /\
+                  (exists outer_fragment.
+                    WS.parse_record raw_record_bytes ==
+                      Some
+                        (T.Application_data,
+                         outer_fragment,
+                         B.length raw_record_bytes)))))

@@ -13,14 +13,31 @@ module CN = TLS13.Impl.ConnectionState.Network
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CM = TLS13.Impl.ConnectionState.Model
 module CT = TLS13.Impl.Client.Types
+module Cast = FStar.Int.Cast
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 module Sem = TLS13.Wire.Semantics
+module H = TLS13.Handshake.Spec
+
+inline_for_extraction
+let tls_handshake_message_tag (l:L.tls_message) : FStar.UInt64.t =
+  match l with
+  | L.LTlsHandshake lhs ->
+    (match lhs with
+     | L.LClientHello _ -> 1UL
+     | L.LServerHello _ -> 2UL
+     | L.LEncryptedExtensions _ -> 8UL
+     | L.LCertificate _ -> 11UL
+     | L.LCertificateVerify _ -> 15UL
+     | L.LFinished _ -> 20UL
+     | L.LHelloRetryRequest -> 254UL)
+  | _ -> 0UL
 
 fn handle_unexpected_handshake_input
   (c:CR.connection_state)
@@ -190,6 +207,11 @@ fn handle_handshake_message
                     'old_app_out) /\
                 (resp.CT.status == CT.OutputBufferTooSmall ==> False))
 {
+  Trace.emit
+    Trace.client_handshake_message
+    (tls_handshake_message_tag l)
+    (Cast.uint8_to_uint64 content_type)
+    (SZ.sizet_to_uint64 fragment_len);
   match l {
     L.LTlsHandshake lhs -> {
       match lhs {
@@ -295,7 +317,9 @@ fn handle_handshake_message
           assert (pure (mhs == M.ServerHello sh));
           assert (pure (m == M.TlsHandshake (M.ServerHello sh)));
           unfold (L.is_valid_server_hello lsh sh);
-          with sh_random sh_key_share. assert (pure (Sem.serverHello_cipher_suite sh == Some T.TLS_CHACHA20_POLY1305_SHA256));
+          with sh_random sh_key_share. assert (pure (exists (cs:T.cipher_suite).
+            Sem.serverHello_cipher_suite sh == Some cs /\
+            H.is_supported_cipher_suite cs));
           fold (L.is_valid_server_hello lsh sh);
           assert (pure (CT.parsed_message_wire_success_for
             content_type

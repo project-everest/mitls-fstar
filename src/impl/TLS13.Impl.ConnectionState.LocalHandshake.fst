@@ -9,11 +9,14 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
+module AC = TLS13.Impl.ArrayCopy
 module Crypto = TLS13.Crypto
+module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.StateMachine
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
+module KEX = TLS13.KEX
 module KS = TLS13.KeySchedule
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -136,10 +139,16 @@ fn try_start_handshake
     with private_key_bytes. assert (ArrPts.pts_to private_key private_key_bytes);
     assert (pure (B.length private_key_bytes == 32));
 
-    let entropy_ok = random_ok && private_ok;
+    let mut p256_private_key = [| 0uy; 32sz |];
+    let p256_private_ok = Crypto.random_bytes p256_private_key 32sz;
+    with p256_private_key_bytes. assert (ArrPts.pts_to p256_private_key p256_private_key_bytes);
+    assert (pure (B.length p256_private_key_bytes == 32));
+
+    let entropy_ok = random_ok && private_ok && p256_private_ok;
     if entropy_ok {
     assert (pure random_ok);
     assert (pure private_ok);
+    assert (pure p256_private_ok);
 
     let mut public_key = [| 0uy; 32sz |];
     Crypto.x25519_public_from_private private_key public_key;
@@ -148,12 +157,21 @@ fn try_start_handshake
       TLS13.Crypto.Spec.x25519_public_from_private private_key_bytes));
     assert (pure (B.length public_key_bytes == 32));
 
+    let mut p256_public_key = [| 0uy; 65sz |];
+    Crypto.p256_public_from_private p256_private_key p256_public_key;
+    with p256_public_key_bytes. assert (ArrPts.pts_to p256_public_key p256_public_key_bytes);
+    assert (pure (p256_public_key_bytes ==
+      TLS13.Crypto.Spec.p256_public_from_private p256_private_key_bytes));
+    assert (pure (B.length p256_public_key_bytes == 65));
+
     let start = Ghost.hide ({
       CS.start_server_name =
         st0.CS.cs_model.CS.model_config.CS.config_server_name;
       CS.start_client_random = client_random_bytes;
       CS.start_client_key_share_private = Some private_key_bytes;
       CS.start_client_key_share_public = public_key_bytes;
+      CS.start_client_p256_private = Some p256_private_key_bytes;
+      CS.start_client_p256_public = p256_public_key_bytes;
       CS.start_cipher_suites =
         st0.CS.cs_model.CS.model_config.CS.config_cipher_suites;
       CS.start_signature_schemes =
@@ -205,6 +223,35 @@ fn try_start_handshake
       c.handshake.start.client_key_share_public
       32
       public_key_bytes);
+    unfold (optional_fixed_bytes_exactly
+      c.handshake.start.client_p256_private
+      32
+      None);
+    with old_p256_present old_p256_storage. _;
+    copy_fixed32_array_to_vec
+      p256_private_key
+      c.handshake.start.client_p256_private.bytes;
+    c.handshake.start.client_p256_private.present := true;
+    with stored_p256_private. assert (V.pts_to c.handshake.start.client_p256_private.bytes stored_p256_private);
+    assert (pure (stored_p256_private == p256_private_key_bytes));
+    assert (pure (optional_fixed_bytes_match
+      true
+      stored_p256_private
+      32
+      (Ghost.reveal start).CS.start_client_p256_private));
+    fold (optional_fixed_bytes_exactly
+      c.handshake.start.client_p256_private
+      32
+      (Ghost.reveal start).CS.start_client_p256_private);
+    unfold (fixed_bytes_allocated c.handshake.start.client_p256_public 65);
+    with old_start_p256_public. assert (V.pts_to c.handshake.start.client_p256_public old_start_p256_public);
+    copy_fixed65_array_to_vec
+      p256_public_key
+      c.handshake.start.client_p256_public;
+    fold (fixed_bytes_exactly
+      c.handshake.start.client_p256_public
+      65
+      p256_public_key_bytes);
     copy_cipher_suite_list_storage
       c.config.cipher_suites
       c.handshake.start.cipher_suites
@@ -838,11 +885,10 @@ fn mark_sent_server_hello
     c.handshake.server_key_share
     st0.CS.cs_model.CS.model_handshake);
   unfold (optional_fixed_bytes_exactly
-    c.handshake.server_key_share
-    32
-    (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None));
+    ({ present = c.handshake.server_key_share.present;
+       bytes = c.handshake.server_key_share.bytes })
+    65
+    (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
   with old_server_key_share_present old_server_key_share_storage. _;
 
   c.control.handshake_stage_tag := 14uy;
@@ -871,27 +917,33 @@ fn mark_sent_server_hello
   c.handshake.messages.server_hello := Some lsh;
 
   unfold (IM.is_valid_server_hello lsh sh);
-  with lsh_random lsh_key_share. _;
+  with lsh_random lsh_session_id lsh_key_share. _;
   V.to_array_pts_to lsh.IM.server_hello_key_share;
   V.to_array_pts_to c.handshake.server_key_share.bytes;
   Arr.memcpy
-    32sz
+    65sz
     (V.vec_to_array lsh.IM.server_hello_key_share)
     (V.vec_to_array c.handshake.server_key_share.bytes);
   V.to_vec_pts_to lsh.IM.server_hello_key_share;
   V.to_vec_pts_to c.handshake.server_key_share.bytes;
   c.handshake.server_key_share.present := true;
+  (* The group the server named travels with the bytes; it is stored, never
+     recovered from the buffer's width. *)
+  c.handshake.server_key_share.group := lsh.IM.server_hello_kex_group;
   with copied_server_key_share. assert (V.pts_to c.handshake.server_key_share.bytes copied_server_key_share);
-  assert (pure (Some? (CS.server_hello_key_share (Ghost.reveal sh)) /\
-    Seq.equal copied_server_key_share (Some?.v (CS.server_hello_key_share (Ghost.reveal sh)))));
-  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (CS.server_hello_key_share (Ghost.reveal sh))));
+  assert (pure (Some? (CS.server_hello_kex (Ghost.reveal sh)) /\
+    Seq.equal copied_server_key_share
+      (CryptoSpec.pad_share_65 (dsnd (Some?.v (CS.server_hello_kex (Ghost.reveal sh)))))));
+  assert (pure (optional_fixed_bytes_match true copied_server_key_share 65
+    (match CS.server_hello_kex (Ghost.reveal sh) with
+     | Some (| _, k |) -> Some (CryptoSpec.pad_share_65 k)
+     | None -> None)));
   lemma_sent_server_hello_state_server_hello st0 sh (Ghost.reveal 'raw_bytes);
   fold (optional_fixed_bytes_exactly
-    c.handshake.server_key_share
-    32
-    (match (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None));
+    ({ present = c.handshake.server_key_share.present;
+       bytes = c.handshake.server_key_share.bytes })
+    65
+    (server_kex_bytes (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake));
   fold (server_key_share_exactly
     c.handshake.server_key_share
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
@@ -1004,6 +1056,7 @@ fn mark_sent_server_hello
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)))
 }
 
+#restart-solver
 fn mark_sent_encrypted_extensions
   (c:connection_state)
   (raw:array U8.t)
@@ -1955,6 +2008,7 @@ fn mark_sent_certificate_verify
     (sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)))
 }
 
+#restart-solver
 fn serialize_stored_certificate_verify_fragment
   (c:connection_state)
   (#cv:erased GCV.certificateVerify)
@@ -2314,6 +2368,8 @@ let lemma_client_hello_of_start_eq_poc
           start.CS.start_client_random
           start.CS.start_server_name
           start.CS.start_client_key_share_public
+          start.CS.start_client_p256_public
+          start.CS.start_client_random
           cs sa)
   = ()
 #pop-options
@@ -2323,8 +2379,9 @@ let lemma_client_hello_of_start_eq_poc
    start's server_name / cipher_suites / signature_schemes are non-empty -- but the
    generated wire ClientHello refinements (and client_hello_matches_start) require
    it.  This helper reads the three runtime start lengths and reports whether they
-   are all >= 1.  The runtime predicates already pin each length <= its cap
-   (255/16/16), so `ok` establishes the full Model.valid_start.  It preserves
+   are all >= 1, and that the two list lengths are <= 16 (the storage caps are now
+   larger than that, to fit a browser's offered lists), so `ok` establishes the
+   full Model.valid_start.  It preserves
    connection_exactly c st0 (symmetric unfold/refold). *)
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 60"
 fn client_hello_start_nonempty_runtime
@@ -2394,7 +2451,15 @@ fn client_hello_start_nonempty_runtime
     lemma_sizet_lte_plain 1sz csl;
     let sa_ok = sizet_lte_plain 1sz sal;
     lemma_sizet_lte_plain 1sz sal;
-    let nonempty = sn_ok && cs_ok && sa_ok;
+    // The storage caps (64 cipher suites / 32 signature schemes) are sized for the
+    // lists a *browser* offers us, but the ClientHello we ourselves emit is bounded
+    // by valid_start at 16/16, so the upper bounds have to be checked explicitly
+    // rather than read off the cap.
+    let cs_hi = sizet_lte_plain csl 16sz;
+    lemma_sizet_lte_plain csl 16sz;
+    let sa_hi = sizet_lte_plain sal 16sz;
+    lemma_sizet_lte_plain sal 16sz;
+    let nonempty = sn_ok && cs_ok && sa_ok && cs_hi && sa_hi;
     Model.lemma_cipher_suites_match_length cs_items (SZ.v cs_len)
       start_spec.CS.start_cipher_suites;
     Model.lemma_signature_schemes_match_length sa_items (SZ.v sa_len)
@@ -2492,7 +2557,7 @@ fn try_send_client_hello
     assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None));
     assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
       <= max_transcript_len - max_client_hello_len));
-    assert (pure (517 <= SZ.v network_out_len));
+    assert (pure (544 <= SZ.v network_out_len));
 
     let valid_nonempty = client_hello_start_nonempty_runtime c;
     if valid_nonempty {
@@ -2547,6 +2612,11 @@ fn try_send_client_hello
       32
       start_spec.CS.start_client_key_share_public);
     with old_start_key_share. _;
+    unfold (fixed_bytes_exactly
+      c.handshake.start.client_p256_public
+      65
+      start_spec.CS.start_client_p256_public);
+    with old_start_p256_key_share. _;
     unfold (cipher_suite_list_exactly
       c.handshake.start.cipher_suites
       max_cipher_suites
@@ -2565,7 +2635,7 @@ fn try_send_client_hello
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-    with old_client_hello_present old_l_random old_l_server_name
+    with old_client_hello_present old_l_random old_l_session_id old_l_server_name
          old_l_key_share old_l_cipher_suites old_l_signature_schemes. _;
     unfold (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
@@ -2602,6 +2672,7 @@ fn try_send_client_hello
     let rnd_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_client_random;
     let sni_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_server_name;
     let ks_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_client_key_share_public;
+    let pks_g : Ghost.erased B.bytes = Ghost.hide start_spec.CS.start_client_p256_public;
     let cs_g : Ghost.erased GCH.clientHello_cipher_suites =
       Ghost.hide (start_spec.CS.start_cipher_suites <: GCH.clientHello_cipher_suites);
     let sa_g : Ghost.erased GECH.extensionClientHello_extension_data_signature_algorithms =
@@ -2617,12 +2688,14 @@ fn try_send_client_hello
         #rnd_g
         #sni_g
         #ks_g
+        #pks_g
         #cs_g
         #sa_g
         c.handshake.start.client_random
         c.handshake.start.server_name.bytes
         c.handshake.start.server_name.len
         c.handshake.start.client_key_share_public
+        c.handshake.start.client_p256_public
         c.handshake.start.cipher_suites.items
         c.handshake.start.cipher_suites.len
         c.handshake.start.signature_schemes.items
@@ -2702,6 +2775,10 @@ fn try_send_client_hello
       c.handshake.start.client_key_share_public
       32
       start_spec.CS.start_client_key_share_public);
+    fold (fixed_bytes_exactly
+      c.handshake.start.client_p256_public
+      65
+      start_spec.CS.start_client_p256_public);
     fold (cipher_suite_list_exactly
       c.handshake.start.cipher_suites
       max_cipher_suites
@@ -2854,13 +2931,13 @@ fn try_send_client_hello
     c.control.failure_present := false;
     c.control.failure_code := 0uy;
     c.control.failure_alert := 0uy;
-    assert (pure (Tags.control_state_matches
+    assert_norm (Tags.control_state_matches
       1uy
       2uy
       false
       0uy
       0uy
-      (CS.ControlHandshaking CS.HsClientHelloSent)));
+      (CS.ControlHandshaking CS.HsClientHelloSent));
     fold (control_exactly
       c.control
       (CS.ControlHandshaking CS.HsClientHelloSent)
@@ -2920,6 +2997,7 @@ fn try_send_client_hello
   }
 }
 
+#restart-solver
 fn derive_shared_secret_from_bytes
   (c:connection_state)
   (shared_src:array U8.t)
@@ -3057,7 +3135,7 @@ fn install_server_handshake_write_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
              st0.CS.cs_model
@@ -3081,7 +3159,7 @@ fn install_server_handshake_write_traffic_keys_from_material
               };
             }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
             st0
@@ -3108,6 +3186,7 @@ fn install_server_handshake_write_traffic_keys_from_material
               };
             }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let install = Ghost.hide {
     CS.install_epoch = CS.TrafficHandshake;
     CS.install_direction = CS.TrafficWrite;
@@ -3135,6 +3214,7 @@ fn install_server_handshake_write_traffic_keys_from_material
   store_traffic_key_material
     c.handshake.keys.server_handshake_traffic
     traffic_secret_src
+    aead_alg
     traffic_key_src
     traffic_iv_src
     #material;
@@ -3142,7 +3222,7 @@ fn install_server_handshake_write_traffic_keys_from_material
     c.handshake.keys
     (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-  Rec.install_handshake_keys_runtime c.records.write traffic_key_src traffic_iv_src;
+  Rec.install_handshake_keys_runtime c.records.write traffic_key_src aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_src;
   assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficHandshake));
   assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficWrite));
   assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -3154,7 +3234,7 @@ fn install_server_handshake_write_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
     as (Rec.is_record_state
@@ -3165,7 +3245,7 @@ fn install_server_handshake_write_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.write
@@ -3282,7 +3362,7 @@ fn install_client_handshake_read_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
              st0.CS.cs_model
@@ -3306,7 +3386,7 @@ fn install_client_handshake_read_traffic_keys_from_material
               };
             }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
             st0
@@ -3333,6 +3413,7 @@ fn install_client_handshake_read_traffic_keys_from_material
               };
             }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let install = Ghost.hide {
     CS.install_epoch = CS.TrafficHandshake;
     CS.install_direction = CS.TrafficRead;
@@ -3360,6 +3441,7 @@ fn install_client_handshake_read_traffic_keys_from_material
   store_traffic_key_material
     c.handshake.keys.client_handshake_traffic
     traffic_secret_src
+    aead_alg
     traffic_key_src
     traffic_iv_src
     #material;
@@ -3367,7 +3449,7 @@ fn install_client_handshake_read_traffic_keys_from_material
     c.handshake.keys
     (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-  Rec.install_handshake_keys_runtime c.records.read traffic_key_src traffic_iv_src;
+  Rec.install_handshake_keys_runtime c.records.read traffic_key_src aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_src;
   assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficHandshake));
   assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficRead));
   assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -3379,7 +3461,7 @@ fn install_client_handshake_read_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
     as (Rec.is_record_state
@@ -3390,7 +3472,7 @@ fn install_client_handshake_read_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Handshake
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -3507,7 +3589,7 @@ fn install_server_application_write_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
              st0.CS.cs_model
@@ -3531,7 +3613,7 @@ fn install_server_application_write_traffic_keys_from_material
              };
            }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
             st0
@@ -3558,6 +3640,7 @@ fn install_server_application_write_traffic_keys_from_material
               };
             }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let install = Ghost.hide {
     CS.install_epoch = CS.TrafficApplication;
     CS.install_direction = CS.TrafficWrite;
@@ -3585,6 +3668,7 @@ fn install_server_application_write_traffic_keys_from_material
   store_traffic_key_material
     c.handshake.keys.server_application_traffic
     traffic_secret_src
+    aead_alg
     traffic_key_src
     traffic_iv_src
     #material;
@@ -3592,7 +3676,7 @@ fn install_server_application_write_traffic_keys_from_material
     c.handshake.keys
     (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-  Rec.install_application_keys_runtime c.records.write traffic_key_src traffic_iv_src;
+  Rec.install_application_keys_runtime c.records.write traffic_key_src aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_src;
   assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficApplication));
   assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficWrite));
   assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -3604,7 +3688,7 @@ fn install_server_application_write_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
     as (Rec.is_record_state
@@ -3615,7 +3699,7 @@ fn install_server_application_write_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_write
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.write
@@ -3723,6 +3807,7 @@ fn install_server_application_write_traffic_keys_from_material
     }))
 }
 
+#restart-solver
 fn install_client_application_read_traffic_keys_from_material
   (c:connection_state)
   (traffic_secret_src:array U8.t)
@@ -3732,7 +3817,7 @@ fn install_client_application_read_traffic_keys_from_material
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
            pure (CS.legal_event
              st0.CS.cs_model
@@ -3756,7 +3841,7 @@ fn install_client_application_read_traffic_keys_from_material
              };
            }) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
           pure (CS.legal_connection_delta
             st0
@@ -3783,6 +3868,7 @@ fn install_client_application_read_traffic_keys_from_material
               };
             }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let install = Ghost.hide {
     CS.install_epoch = CS.TrafficApplication;
     CS.install_direction = CS.TrafficRead;
@@ -3810,6 +3896,7 @@ fn install_client_application_read_traffic_keys_from_material
   store_traffic_key_material
     c.handshake.keys.client_application_traffic
     traffic_secret_src
+    aead_alg
     traffic_key_src
     traffic_iv_src
     #material;
@@ -3817,7 +3904,7 @@ fn install_client_application_read_traffic_keys_from_material
     c.handshake.keys
     (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-  Rec.install_application_keys_runtime c.records.read traffic_key_src traffic_iv_src;
+  Rec.install_application_keys_runtime c.records.read traffic_key_src aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_src;
   assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficApplication));
   assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficRead));
   assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -3829,7 +3916,7 @@ fn install_client_application_read_traffic_keys_from_material
     R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv));
   rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
     as (Rec.is_record_state
@@ -3840,7 +3927,7 @@ fn install_client_application_read_traffic_keys_from_material
     (R.install_keys
       st0.CS.cs_model.CS.model_record.CS.record_read
       R.Application
-      (Ghost.reveal material).CS.traffic_key
+      aead_alg (Ghost.reveal material).CS.traffic_key
       (Ghost.reveal material).CS.traffic_iv))
     as (Rec.is_record_state
       c.records.read
@@ -3993,6 +4080,7 @@ fn derive_and_install_server_application_write_traffic_keys
                 };
               }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
@@ -4063,16 +4151,16 @@ fn derive_and_install_server_application_write_traffic_keys
       (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
   let mut traffic_key_out = [| 0uy; 32sz |];
-  KS.derive_traffic_key traffic_secret_out traffic_key_out;
+  KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
   let mut traffic_iv_out = [| 0uy; 12sz |];
   KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
   with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
   with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
   let traffic_secret = Ghost.hide traffic_secret_bytes;
-  let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+  let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
   assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-  assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+  assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
   assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
 
   fold (optional_secret_exactly
@@ -4161,6 +4249,7 @@ fn derive_and_install_client_application_read_traffic_keys
                 };
               }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
@@ -4231,16 +4320,16 @@ fn derive_and_install_client_application_read_traffic_keys
       (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
   let mut traffic_key_out = [| 0uy; 32sz |];
-  KS.derive_traffic_key traffic_secret_out traffic_key_out;
+  KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
   let mut traffic_iv_out = [| 0uy; 12sz |];
   KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
   with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
   with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
   let traffic_secret = Ghost.hide traffic_secret_bytes;
-  let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+  let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
   assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-  assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+  assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
   assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
 
   fold (optional_secret_exactly
@@ -4329,6 +4418,7 @@ fn derive_and_install_server_handshake_write_traffic_keys
                 };
               }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
@@ -4399,16 +4489,16 @@ fn derive_and_install_server_handshake_write_traffic_keys
       (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
   let mut traffic_key_out = [| 0uy; 32sz |];
-  KS.derive_traffic_key traffic_secret_out traffic_key_out;
+  KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
   let mut traffic_iv_out = [| 0uy; 12sz |];
   KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
   with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
   with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
   let traffic_secret = Ghost.hide traffic_secret_bytes;
-  let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+  let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
   assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-  assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+  assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
   assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
 
   fold (optional_secret_exactly
@@ -4497,6 +4587,7 @@ fn derive_and_install_client_handshake_read_traffic_keys
                 };
               }))
 {
+  let aead_alg = read_negotiated_aead_alg c;
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
@@ -4567,16 +4658,16 @@ fn derive_and_install_client_handshake_read_traffic_keys
       (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
   let mut traffic_key_out = [| 0uy; 32sz |];
-  KS.derive_traffic_key traffic_secret_out traffic_key_out;
+  KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
   let mut traffic_iv_out = [| 0uy; 12sz |];
   KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
   with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
   with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
   let traffic_secret = Ghost.hide traffic_secret_bytes;
-  let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+  let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
   assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-  assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+  assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
   assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
 
   fold (optional_secret_exactly
@@ -4620,6 +4711,80 @@ fn derive_and_install_client_handshake_read_traffic_keys
     #material;
 }
 
+(**
+  Load the client's private key for the negotiated group into [out].
+
+  The client generates a keypair for every group it offers, so both slots are
+  populated; the negotiated group -- the tag the server named in its
+  `KeyShareEntry` -- selects which one the ECDH runs with.  The two private keys
+  are the same width, so the caller can hand a single buffer to the agile ECDH.
+**)
+fn load_kex_private
+  (x25519_slot:optional_fixed_bytes)
+  (p256_slot:optional_fixed_bytes)
+  (g:CryptoSpec.kex_group)
+  (out:array U8.t)
+  (#xspec #pspec:erased (option (B.bytes_of_len 32)))
+  requires optional_fixed_bytes_exactly x25519_slot 32 xspec **
+           optional_fixed_bytes_exactly p256_slot 32 pspec **
+           ArrPts.pts_to out 'old **
+           pure (B.length 'old == 32)
+  returns present: bool
+  ensures exists* ob.
+          optional_fixed_bytes_exactly x25519_slot 32 xspec **
+          optional_fixed_bytes_exactly p256_slot 32 pspec **
+          ArrPts.pts_to out ob **
+          pure (B.length ob == 32 /\
+                (let sel = (match g with
+                            | CryptoSpec.KexX25519 -> Ghost.reveal xspec
+                            | CryptoSpec.KexP256 -> Ghost.reveal pspec) in
+                 present == Some? sel /\
+                 (present ==> sel == Some ob)))
+{
+  ArrPts.pts_to_len out;
+  match g {
+    CryptoSpec.KexX25519 -> {
+      unfold (optional_fixed_bytes_exactly x25519_slot 32 xspec);
+      with present storage. _;
+      let has = !x25519_slot.present;
+      assert (pure (has == present));
+      if has {
+        lemma_optional_fixed_bytes_match_some present storage 32 xspec;
+        V.to_array_pts_to x25519_slot.bytes;
+        AC.copy_prefix 32sz (V.vec_to_array x25519_slot.bytes) 32sz out 32sz;
+        V.to_vec_pts_to x25519_slot.bytes;
+        with ob. assert (ArrPts.pts_to out ob);
+        Seq.lemma_eq_elim ob storage;
+        fold (optional_fixed_bytes_exactly x25519_slot 32 xspec);
+        true
+      } else {
+        fold (optional_fixed_bytes_exactly x25519_slot 32 xspec);
+        false
+      }
+    }
+    CryptoSpec.KexP256 -> {
+      unfold (optional_fixed_bytes_exactly p256_slot 32 pspec);
+      with present storage. _;
+      let has = !p256_slot.present;
+      assert (pure (has == present));
+      if has {
+        lemma_optional_fixed_bytes_match_some present storage 32 pspec;
+        V.to_array_pts_to p256_slot.bytes;
+        AC.copy_prefix 32sz (V.vec_to_array p256_slot.bytes) 32sz out 32sz;
+        V.to_vec_pts_to p256_slot.bytes;
+        with ob. assert (ArrPts.pts_to out ob);
+        Seq.lemma_eq_elim ob storage;
+        fold (optional_fixed_bytes_exactly p256_slot 32 pspec);
+        true
+      } else {
+        fold (optional_fixed_bytes_exactly p256_slot 32 pspec);
+        false
+      }
+    }
+  }
+}
+
+#restart-solver
 fn try_derive_shared_secret
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -4654,11 +4819,10 @@ fn try_derive_shared_secret
     c.handshake.server_key_share
     st0.CS.cs_model.CS.model_handshake);
   unfold (optional_fixed_bytes_exactly
-    c.handshake.server_key_share
-    32
-    (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-     | Some sh -> CS.server_hello_key_share sh
-     | None -> None));
+    ({ present = c.handshake.server_key_share.present;
+       bytes = c.handshake.server_key_share.bytes })
+    65
+    (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
   unfold (key_schedule_exactly
     c.handshake.keys
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
@@ -4718,10 +4882,8 @@ fn try_derive_shared_secret
     lemma_optional_fixed_bytes_match_some
       server_share_present
       server_share_storage
-      32
-      (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-       | Some sh -> CS.server_hello_key_share sh
-       | None -> None);
+      65
+      (server_kex_bytes st0.CS.cs_model.CS.model_handshake);
     lemma_server_key_share_option_some
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello
       server_share_storage;
@@ -4729,7 +4891,19 @@ fn try_derive_shared_secret
     assert (pure (st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerHelloReceived));
     assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some (Ghost.reveal sh)));
-    assert (pure (CS.server_hello_key_share (Ghost.reveal sh) == Some server_share_storage));
+    assert (pure (Some? (CS.server_hello_kex (Ghost.reveal sh))));
+    (* The negotiated group is the tag the server named in its KeyShareEntry,
+       read back off the stored key share -- never inferred from a length. *)
+    let kex_group = !c.handshake.server_key_share.group;
+    let server_share =
+      Ghost.hide (dsnd (Some?.v (CS.server_hello_kex (Ghost.reveal sh))));
+    assert (pure (kex_group == dfst (Some?.v (CS.server_hello_kex (Ghost.reveal sh)))));
+    assert (pure (CryptoSpec.pad_share_65 (Ghost.reveal server_share) == server_share_storage));
+    assert (pure (B.length (Ghost.reveal server_share) ==
+                  CryptoSpec.kex_public_len kex_group));
+    assert (pure (CryptoSpec.unpad_share_65
+                    server_share_storage
+                    (CryptoSpec.kex_public_len kex_group) == Ghost.reveal server_share));
 
     if has_start {
     unfold (handshake_start_payload_exactly
@@ -4739,53 +4913,49 @@ fn try_derive_shared_secret
     with start_spec. assert (pure True);
     unfold (handshake_start_fields_exactly c.handshake.start start_spec);
     lemma_len32_refinement_tautology();
-    unfold (optional_fixed_bytes_exactly
-      c.handshake.start.client_key_share_private
-      32
-      start_spec.CS.start_client_key_share_private);
 
-    with private_present private_storage. _;
+    (* Both keypairs are generated, so the negotiated group -- not a length --
+       selects which private key the ECDH runs with. *)
+    let mut kex_sk = [| 0uy; 32sz |];
+    let has_private =
+      load_kex_private
+        c.handshake.start.client_key_share_private
+        c.handshake.start.client_p256_private
+        kex_group
+        kex_sk;
+    with private_storage. assert (ArrPts.pts_to kex_sk private_storage);
     let private_storage_e = Ghost.hide private_storage;
-    let has_private = !c.handshake.start.client_key_share_private.present;
-    assert (pure (has_private == private_present));
 
     if has_private {
-      assert (pure private_present);
-      lemma_optional_fixed_bytes_match_some
-        private_present
-        (Ghost.reveal private_storage_e)
-        32
-        start_spec.CS.start_client_key_share_private;
-      assert (pure (start_spec.CS.start_client_key_share_private == Some (Ghost.reveal private_storage_e)));
-      let private_spec = private_storage_e;
+      assert (pure (CS.start_kex_private start_spec kex_group ==
+                    Some (Ghost.reveal private_storage_e)));
       assert (pure (B.length (Ghost.reveal private_storage_e) == 32));
-      assert (pure (B.length (Ghost.reveal server_share_storage_e) == 32));
+      assert (pure (B.length (Ghost.reveal server_share_storage_e) == 65));
       lemma_len32_refinement_tautology();
 
-        V.to_array_pts_to c.handshake.start.client_key_share_private.bytes;
         V.to_array_pts_to c.handshake.server_key_share.bytes;
         let mut shared_out = [| 0uy; 32sz |];
         let crypto_ok =
-          Crypto.x25519_shared_runtime
-            (V.vec_to_array c.handshake.start.client_key_share_private.bytes)
+          KEX.kex_shared_runtime
+            kex_group
+            kex_sk
             (V.vec_to_array c.handshake.server_key_share.bytes)
             shared_out;
-        V.to_vec_pts_to c.handshake.start.client_key_share_private.bytes;
         V.to_vec_pts_to c.handshake.server_key_share.bytes;
 
         if crypto_ok {
           with shared. assert (ArrPts.pts_to shared_out shared);
           ArrPts.pts_to_len shared_out;
           assert (pure (B.length shared == 32));
-          assert (pure (Crypto.x25519_shared_call (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) shared crypto_ok));
-          Crypto.lemma_x25519_shared_call_success (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) shared crypto_ok;
-          assert (pure (Some? (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e))));
-          assert (pure (Some?.v (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e)) == shared));
-          let shared_secret = Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e)));
+          assert (pure (KEX.kex_shared_call kex_group (Ghost.reveal private_storage_e) (Ghost.reveal server_share) shared crypto_ok));
+          KEX.lemma_kex_shared_call_success kex_group (Ghost.reveal private_storage_e) (Ghost.reveal server_share) shared crypto_ok;
+          assert (pure (Some? (CryptoSpec.kex_shared kex_group (Ghost.reveal private_storage_e) (Ghost.reveal server_share))));
+          let shared_secret = Ghost.hide (Some?.v (CryptoSpec.kex_shared kex_group (Ghost.reveal private_storage_e) (Ghost.reveal server_share)));
           assert (pure (Ghost.reveal shared_secret == shared));
-          assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) == Some (Ghost.reveal shared_secret)));
-          assert (pure (CS.server_hello_key_share (Ghost.reveal sh) == Some (Ghost.reveal server_share_storage_e)));
-          assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_spec) (Ghost.reveal server_share_storage_e) == Some (Ghost.reveal shared_secret)));
+          assert (pure (CryptoSpec.kex_shared kex_group (Ghost.reveal private_storage_e) (Ghost.reveal server_share) == Some (Ghost.reveal shared_secret)));
+          CS.lemma_start_kex_public_from_private start_spec kex_group;
+          assert (pure (CryptoSpec.kex_public_from_private kex_group (Ghost.reveal private_storage_e) ==
+                        CS.start_kex_public start_spec kex_group));
           assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None));
           assert (pure (CS.legal_event
             st0.CS.cs_model
@@ -4816,10 +4986,6 @@ fn try_derive_shared_secret
             c.handshake.keys
             (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-          fold (optional_fixed_bytes_exactly
-            c.handshake.start.client_key_share_private
-            32
-            start_spec.CS.start_client_key_share_private);
           fold (handshake_start_fields_exactly c.handshake.start start_spec);
           fold (handshake_start_payload_exactly
             c.handshake.start
@@ -4829,11 +4995,14 @@ fn try_derive_shared_secret
             c.handshake.start
             (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_start);
           fold (optional_fixed_bytes_exactly
-            c.handshake.server_key_share
-            32
-            (match (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-             | Some sh -> CS.server_hello_key_share sh
-             | None -> None));
+            ({ present = c.handshake.server_key_share.present;
+               bytes = c.handshake.server_key_share.bytes })
+            65
+            (server_kex_bytes (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake));
+          assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+                        st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+          assert (pure (server_kex (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake ==
+                        server_kex st0.CS.cs_model.CS.model_handshake));
           fold (server_key_share_exactly
             c.handshake.server_key_share
             (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake);
@@ -4857,10 +5026,6 @@ fn try_derive_shared_secret
           true
         } else {
           with shared_old. assert (ArrPts.pts_to shared_out shared_old);
-          fold (optional_fixed_bytes_exactly
-            c.handshake.start.client_key_share_private
-            32
-            start_spec.CS.start_client_key_share_private);
           fold (handshake_start_fields_exactly c.handshake.start start_spec);
           fold (handshake_start_payload_exactly
             c.handshake.start
@@ -4870,11 +5035,10 @@ fn try_derive_shared_secret
             c.handshake.start
             st0.CS.cs_model.CS.model_handshake.CS.hs_start);
           fold (optional_fixed_bytes_exactly
-            c.handshake.server_key_share
-            32
-            (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-             | Some sh -> CS.server_hello_key_share sh
-             | None -> None));
+            ({ present = c.handshake.server_key_share.present;
+               bytes = c.handshake.server_key_share.bytes })
+            65
+            (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
           fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
           fold (key_schedule_exactly
             c.handshake.keys
@@ -4890,10 +5054,6 @@ fn try_derive_shared_secret
           false
         }
     } else {
-      fold (optional_fixed_bytes_exactly
-        c.handshake.start.client_key_share_private
-        32
-        start_spec.CS.start_client_key_share_private);
       fold (handshake_start_fields_exactly c.handshake.start start_spec);
       fold (handshake_start_payload_exactly
         c.handshake.start
@@ -4903,11 +5063,10 @@ fn try_derive_shared_secret
         c.handshake.start
         st0.CS.cs_model.CS.model_handshake.CS.hs_start);
       fold (optional_fixed_bytes_exactly
-        c.handshake.server_key_share
-        32
-        (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-         | Some sh -> CS.server_hello_key_share sh
-         | None -> None));
+        ({ present = c.handshake.server_key_share.present;
+           bytes = c.handshake.server_key_share.bytes })
+        65
+        (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
       fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
       fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
@@ -4922,11 +5081,10 @@ fn try_derive_shared_secret
         c.handshake.start
         st0.CS.cs_model.CS.model_handshake.CS.hs_start);
       fold (optional_fixed_bytes_exactly
-        c.handshake.server_key_share
-        32
-        (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-         | Some sh -> CS.server_hello_key_share sh
-         | None -> None));
+        ({ present = c.handshake.server_key_share.present;
+           bytes = c.handshake.server_key_share.bytes })
+        65
+        (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
       fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
       fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
@@ -4944,11 +5102,10 @@ fn try_derive_shared_secret
         c.handshake.start
         st0.CS.cs_model.CS.model_handshake.CS.hs_start);
       fold (optional_fixed_bytes_exactly
-        c.handshake.server_key_share
-        32
-        (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
-         | Some sh -> CS.server_hello_key_share sh
-         | None -> None));
+        ({ present = c.handshake.server_key_share.present;
+           bytes = c.handshake.server_key_share.bytes })
+        65
+        (server_kex_bytes st0.CS.cs_model.CS.model_handshake));
       fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
       fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
@@ -5028,7 +5185,7 @@ fn try_derive_server_shared_secret_from_private_array
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_server_name ch_key_share ch_cipher_suites ch_signature_schemes. _;
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_cipher_suites ch_signature_schemes. _;
 
   let ch = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
@@ -5178,6 +5335,7 @@ fn try_install_client_handshake_traffic_keys
            else
              connection_exactly c st0)
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let ready = can_install_handshake_traffic_keys c;
   if ready {
     unfold (connection_exactly c st0);
@@ -5253,16 +5411,16 @@ fn try_install_client_handshake_traffic_keys
         (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
     let mut traffic_key_out = [| 0uy; 32sz |];
-    KS.derive_traffic_key traffic_secret_out traffic_key_out;
+    KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
     let mut traffic_iv_out = [| 0uy; 12sz |];
     KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
     with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
     with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
     let traffic_secret = Ghost.hide traffic_secret_bytes;
-    let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+    let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
     assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-    assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+    assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
     assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
     let install = Ghost.hide ({
       CS.install_epoch = CS.TrafficHandshake;
@@ -5280,6 +5438,7 @@ fn try_install_client_handshake_traffic_keys
     store_traffic_key_material
       c.handshake.keys.client_handshake_traffic
       traffic_secret_out
+      aead_alg
       traffic_key_out
       traffic_iv_out
       #material;
@@ -5290,7 +5449,7 @@ fn try_install_client_handshake_traffic_keys
       c.handshake.keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-    Rec.install_handshake_keys_runtime c.records.write traffic_key_out traffic_iv_out;
+    Rec.install_handshake_keys_runtime c.records.write traffic_key_out aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
     assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficHandshake));
     assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficWrite));
     assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -5300,7 +5459,7 @@ fn try_install_client_handshake_traffic_keys
       R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_write
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv));
     rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
       as (Rec.is_record_state
@@ -5311,7 +5470,7 @@ fn try_install_client_handshake_traffic_keys
       (R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_write
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv))
       as (Rec.is_record_state
         c.records.write
@@ -5430,6 +5589,7 @@ fn try_install_client_handshake_traffic_keys
   }
 }
 
+#restart-solver
 fn try_install_server_handshake_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -5464,6 +5624,7 @@ fn try_install_server_handshake_traffic_keys
            else
              connection_exactly c st0)
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let ready = can_install_handshake_traffic_keys c;
   if ready {
     unfold (connection_exactly c st0);
@@ -5539,16 +5700,16 @@ fn try_install_server_handshake_traffic_keys
         (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
     let mut traffic_key_out = [| 0uy; 32sz |];
-    KS.derive_traffic_key traffic_secret_out traffic_key_out;
+    KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
     let mut traffic_iv_out = [| 0uy; 12sz |];
     KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
     with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
     with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
     let traffic_secret = Ghost.hide traffic_secret_bytes;
-    let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+    let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
     assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-    assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+    assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
     assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
     let install = Ghost.hide ({
       CS.install_epoch = CS.TrafficHandshake;
@@ -5566,6 +5727,7 @@ fn try_install_server_handshake_traffic_keys
     store_traffic_key_material
       c.handshake.keys.server_handshake_traffic
       traffic_secret_out
+      aead_alg
       traffic_key_out
       traffic_iv_out
       #material;
@@ -5576,7 +5738,7 @@ fn try_install_server_handshake_traffic_keys
       c.handshake.keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-    Rec.install_handshake_keys_runtime c.records.read traffic_key_out traffic_iv_out;
+    Rec.install_handshake_keys_runtime c.records.read traffic_key_out aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
     assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficHandshake));
     assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficRead));
     assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -5586,7 +5748,7 @@ fn try_install_server_handshake_traffic_keys
       R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv));
     rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
       as (Rec.is_record_state
@@ -5597,7 +5759,7 @@ fn try_install_server_handshake_traffic_keys
       (R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Handshake
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv))
       as (Rec.is_record_state
         c.records.read
@@ -5750,6 +5912,7 @@ fn try_install_client_application_traffic_keys
            else
              connection_exactly c st0)
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let ready = can_install_application_traffic_keys c;
   if ready {
     unfold (connection_exactly c st0);
@@ -5825,16 +5988,16 @@ fn try_install_client_application_traffic_keys
         (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
     let mut traffic_key_out = [| 0uy; 32sz |];
-    KS.derive_traffic_key traffic_secret_out traffic_key_out;
+    KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
     let mut traffic_iv_out = [| 0uy; 12sz |];
     KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
     with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
     with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
     let traffic_secret = Ghost.hide traffic_secret_bytes;
-    let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+    let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
     assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-    assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+    assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
     assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
     let install = Ghost.hide ({
       CS.install_epoch = CS.TrafficApplication;
@@ -5852,6 +6015,7 @@ fn try_install_client_application_traffic_keys
     store_traffic_key_material
       c.handshake.keys.client_application_traffic
       traffic_secret_out
+      aead_alg
       traffic_key_out
       traffic_iv_out
       #material;
@@ -6025,6 +6189,7 @@ fn try_install_server_application_traffic_keys
            else
              connection_exactly c st0)
 {
+  let aead_alg = read_negotiated_aead_alg c;
   let ready = can_install_application_traffic_keys c;
   if ready {
     unfold (connection_exactly c st0);
@@ -6100,16 +6265,16 @@ fn try_install_server_application_traffic_keys
         (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
 
     let mut traffic_key_out = [| 0uy; 32sz |];
-    KS.derive_traffic_key traffic_secret_out traffic_key_out;
+    KS.derive_traffic_key traffic_secret_out aead_alg traffic_key_out;
     let mut traffic_iv_out = [| 0uy; 12sz |];
     KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
     with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
     with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
 
     let traffic_secret = Ghost.hide traffic_secret_bytes;
-    let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+    let material = Ghost.hide (CS.traffic_key_material_for_secret (aead_alg) (Ghost.reveal traffic_secret));
     assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
-    assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+    assert (pure (Seq.equal traffic_key_bytes (TLS13.Crypto.Spec.pad_key_32 (Ghost.reveal material).CS.traffic_key)));
     assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
     let install = Ghost.hide ({
       CS.install_epoch = CS.TrafficApplication;
@@ -6127,6 +6292,7 @@ fn try_install_server_application_traffic_keys
     store_traffic_key_material
       c.handshake.keys.server_application_traffic
       traffic_secret_out
+      aead_alg
       traffic_key_out
       traffic_iv_out
       #material;
@@ -6137,7 +6303,7 @@ fn try_install_server_application_traffic_keys
       c.handshake.keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-    Rec.install_application_keys_runtime c.records.read traffic_key_out traffic_iv_out;
+    Rec.install_application_keys_runtime c.records.read traffic_key_out aead_alg (Ghost.hide (Ghost.reveal material).CS.traffic_key) traffic_iv_out;
     assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficApplication));
     assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficRead));
     assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
@@ -6147,7 +6313,7 @@ fn try_install_server_application_traffic_keys
       R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Application
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv));
     rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
       as (Rec.is_record_state
@@ -6158,7 +6324,7 @@ fn try_install_server_application_traffic_keys
       (R.install_keys
         st0.CS.cs_model.CS.model_record.CS.record_read
         R.Application
-        (Ghost.reveal material).CS.traffic_key
+        aead_alg (Ghost.reveal material).CS.traffic_key
         (Ghost.reveal material).CS.traffic_iv))
       as (Rec.is_record_state
         c.records.read

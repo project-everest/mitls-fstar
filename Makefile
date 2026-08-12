@@ -24,14 +24,43 @@ KRML_EXE   ?= $(KRML_HOME)/out/bin/krml
 QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
 LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 
+# The exact EverParse commit this project is verified against, read from the
+# build script so there is a single source of truth.  `check-toolchain` asserts
+# that $(EVERPARSE_HOME) is actually at this commit, because nothing else does:
+# tools/everparse is gitignored, `fstar.exe --version` is a date tag that does
+# not identify the build, and a .checked cache reacts to a different F* by
+# silently re-verifying rather than warning.  A drifted toolchain therefore
+# verifies happily against the wrong F*/Pulse and does not reproduce in CI.
+EVERPARSE_COMMIT := $(shell sed -n 's/.*EVERPARSE_COMMIT:-\([0-9a-f]*\).*/\1/p' \
+                      $(CURDIR)/scripts/build-everparse.sh | head -1)
+
 # F* locates Z3 by looking for `z3-<version>` on PATH.  The EverParse toolchain
-# ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.13.3); make them visible
+# ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.15.3); make them visible
 # to every F* invocation (this Makefile and the generated/ sub-make) instead of
 # relying on the caller having sourced tools/everparse/env.sh.
 Z3_DIR         ?= $(EVERPARSE_HOME)/opt/z3
 export PATH := $(Z3_DIR):$(PATH)
 TLS_Z3_VERSION := 4.13.3
 DY_Z3_VERSION  := 4.15.3
+
+# Z3 version used by every F* invocation.  F* defaults to 4.13.3, which has an
+# internal assertion failure in the LP arithmetic solver (lar_solver.cpp:1066)
+# that aborts the solver on some of our arithmetic-heavy system-level queries.
+# 4.15.3 fixes it.  Override on the command line to A/B a proof against another
+# version, e.g. `make verify Z3_VERSION=4.13.3`.
+#
+# The pinned value lives in scripts/z3-version.txt, which is the single source
+# of truth shared with scripts/install-z3.sh, the sample Makefiles and the CI
+# dev-container cache key.  Keeping it in one file stops the eight places that
+# used to spell "4.15.3" from drifting apart.  Note that a .checked file does
+# NOT record the solver version, so changing this alone will not invalidate a
+# warm cache -- wipe _cache before believing an A/B result.
+Z3_VERSION_FILE := scripts/z3-version.txt
+Z3_VERSION     ?= $(strip $(shell cat $(Z3_VERSION_FILE)))
+ifeq ($(Z3_VERSION),)
+$(error Could not read the pinned Z3 version from $(Z3_VERSION_FILE))
+endif
+export Z3_VERSION
 
 GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
@@ -71,6 +100,7 @@ INCLUDES = \
 FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*'
 
 EXTRACT_DEBUG ?= 0
+ATLAS_LOGGING ?= 0
 ifeq ($(EXTRACT_DEBUG),1)
 FSTAR_EXTRACT_DEBUG_FLAGS = --trace_error --profile '*' --profile_component FStarC.Extraction
 KRML_DEBUG_FLAGS = -verbose -dbacktrace
@@ -79,8 +109,18 @@ FSTAR_EXTRACT_DEBUG_FLAGS =
 KRML_DEBUG_FLAGS =
 endif
 
+# --ext fly_deps=false: F* enables `fly_deps` by default, which makes it treat
+# every .checked file of a module it is asked to check as invalid and recompute
+# dependencies on the fly.  That is fine for verification, but extraction runs
+# with cross-module inlining (--cmi, on by default whenever --codegen is set),
+# and cmi *requires* every dependency to have a loadable .checked file --
+# otherwise F* aborts with "Cross-module inlining expects all modules to be
+# checked first" (Error 317).  fly_deps also changes the dependency graph that
+# is hashed into .checked files, so it must be disabled for verification too,
+# or extraction rejects the cache with a dependence hash mismatch.
 FSTAR_FLAGS = \
   $(OTHERFLAGS) \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
@@ -88,7 +128,7 @@ FSTAR_FLAGS = \
   --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
-  --ext fly_deps \
+  --ext fly_deps=false \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
@@ -112,12 +152,15 @@ FSTAR_SYMBOLIC = $(FSTAR_EXE) $(FSTAR_SYMBOLIC_FLAGS)
 
 FSTAR_EXTRACT_FLAGS = \
   $(OTHERFLAGS) \
+  --z3version $(Z3_VERSION) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
   --warn_error -321 \
   --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+  --ext optimize_let_vc \
+  --ext fly_deps=false \
   $(INCLUDES)
 
 FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
@@ -136,9 +179,32 @@ ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 DY_CORE_FILES = $(sort $(shell find $(DY_CORE_DIR) $(DY_CORE_TEST_DIR) \
   -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 ROOT_FILES = \
+  src/impl/TLS13.System.SlotMono.fst \
+  src/impl/TLS13.System.ServerSfsRecovery.fst \
+  src/impl/TLS13.System.HsMaterialFamilies.fst \
   src/impl/TLS13.System.Temporal.fst \
+  src/impl/TLS13.Impl.Client.Engine.fst \
+  src/impl/TLS13.System.SeqCountBase.fst \
+  src/impl/TLS13.System.AppSeqPairing.fst \
+  src/impl/TLS13.System.ServerReadRecvCount.fst \
+  src/impl/TLS13.System.ServerNotCFR.fst \
+  src/impl/TLS13.System.AppBothCongruence.fst \
+  src/impl/TLS13.System.AppMaterialFamilies.fst \
+  src/impl/TLS13.System.AppExtrasInv.fst \
+  src/impl/TLS13.System.AppStreamInv.fst \
+  src/impl/TLS13.System.StreamTemporal.fst \
+  src/impl/TLS13.System.StreamTemporal.Realized.fst \
+  src/impl/TLS13.System.HsSeqPairing.fst \
+  src/spec/properties/TLS13.ConnectionState.HandshakeAgreementNonReady.fst \
+  src/spec/properties/TLS13.ConnectionState.RecordKeyEpoch.fst \
+  src/spec/properties/TLS13.ConnectionState.AppDataBufferEmpty.fst \
+  src/spec/properties/TLS13.ConnectionState.ServerHelloSelectionLink.fst \
+  src/spec/properties/TLS13.ConnectionState.HandshakeSeqZero.fst \
+  src/impl/TLS13.System.Ordering.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
-  src/impl/TLS13.Impl.Server.Driver.fst
+  src/impl/TLS13.Impl.Server.Driver.fst \
+  src/spec/properties/TLS13.Spec.InternalEvent.Baseline.fst \
+  common/Common.ProtocolDriver.fst
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
@@ -158,7 +224,8 @@ GENERATED_MAKE_VARS = \
   EVERPARSE_HOME='$(realpath $(EVERPARSE_HOME))' \
   FSTAR_EXE='$(FSTAR_EXE)' \
   KRML_EXE='$(KRML_EXE)' \
-  KRML_HOME='$(KRML_HOME)'
+  KRML_HOME='$(KRML_HOME)' \
+  Z3_VERSION='$(Z3_VERSION)'
 
 # Committed generated sources and a stamp marking that their (gitignored)
 # .checked files have been produced.  The main build's `.depend` consumes the
@@ -187,6 +254,8 @@ regen-generated: | check-toolchain
 # consumed as already-cached from the $(GENERATED_DIR)/*.checked copies below), so
 # these leftovers are inert for the rest of the build.
 $(GENERATED_STAMP): $(GENERATED_SRCS) | check-toolchain
+	rm -f $(GENERATED_DIR)/.depend \
+	  $(GENERATED_DIR)/TLS13.Wire.Generated.*.checked
 	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify $(GENERATED_MAKE_VARS)
 	-cp $(GENERATED_DIR)/cache/TLS13.Wire.Generated.*.checked $(GENERATED_DIR)/ 2>/dev/null || true
 	touch $@
@@ -298,9 +367,14 @@ $(SYMBOLIC_DEPEND): $(SYMBOLIC_FILES) Makefile | check-toolchain $(GENERATED_STA
 # generated sources), so the generated Wire modules would be re-verified once per
 # sub-make — racing under -jN.  These goals manage the generated .checked files
 # explicitly via the stamp and never need the spec/impl dependency graph.
+#
+# `quick` is excluded for a different reason: it invokes F* directly on a single
+# file and uses no rule from .depend, but editing any source (or this Makefile)
+# invalidates .depend, and regenerating it costs ~2.5min — which would dwarf the
+# ~1min iteration cycle that `quick` exists to provide.
 DEPEND_EXCLUDED_GOALS := clean regen-generated verify-generated extract-generated \
   parsers generated-checked save-generated-cache restore-generated-cache \
-  verify-dy-core $(SYMBOLIC_DEPEND) \
+  verify-dy-core $(SYMBOLIC_DEPEND) quick \
   $(GENERATED_STAMP)
 
 # Only goals that verify symbolic code need the additional dependency graph.
@@ -324,8 +398,18 @@ include .depend
 endif
 
 # ── Generic Verification Rules ────────────────────────────────────
+# F* validates an existing .checked file by CONTENT HASH and, when it is still
+# valid, re-verifies the module but deliberately does NOT rewrite the file.  Make
+# reasons about TIMESTAMPS.  So if a .checked ever ends up older than one of its
+# prerequisite .checked files — which happens routinely under -jN, or whenever a
+# single .checked is deleted and regenerated — Make asks for the target, F*
+# declines to rewrite it, the mtime does not move, and the module is re-verified
+# on every single `make` forever.  Stamping the target after a successful run
+# breaks that loop.  `-c` so that a genuine failure to produce the file is not
+# papered over with an empty one.
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	$(FSTAR) $<
+	@touch -c $@
 
 # F* supplies the actual inter-module prerequisites in .depend-symbolic.  This
 # static pattern only selects the symbolic flags and maps each checked artifact
@@ -393,8 +477,23 @@ verify-tls: generated-checked $(ALL_CHECKED_FILES)
 
 verify: verify-tls verify-symbolic
 
+# ── Sample-protocol gate ───────────────────────────────────────────
+# The sample protocols instantiate the same generic classes as TLS
+# (`Common.ProtocolImplementation`, `Common.ProtocolEndpoint`), so a change to
+# those classes can break them without the root `verify` target noticing.
+# `verify-samples` closes that gap; `test` depends on it.
+SAMPLE_DIRS = calc_sample dh-sample ftp_sample http_sample nsl-sample \
+  tftp_sample ymodem_sample
+
+.PHONY: verify-samples $(addprefix verify-sample-,$(SAMPLE_DIRS))
+
+verify-samples: $(addprefix verify-sample-,$(SAMPLE_DIRS))
+	@echo "All sample protocols verified"
+$(addprefix verify-sample-,$(SAMPLE_DIRS)): verify-sample-%:
+	$(MAKE) -C $* verify
+
 admit-count:
-	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src common $(SAMPLE_DIRS) || true); \
 	if [ -n "$$matches" ]; then \
 	  printf "%s\n" "$$matches"; \
 	  count=$$(printf "%s\n" "$$matches" | wc -l); \
@@ -404,7 +503,7 @@ admit-count:
 	fi
 
 check-admits:
-	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src common $(SAMPLE_DIRS) || true); \
 	if [ -n "$$matches" ]; then \
 	  printf "%s\n" "$$matches"; \
 	  count=$$(printf "%s\n" "$$matches" | wc -l); \
@@ -478,6 +577,7 @@ PULSE_RUNTIME_MODULES = \
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
+  TLS13.Impl.Client.DrainLoop \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
@@ -502,6 +602,8 @@ BUNDLE_IMPL_MODULES = \
   $(SERIALIZER_MODULES) \
   $(PARSER_MODULES) \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
+  TLS13.KEX \
   TLS13.KeySchedule \
   TLS13.Record
 
@@ -519,7 +621,7 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
   TLS13.Impl.Handle.Local,$(SERIALIZER_INTERNAL_MODULES),$(PARSER_INTERNAL_MODULES),\
   TLS13.Impl.Messages,\
-  TLS13.KeySchedule,TLS13.Record
+  TLS13.AEAD,TLS13.KEX,TLS13.KeySchedule,TLS13.Record
 
 # Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
 # models remain under src/spec/assumptions.
@@ -535,7 +637,7 @@ BUNDLE_KRML_FILES = $(filter-out \
 
 TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_bundle
 TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
-TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj
+TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj-logging-$(ATLAS_LOGGING)
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
 TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
@@ -562,10 +664,15 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Handle.Handshake \
   TLS13.Impl.Handle.Local \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
+  TLS13.KEX \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Client \
+  TLS13.Impl.Client.DrainLoop \
+  TLS13.Impl.Client.Engine \
   TLS13.Impl.Client.Driver.State \
+  TLS13.Impl.Client.Driver.BufferedNetwork \
   TLS13.Impl.Client.Driver.New \
   TLS13.Impl.Client.Driver.Core \
   TLS13.Impl.Client.Driver.Cleanup \
@@ -575,8 +682,10 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Client.Driver.Close
 CLIENT_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES))) \
+  $(filter-out $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml, \
+    $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES)))) \
   $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 DRIVER_EXTRACT_SELECTOR = \
@@ -586,7 +695,7 @@ DRIVER_EXTRACT_SELECTOR = \
   -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
   -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
   -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
-  -TLS13.Impl.Client.CanonicalQueries,-TLS13.Impl.Client.Endpoint,\
+  -TLS13.Impl.Client.CanonicalQueries,\
   -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 SERVER_DRIVER_EXTRACT_SELECTOR = \
@@ -596,7 +705,7 @@ SERVER_DRIVER_EXTRACT_SELECTOR = \
   -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
   -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
   -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
-  -TLS13.Impl.Server.CanonicalQueries,-TLS13.Impl.Server.Endpoint,\
+  -TLS13.Impl.Server.CanonicalQueries,\
   -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
   -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
 
@@ -615,6 +724,8 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.ConnectionState.LocalSend \
   TLS13.Impl.ConnectionState.LocalApp \
   TLS13.Impl.Messages \
+  TLS13.AEAD \
+  TLS13.KEX \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Impl.Server.Types \
@@ -630,10 +741,19 @@ SERVER_DRIVER_MODULES = \
   Common.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
-  TLS13.Impl.Server.Driver.Transport \
-  TLS13.Impl.Server.Driver.Network \
+  TLS13.Impl.Server.Driver.BufferedNetwork \
+  TLS13.Impl.Server.Driver.BufferedTransport \
+  TLS13.Impl.Server.Driver.BufferedLifecycle \
+  TLS13.Impl.Server.Driver.BufferedHandshake \
+  TLS13.Impl.Server.Driver.BufferedLocal \
+  TLS13.Impl.Server.Driver.BufferedWorkflow \
+  TLS13.Impl.Server.Driver.BufferedTopHandshake \
+  TLS13.Impl.Server.Driver.BufferedChannel \
+  TLS13.Impl.Server.Driver.BufferedAccept \
+  TLS13.Impl.Server.Driver.BufferedSend \
+  TLS13.Impl.Server.Driver.BufferedReceive \
+  TLS13.Impl.Server.Driver.BufferedClose \
   TLS13.Impl.Server.Driver.Local \
-  TLS13.Impl.Server.Driver.Handshake \
   TLS13.Impl.Server.Driver
 SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
@@ -643,11 +763,15 @@ SERVER_DRIVER_KRML_FILES = \
   $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 TLS13_BUNDLE_KRML_FILES = \
+  $(OUTPUT_DIR)/Common_BufferedTCP_Internal.krml \
+  $(OUTPUT_DIR)/Common_BufferedTCP.krml \
+  $(OUTPUT_DIR)/Common_BufferedStream.krml \
+  $(OUTPUT_DIR)/Common_Memmove.krml \
+  $(OUTPUT_DIR)/TLS13_Trace.krml \
+  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml \
   $(CLIENT_DRIVER_KRML_FILES) \
   $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES))) \
-  $(OUTPUT_DIR)/TLS13_Lib_Memmove.krml \
-  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES)))
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -734,7 +858,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	start=$$(date +%s); \
 	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
 	  "$@" "$$module" "$$src" "$$(date -Is)"; \
-	$(FSTAR) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
+	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
 	  --codegen krml --extract_module "$$module" "$$src" --krmloutput "$@"; \
 	status=$$?; end=$$(date +%s); \
 	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
@@ -757,6 +881,13 @@ $(TLS13_BUNDLE_DIR):
 
 extract-tls13-bundle: $(TLS13_BUNDLE_STAMP)
 
+# KaRaMeL bundling notes:
+#  * -bundle 'Common.BufferedStream': the module is specification-only; without
+#    a bundle of its own KaRaMeL emits a .c file for it with no matching .h.
+#  * -drop of TLS13.ConnectionLog / TLS13.Spec.StateMachine* / TLS13.Spec.Endpoint*
+#    / TLS13.Transcript: these are pure specification modules.  KaRaMeL emits
+#    their (ghost) datatypes into a public header that references types it keeps
+#    private, which does not compile.  Nothing in the extracted C uses them.
 $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	@echo "Extracting TLS13 client/server driver bundle..."
 	@rm -f $(TLS13_BUNDLE_DIR)/*.c $(TLS13_BUNDLE_DIR)/*.h $(TLS13_BUNDLE_DIR)/internal/*.h
@@ -773,11 +904,16 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/common_tcp_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
+	  -add-include '"../../c_stubs/atlas_trace.h"' \
 	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library TLS13.Lib.Memmove -library Common.TCP \
-	  -library TLS13.OpenSSL \
-	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
+	  -library TLS13.OpenSSL -library TLS13.Trace \
+	  -bundle 'Common.BufferedStream' \
+	  -bundle 'TLS13.Trace' \
+	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*,TLS13.Wire.Semantics' \
 	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
+	  -drop TLS13.ConnectionLog -drop TLS13.Spec.StateMachine -drop 'TLS13.Spec.StateMachine.*' \
+	  -drop 'TLS13.Spec.Endpoint.*' -drop TLS13.Transcript \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
@@ -795,12 +931,19 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
+  $(HACL_DIR)/Hacl_Hash_MD5.c \
+  $(HACL_DIR)/Hacl_Hash_SHA1.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
+  $(HACL_DIR)/Hacl_Hash_SHA3.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2b.c \
+  $(HACL_DIR)/Hacl_Hash_Blake2s.c \
   $(HACL_DIR)/Hacl_HMAC.c \
+  $(HACL_DIR)/Hacl_HKDF.c \
   $(HACL_DIR)/Hacl_Curve25519_51.c \
   $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
   $(HACL_DIR)/Hacl_Chacha20.c \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
+  $(HACL_DIR)/Lib_Memzero0.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
 
 HACL_SIMD256 ?= $(shell \
@@ -847,11 +990,18 @@ HACL_ACCEL_C_MODULES = \
   EverCrypt_AutoConfig2 \
   EverCrypt_Hash \
   EverCrypt_HMAC \
-  Hacl_Curve25519_64
+  EverCrypt_HKDF \
+  EverCrypt_Curve25519 \
+  EverCrypt_AEAD \
+  EverCrypt_Chacha20Poly1305 \
+  Hacl_Curve25519_64 \
+  Hacl_P256 \
+  Hacl_Bignum
 HACL_ACCEL_ASM_MODULES = \
   cpuid-x86_64-linux \
   sha256-x86_64-linux \
-  curve25519-x86_64-linux
+  curve25519-x86_64-linux \
+  aesgcm-x86_64-linux
 HACL_ACCEL_MODULES = $(HACL_ACCEL_C_MODULES) $(HACL_ACCEL_ASM_MODULES)
 HACL_ACCEL_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_obj
 HACL_ACCEL_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_benchmark_obj
@@ -870,6 +1020,10 @@ HACL_ACCEL_CONFIG_DEP =
 HACL_ACCEL_TEST_OBJECTS =
 HACL_ACCEL_BENCHMARK_OBJECTS =
 HACL_ACCEL_PROFILE_OBJECTS =
+# Hacl_P256 supplies the secp256r1 key exchange.  When HACL_ACCEL=1 it is
+# already built as an accelerated object (HACL_ACCEL_C_MODULES), so compiling it
+# again here would give duplicate definitions at link time.
+HACL_WRAPPER_SOURCES += $(HACL_DIR)/Hacl_P256.c
 endif
 
 HACL_TEST_OBJECTS = $(HACL_SIMD256_TEST_OBJECTS) $(HACL_ACCEL_TEST_OBJECTS)
@@ -878,7 +1032,8 @@ HACL_BENCHMARK_OBJECTS = \
 HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJECTS)
 
 ECHO_STUB_SOURCES = \
-  runtime/tls13_lib_memmove.c \
+  runtime/common_memmove.c \
+  c_stubs/atlas_trace.c \
   c_stubs/common_tcp_karamel.c \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
@@ -887,7 +1042,8 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
-  runtime/tls13_lib_memmove.h \
+  runtime/common_memmove.h \
+  c_stubs/atlas_trace.h \
   c_stubs/common_tcp_karamel.h \
   c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_bytes_karamel.h \
@@ -899,8 +1055,10 @@ ECHO_STUB_HEADERS = \
 # Common C flags for all test builds
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
+  -DATLAS_ENABLE_LOGGING=$(ATLAS_LOGGING) \
   -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
   -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
   -I c_stubs \
   -I runtime \
   -I $(HACL_ACCEL_CONFIG_DIR) \
@@ -912,6 +1070,39 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -I $(HACL_KL)
 
 LDFLAGS_COMMON = -Wl,--gc-sections
+
+TLS13_PROVIDER_DIR = $(EXTRACT_DIR)/atlas_provider/logging-$(ATLAS_LOGGING)
+TLS13_PROVIDER_OBJ_DIR = $(TLS13_PROVIDER_DIR)/obj
+TLS13_PROVIDER_ARCHIVE = $(TLS13_PROVIDER_DIR)/libatlas_tls13_client_engine.a
+TLS13_PROVIDER_C_SOURCES = \
+  c_stubs/atlas_trace.c \
+  c_stubs/tls13_crypto_external.c \
+  runtime/common_memmove.c \
+  runtime/tls13_client_engine.c \
+  $(HACL_WRAPPER_SOURCES) \
+  $(KRML_HOME)/krmllib/c/fstar_uint32.c
+TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
+
+CHROMIUM_SRC ?= $(abspath ../chromium/src)
+DEPOT_TOOLS ?= $(abspath ../depot_tools)
+CHROMIUM_OUT ?= out/atlas
+CHROMIUM_OUT_ABS = $(if $(filter /%,$(CHROMIUM_OUT)),$(CHROMIUM_OUT),$(CHROMIUM_SRC)/$(CHROMIUM_OUT))
+CHROMIUM_DEMO_BUNDLE = $(EXTRACT_DIR)/atlas-chromium-demo-linux-x86_64.tar.gz
+
+# The logging and non-logging bundles are built from the same CHROMIUM_OUT, so
+# they must be distinguishable once extracted: they unpack into differently
+# named directories and record ATLAS logging state in BUILD_INFO.
+ifeq ($(ATLAS_LOGGING),1)
+CHROMIUM_DEMO_BUNDLE_LOGGING_FLAG = --logging
+CHROMIUM_DEMO_BUNDLE_DIR_NAME = atlas-chromium-demo-logging-linux-x86_64
+else
+CHROMIUM_DEMO_BUNDLE_LOGGING_FLAG =
+CHROMIUM_DEMO_BUNDLE_DIR_NAME = atlas-chromium-demo-linux-x86_64
+endif
+
+CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
+CHROMIUM_DEMO_C_SOURCES = c_stubs/tls13_openssl_stubs.c
+CHROMIUM_DEMO_OBJ_STAMP = $(CHROMIUM_DEMO_OBJ_DIR)/.built
 
 $(HACL_SIMD256_TEST_OBJ_DIR) \
 $(HACL_SIMD256_BENCHMARK_OBJ_DIR) \
@@ -995,8 +1186,9 @@ define link_benchmark
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(2)/*.o \
 	  $(4) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/tls13_lib_memmove.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
@@ -1049,16 +1241,27 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
 # ──────────────────────────────────────────────────────────────────────────────
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
-.PHONY: test test-extracted-client-openssl-echo test-openssl-echo \
-  test-openssl-sclient test-hacl-stubs check-c-stubs
+.PHONY: atlas-client-provider tls13-client-provider chromium-install-provider \
+  chromium-configure chromium-net chromium-browser chromium-browser-logging \
+  test-chromium-browser test-chromium-browser-logging \
+  test-chromium-browser-public chromium-demo-bundle \
+  chromium-demo-bundle-logging test-chromium-demo-bundle \
+  test-chromium-demo-bundle-logging \
+  test test-extracted-client-openssl-echo test-openssl-echo \
+  test-client-engine-openssl-echo test-chromium-client-demo \
+  test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
+  test-key-schedule-bindings check-c-stubs
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-echo test-openssl-sclient
+test: verify verify-samples check-c-stubs test-hacl-stubs test-key-schedule-bindings \
+  test-openssl-echo test-client-engine-openssl-echo \
+  test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
 	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
 	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
+	  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
 	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
@@ -1077,6 +1280,28 @@ test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
 
 test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
+
+test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) c_stubs/tls13_crypto_external.c \
+  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(HACL_TEST_OBJECTS) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Record.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_AEAD.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_ArrayCopy.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  test/unit/test_key_schedule_bindings.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-key-schedule-bindings: test/test_key_schedule_bindings
+	./test/test_key_schedule_bindings
 
 # ── OpenSSL Echo Test ──────────────────────────────────────────────
 TEST_CERT_STAMP = test/certs/.generated
@@ -1097,8 +1322,9 @@ test/test_extracted_client_openssl_echo: \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/tls13_lib_memmove.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -1110,6 +1336,57 @@ test/test_extracted_client_openssl_echo: \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-client-openssl-echo: test-openssl-echo
+
+# Interop harness: drives the verified client driver against real public HTTPS
+# servers.  Not part of `make test` (it needs outbound network access); run it
+# explicitly via test/interop/sweep.sh.
+test/test_interop_client: \
+  test/unit/test_interop_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_interop_client.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+.PHONY: interop-client
+interop-client: test/test_interop_client
+
+test/test_extracted_client_engine_openssl_echo: \
+  test/unit/test_extracted_client_engine_openssl_echo.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_client_engine.c runtime/tls13_client_engine.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_engine.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_extracted_client_engine_openssl_echo.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test/openssl_echo_server: test/openssl_echo_server.c
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
@@ -1139,6 +1416,384 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 	  ./test/test_extracted_client_openssl_echo 127.0.0.1 $$port test/certs/ca.pem; \
 	  wait $$server_pid
 
+test-client-engine-openssl-echo: test/openssl_echo_server \
+  test/test_extracted_client_engine_openssl_echo \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+	@rm -f test/client_engine_echo_server.port test/client_engine_echo_server.log
+	@set -e; \
+	  ./test/openssl_echo_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    test/client_engine_echo_server.port > test/client_engine_echo_server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f test/client_engine_echo_server.port' EXIT; \
+	  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do \
+	    test -s test/client_engine_echo_server.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  if ! test -s test/client_engine_echo_server.port; then \
+	    echo "OpenSSL echo server did not start"; \
+	    cat test/client_engine_echo_server.log; \
+	    exit 1; \
+	  fi; \
+	  port=$$(cat test/client_engine_echo_server.port); \
+	  ./test/test_extracted_client_engine_openssl_echo \
+	    127.0.0.1 $$port test/certs/ca.pem; \
+	  wait $$server_pid
+
+# ── Chromium-style Async HTTPS Demo ────────────────────────────────
+$(TLS13_PROVIDER_OBJ_STAMP): $(TLS13_PROVIDER_C_SOURCES) \
+  runtime/tls13_client_engine.h $(ECHO_STUB_HEADERS) \
+  $(TLS13_BUNDLE_STAMP) $(HACL_ACCEL_CONFIG_DEP) Makefile | check-deps
+	@rm -rf $(TLS13_PROVIDER_OBJ_DIR)
+	@mkdir -p $(TLS13_PROVIDER_OBJ_DIR)
+	@set -e; for src in $(TLS13_PROVIDER_C_SOURCES); do \
+	  obj="$(TLS13_PROVIDER_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+$(TLS13_PROVIDER_ARCHIVE): $(TLS13_BUNDLE_OBJS_STAMP) \
+  $(TLS13_PROVIDER_OBJ_STAMP) $(HACL_TEST_OBJECTS)
+	@mkdir -p $(TLS13_PROVIDER_DIR)
+	rm -f $@
+	$(AR) rcs $@ \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(TLS13_PROVIDER_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS)
+
+tls13-client-provider: $(TLS13_PROVIDER_ARCHIVE)
+	@echo "ATLAS TLS 1.3 client provider: $(TLS13_PROVIDER_ARCHIVE)"
+
+atlas-client-provider: tls13-client-provider
+
+chromium-install-provider: $(TLS13_PROVIDER_ARCHIVE)
+	python3 runtime/chromium/install_chromium_overlay.py \
+	  --chromium-src "$(CHROMIUM_SRC)" \
+	  --provider-archive "$(abspath $(TLS13_PROVIDER_ARCHIVE))"
+
+chromium-configure: chromium-install-provider
+	cd "$(CHROMIUM_SRC)" && \
+	  PATH="$(DEPOT_TOOLS):$$PATH" gn gen "$(CHROMIUM_OUT)" \
+	    --args='is_debug=false is_component_build=false symbol_level=0 blink_symbol_level=0 v8_symbol_level=0 use_remoteexec=false'
+
+chromium-net: chromium-configure
+	cd "$(CHROMIUM_SRC)" && \
+	  PATH="$(DEPOT_TOOLS):$$PATH" autoninja -C "$(CHROMIUM_OUT)" net
+
+chromium-browser: chromium-configure
+	cd "$(CHROMIUM_SRC)" && \
+	  PATH="$(DEPOT_TOOLS):$$PATH" autoninja -C "$(CHROMIUM_OUT)" chrome
+
+chromium-browser-logging:
+	$(MAKE) ATLAS_LOGGING=1 chromium-browser
+
+test-chromium-browser: chromium-browser test/openssl_http_server \
+  test/certs/chain.pem test/certs/leaf.key
+	@rm -f $(EXTRACT_DIR)/chromium_browser.port \
+	  $(EXTRACT_DIR)/chromium_browser.server.log \
+	  $(EXTRACT_DIR)/chromium_browser.log \
+	  $(EXTRACT_DIR)/chromium_browser.dom
+	@rm -rf $(EXTRACT_DIR)/chromium_browser_profile
+	@set -e; \
+	  ./test/openssl_http_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    $(EXTRACT_DIR)/chromium_browser.port \
+	    > $(EXTRACT_DIR)/chromium_browser.server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f $(EXTRACT_DIR)/chromium_browser.port' EXIT; \
+	  for _i in $$(seq 1 100); do \
+	    test -s $(EXTRACT_DIR)/chromium_browser.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  test -s $(EXTRACT_DIR)/chromium_browser.port; \
+	  port=$$(cat $(EXTRACT_DIR)/chromium_browser.port); \
+	  timeout 60 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
+	    --headless --no-sandbox --disable-gpu --disable-quic \
+	    --disable-background-networking \
+	    --disable-component-update --disable-sync \
+	    --disable-field-trial-config \
+	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
+	    --enable-logging=stderr --log-level=0 --no-first-run \
+	    --no-proxy-server --ignore-certificate-errors \
+	    --use-atlas \
+	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_browser_profile)" \
+	    --dump-dom "https://localhost:$$port/" \
+	    > $(EXTRACT_DIR)/chromium_browser.dom \
+	    2> $(EXTRACT_DIR)/chromium_browser.log; \
+	  wait $$server_pid; \
+	  grep -q "verified chromium demo" $(EXTRACT_DIR)/chromium_browser.dom; \
+	  grep -q "ATLAS provider selected for localhost:" \
+	    $(EXTRACT_DIR)/chromium_browser.log; \
+	  echo "Chromium ATLAS HTTPS smoke test passed"
+
+test-chromium-browser-logging:
+	@rm -f $(EXTRACT_DIR)/atlas_chromium_trace.jsonl \
+	  $(EXTRACT_DIR)/atlas_chromium_trace.txt
+	ATLAS_TRACE_FILE="$(abspath $(EXTRACT_DIR)/atlas_chromium_trace.jsonl)" \
+	  $(MAKE) ATLAS_LOGGING=1 test-chromium-browser
+	python3 runtime/analyze_atlas_trace.py \
+	  $(EXTRACT_DIR)/atlas_chromium_trace.jsonl --timeline \
+	  > $(EXTRACT_DIR)/atlas_chromium_trace.txt
+	@echo "ATLAS trace: $(EXTRACT_DIR)/atlas_chromium_trace.jsonl"
+	@echo "ATLAS analysis: $(EXTRACT_DIR)/atlas_chromium_trace.txt"
+
+test-chromium-browser-public: chromium-browser
+	@rm -f $(EXTRACT_DIR)/chromium_google.dom \
+	  $(EXTRACT_DIR)/chromium_google.log \
+	  $(EXTRACT_DIR)/chromium_microsoft.dom \
+	  $(EXTRACT_DIR)/chromium_microsoft.log
+	@rm -rf $(EXTRACT_DIR)/chromium_google_profile \
+	  $(EXTRACT_DIR)/chromium_microsoft_profile
+	@set -e; \
+	  timeout 90 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
+	    --headless --no-sandbox --disable-gpu --disable-quic \
+	    --disable-background-networking \
+	    --disable-component-update --disable-sync \
+	    --disable-field-trial-config \
+	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
+	    --enable-logging=stderr --log-level=0 --no-first-run \
+	    --no-proxy-server --use-atlas \
+	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_google_profile)" \
+	    --dump-dom "https://www.google.com/" \
+	    > $(EXTRACT_DIR)/chromium_google.dom \
+	    2> $(EXTRACT_DIR)/chromium_google.log; \
+	  grep -q '<title>Google</title>' $(EXTRACT_DIR)/chromium_google.dom; \
+	  grep -q "ATLAS provider selected for www.google.com:443" \
+	    $(EXTRACT_DIR)/chromium_google.log; \
+	  timeout 90 "$(CHROMIUM_SRC)/$(CHROMIUM_OUT)/chrome" \
+	    --headless --no-sandbox --disable-gpu --disable-quic \
+	    --disable-background-networking \
+	    --disable-component-update --disable-sync \
+	    --disable-field-trial-config \
+	    --disable-features=EncryptedClientHello,AddTLSServerHandshakePadding,TLSTrustAnchorIDs \
+	    --enable-logging=stderr --log-level=0 --no-first-run \
+	    --no-proxy-server --use-atlas \
+	    --user-data-dir="$(abspath $(EXTRACT_DIR)/chromium_microsoft_profile)" \
+	    --dump-dom "https://www.microsoft.com/" \
+	    > $(EXTRACT_DIR)/chromium_microsoft.dom \
+	    2> $(EXTRACT_DIR)/chromium_microsoft.log; \
+	  grep -q '<title>Microsoft' $(EXTRACT_DIR)/chromium_microsoft.dom; \
+	  grep -q "ATLAS provider selected for www.microsoft.com:443" \
+	    $(EXTRACT_DIR)/chromium_microsoft.log; \
+	  echo "Chromium ATLAS public HTTPS smoke tests passed"
+
+$(CHROMIUM_DEMO_BUNDLE): chromium-browser test/openssl_http_server \
+  test/certs/chain.pem test/certs/leaf.key \
+  runtime/chromium/package_demo_bundle.py \
+  $(wildcard runtime/chromium/bundle/*)
+	python3 runtime/chromium/package_demo_bundle.py \
+	  --repository "$(CURDIR)" \
+	  --chromium-source "$(CHROMIUM_SRC)" \
+	  --chromium-out "$(CHROMIUM_OUT_ABS)" \
+	  --server test/openssl_http_server \
+	  --certificate test/certs/chain.pem \
+	  --private-key test/certs/leaf.key \
+	  --bundle-sources runtime/chromium/bundle \
+	  --trace-analyzer runtime/analyze_atlas_trace.py \
+	  --output "$@" $(CHROMIUM_DEMO_BUNDLE_LOGGING_FLAG)
+
+chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
+	@echo "Chromium demo bundle: $(CHROMIUM_DEMO_BUNDLE)"
+
+chromium-demo-bundle-logging:
+	$(MAKE) ATLAS_LOGGING=1 \
+	  CHROMIUM_DEMO_BUNDLE=$(EXTRACT_DIR)/atlas-chromium-demo-logging-linux-x86_64.tar.gz \
+	  chromium-demo-bundle
+
+test-chromium-demo-bundle: $(CHROMIUM_DEMO_BUNDLE)
+	@set -e; \
+	  test_dir=$$(mktemp -d "$(abspath $(EXTRACT_DIR))/chromium_bundle_test.XXXXXX"); \
+	  trap 'rm -rf "'"$$test_dir"'"' EXIT; \
+	  tar xzf "$(CHROMIUM_DEMO_BUNDLE)" -C "$$test_dir"; \
+	  cd "$$test_dir/$(CHROMIUM_DEMO_BUNDLE_DIR_NAME)"; \
+	  sha256sum --check SHA256SUMS; \
+	  timeout 90 \
+	    ./run-demo.sh --headless
+
+test-chromium-demo-bundle-logging:
+	$(MAKE) ATLAS_LOGGING=1 \
+	  CHROMIUM_DEMO_BUNDLE=$(EXTRACT_DIR)/atlas-chromium-demo-logging-linux-x86_64.tar.gz \
+	  test-chromium-demo-bundle
+
+$(CHROMIUM_DEMO_OBJ_STAMP): $(CHROMIUM_DEMO_C_SOURCES) \
+  c_stubs/tls13_openssl_stubs.h Makefile | check-deps
+	@rm -rf $(CHROMIUM_DEMO_OBJ_DIR)
+	@mkdir -p $(CHROMIUM_DEMO_OBJ_DIR)
+	@set -e; for src in $(CHROMIUM_DEMO_C_SOURCES); do \
+	  obj="$(CHROMIUM_DEMO_OBJ_DIR)/$$(basename "$$src" .c).o"; \
+	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
+	    -c "$$src" -o "$$obj"; \
+	done
+	@touch $@
+
+test/test_chromium_client_socket_demo: \
+  test/unit/test_chromium_client_socket_demo.cc \
+  runtime/chromium/tls13_client_socket.cc \
+  runtime/chromium/tls13_client_socket.h \
+  runtime/tls13_client_engine.h \
+  $(TLS13_PROVIDER_ARCHIVE) $(CHROMIUM_DEMO_OBJ_STAMP) | check-deps
+	$(CXX) -std=c++17 $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  runtime/chromium/tls13_client_socket.cc \
+	  test/unit/test_chromium_client_socket_demo.cc \
+	  $(CHROMIUM_DEMO_OBJ_DIR)/*.o \
+	  $(TLS13_PROVIDER_ARCHIVE) \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test/openssl_http_server: test/openssl_http_server.c
+	$(CC) -Wall -Wextra test/openssl_http_server.c \
+	  -lssl -lcrypto -o $@
+
+test-openssl-http-preconnect: test/openssl_http_server \
+  test/certs/chain.pem test/certs/leaf.key | $(EXTRACT_DIR)
+	@rm -f $(EXTRACT_DIR)/http_preconnect.port \
+	  $(EXTRACT_DIR)/http_preconnect.server.log \
+	  $(EXTRACT_DIR)/http_preconnect.response
+	@set -e; \
+	  ./test/openssl_http_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    $(EXTRACT_DIR)/http_preconnect.port \
+	    > $(EXTRACT_DIR)/http_preconnect.server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f $(EXTRACT_DIR)/http_preconnect.port' EXIT; \
+	  for _i in $$(seq 1 100); do \
+	    test -s $(EXTRACT_DIR)/http_preconnect.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  test -s $(EXTRACT_DIR)/http_preconnect.port; \
+	  port=$$(cat $(EXTRACT_DIR)/http_preconnect.port); \
+	  timeout 5 openssl s_client -quiet -connect 127.0.0.1:$$port \
+	    -tls1_3 -groups X25519 \
+	    -ciphersuites TLS_CHACHA20_POLY1305_SHA256 \
+	    -no_ign_eof \
+	    </dev/null >/dev/null 2>&1 || true; \
+	  printf 'GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' | \
+	    timeout 5 openssl s_client -quiet -connect 127.0.0.1:$$port \
+	      -tls1_3 -groups X25519 \
+	      -ciphersuites TLS_CHACHA20_POLY1305_SHA256 \
+	      > $(EXTRACT_DIR)/http_preconnect.response 2>/dev/null; \
+	  wait $$server_pid; \
+	  grep -q "verified chromium demo" \
+	    $(EXTRACT_DIR)/http_preconnect.response; \
+	  grep -q "Ignoring TLS connection closed before an HTTP request" \
+	    $(EXTRACT_DIR)/http_preconnect.server.log; \
+	  echo "OpenSSL HTTP server speculative-preconnect test passed"
+
+test-chromium-client-demo: test/openssl_http_server \
+  test/test_chromium_client_socket_demo \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key
+	@rm -f test/chromium_http_server.port test/chromium_http_server.log
+	@set -e; \
+	  ./test/openssl_http_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    test/chromium_http_server.port > test/chromium_http_server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f test/chromium_http_server.port' EXIT; \
+	  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do \
+	    test -s test/chromium_http_server.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  if ! test -s test/chromium_http_server.port; then \
+	    echo "OpenSSL HTTP server did not start"; \
+	    cat test/chromium_http_server.log; \
+	    exit 1; \
+	  fi; \
+	  port=$$(cat test/chromium_http_server.port); \
+	  ./test/test_chromium_client_socket_demo \
+	    127.0.0.1 $$port test/certs/ca.pem; \
+	  wait $$server_pid
+# ── HTTP sample server over the VERIFIED TLS 1.3 server ────────────
+# Links http_sample/interop/http_server.c (verified HTTP/1.1 leaves) against the
+# extracted TLS13 server driver, so BOTH the record layer and the HTTP codec are
+# extracted Pulse code.  Selected at run time with HTTP_TLS_BACKEND=verified.
+HTTP_SAMPLE_DIR = http_sample
+HTTP_SAMPLE_EXTRACT = $(HTTP_SAMPLE_DIR)/_extract
+HTTP_SAMPLE_VTLS_BIN = $(HTTP_SAMPLE_EXTRACT)/http_server_vtls
+
+.PHONY: http-sample-vtls-server
+http-sample-vtls-server: $(HTTP_SAMPLE_VTLS_BIN)
+
+$(HTTP_SAMPLE_VTLS_BIN): \
+  $(HTTP_SAMPLE_DIR)/interop/http_server.c $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	@$(MAKE) --no-print-directory -C $(HTTP_SAMPLE_DIR) extract-loops
+	@mkdir -p $(HTTP_SAMPLE_EXTRACT)/vtls_obj
+	@# The HTTP translation units are extracted against the VARIADIC Common.TCP
+	@# stub declarations (they pass erased ghost arguments), which clash with the
+	@# TLS13 bundle's strict Common_TCP.h -- so compile them on their own.
+	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -DHTTP_VERIFIED_TLS \
+	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
+	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I runtime -I $(HTTP_SAMPLE_EXTRACT) \
+	  -I $(KRML_HOME)/include -I $(KRML_HOME)/include/krml \
+	  -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -c $(HTTP_SAMPLE_DIR)/interop/http_server.c \
+	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o
+	$(CC) -std=gnu11 -D_DEFAULT_SOURCE \
+	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
+	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I $(HTTP_SAMPLE_EXTRACT) \
+	  -I $(KRML_HOME)/include -I $(KRML_HOME)/include/krml \
+	  -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -c $(HTTP_SAMPLE_EXTRACT)/HTTP_Verified.c \
+	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/HTTP_Verified.o
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o \
+	  $(HTTP_SAMPLE_EXTRACT)/vtls_obj/HTTP_Verified.o \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+	@echo "Built $@ (verified HTTP/1.1 over verified TLS 1.3)"
+
+# End-to-end demo/test: the verified HTTP server serving HTTPS over the VERIFIED
+# TLS 1.3 record layer.  curl is pinned to the one profile the verified server
+# implements (TLS 1.3, X25519, TLS_CHACHA20_POLY1305_SHA256, rsa_pss_rsae_sha256).
+HTTP_SAMPLE_VTLS_PORT ?= 18443
+HTTP_SAMPLE_VTLS_CLIENT = $(HTTP_SAMPLE_EXTRACT)/vtls_client
+
+$(HTTP_SAMPLE_VTLS_CLIENT): $(HTTP_SAMPLE_DIR)/interop/vtls_client.c
+	@mkdir -p $(HTTP_SAMPLE_EXTRACT)
+	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -Wall -Wextra -Wno-deprecated-declarations \
+	  $< -lssl -lcrypto -o $@
+
+.PHONY: test-http-sample-vtls
+test-http-sample-vtls: $(HTTP_SAMPLE_VTLS_BIN) $(HTTP_SAMPLE_VTLS_CLIENT) \
+  test/certs/leaf.der test/certs/ca.pem test/certs/leaf.key
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo " verified HTTP/1.1 over VERIFIED TLS 1.3 (no OpenSSL on the server path)"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@rm -rf _run_vtls && mkdir -p _run_vtls
+	@printf 'verified HTTP over verified TLS %s\n' "$$(date +%s)" > _run_vtls/body.txt
+	@set -e; \
+	  HTTP_TLS_BACKEND=verified \
+	  HTTP_TLS_CERT=test/certs/leaf.der \
+	  HTTP_TLS_KEY=test/certs/leaf.key \
+	  ./$(HTTP_SAMPLE_VTLS_BIN) $(HTTP_SAMPLE_VTLS_PORT) _run_vtls/body.txt \
+	    > _run_vtls/server.log 2>&1 & \
+	  srv=$$!; \
+	  trap 'kill '"$$srv"' 2>/dev/null || true' EXIT; \
+	  sleep 1; \
+	  rc=0; \
+	  ./$(HTTP_SAMPLE_VTLS_CLIENT) localhost $(HTTP_SAMPLE_VTLS_PORT) test/certs/ca.pem / \
+	    > _run_vtls/recv.txt 2> _run_vtls/client.log || rc=$$?; \
+	  cat _run_vtls/client.log; \
+	  if [ "$$rc" = "0" ] && cmp -s _run_vtls/recv.txt _run_vtls/body.txt; then \
+	    echo "  RESULT: PASS - verified HTTP body served over the VERIFIED TLS 1.3 record layer"; \
+	  else \
+	    echo "  RESULT: FAIL"; sed -n '1,40p' _run_vtls/server.log; exit 1; \
+	  fi
+
 # ── Extracted Server / OpenSSL Client Test ─────────────────────────
 test/test_extracted_server_openssl_client: \
   test/unit/test_extracted_server_openssl_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
@@ -1149,8 +1804,9 @@ test/test_extracted_server_openssl_client: \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/tls13_lib_memmove.c \
+	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
 	  c_stubs/common_tcp_karamel.c \
 	  c_stubs/common_tcp_stubs.c \
@@ -1180,6 +1836,28 @@ check-toolchain:
 	  echo "QuackyDucky not found at $(QD_EXE).  Build EverParse with ./setup.sh (or set QD_EXE)."; \
 	  exit 1; \
 	fi
+	@if ! command -v "z3-$(Z3_VERSION)" >/dev/null 2>&1; then \
+	  echo "Z3 $(Z3_VERSION) not found (F* looks for a binary named 'z3-$(Z3_VERSION)' on PATH)."; \
+	  echo "Install it with scripts/install-z3.sh, or pick another version with Z3_VERSION=<v>."; \
+	  exit 1; \
+	fi
+	@if [ "$(CHECK_EVERPARSE_PIN)" != "0" ] && [ -n "$(EVERPARSE_COMMIT)" ] && \
+	    [ -d "$(EVERPARSE_HOME)/.git" ]; then \
+	  have=$$(git -C "$(EVERPARSE_HOME)" rev-parse HEAD 2>/dev/null || echo unknown); \
+	  if [ "$$have" != "$(EVERPARSE_COMMIT)" ]; then \
+	    echo "EverParse toolchain at $(EVERPARSE_HOME) is at $$have,"; \
+	    echo "but scripts/build-everparse.sh pins $(EVERPARSE_COMMIT)."; \
+	    echo ""; \
+	    echo "A drifted toolchain verifies against a different F*/Pulse than CI, so"; \
+	    echo "a green local build proves nothing.  F* reports the same --version for"; \
+	    echo "both, so this check is the only way to notice."; \
+	    echo ""; \
+	    echo "Rebuild it with:  bash scripts/build-everparse.sh"; \
+	    echo "then delete every _cache (the old F* invalidates all .checked files)."; \
+	    echo "Set CHECK_EVERPARSE_PIN=0 to bypass this check deliberately."; \
+	    exit 1; \
+	  fi; \
+	fi
 
 check-z3:
 	@for version in "$(TLS_Z3_VERSION)" "$(DY_Z3_VERSION)"; do \
@@ -1201,16 +1879,70 @@ clean:
 	  $(DY_HOME)/hints $(DY_HOME)/obj $(DY_HOME)/cache \
 	  $(DY_HOME)/ml/lib/src \
 	  test/openssl_echo_server test/test_extracted_client_openssl_echo \
+	  test/test_extracted_client_engine_openssl_echo \
+	  test/openssl_http_server test/test_chromium_client_socket_demo \
 	  test/test_extracted_server_openssl_client \
+	  test/test_key_schedule_bindings \
 	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
 	  test/openssl_echo_server.log \
+	  test/client_engine_echo_server.port \
+	  test/client_engine_echo_server.log \
+	  test/chromium_http_server.port \
+	  test/chromium_http_server.log \
 	  $(TEST_CERT_STAMP)
 	find src test -name '*.checked' -delete
+
+# ── Fast proof iteration ───────────────────────────────────────────
+# Re-verifying a whole proof module costs minutes, but the fixed cost of a
+# module (elaboration + loading dependencies) is only ~20-45s; almost all of
+# the rest is SMT attached to individual definitions.  So while iterating on
+# one lemma or one Pulse fn, admit every *other* definition in the file:
+#
+#   make quick FILE=src/impl/TLS13.Impl.ConnectionState.Network.fst \
+#              DEF=TLS13.Impl.ConnectionState.Network.mark_received_encrypted_extensions
+#
+# Measured (warm dependency cache, this machine):
+#   TLS13.Impl.ConnectionState.Network.fst          3m16s -> 58s
+#   ...ProtectedWireClientFinishedInversion.fst     6m56s -> 2m30s
+#
+# DEF may be omitted to typecheck the file with *all* SMT admitted, which
+# checks syntax, binder scoping and slprop framing only (~20-45s).  That is
+# the fastest way to shake out Pulse framing errors.
+#
+# SAFETY: these runs admit proof obligations, so they must never be allowed to
+# deposit a .checked file into the shared $(CACHE_DIR) -- a partially-admitted
+# .checked would be indistinguishable from a real one and would silently
+# poison every downstream module.  We therefore verify into a scratch cache
+# that is seeded (copy-on-write if the filesystem supports it) from the real
+# one and thrown away afterwards.  `make verify` remains the only thing that
+# writes $(CACHE_DIR).
+QUICK_CACHE = _cache_quick
+
+.PHONY: quick
+quick:
+	@if [ -z "$(FILE)" ]; then \
+	  echo "usage: make quick FILE=<path/to/Module.fst> [DEF=<Module.definition>]"; \
+	  exit 1; \
+	fi
+	@rm -rf $(QUICK_CACHE)
+	@cp -r --reflink=auto $(CACHE_DIR) $(QUICK_CACHE) 2>/dev/null \
+	  || cp -r $(CACHE_DIR) $(QUICK_CACHE)
+	@rm -f $(QUICK_CACHE)/$(notdir $(FILE)).checked
+	$(FSTAR_EXE) $(FSTAR_FLAGS) --cache_dir $(QUICK_CACHE) \
+	  $(if $(DEF),--admit_except '$(DEF)',--admit_smt_queries true) \
+	  $(FILE)
+	@rm -f $(QUICK_CACHE)/$(notdir $(FILE)).checked
 
 .PHONY: all verify test extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle \
   test-extracted-client-openssl-echo \
-  test-client test-openssl-echo test-openssl-sclient \
+  test-client test-openssl-echo test-client-engine-openssl-echo \
+  test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \
+  tls13-client-provider chromium-install-provider chromium-configure \
+  chromium-net chromium-browser test-chromium-browser \
+  test-chromium-browser-public chromium-demo-bundle \
+  test-chromium-demo-bundle \
+  test-chromium-demo-bundle-logging \
   check-c-stubs check-toolchain check-deps benchmark benchmark-build \
-  benchmark-profile-build profile clean
+  benchmark-profile-build profile clean quick

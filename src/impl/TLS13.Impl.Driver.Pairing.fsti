@@ -242,6 +242,9 @@ let rec event_trace_has_tls_message
     | CS.ConnNetworkEvent trace_msg ->
       trace_msg.CL.message_direction == dir /\
       trace_msg.CL.message_value == msg
+    | CS.ConnProtectedHandshake step ->
+      dir == CL.Received /\
+      msg == M.TlsHandshake step.CS.protected_handshake_message
     | CS.ConnLocalEvent _ ->
       False) \/
     event_trace_has_tls_message dir msg rest

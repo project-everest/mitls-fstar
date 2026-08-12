@@ -126,6 +126,8 @@ let sent_event_seal_projection
       | protected_msg ->
         sent_single_protected_message_seal model protected_msg raw_sent
     else True
+  | ConnProtectedHandshake _ ->
+    True
   | ConnLocalEvent _ ->
     True
 
@@ -162,6 +164,51 @@ let received_single_protected_message_decode
     W.parse_plaintext opened == Some plaintext /\
     W.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
 
+(* The wire relation for a BUFFERING head step.  It says exactly what such a
+   step claims: this record opens, under the receiver's current read state,
+   to handshake plaintext that IS the step's fragment.  There is no message
+   conjunct, because a buffering step delivers no message -- it sets the
+   plaintext aside so that a later TAIL step can parse a handshake message
+   that began in an earlier record. *)
+let received_protected_handshake_buffer_decode
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (raw_received:B.bytes)
+  : prop =
+  exists outer_fragment opened plaintext.
+    W.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
+    received_record_opened model raw_received outer_fragment opened /\
+    W.parse_plaintext opened == Some plaintext /\
+    plaintext.M.content_type == T.Handshake /\
+    Seq.equal plaintext.M.fragment step.protected_handshake_fragment
+
+let received_protected_handshake_head_decode
+  (model:connection_model)
+  (step:protected_handshake_step)
+  (raw_received:B.bytes)
+  : prop =
+  if step.protected_handshake_buffering
+  then received_protected_handshake_buffer_decode model step raw_received
+  else
+  exists outer_fragment opened plaintext.
+    W.parse_record_wire raw_received ==
+      Some (T.Application_data, outer_fragment, B.length raw_received) /\
+    received_record_opened model raw_received outer_fragment opened /\
+    W.parse_plaintext opened == Some plaintext /\
+    plaintext.M.content_type == T.Handshake /\
+    Seq.equal plaintext.M.fragment step.protected_handshake_fragment /\
+    step.protected_handshake_offset <=
+      B.length step.protected_handshake_fragment /\
+    W.parse_handshake
+      (Seq.slice
+        step.protected_handshake_fragment
+        step.protected_handshake_offset
+        (B.length step.protected_handshake_fragment)) ==
+      Some
+        (step.protected_handshake_message,
+         step.protected_handshake_consumed)
+
 let received_event_decode_projection
   (model:connection_model)
   (ev:conn_event)
@@ -174,6 +221,10 @@ let received_event_decode_projection
          msg.CL.message_direction
          msg.CL.message_value == false
     then received_single_protected_message_decode model msg.CL.message_value raw_received
+    else True
+  | ConnProtectedHandshake step ->
+    if step.protected_handshake_head
+    then received_protected_handshake_head_decode model step raw_received
     else True
   | ConnLocalEvent _ ->
     True

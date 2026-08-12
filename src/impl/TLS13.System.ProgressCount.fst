@@ -9,7 +9,7 @@ module TLS13.System.ProgressCount
   during the handshake, making the per-endpoint event-log LENGTH a deterministic
   function of the endpoint micro-state.  The counts here are that function.
 
-  Both counts are `16 - rank` on the rank-covered handshake stages, reusing the
+  Both counts are `14 - rank` on the rank-covered handshake stages, reusing the
   already-verified obligation-rank measures:
     * client: `PNI.client_application_progress_rank` (covers HsStarted through
       ControlApplicationData);
@@ -27,6 +27,10 @@ module TLS13.System.ProgressCount
 **)
 
 module CS  = TLS13.Spec.StateMachine
+
+(* The client progress count and its two step lemmas live here; re-exported so
+   this module's clients see the same names they always did. *)
+include TLS13.System.ProgressCount.ClientCount
 module CL  = TLS13.ConnectionLog
 module M   = TLS13.Messages
 module PNI = TLS13.Impl.Driver.PairingNoTailInversion
@@ -34,41 +38,6 @@ module SWR = TLS13.Impl.Driver.PairingNoTailServerHelloWindowRank
 module L   = FStar.List.Tot
 module B   = TLS13.Bytes
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
-
-(** Control stages strictly before application data (and before any close). **)
-let pre_appdata_control (c:CS.connection_control_state) : bool =
-  match c with
-  | CS.ControlApplicationData
-  | CS.ControlClosing
-  | CS.ControlClosed
-  | CS.ControlFailed _ -> false
-  | _ -> true
-
-(** All five key-schedule slots empty. **)
-let keys_all_none (keys:CS.key_schedule_state) : prop =
-  keys.CS.ks_shared_secret == None /\
-  keys.CS.ks_client_handshake_traffic == None /\
-  keys.CS.ks_server_handshake_traffic == None /\
-  keys.CS.ks_client_application_traffic == None /\
-  keys.CS.ks_server_application_traffic == None
-
-(** ─────────────────────────────────────────────────────────────────────────
-    Client count.
-    ───────────────────────────────────────────────────────────────────────── **)
-
-let client_progress (m:CS.connection_model) : int =
-  match m.CS.model_control with
-  | CS.ControlNew -> 0
-  | CS.ControlHandshaking _ -> 16 - PNI.client_application_progress_rank m
-  | _ -> 0
-
-(** The one client region-entry shape fact: at ControlNew the key schedule is
-    empty (no install can have fired before leaving ControlNew).  Every other
-    client boundary is handshake-stage -> handshake-stage, handled uniformly by
-    the rank step lemma. **)
-let client_micro_shape (m:CS.connection_model) : prop =
-  CS.ControlNew? m.CS.model_control ==>
-    keys_all_none m.CS.model_handshake.CS.hs_keys
 
 (** A legal client-role step raises `client_progress` by at most one across the
     pre-application-data region. **)
@@ -87,11 +56,11 @@ let lemma_client_progress_step_bound
   = match m.CS.model_control with
     | CS.ControlNew ->
       // Only LocalStartHandshake is legal for a client at ControlNew; it moves
-      // to HsStarted keeping the (empty) key schedule, so rank m' == 15.
+      // to HsStarted keeping the (empty) key schedule, so rank m' == 13.
       assert (keys_all_none m.CS.model_handshake.CS.hs_keys);
       ()
     | CS.ControlHandshaking _ ->
-      // Uniform: client_progress = 16 - rank on both sides; the rank step lemma
+      // Uniform: client_progress = 14 - rank on both sides; the rank step lemma
       // gives rank m <= rank m' + 1 (m' is not Failed, being pre-appdata).
       PNI.lemma_client_application_progress_rank_step m ev m'
 #pop-options
@@ -101,8 +70,8 @@ let lemma_client_progress_step_bound
 
     Prefix (ControlNew .. HsClientHelloReceived) is an additive milestone count;
     the window stages (HsServerHelloSent onward) reuse `SWR.server_hello_window_rank`
-    as `16 - rank`.  The prefix->window boundary (Sent ServerHello) lands on a
-    FRESH HsServerHelloSent whose window rank is exactly 11, giving 16-11 = 5,
+    as `14 - rank`.  The prefix->window boundary (Sent ServerHello) lands on a
+    FRESH HsServerHelloSent whose window rank is exactly 9, giving 14-9 = 5,
     one more than the prefix value 4 at a fully-selected HsClientHelloReceived.
     ───────────────────────────────────────────────────────────────────────── **)
 
@@ -118,7 +87,7 @@ let server_progress (m:CS.connection_model) : int =
   | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
   | CS.ControlHandshaking CS.HsServerFinishedSent
   | CS.ControlHandshaking CS.HsClientFinishedReceived ->
-    16 - SWR.server_hello_window_rank m
+    14 - SWR.server_hello_window_rank m
   | _ -> 0
 
 (** Server region-entry shape facts:
@@ -172,10 +141,10 @@ let lemma_server_progress_step_bound
     | CS.ControlHandshaking CS.HsAwaitingClientHello -> ()
     | CS.ControlHandshaking CS.HsClientHelloReceived ->
       // Select / Derive stay in-stage (+1 in the additive count); Sent ServerHello
-      // crosses to a FRESH HsServerHelloSent whose window rank is exactly 11.
+      // crosses to a FRESH HsServerHelloSent whose window rank is exactly 9.
       (match m'.CS.model_control with
        | CS.ControlHandshaking CS.HsServerHelloSent ->
-         SWR.lemma_server_hello_window_rank_fresh_is_eleven m'
+         SWR.lemma_server_hello_window_rank_fresh_is_nine m'
        | _ -> ())
     | CS.ControlHandshaking CS.HsServerHelloSent
     | CS.ControlHandshaking CS.HsServerEncryptedFlightSent
@@ -245,7 +214,7 @@ let lemma_delta_length (st0 st1:CS.connection_state) (d:CS.connection_delta)
 
     A tiny write-once/monotone key-schedule fact used to pin the client's
     late-obligation rank at the send-Client-Finished boundary (so the boundary
-    length is exactly 16 without an external pin).  It says: an application
+    length is exactly 14 without an external pin).  It says: an application
     traffic secret is present only if the master secret is (FACT 2), and the
     master secret is present only if the shared secret is (FACT 1 — both are set
     atomically by `derive_shared_secret_model`).
@@ -312,6 +281,7 @@ let lemma_ksp_step
               install.CS.install_direction)
            install.CS.install_material
        | _ -> ())
+    | CS.ConnProtectedHandshake _ -> ()
     | CS.ConnNetworkEvent _ -> ()
 #pop-options
 
@@ -323,7 +293,7 @@ let lemma_ksp_step
     Its legality supplies the client-handshake and both application traffic
     secrets; `model_ksp` then supplies the shared secret, so the client's
     late-obligation rank is 0 and `client_progress` at the pre-state is exactly
-    15 — hence the post-state event-log length is exactly 16.
+    13 — hence the post-state event-log length is exactly 14.
     ───────────────────────────────────────────────────────────────────────── **)
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_client_send_cf_progress
@@ -336,7 +306,7 @@ let lemma_client_send_cf_progress
         ~(m.CS.model_control == CS.ControlApplicationData) /\
         m'.CS.model_control == CS.ControlApplicationData /\
         model_ksp m)
-      (ensures pre_appdata_control m.CS.model_control /\ client_progress m == 15)
+      (ensures pre_appdata_control m.CS.model_control /\ client_progress m == 13)
   = ()
 #pop-options
 
@@ -469,21 +439,6 @@ let lemma_client_appdata_appkeys_delta
     rules out the window `Sent`/deliver control changes whose progress step is not
     a strict +1; those are guarded by `server_advances` (unchanged), not the local
     guard, so this restriction loses nothing. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
-let lemma_client_control_change_progress
-  (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
-  : Lemma (requires
-            m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
-            CS.legal_event m ev /\
-            CS.step_model m ev == Some m' /\
-            pre_appdata_control m.CS.model_control /\
-            pre_appdata_control m'.CS.model_control /\
-            client_micro_shape m /\
-            ~(m'.CS.model_control == m.CS.model_control))
-          (ensures client_progress m' > client_progress m)
-  = ()
-#pop-options
-
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
 let lemma_server_control_change_progress
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)

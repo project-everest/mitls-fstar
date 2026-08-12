@@ -23,9 +23,16 @@ jobs:
   # self-contained image and stores it in the GitHub Actions cache (not as a
   # build artifact).  The cache is keyed on the files that determine the image
   # contents — the Dockerfile (base OS + apt packages, incl. lrzsz/tftp and the
-  # in.tftpd setcap) and the toolchain build scripts (setup.sh + the pinned
-  # EverParse commit in scripts/build-everparse.sh) — so the ~1h build only
-  # re-runs when one of those changes; ordinary source edits reuse the cache.
+  # in.tftpd setcap) and the toolchain build scripts (setup.sh, the pinned
+  # EverParse commit in scripts/build-everparse.sh, and the Z3 version pinned in
+  # scripts/install-z3.sh) — so the ~1h build only re-runs when one of those
+  # changes; ordinary source edits reuse the cache.
+  #
+  # scripts/install-z3.sh MUST stay in the key.  The solver lives in the cached
+  # image (tools/everparse/opt/z3), so bumping the Z3 version there without
+  # invalidating the image would leave CI verifying with the old solver while the
+  # Makefile asks for the new one.  Keep this key in sync with Z3_VERSION in the
+  # root Makefile.
   # A lookup-only restore checks whether the image already exists; the build and
   # cache-save steps run only on a miss.
   devcontainer:
@@ -42,7 +49,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: devcontainer.tgz
-          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
           lookup-only: true
 
       - name: Build the dev container image + toolchain
@@ -75,7 +82,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: devcontainer.tgz
-          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
 
   # ── 2. Parallel test jobs ─────────────────────────────────────────────────
   # Each matrix leg restores the cached toolchain image and injects the FRESH
@@ -101,8 +108,36 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Verify the memory-hungry modules first, each as the terminal goal of
+          # its own parallel make, so the subsequent full build never schedules
+          # several of them together and OOMs the runner.  None of them is in
+          # another's dependency closure, so each really does get the machine to
+          # itself; their prerequisites still build in parallel.  A GitHub
+          # ubuntu-latest runner has 4 vCPUs and 16 GB, and `-j4` over this list
+          # would put ~12 GB of fstar.exe resident at once -- before counting
+          # each one's z3 child.
+          #
+          # Select by *peak RSS*, not by .checked file size: the two do not
+          # track each other, and size was what let this list go stale when the
+          # internal-event refactor added Impl.Client.Driver.Receive and System.
+          # Re-measure on a cold cache by sampling
+          #
+          #   ps -eo rss,args | grep [f]star.exe
+          #
+          # during `make -jN verify`, then list everything >= ~2.5 GB.  Current
+          # measurements, in GB:
+          #
+          #   4.28 ProtectedWireHead              3.24 ConnectionState.Lemmas
+          #   3.68 ProtectedWireServerFlightInv.  2.84 Impl.Parser
+          #   3.67 ProtectedWireClientFinishedInv 2.77 System
+          #   3.28 Impl.Client.Driver.Receive     2.50 ClientCanonicalShape
+          #
+          # Ordered by dependency-closure size so later invocations reuse the
+          # earlier ones' work.  A target naming a module that no longer exists
+          # fails fast with "Error 5: No file provided", which is the intended
+          # reminder to re-measure.
           - name: tls-root (make test)
-            cmd: make -j"$(nproc)" _cache/TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.fst.checked && make -j"$(nproc)" test
+            cmd: for m in TLS13.ConnectionState.Lemmas TLS13.ConnectionState.ProtectedWireHead TLS13.Impl.Parser TLS13.Impl.Client.Driver.Receive TLS13.ConnectionState.ClientCanonicalShape TLS13.System TLS13.ConnectionState.ProtectedWireServerFlightInversion TLS13.ConnectionState.ProtectedWireClientFinishedInversion; do make -j"$(nproc)" "_cache/$m.fst.checked" || exit 1; done && make -j"$(nproc)" test
             cache_generated: true
           - name: symbolic (verify)
             cmd: make -j"$(nproc)" verify-symbolic
@@ -114,6 +149,8 @@ jobs:
             cmd: make -j"$(nproc)" -C ymodem_sample vloop-test && make -j"$(nproc)" -C ymodem_sample/interop
           - name: tftp (vloop-test + interop)
             cmd: make -j"$(nproc)" -C tftp_sample vloop-test && make -j"$(nproc)" -C tftp_sample/interop
+          - name: http (vloop-tests + curl interop)
+            cmd: make -j"$(nproc)" -C http_sample vloop-tests && make -C http_sample/interop test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -129,7 +166,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: devcontainer.tgz
-          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh') }}
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
           fail-on-cache-miss: true
 
       - name: Load the dev container image
@@ -138,19 +175,40 @@ jobs:
           rm -f devcontainer.tgz
 
       # Cache the generated-parser/serializer verification for the tls-root leg
-      # only.  Keyed on the wire spec + pinned toolchain, the two inputs that
-      # fully determine the generated TLS13.Wire.Generated.* modules and their
-      # .checked files.  On a miss the run step below recomputes and exports them
-      # (restored/saved via the tarball); actions/cache stores it post-job.  No
-      # restore-keys: a prefix-matched (stale) cache could carry .checked that no
-      # longer match the sources, so we only ever reuse an exact-input match.
+      # only.  On a miss the run step below recomputes and exports the .checked
+      # files (restored/saved via the tarball); actions/cache stores it post-job.
+      # No restore-keys: a prefix-matched (stale) cache could carry .checked that
+      # no longer match the sources, so we only ever reuse an exact-input match.
+      #
+      # The key MUST hash generated/** -- the committed .fst/.fsti sources that
+      # the cached .checked files were produced from -- and not merely the
+      # upstream tls.qd.rfc they are generated from.  F* validates a .checked
+      # against the *source digest*, and --already_cached turns a mismatch into a
+      # hard failure:
+      #
+      #   Warning 241: ... .checked is stale (digest mismatch for <source>)
+      #   Error 317: Expected <source> to already be checked.
+      #
+      # Two branches can share a tls.qd.rfc while their committed generated/
+      # sources differ (regeneration is not bit-reproducible across EverParse
+      # builds, and merges can take generated/ from one side).  That is exactly
+      # how PR #280 failed: agentic and chromium hashed identically on
+      # tls.qd.rfc, the PR restored agentic's entry, and tls-root died on
+      # TLS13.Wire.Generated.OfferedVersion.fsti.  Hashing the derived sources
+      # themselves makes the key describe what is actually in the tarball.
+      #
+      # scripts/build-everparse.sh stays in the key because it pins the F*
+      # binary, whose version stamp a .checked file does record.  The Z3 version
+      # deliberately does NOT appear: --z3version is not part of the .checked
+      # digest (verified by A/B run), so including it would only cause needless
+      # misses.
       - name: Cache generated-parser verification (tls-root)
         id: gencache
         if: ${{ matrix.cache_generated }}
         uses: actions/cache@v4
         with:
           path: generated-checked.tar.gz
-          key: agentic-tls-generated-checked-${{ hashFiles('scripts/build-everparse.sh', 'tls.qd.rfc') }}
+          key: agentic-tls-generated-checked-${{ hashFiles('generated/**', 'scripts/build-everparse.sh') }}
 
       - name: Run ${{ matrix.name }}
         env:

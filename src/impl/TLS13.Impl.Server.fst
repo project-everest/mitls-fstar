@@ -44,6 +44,7 @@ module SK = TLS13.Impl.Server.Keys
 module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module Tr = TLS13.Transcript
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -103,6 +104,10 @@ fn new_server
                 TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal 'credential_identity_bytes)) /\
+                CR.server_config_valid
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
 {
   let s =
@@ -135,11 +140,18 @@ fn new_server
     (CR.server_initial_state
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal 'credential_identity_bytes));
+  CR.lemma_server_initial_state_config_valid
+    (Ghost.reveal 'certificate_chain_bytes)
+    (Ghost.reveal 'credential_identity_bytes);
   fold (connection_exactly
     s
     (CR.server_initial_state
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal 'credential_identity_bytes)));
+  Trace.emit Trace.server_new
+    (SZ.sizet_to_uint64 certificate_chain_len)
+    (SZ.sizet_to_uint64 credential_identity_len)
+    0UL;
   s
 }
 
@@ -181,6 +193,10 @@ fn new_server_erased_credential_identity
                 TLS13.Spec.StateMachine.Replay.connection_state_protected_raw_segmented_replay_consistent
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                CR.server_config_valid
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal credential_identity)))
 {
   let s =
@@ -212,11 +228,18 @@ fn new_server_erased_credential_identity
     (CR.server_initial_state
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal credential_identity));
+  CR.lemma_server_initial_state_config_valid
+    (Ghost.reveal 'certificate_chain_bytes)
+    (Ghost.reveal credential_identity);
   fold (connection_exactly
     s
     (CR.server_initial_state
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal credential_identity)));
+  Trace.emit Trace.server_new
+    (SZ.sizet_to_uint64 certificate_chain_len)
+    0UL
+    1UL;
   s
 }
 
@@ -739,7 +762,7 @@ fn process_send_server_hello_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 95 /\
+                 SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
@@ -748,6 +771,7 @@ fn process_send_server_hello_serialized
                    SS.mk_server_hello_witness
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
+                     (CM.stored_client_hello_session_id 'st0)
                      (T.TLS_CHACHA20_POLY1305_SHA256) /\
                  CM.can_send_server_hello
                    'st0
@@ -815,14 +839,14 @@ fn process_send_server_hello_from_arrays
                  B.length 'server_key_share_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 95 /\
+                 SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -839,7 +863,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -894,7 +918,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'server_private_key_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 95 /\
+                 SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
@@ -902,7 +926,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                  (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -920,7 +944,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
                  (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                        (Ghost.reveal 'server_private_key_bytes)) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                        (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -1592,7 +1616,7 @@ fn process_install_server_handshake_write_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1614,7 +1638,7 @@ fn process_install_server_handshake_write_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -1652,7 +1676,7 @@ fn process_install_server_handshake_write_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1737,7 +1761,7 @@ fn process_install_client_handshake_read_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1759,7 +1783,7 @@ fn process_install_client_handshake_read_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -1797,7 +1821,7 @@ fn process_install_client_handshake_read_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1882,7 +1906,7 @@ fn process_install_server_application_write_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1904,7 +1928,7 @@ fn process_install_server_application_write_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -1942,7 +1966,7 @@ fn process_install_server_application_write_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1962,7 +1986,7 @@ fn process_install_client_application_read_keys
   (app_out_len:SZ.t)
   requires connection_exactly s 'st0 **
            pts_to traffic_secret_src material.CS.traffic_secret **
-           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
            pts_to traffic_iv_src material.CS.traffic_iv **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -1984,7 +2008,7 @@ fn process_install_client_application_read_keys
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
           pts_to traffic_secret_src material.CS.traffic_secret **
-          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
           pts_to traffic_iv_src material.CS.traffic_iv **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -2022,7 +2046,7 @@ fn process_install_client_application_read_keys
   with st1 network_out_bytes app_out_bytes.
     assert (SK.connection_exactly s st1 **
             pts_to traffic_secret_src material.CS.traffic_secret **
-            pts_to traffic_key_src material.CS.traffic_key **
+            pts_to traffic_key_src (TLS13.Crypto.Spec.pad_key_32 material.CS.traffic_key) **
             pts_to traffic_iv_src material.CS.traffic_iv **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -2297,6 +2321,82 @@ fn process_send_close_notify_local_event
   resp
 }
 
+fn process_send_key_update_local_event
+  (s:server)
+  (kind:ST.local_event_kind)
+  (req:M.key_update_request)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 ((kind == ST.LocalSendKeyUpdate /\ req == M.UpdateNotRequested) \/
+                  (kind == ST.LocalSendKeyUpdateRequested /\ req == M.UpdateRequested)) /\
+                 server_local_event_input_ready
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                (resp.status == ST.StepOk ==>
+                  exists raw_sent.
+                    st1 ==
+                      CM.server_sent_key_update_state
+                        'st0
+                        req
+                        raw_sent /\
+                    Seq.equal
+                      raw_sent
+                      (ST.response_network_out resp network_out_bytes)) /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  ST.lemma_key_update_kind_input_ready 'st0 kind (Ghost.reveal 'payload_bytes);
+  assert (pure (SApp.server_app_local_event_input_ready
+    'st0
+    kind
+    (Ghost.reveal 'payload_bytes)));
+  rewrite (connection_exactly s 'st0) as (SApp.connection_exactly s 'st0);
+  let resp = SApp.process_send_key_update_local_event
+    s
+    kind
+    req
+    payload
+    payload_len
+    network_out
+    network_out_len
+    app_out
+    app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SApp.connection_exactly s st1 **
+            pts_to payload 'payload_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SApp.connection_exactly s st1) as (connection_exactly s st1);
+  resp
+}
+
 fn process_verify_client_finished
   (s:server)
   (network_out:array U8.t)
@@ -2473,6 +2573,22 @@ fn process_sign_certificate_verify
   resp
 }
 
+fn trace_server_local_event_end (resp:ST.server_response)
+  requires emp
+  ensures emp
+{
+  Trace.emit Trace.server_local_event_end
+    (match resp.ST.status with
+     | ST.StepOk -> 0UL
+     | ST.NeedMoreInput -> 1UL
+     | ST.DecodeError -> 2UL
+     | ST.IllegalTransition -> 3UL
+     | ST.OutputBufferTooSmall -> 4UL
+     | ST.ConnectionFailed -> 5UL)
+    (SZ.sizet_to_uint64 resp.ST.network_out_len)
+    (SZ.sizet_to_uint64 resp.ST.app_out_len)
+}
+
 #push-options "--z3seed 7"
 fn process_local_event
   (s:server)
@@ -2506,13 +2622,14 @@ fn process_local_event
                  // to True (no GSH.serverHello witness builder in Model yet).  The
                  // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
                  // for a symbolic random.  Both threaded as explicit caller obligation.
-                 (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 95 ==>
+                 (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 127 ==>
                   (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
                    let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                    (Seq.length server_random_bytes == 32 ==>
                     (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                    (let sh = SS.mk_server_hello_witness server_random_bytes
                       (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+                      (CM.stored_client_hello_session_id 'st0)
                       T.TLS_CHACHA20_POLY1305_SHA256 in
                     CM.can_send_server_hello 'st0 sh
                       (CS.serialized_cleartext_tls_message
@@ -2550,17 +2667,44 @@ fn process_local_event
                   network_out_bytes
                   app_out_bytes)
 {
+  Trace.emit Trace.server_local_event_begin
+    (match kind with
+     | ST.LocalStartServer -> 0UL
+     | ST.LocalSelectServerParameters -> 1UL
+     | ST.LocalDeriveSharedSecret -> 2UL
+     | ST.LocalInstallClientHandshakeTrafficKeys -> 3UL
+     | ST.LocalInstallServerHandshakeTrafficKeys -> 4UL
+     | ST.LocalInstallClientApplicationTrafficKeys -> 5UL
+     | ST.LocalInstallServerApplicationTrafficKeys -> 6UL
+     | ST.LocalSignCertificateVerify -> 7UL
+     | ST.LocalVerifyClientFinished -> 8UL
+     | ST.LocalDeliverApplicationData -> 9UL
+     | ST.LocalSendServerHello -> 10UL
+     | ST.LocalSendEncryptedExtensions -> 11UL
+     | ST.LocalSendCertificate -> 12UL
+     | ST.LocalSendCertificateVerify -> 13UL
+     | ST.LocalSendServerFinished -> 14UL
+     | ST.LocalSendApplicationData -> 15UL
+     | ST.LocalSendCloseNotify -> 16UL
+     | ST.LocalSendKeyUpdate -> 18UL
+     | ST.LocalSendKeyUpdateRequested -> 19UL
+     | ST.LocalFail -> 17UL)
+    (SZ.sizet_to_uint64 payload_len)
+    0UL;
   match kind {
     ST.LocalStartServer -> {
-      process_start_server_local_event
-        s
-        kind
-        payload
-        payload_len
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+      let resp =
+        process_start_server_local_event
+          s
+          kind
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
     }
     ST.LocalInstallServerHandshakeTrafficKeys -> {
       let resp =
@@ -2571,6 +2715,7 @@ fn process_local_event
           app_out
           app_out_len;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalInstallClientHandshakeTrafficKeys -> {
@@ -2582,6 +2727,7 @@ fn process_local_event
           app_out
           app_out_len;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalSelectServerParameters -> {
@@ -2629,6 +2775,7 @@ fn process_local_event
         (Ghost.reveal 'payload_bytes)
         network_out_bytes
         app_out_bytes));
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalDeriveSharedSecret -> {
@@ -2641,6 +2788,7 @@ fn process_local_event
           network_out_len
           app_out
           app_out_len;
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalInstallClientApplicationTrafficKeys -> {
@@ -2652,6 +2800,7 @@ fn process_local_event
           app_out
           app_out_len;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalInstallServerApplicationTrafficKeys -> {
@@ -2663,18 +2812,22 @@ fn process_local_event
           app_out
           app_out_len;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalSignCertificateVerify -> {
-      process_local_unexpected_message
-        s
-        kind
-        payload
-        payload_len
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+      let resp =
+        process_local_unexpected_message
+          s
+          kind
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
     }
     ST.LocalVerifyClientFinished -> {
       let resp =
@@ -2685,6 +2838,7 @@ fn process_local_event
           app_out
           app_out_len;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      trace_server_local_event_end resp;
       resp
     }
     ST.LocalDeliverApplicationData -> {
@@ -2697,7 +2851,7 @@ fn process_local_event
     }
     ST.LocalSendServerHello -> {
       assert (pure (B.length (Ghost.reveal 'payload_bytes) == 64));
-      if (network_out_len = 95sz) {
+      if (network_out_len = 127sz) {
         let mut server_random = [| 0uy; 32sz |];
         let mut server_private_key = [| 0uy; 32sz |];
         SMat.copy_server_random_and_private_from_payload
@@ -2741,29 +2895,52 @@ fn process_local_event
           (Ghost.reveal 'payload_bytes)
           network_out_bytes
           app_out_bytes));
+        trace_server_local_event_end resp;
         resp
       } else {
-        process_local_unexpected_message
-          s
-          kind
-          payload
-          payload_len
-          network_out
-          network_out_len
-          app_out
-          app_out_len
+        let resp =
+          process_local_unexpected_message
+            s
+            kind
+            payload
+            payload_len
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
       }
     }
     ST.LocalSendEncryptedExtensions -> {
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
       if (network_out_len = 28sz) {
-        process_send_encrypted_extensions_serialized
-          s
-          network_out
-          network_out_len
-          app_out
-          app_out_len
+        let resp =
+          process_send_encrypted_extensions_serialized
+            s
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
       } else {
+        let resp =
+          process_local_unexpected_message
+            s
+            kind
+            payload
+            payload_len
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
+      }
+    }
+    ST.LocalSendCertificate -> {
+      let resp =
         process_local_unexpected_message
           s
           kind
@@ -2772,19 +2949,9 @@ fn process_local_event
           network_out
           network_out_len
           app_out
-          app_out_len
-      }
-    }
-    ST.LocalSendCertificate -> {
-      process_local_unexpected_message
-        s
-        kind
-        payload
-        payload_len
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
     }
     ST.LocalSendCertificateVerify -> {
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
@@ -2817,66 +2984,114 @@ fn process_local_event
       let expected_network_out_len = SZ.add fragment_len 22sz;
       if (network_out_len = expected_network_out_len) {
         assert (pure (SZ.v network_out_len == SZ.v fragment_len + 22));
-        process_send_stored_certificate_verify_serialized
-          s
-          #cv
-          fragment_len
-          network_out
-          network_out_len
-          app_out
-          app_out_len
+        let resp =
+          process_send_stored_certificate_verify_serialized
+            s
+            #cv
+            fragment_len
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
       } else {
-        process_local_unexpected_message
-          s
-          kind
-          payload
-          payload_len
-          network_out
-          network_out_len
-          app_out
-          app_out_len
+        let resp =
+          process_local_unexpected_message
+            s
+            kind
+            payload
+            payload_len
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
       }
     }
     ST.LocalSendServerFinished -> {
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
       if (network_out_len = 58sz) {
-        process_send_server_finished_serialized
-          s
-          network_out
-          network_out_len
-          app_out
-          app_out_len
+        let resp =
+          process_send_server_finished_serialized
+            s
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
       } else {
-        process_local_unexpected_message
+        let resp =
+          process_local_unexpected_message
+            s
+            kind
+            payload
+            payload_len
+            network_out
+            network_out_len
+            app_out
+            app_out_len;
+        trace_server_local_event_end resp;
+        resp
+      }
+    }
+    ST.LocalSendApplicationData -> {
+      let resp =
+        process_send_application_data_local_event
           s
-          kind
           payload
           payload_len
           network_out
           network_out_len
           app_out
-          app_out_len
-      }
-    }
-    ST.LocalSendApplicationData -> {
-      process_send_application_data_local_event
-        s
-        payload
-        payload_len
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
     }
     ST.LocalSendCloseNotify -> {
-      process_send_close_notify_local_event
-        s
-        payload
-        payload_len
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+      let resp =
+        process_send_close_notify_local_event
+          s
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
+    }
+    ST.LocalSendKeyUpdate -> {
+      let resp =
+        process_send_key_update_local_event
+          s
+          kind
+          M.UpdateNotRequested
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
+    }
+    ST.LocalSendKeyUpdateRequested -> {
+      let resp =
+        process_send_key_update_local_event
+          s
+          kind
+          M.UpdateRequested
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
     }
     ST.LocalFail -> {
       assert (pure False);
@@ -2925,13 +3140,14 @@ fn process_local_event_with_credentials
                // to True (no GSH.serverHello witness builder in Model yet).  The
                // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
                // for a symbolic random.  Both threaded as explicit caller obligation.
-               (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 95 ==>
+               (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 127 ==>
                 (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
                  let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                  (Seq.length server_random_bytes == 32 ==>
                   (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                  (let sh = SS.mk_server_hello_witness server_random_bytes
                     (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+                    (CM.stored_client_hello_session_id 'st0)
                     T.TLS_CHACHA20_POLY1305_SHA256 in
                   CM.can_send_server_hello 'st0 sh
                     (CS.serialized_cleartext_tls_message
@@ -2985,6 +3201,8 @@ fn process_local_event_with_credentials
 {
   match kind {
     ST.LocalSendCertificate -> {
+      Trace.emit Trace.server_local_event_begin 12UL
+        (SZ.sizet_to_uint64 payload_len) 0UL;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
       let built = SS.build_certificate_from_credentials creds;
       match built {
@@ -3021,38 +3239,59 @@ fn process_local_event_with_credentials
           if (network_out_len = expected_network_out_len) {
             assert (pure (SZ.v network_out_len ==
               13 + B.length (Ghost.reveal 'certificate_chain) + 22));
+            // The single-entry certificate built from the (1 <= len <= 32768)
+            // chain is [certificate_representable] (1 entry <= 8; total bytes
+            // == |chain| <= 32768), as the strengthened [legal_handshake_message]
+            // Certificate-Sent arm now requires.
+            W.lemma_cert_chain_total_bytes_nil ();
+            W.lemma_cert_chain_total_bytes_cons (Ghost.reveal 'certificate_chain) [];
+            W.lemma_certificate_representable
+              (SS.mk_cert_witness (Ghost.reveal 'certificate_chain));
+            assert (pure (W.certificate_representable
+              (SS.mk_cert_witness (Ghost.reveal 'certificate_chain))));
             IM.free_certificate_msg lcert;
-            process_send_certificate_from_credentials
-              s
-              creds
-              network_out
-              network_out_len
-              app_out
-              app_out_len
+            let resp =
+              process_send_certificate_from_credentials
+                s
+                creds
+                network_out
+                network_out_len
+                app_out
+                app_out_len;
+            trace_server_local_event_end resp;
+            resp
           } else {
             IM.free_certificate_msg lcert;
-            process_local_unexpected_message
-              s
-              kind
-              payload
-              payload_len
-              network_out
-              network_out_len
-              app_out
-              app_out_len
+            let resp =
+              process_local_unexpected_message
+                s
+                kind
+                payload
+                payload_len
+                network_out
+                network_out_len
+                app_out
+                app_out_len;
+            trace_server_local_event_end resp;
+            resp
           }
         }
       }
     }
     ST.LocalSignCertificateVerify -> {
+      Trace.emit Trace.server_local_event_begin 7UL
+        (SZ.sizet_to_uint64 payload_len) 0UL;
       assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
-      process_sign_certificate_verify
-        s
-        creds
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+      let resp =
+        process_sign_certificate_verify
+          s
+          creds
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      trace_server_local_event_end resp;
+      resp
     }
     ST.LocalStartServer -> {
       assert (pure (server_local_event_input_ready
@@ -3174,6 +3413,22 @@ fn process_local_event_with_credentials
       process_local_event
         s kind payload payload_len network_out network_out_len app_out app_out_len
     }
+    ST.LocalSendKeyUpdate -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendKeyUpdateRequested -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
     ST.LocalFail -> {
       assert (pure (server_local_event_input_ready
         'st0
@@ -3217,9 +3472,10 @@ fn process_client_hello
                  Seq.equal
                   (Ghost.reveal 'fragment_bytes)
                   (TLS13.Wire.Spec.serialize_handshake (M.ClientHello ch)) /\
-                 lch.IM.client_hello_has_server_name == true /\
-                 CM.client_hello_server_name_len_for ch ==
-                  lch.IM.client_hello_server_name_len /\
+                 lch.IM.client_hello_has_server_name == CM.client_hello_has_sni ch /\
+                 (lch.IM.client_hello_has_server_name ==>
+                    CM.client_hello_server_name_len_for ch ==
+                      lch.IM.client_hello_server_name_len) /\
                  CM.client_hello_cipher_suites_len_for ch ==
                   lch.IM.client_hello_cipher_suites_len /\
                  CM.client_hello_signature_schemes_len_for ch ==
@@ -3265,6 +3521,10 @@ fn process_client_hello
                   network_out_bytes
                   app_out_bytes)
 {
+  Trace.emit Trace.server_network_begin
+    (SZ.sizet_to_uint64 raw_len)
+    1UL
+    0UL;
   rewrite (connection_exactly s 'st0) as (SN.connection_exactly s 'st0);
   let resp = SN.process_client_hello
     s
@@ -3397,8 +3657,12 @@ fn process_network_bytes
                    network_out_bytes
                    app_out_bytes /\
                 (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
                   W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)))
+                  Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+                  Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)) /\
+                 (buffer_resp.ST.response.ST.status == ST.StepOk ==>
+                  0 < SZ.v buffer_resp.ST.consumed_len))
 {
   rewrite (connection_exactly s 'st0) as (SN.connection_exactly s 'st0);
   let buffer_resp = SN.process_network_bytes
@@ -3415,8 +3679,20 @@ fn process_network_bytes
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
   assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+    W.record_prefix_incomplete (Ghost.reveal 'raw_bytes) /\
     W.parse_record_wire (Ghost.reveal 'raw_bytes) == None /\
-    Seq.equal network_out_bytes (Ghost.reveal 'old_network_out)));
+    Seq.equal network_out_bytes (Ghost.reveal 'old_network_out) /\
+    Seq.equal app_out_bytes (Ghost.reveal 'old_app_out)));
   rewrite (SN.connection_exactly s st1) as (connection_exactly s st1);
+  Trace.emit Trace.server_network_end
+    (match buffer_resp.ST.response.ST.status with
+     | ST.StepOk -> 0UL
+     | ST.NeedMoreInput -> 1UL
+     | ST.DecodeError -> 2UL
+     | ST.IllegalTransition -> 3UL
+     | ST.OutputBufferTooSmall -> 4UL
+     | ST.ConnectionFailed -> 5UL)
+    (SZ.sizet_to_uint64 buffer_resp.ST.consumed_len)
+    (SZ.sizet_to_uint64 buffer_resp.ST.response.ST.network_out_len);
   buffer_resp
 }

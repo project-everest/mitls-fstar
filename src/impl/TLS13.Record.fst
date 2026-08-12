@@ -6,15 +6,18 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 open Pulse.Lib.Box { box, (!), (:=) }
 
+module AEAD = TLS13.AEAD
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module C = TLS13.Crypto.Spec
+module Cast = FStar.Int.Cast
 module Crypto = TLS13.Crypto
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module Trace = TLS13.Trace
 module U8 = FStar.UInt8
 module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
@@ -22,6 +25,7 @@ module V = Pulse.Lib.Vec
 noeq
 type record_state = {
   key: V.vec U8.t;
+  alg: box C.aead_alg;
   iv: V.vec U8.t;
   seq: box U64.t;
   installed: box bool;
@@ -30,6 +34,7 @@ type record_state = {
 let state_matches
   (installed:bool)
   (seq:U64.t)
+  (alg:C.aead_alg)
   (key:B.bytes)
   (iv:B.bytes)
   (s:R.direction_state)
@@ -37,35 +42,43 @@ let state_matches
   B.length key == 32 /\
   B.length iv == 12 /\
   U64.v seq == s.R.seq /\
-  ((installed /\ s.R.key == Some key /\ s.R.static_iv == Some iv) \/
+  ((installed /\
+    Seq.equal key (C.pad_key_32 (C.logical_key alg key)) /\
+    s.R.alg == alg /\
+    s.R.key == Some (C.logical_key alg key) /\
+    s.R.static_iv == Some iv) \/
    (not installed /\ s.R.key == None /\ s.R.static_iv == None))
 
 let is_record_state ([@@@mkey] st:record_state) (s:R.direction_state) : slprop =
-  exists* key iv seq installed.
+  exists* key alg iv seq installed.
     V.pts_to st.key key **
+    Box.pts_to st.alg alg **
     V.pts_to st.iv iv **
     Box.pts_to st.seq seq **
     Box.pts_to st.installed installed **
     pure (V.is_full_vec st.key /\
           V.is_full_vec st.iv /\
-          state_matches installed seq key iv s)
+          state_matches installed seq alg key iv s)
 
 fn record_state_new ()
   returns st: record_state
   ensures is_record_state st R.initial_direction_state
 {
   let key = V.alloc 0uy 32sz;
+  let alg = Box.alloc C.AEAD_CHACHA20_POLY1305;
   let iv = V.alloc 0uy 12sz;
   let seq = Box.alloc 0UL;
   let installed = Box.alloc false;
-  let st = { key; iv; seq; installed };
+  let st = { key; alg; iv; seq; installed };
   with key_s. rewrite (V.pts_to key key_s) as (V.pts_to st.key key_s);
+  with alg_s. rewrite (Box.pts_to alg alg_s) as (Box.pts_to st.alg alg_s);
   with iv_s. rewrite (V.pts_to iv iv_s) as (V.pts_to st.iv iv_s);
   with seq_s. rewrite (Box.pts_to seq seq_s) as (Box.pts_to st.seq seq_s);
   with installed_s. rewrite (Box.pts_to installed installed_s) as (Box.pts_to st.installed installed_s);
-  assert_norm (state_matches false 0UL (Seq.create 32 0uy) (Seq.create 12 0uy) R.initial_direction_state);
-  assert (pure (state_matches false 0UL (Seq.create 32 0uy) (Seq.create 12 0uy) R.initial_direction_state));
+  assert_norm (state_matches false 0UL C.AEAD_CHACHA20_POLY1305 (Seq.create 32 0uy) (Seq.create 12 0uy) R.initial_direction_state);
+  assert (pure (state_matches false 0UL C.AEAD_CHACHA20_POLY1305 (Seq.create 32 0uy) (Seq.create 12 0uy) R.initial_direction_state));
   fold (is_record_state st R.initial_direction_state);
+  Trace.emit Trace.record_state_new 0UL 0UL 0UL;
   st
 }
 
@@ -73,9 +86,11 @@ fn record_state_free (st: record_state)
   requires is_record_state st 's
   ensures emp
 {
+  Trace.emit Trace.record_state_free 0UL 0UL 0UL;
   unfold (is_record_state st 's);
   V.free st.key;
   V.free st.iv;
+  Box.free st.alg;
   Box.free st.seq;
   Box.free st.installed;
 }
@@ -93,6 +108,135 @@ let lemma_seq_can_advance_fits (seq:U64.t)
   assert (U64.v seq < U64.v u64_max);
   assert (U64.v seq + 1 < 18446744073709551616)
 
+let lemma_record_nonce_byte
+  (sequence_number:U64.t)
+  (divisor:U64.t{U64.v divisor > 0})
+  : Lemma
+      (Cast.uint64_to_uint8 (U64.div sequence_number divisor) ==
+       C.nonce_byte (U64.v sequence_number) (U64.v divisor))
+=
+  let actual = Cast.uint64_to_uint8 (U64.div sequence_number divisor) in
+  let expected = C.nonce_byte (U64.v sequence_number) (U64.v divisor) in
+  assert_norm (U8.v actual ==
+    ((U64.v sequence_number / U64.v divisor) % 256));
+  assert_norm (U8.v expected ==
+    ((U64.v sequence_number / U64.v divisor) % 256));
+  U8.v_inj actual expected
+
+let lemma_record_nonce_from_machine_bytes
+  (static_iv:B.bytes)
+  (sequence_number:U64.t)
+  : Lemma
+      (requires True)
+      (ensures C.record_nonce_from_bytes static_iv
+        (Cast.uint64_to_uint8 (U64.div sequence_number 72057594037927936UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 281474976710656UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 1099511627776UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 4294967296UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 16777216UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 65536UL))
+        (Cast.uint64_to_uint8 (U64.div sequence_number 256UL))
+        (Cast.uint64_to_uint8 sequence_number) ==
+       C.tls13_record_nonce static_iv (U64.v sequence_number))
+=
+  lemma_record_nonce_byte sequence_number 72057594037927936UL;
+  lemma_record_nonce_byte sequence_number 281474976710656UL;
+  lemma_record_nonce_byte sequence_number 1099511627776UL;
+  lemma_record_nonce_byte sequence_number 4294967296UL;
+  lemma_record_nonce_byte sequence_number 16777216UL;
+  lemma_record_nonce_byte sequence_number 65536UL;
+  lemma_record_nonce_byte sequence_number 256UL;
+  lemma_record_nonce_byte sequence_number 1UL;
+  assert_norm (
+    C.tls13_record_nonce static_iv (U64.v sequence_number) ==
+    C.record_nonce_from_bytes static_iv
+      (C.nonce_byte (U64.v sequence_number) 72057594037927936)
+      (C.nonce_byte (U64.v sequence_number) 281474976710656)
+      (C.nonce_byte (U64.v sequence_number) 1099511627776)
+      (C.nonce_byte (U64.v sequence_number) 4294967296)
+      (C.nonce_byte (U64.v sequence_number) 16777216)
+      (C.nonce_byte (U64.v sequence_number) 65536)
+      (C.nonce_byte (U64.v sequence_number) 256)
+      (C.nonce_byte (U64.v sequence_number) 1));
+  assert (
+    C.record_nonce_from_bytes static_iv
+      (Cast.uint64_to_uint8 (U64.div sequence_number 72057594037927936UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 281474976710656UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 1099511627776UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 4294967296UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 16777216UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 65536UL))
+      (Cast.uint64_to_uint8 (U64.div sequence_number 256UL))
+      (Cast.uint64_to_uint8 sequence_number) ==
+    C.record_nonce_from_bytes static_iv
+      (C.nonce_byte (U64.v sequence_number) 72057594037927936)
+      (C.nonce_byte (U64.v sequence_number) 281474976710656)
+      (C.nonce_byte (U64.v sequence_number) 1099511627776)
+      (C.nonce_byte (U64.v sequence_number) 4294967296)
+      (C.nonce_byte (U64.v sequence_number) 16777216)
+      (C.nonce_byte (U64.v sequence_number) 65536)
+      (C.nonce_byte (U64.v sequence_number) 256)
+      (C.nonce_byte (U64.v sequence_number) 1))
+
+inline_for_extraction
+fn xor_nonce_byte
+  (out: array U8.t)
+  (idx: SZ.t{SZ.v idx < length out})
+  (value: U8.t)
+  requires pts_to out 'bytes
+  ensures pts_to out
+    (C.update_byte 'bytes (SZ.v idx)
+      (U8.logxor (C.byte_at 'bytes (SZ.v idx)) value))
+{
+  pts_to_len out;
+  let current = out.(idx);
+  out.(idx) <- U8.logxor current value;
+}
+
+fn tls13_record_nonce
+  (static_iv: array U8.t)
+  (sequence_number: U64.t)
+  (out: array U8.t)
+  requires pts_to static_iv 'iv_bytes **
+           pts_to out 'old **
+           pure (B.length 'iv_bytes == 12 /\ B.length 'old == 12)
+  returns ok: bool
+  ensures pts_to static_iv 'iv_bytes **
+          pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)) **
+          pure ok
+{
+  pts_to_len static_iv;
+  pts_to_len out;
+  Arr.memcpy 12sz static_iv out;
+
+  let seq4 = Cast.uint64_to_uint8 (U64.div sequence_number 72057594037927936UL);
+  let seq5 = Cast.uint64_to_uint8 (U64.div sequence_number 281474976710656UL);
+  let seq6 = Cast.uint64_to_uint8 (U64.div sequence_number 1099511627776UL);
+  let seq7 = Cast.uint64_to_uint8 (U64.div sequence_number 4294967296UL);
+  let seq8 = Cast.uint64_to_uint8 (U64.div sequence_number 16777216UL);
+  let seq9 = Cast.uint64_to_uint8 (U64.div sequence_number 65536UL);
+  let seq10 = Cast.uint64_to_uint8 (U64.div sequence_number 256UL);
+  let seq11 = Cast.uint64_to_uint8 sequence_number;
+
+  xor_nonce_byte out 4sz seq4;
+  xor_nonce_byte out 5sz seq5;
+  xor_nonce_byte out 6sz seq6;
+  xor_nonce_byte out 7sz seq7;
+  xor_nonce_byte out 8sz seq8;
+  xor_nonce_byte out 9sz seq9;
+  xor_nonce_byte out 10sz seq10;
+  xor_nonce_byte out 11sz seq11;
+
+  with out_bytes. assert (pts_to out out_bytes);
+  assert_norm (out_bytes ==
+    C.record_nonce_from_bytes 'iv_bytes
+      seq4 seq5 seq6 seq7 seq8 seq9 seq10 seq11);
+  lemma_record_nonce_from_machine_bytes 'iv_bytes sequence_number;
+  rewrite (pts_to out out_bytes) as
+    (pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)));
+  true
+}
+
 fn can_advance_seq (st: record_state)
   requires is_record_state st 's
   returns ok: bool
@@ -105,17 +249,19 @@ fn can_advance_seq (st: record_state)
   if ok {
     lemma_seq_can_advance_fits seq;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with installed_s. assert (Box.pts_to st.installed installed_s);
-    assert (pure (state_matches installed_s seq key_s iv_s 's));
+    assert (pure (state_matches installed_s seq alg_s key_s iv_s 's));
     assert (pure (U64.fits ('s.R.seq + 1)));
     fold (is_record_state st 's);
     true
   } else {
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with installed_s. assert (Box.pts_to st.installed installed_s);
-    assert (pure (state_matches installed_s seq key_s iv_s 's));
+    assert (pure (state_matches installed_s seq alg_s key_s iv_s 's));
     fold (is_record_state st 's);
     false
   }
@@ -128,7 +274,7 @@ fn seq_eq (st: record_state) (expected: U64.t)
           pure (ok ==> 's.R.seq == U64.v expected)
 {
   unfold (is_record_state st 's);
-  with key_b iv_b seq_b installed_b. _;
+  with key_b alg_b iv_b seq_b installed_b. _;
   let current_seq = !st.seq;
   assert (pure (current_seq == seq_b));
   assert (pure (U64.v current_seq == 's.R.seq));
@@ -140,7 +286,8 @@ fn seq_eq (st: record_state) (expected: U64.t)
   ok
 }
 
-fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
+fn application_keys_match (st: record_state) (key: array U8.t) (alg: C.aead_alg)
+  (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
@@ -150,12 +297,14 @@ fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **
           pure (ok ==>
-            's.R.key == Some (Ghost.reveal 'key_bytes) /\
+            's.R.alg == alg /\
+            's.R.key == Some (C.logical_key alg 'key_bytes) /\
             's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
 {
   unfold (is_record_state st 's);
-  with stored_key stored_iv stored_seq stored_installed.
+  with stored_key stored_alg stored_iv stored_seq stored_installed.
     assert (V.pts_to st.key stored_key **
+            Box.pts_to st.alg stored_alg **
             V.pts_to st.iv stored_iv **
             Box.pts_to st.seq stored_seq **
             Box.pts_to st.installed stored_installed);
@@ -173,13 +322,19 @@ fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
   V.to_array_pts_to st.iv;
   let iv_ok = Crypto.equal12 (V.vec_to_array st.iv) iv;
   V.to_vec_pts_to st.iv;
-  let ok = installed && key_ok && iv_ok;
+  let stored_alg_v = !st.alg;
+  let alg_ok = AEAD.aead_alg_eq stored_alg_v alg;
+  let ok = installed && key_ok && iv_ok && alg_ok;
   assert (pure (ok ==> stored_installed));
+  assert (pure (ok ==> stored_alg == alg));
   assert (pure (ok ==> Seq.equal stored_key 'key_bytes));
   assert (pure (ok ==> Seq.equal stored_iv 'iv_bytes));
   assert (pure (ok ==> stored_key == Ghost.reveal 'key_bytes));
   assert (pure (ok ==> stored_iv == Ghost.reveal 'iv_bytes));
-  assert (pure (ok ==> 's.R.key == Some (Ghost.reveal 'key_bytes)));
+  assert (pure (ok ==> Seq.equal (C.logical_key stored_alg stored_key)
+                                 (C.logical_key alg 'key_bytes)));
+  assert (pure (ok ==> 's.R.alg == alg));
+  assert (pure (ok ==> 's.R.key == Some (C.logical_key alg 'key_bytes)));
   assert (pure (ok ==> 's.R.static_iv == Some (Ghost.reveal 'iv_bytes)));
   fold (is_record_state st 's);
   ok
@@ -194,13 +349,15 @@ fn has_seal_keys (st: record_state) (#'s: erased R.direction_state)
                         | _, _ -> False))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
   with iv_s. assert (V.pts_to st.iv iv_s);
   with seq_s. assert (Box.pts_to st.seq seq_s);
-  assert (pure (state_matches installed seq_s key_s iv_s 's));
+  assert (pure (state_matches installed seq_s alg_s key_s iv_s 's));
   if installed {
-    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s));
+    assert (pure ('s.R.key == Some (C.logical_key alg_s key_s) /\ 's.R.static_iv == Some iv_s));
     fold (is_record_state st 's);
     true
   } else {
@@ -217,26 +374,52 @@ fn advance_seq (st: record_state)
   unfold (is_record_state st 's);
   let seq = !st.seq;
   let next_seq = U64.add seq 1UL;
+  Trace.emit Trace.record_sequence_advance seq next_seq 0UL;
   st.seq := next_seq;
   with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
   with iv_s. assert (V.pts_to st.iv iv_s);
   with installed_s. assert (Box.pts_to st.installed installed_s);
-  assert (pure (state_matches installed_s seq key_s iv_s 's));
+  assert (pure (state_matches installed_s seq alg_s key_s iv_s 's));
   assert (pure (U64.v next_seq == 's.R.seq + 1));
-  assert (pure (state_matches installed_s next_seq key_s iv_s (R.next_seq 's)));
+  assert (pure (state_matches installed_s next_seq alg_s key_s iv_s (R.next_seq 's)));
   fold (is_record_state st (R.next_seq 's));
+}
+
+fn restore_previous_seq (st: record_state)
+  requires is_record_state st (R.next_seq 's)
+  ensures is_record_state st 's
+{
+  unfold (is_record_state st (R.next_seq 's));
+  let seq = !st.seq;
+  assert (pure (U64.v seq == 's.R.seq + 1));
+  let previous_seq = U64.sub seq 1UL;
+  Trace.emit Trace.record_sequence_restore seq previous_seq 0UL;
+  st.seq := previous_seq;
+  with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  with installed_s. assert (Box.pts_to st.installed installed_s);
+  assert (pure (state_matches installed_s seq alg_s key_s iv_s (R.next_seq 's)));
+  assert (pure (U64.v previous_seq == 's.R.seq));
+  assert (pure (state_matches installed_s previous_seq alg_s key_s iv_s 's));
+  fold (is_record_state st 's);
 }
 
 fn install_keys
   (st: record_state)
   (#epoch: R.epoch)
   (key: array U8.t)
+  (alg: C.aead_alg)
+  (key_spec: erased C.aead_key_any)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures is_record_state st (R.install_keys 's epoch (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
+                 C.aead_key_len alg == B.length key_spec /\
+                 Seq.equal 'key_bytes (C.pad_key_32 key_spec))
+  ensures is_record_state st (R.install_keys 's epoch alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -251,26 +434,33 @@ fn install_keys
   Arr.memcpy 12sz iv (V.vec_to_array st.iv);
   V.to_vec_pts_to st.key;
   V.to_vec_pts_to st.iv;
+  st.alg := alg;
   st.seq := 0UL;
   st.installed := true;
+  assert (pure (Seq.equal (C.logical_key alg 'key_bytes)
+                          (Ghost.reveal key_spec)));
   with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
   with iv_s. assert (V.pts_to st.iv iv_s);
   assert (pure (key_s == 'key_bytes));
   assert (pure (iv_s == 'iv_bytes));
-  assert_norm (state_matches true 0UL key_s iv_s (R.install_keys 's epoch (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
-  assert (pure (state_matches true 0UL key_s iv_s (R.install_keys 's epoch (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes))));
-  fold (is_record_state st (R.install_keys 's epoch (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
+  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's epoch alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's epoch alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
 }
 
 fn install_handshake_keys_runtime
   (st: record_state)
   (key: array U8.t)
+  (alg: C.aead_alg)
+  (key_spec: erased C.aead_key_any)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
+                 C.aead_key_len alg == B.length key_spec /\
+                 Seq.equal 'key_bytes (C.pad_key_32 key_spec))
+  ensures is_record_state st (R.install_keys 's R.Handshake alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -285,25 +475,35 @@ fn install_handshake_keys_runtime
   Arr.memcpy 12sz iv (V.vec_to_array st.iv);
   V.to_vec_pts_to st.key;
   V.to_vec_pts_to st.iv;
+  let old_seq = !st.seq;
+  Trace.emit Trace.record_install_handshake_keys old_seq 32UL 12UL;
+  st.alg := alg;
   st.seq := 0UL;
   st.installed := true;
+  assert (pure (Seq.equal (C.logical_key alg 'key_bytes)
+                          (Ghost.reveal key_spec)));
   with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
   with iv_s. assert (V.pts_to st.iv iv_s);
   assert (pure (key_s == 'key_bytes));
   assert (pure (iv_s == 'iv_bytes));
-  assert (pure (state_matches true 0UL key_s iv_s (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes))));
-  fold (is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
+  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's R.Handshake alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's R.Handshake alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
 }
 
 fn install_application_keys_runtime
   (st: record_state)
   (key: array U8.t)
+  (alg: C.aead_alg)
+  (key_spec: erased C.aead_key_any)
   (iv: array U8.t)
   requires is_record_state st 's **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures is_record_state st (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12 /\
+                 C.aead_key_len alg == B.length key_spec /\
+                 Seq.equal 'key_bytes (C.pad_key_32 key_spec))
+  ensures is_record_state st (R.install_keys 's R.Application alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -318,14 +518,20 @@ fn install_application_keys_runtime
   Arr.memcpy 12sz iv (V.vec_to_array st.iv);
   V.to_vec_pts_to st.key;
   V.to_vec_pts_to st.iv;
+  let old_seq = !st.seq;
+  Trace.emit Trace.record_install_application_keys old_seq 32UL 12UL;
+  st.alg := alg;
   st.seq := 0UL;
   st.installed := true;
+  assert (pure (Seq.equal (C.logical_key alg 'key_bytes)
+                          (Ghost.reveal key_spec)));
   with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
   with iv_s. assert (V.pts_to st.iv iv_s);
   assert (pure (key_s == 'key_bytes));
   assert (pure (iv_s == 'iv_bytes));
-  assert (pure (state_matches true 0UL key_s iv_s (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes))));
-  fold (is_record_state st (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
+  assert (pure (state_matches true 0UL alg key_s iv_s (R.install_keys 's R.Application alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's R.Application alg (Ghost.reveal key_spec) (Ghost.reveal 'iv_bytes)));
 }
 
 fn seal_application
@@ -364,39 +570,51 @@ fn seal_application
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_seal_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 plain_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
-    Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
+    AEAD.aead_seal alg_v (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     let next_seq = U64.add seq 1UL;
+    Trace.emit Trace.record_seal_success next_seq
+      (SZ.sizet_to_uint64 plain_len)
+      0UL;
     st.seq := next_seq;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
-    assert (pure (state_matches true seq key_s iv_s 's));
-    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
+    assert (pure (state_matches true seq alg_s key_s iv_s 's));
+    assert (pure ('s.R.key == Some (C.logical_key alg_s key_s) /\ 's.R.static_iv == Some iv_s /\
                   's.R.seq == U64.v seq));
-    assert (pure (B.length (C.chacha20_poly1305_seal key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes)) == B.length 'old));
+    assert (pure (B.length (C.aead_seal (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes)) == B.length 'old));
     assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
-                  Some ((C.chacha20_poly1305_seal key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes) <: B.bytes),
+                  Some ((C.aead_seal (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes) <: B.bytes),
                         R.next_seq 's)));
     assert (pure (match R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } with
                   | Some (sealed, s') ->
-                    sealed == (C.chacha20_poly1305_seal key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes) <: B.bytes) /\
+                    sealed == (C.aead_seal (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'plain_bytes) <: B.bytes) /\
                     s' == R.next_seq 's /\
                     B.length sealed == B.length 'old
                   | None -> False));
-    assert (pure (state_matches true next_seq key_s iv_s (R.next_seq 's)));
+    assert (pure (state_matches true next_seq alg_s key_s iv_s (R.next_seq 's)));
     fold (is_record_state st (R.next_seq 's));
     true
   } else {
+    Trace.emit Trace.record_seal_failure 0UL
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     assert (pure (R.seal 's (Ghost.reveal 'aad_bytes) { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } == None));
@@ -440,26 +658,31 @@ fn seal_application_no_update
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_seal_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 plain_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
-    Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
+    AEAD.aead_seal alg_v (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with out_s. assert (pts_to out out_s);
-    assert (pure (state_matches true seq key_s iv_s 's));
-    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
+    assert (pure (state_matches true seq alg_s key_s iv_s 's));
+    assert (pure ('s.R.key == Some (C.logical_key alg_s key_s) /\ 's.R.static_iv == Some iv_s /\
                   's.R.seq == U64.v seq));
     assert (pure (B.length
-      (C.chacha20_poly1305_seal
-        key_s
+      (C.aead_seal (alg_s)
+        (C.logical_key alg_s key_s)
         (C.tls13_record_nonce iv_s (U64.v seq))
         (Ghost.reveal 'aad_bytes)
         (Ghost.reveal 'plain_bytes)) == B.length 'old));
@@ -467,15 +690,15 @@ fn seal_application_no_update
       's
       (Ghost.reveal 'aad_bytes)
       { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
-      Some ((C.chacha20_poly1305_seal
-               key_s
+      Some ((C.aead_seal (alg_s)
+               (C.logical_key alg_s key_s)
                (C.tls13_record_nonce iv_s (U64.v seq))
                (Ghost.reveal 'aad_bytes)
                (Ghost.reveal 'plain_bytes) <: B.bytes),
             R.next_seq 's)));
     assert (pure (out_s ==
-      C.chacha20_poly1305_seal
-        key_s
+      C.aead_seal (alg_s)
+        (C.logical_key alg_s key_s)
         (C.tls13_record_nonce iv_s (U64.v seq))
         (Ghost.reveal 'aad_bytes)
         (Ghost.reveal 'plain_bytes)));
@@ -484,15 +707,22 @@ fn seal_application_no_update
       (Ghost.reveal 'aad_bytes)
       { R.content_type = T.Application_data; R.fragment = Ghost.reveal 'plain_bytes } ==
       Some ((out_s <: B.bytes), R.next_seq 's)));
+    Trace.emit Trace.record_seal_success seq
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     fold (is_record_state st 's);
     true
   } else {
+    Trace.emit Trace.record_seal_failure 0UL
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     with out_s. assert (pts_to out out_s);
     assert (pure (out_s == 'old));
-    assert (pure (state_matches false seq_s key_s iv_s 's));
+    assert (pure (state_matches false seq_s alg_s key_s iv_s 's));
     assert (pure (R.seal
       's
       (Ghost.reveal 'aad_bytes)
@@ -527,30 +757,42 @@ fn seal_application_runtime
                 (not ok ==> s' == 's /\ out_bytes == 'old))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_seal_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 plain_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
-    Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
+    AEAD.aead_seal alg_v (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     let next_seq = U64.add_underspec seq 1UL;
+    Trace.emit Trace.record_seal_success next_seq
+      (SZ.sizet_to_uint64 plain_len)
+      0UL;
     st.seq := next_seq;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with out_s. assert (pts_to out out_s);
-    assert (pure (state_matches true seq key_s iv_s 's));
+    assert (pure (state_matches true seq alg_s key_s iv_s 's));
     assert (pure (B.length out_s == B.length 'old));
     assert (pure (U64.fits ('s.R.seq + 1) ==> U64.v next_seq == 's.R.seq + 1));
-    assert (pure (state_matches true next_seq key_s iv_s ({ 's with R.seq = U64.v next_seq })));
+    assert (pure (state_matches true next_seq alg_s key_s iv_s ({ 's with R.seq = U64.v next_seq })));
     fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
     true
   } else {
+    Trace.emit Trace.record_seal_failure 0UL
+      (SZ.sizet_to_uint64 plain_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     with out_s. assert (pts_to out out_s);
@@ -589,41 +831,56 @@ fn open_application
                             R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_open_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 cipher_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
-    let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
+    let opened = AEAD.aead_open alg_v (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
-    assert (pure (state_matches true seq key_s iv_s 's));
-    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
+    assert (pure (state_matches true seq alg_s key_s iv_s 's));
+    assert (pure ('s.R.key == Some (C.logical_key alg_s key_s) /\ 's.R.static_iv == Some iv_s /\
                   's.R.seq == U64.v seq));
     if opened {
       let next_seq = U64.add seq 1UL;
+      Trace.emit Trace.record_open_success next_seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       st.seq := next_seq;
       with out_s. assert (pts_to out out_s);
-      assert (pure (Some? (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
-      assert (pure (out_s == Some?.v (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (Some? (C.aead_open (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (out_s == Some?.v (C.aead_open (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
       assert (pure (Some? (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
       assert (pure (Some?.v (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) == (out_s, R.next_seq 's)));
-      assert (pure (state_matches true next_seq key_s iv_s (R.next_seq 's)));
+      assert (pure (state_matches true next_seq alg_s key_s iv_s (R.next_seq 's)));
       fold (is_record_state st (R.next_seq 's));
       true
     } else {
-      assert (pure (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
+      Trace.emit Trace.record_open_failure seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
+      assert (pure (C.aead_open (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
       assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
       fold (is_record_state st 's);
       false
     }
   } else {
+    Trace.emit Trace.record_open_failure 0UL
+      (SZ.sizet_to_uint64 cipher_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
@@ -660,44 +917,59 @@ fn peek_open_application
                             R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_open_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 cipher_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
-    let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
+    let opened = AEAD.aead_open alg_v (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     assert (pure (seq_s == seq));
-    assert (pure (state_matches true seq key_s iv_s 's));
-    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
+    assert (pure (state_matches true seq alg_s key_s iv_s 's));
+    assert (pure ('s.R.key == Some (C.logical_key alg_s key_s) /\ 's.R.static_iv == Some iv_s /\
                   's.R.seq == U64.v seq));
     if opened {
+      Trace.emit Trace.record_open_success seq
+        (SZ.sizet_to_uint64 cipher_len)
+        1UL;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
-      assert (pure (Some? (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
-      assert (pure (out_s == Some?.v (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (Some? (C.aead_open (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (out_s == Some?.v (C.aead_open (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
       assert (pure (Some? (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
       assert (pure (Some?.v (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) == (out_s, R.next_seq 's)));
       fold (is_record_state st 's);
       true
     } else {
+      Trace.emit Trace.record_open_failure seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
       assert (pure (out_s == 'old));
-      assert (pure (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
+      assert (pure (C.aead_open (alg_s) (C.logical_key alg_s key_s) (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
       assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
       fold (is_record_state st 's);
       false
     }
   } else {
+    Trace.emit Trace.record_open_failure 0UL
+      (SZ.sizet_to_uint64 cipher_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     with out_s. assert (pts_to out out_s);
@@ -823,38 +1095,53 @@ fn open_application_runtime
                 (not ok ==> s' == 's /\ out_bytes == 'old))
 {
   unfold (is_record_state st 's);
+  let alg_v = !st.alg;
   let installed = !st.installed;
   if installed {
     let seq = !st.seq;
+    Trace.emit Trace.record_open_begin seq
+      (SZ.sizet_to_uint64 aad_len)
+      (SZ.sizet_to_uint64 cipher_len);
     let mut nonce = [| 0uy; 12sz |];
     V.to_array_pts_to st.key;
     V.to_array_pts_to st.iv;
-    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    let nonce_ok = tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
     assert (pure nonce_ok);
-    let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
+    let opened = AEAD.aead_open alg_v (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
     V.to_vec_pts_to st.key;
     V.to_vec_pts_to st.iv;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
-    assert (pure (state_matches true seq key_s iv_s 's));
+    assert (pure (state_matches true seq alg_s key_s iv_s 's));
     assert (pure (B.length key_s == 32 /\ B.length iv_s == 12));
     if opened {
       let next_seq = U64.add_underspec seq 1UL;
+      Trace.emit Trace.record_open_success next_seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       st.seq := next_seq;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
       assert (pure (U64.fits ('s.R.seq + 1) ==> U64.v next_seq == 's.R.seq + 1));
-      assert (pure (state_matches true next_seq key_s iv_s ({ 's with R.seq = U64.v next_seq })));
+      assert (pure (state_matches true next_seq alg_s key_s iv_s ({ 's with R.seq = U64.v next_seq })));
       fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
       true
     } else {
+      Trace.emit Trace.record_open_failure seq
+        (SZ.sizet_to_uint64 cipher_len)
+        0UL;
       with out_s. assert (pts_to out out_s);
       assert (pure (out_s == 'old));
       fold (is_record_state st 's);
       false
     }
   } else {
+    Trace.emit Trace.record_open_failure 0UL
+      (SZ.sizet_to_uint64 cipher_len)
+      1UL;
     with key_s. assert (V.pts_to st.key key_s);
+    with alg_s. assert (Box.pts_to st.alg alg_s);
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     with out_s. assert (pts_to out out_s);

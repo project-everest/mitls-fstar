@@ -323,6 +323,7 @@ val lemma_server_handshake_install_materials_agree_from_key_schedule
         | _, _ ->
           False) /\
         Seq.equal server_hs.CS.hs_transcript client_hs.CS.hs_transcript /\
+        CS.negotiated_aead_alg server_hs == CS.negotiated_aead_alg client_hs /\
         CS.traffic_install_matches_key_schedule_for_role
           CS.ServerEndpoint
           server_hs
@@ -363,6 +364,8 @@ val lemma_server_handshake_write_client_handshake_read_install_aligned_from_key_
         Seq.equal
           server.CS.model_handshake.CS.hs_transcript
           client.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg server.CS.model_handshake ==
+          CS.negotiated_aead_alg client.CS.model_handshake /\
         CS.traffic_install_matches_key_schedule_for_role
           CS.ServerEndpoint
           server.CS.model_handshake
@@ -477,6 +480,7 @@ val lemma_client_handshake_install_materials_agree_from_key_schedule
         | _, _ ->
           False) /\
         Seq.equal client_hs.CS.hs_transcript server_hs.CS.hs_transcript /\
+        CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs /\
         CS.traffic_install_matches_key_schedule
           client_hs
           {
@@ -517,6 +521,8 @@ val lemma_client_handshake_write_server_handshake_read_install_aligned_from_key_
         Seq.equal
           client.CS.model_handshake.CS.hs_transcript
           server.CS.model_handshake.CS.hs_transcript /\
+        CS.negotiated_aead_alg client.CS.model_handshake ==
+          CS.negotiated_aead_alg server.CS.model_handshake /\
         CS.traffic_install_matches_key_schedule
           client.CS.model_handshake
           {

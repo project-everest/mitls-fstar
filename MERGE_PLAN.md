@@ -21,7 +21,7 @@ This is a **major merge** (~288 file changes) that will:
 ## What origin/main Brings
 
 ### New Toolchain Infrastructure
-- `setup.sh`: Builds EverParse from `https://github.com/tahina-pro/quackyducky` branch `_taramana_fstar2_qd_copyful` (pinned commit)
+- `setup.sh`: Builds EverParse from `https://github.com/project-everest/everparse` branch `fstar2` (pinned commit)
 - `tools/everparse/` (gitignored): Contains F*, KaRaMeL, QuackyDucky, LowParse, Z3
 - `tls.qd.rfc`: QuackyDucky spec for TLS 1.3 wire format (source of truth)
 - `generated/`: ~200 auto-generated `.fst/.fsti` files: `TLS13.Wire.Generated.*` modules

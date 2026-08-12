@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
@@ -62,20 +63,23 @@ fn store_optional_secret
 fn store_traffic_key_material
   (slot:traffic_key_material_storage)
   (traffic_secret_src:array U8.t)
+  (alg:CryptoSpec.aead_alg)
   (traffic_key_src:array U8.t)
   (traffic_iv_src:array U8.t)
   (#material:erased CS.traffic_key_material)
   requires (exists* prev. traffic_key_material_exactly slot prev) **
            ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
-           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
+           ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
+           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+           pure (material.CS.traffic_alg == alg)
   ensures traffic_key_material_exactly slot (Some (Ghost.reveal material)) **
           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
-          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_key_src (CryptoSpec.pad_key_32 material.CS.traffic_key) **
           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv
 {
   with prev. unfold (traffic_key_material_exactly slot prev);
-  with old_present old_secret old_key old_iv. _;
+  with old_present old_secret old_alg old_key old_iv. _;
+  slot.alg := alg;
   ArrPts.pts_to_len traffic_secret_src;
   ArrPts.pts_to_len traffic_key_src;
   ArrPts.pts_to_len traffic_iv_src;
@@ -96,7 +100,7 @@ fn store_traffic_key_material
   with stored_key. assert (V.pts_to slot.traffic_key stored_key);
   with stored_iv. assert (V.pts_to slot.traffic_iv stored_iv);
   assert (pure (stored_secret == (Ghost.reveal material).CS.traffic_secret));
-  assert (pure (stored_key == (Ghost.reveal material).CS.traffic_key));
+  assert (pure (stored_key == CryptoSpec.pad_key_32 (Ghost.reveal material).CS.traffic_key));
   assert (pure (stored_iv == (Ghost.reveal material).CS.traffic_iv));
   fold (traffic_key_material_exactly slot (Some (Ghost.reveal material)))
 }
@@ -215,8 +219,9 @@ fn free_traffic_key_material_exactly (slot:traffic_key_material_storage)
   ensures emp
 {
   with spec. unfold (traffic_key_material_exactly slot spec);
-  with present secret key iv. _;
+  with present secret alg key iv. _;
   Box.free slot.present;
+  Box.free slot.alg;
   V.free slot.traffic_secret;
   V.free slot.traffic_key;
   V.free slot.traffic_iv;
@@ -287,6 +292,8 @@ fn free_handshake_start_exactly (start:handshake_start_storage)
       free_fixed_bytes_exactly start.client_random;
       free_optional_fixed_bytes_exactly start.client_key_share_private;
       free_fixed_bytes_exactly start.client_key_share_public;
+      free_optional_fixed_bytes_exactly start.client_p256_private;
+      free_fixed_bytes_exactly start.client_p256_public;
       free_cipher_suite_list_exactly start.cipher_suites;
       free_signature_scheme_list_exactly start.signature_schemes;
       Box.free start.present;
@@ -298,6 +305,8 @@ fn free_handshake_start_exactly (start:handshake_start_storage)
       free_fixed_bytes_allocated start.client_random;
       free_optional_fixed_bytes_exactly start.client_key_share_private;
       free_fixed_bytes_allocated start.client_key_share_public;
+      free_optional_fixed_bytes_exactly start.client_p256_private;
+      free_fixed_bytes_allocated start.client_p256_public;
       free_cipher_suite_list_allocated start.cipher_suites;
       free_signature_scheme_list_allocated start.signature_schemes;
       Box.free start.present;
@@ -312,9 +321,10 @@ fn free_client_hello_slot
   ensures emp
 {
   with spec. unfold (client_hello_slot_exactly present_box value spec);
-  with present random server_name key_share cipher_suites signature_schemes. _;
+  with present random session_id server_name key_share cipher_suites signature_schemes. _;
   Box.free present_box;
   V.free value.IM.client_hello_random;
+  V.free value.IM.client_hello_session_id;
   V.free value.IM.client_hello_server_name;
   V.free value.IM.client_hello_key_share;
   V.free value.IM.client_hello_cipher_suites;
@@ -638,6 +648,45 @@ fn free_handshake_buffers_exactly (buffers:handshake_buffer_storage)
   free_optional_sized_bytes_exactly buffers.certificate_verify_input;
 }
 
+let lemma_empty_server_kex_bytes ()
+  : Lemma (server_kex_bytes CS.empty_handshake_state == None /\
+           server_kex CS.empty_handshake_state == None)
+  = ()
+
+fn alloc_empty_kex_share ()
+  requires emp
+  returns slot:kex_share_storage
+  ensures server_key_share_exactly slot CS.empty_handshake_state
+{
+  let present = Box.alloc false;
+  let bytes = V.alloc 0uy 65sz;
+  let group = Box.alloc CryptoSpec.KexX25519;
+  let slot = { present; bytes; group };
+  rewrite (Box.pts_to present false) as (Box.pts_to slot.present false);
+  rewrite (Box.pts_to group CryptoSpec.KexX25519) as
+    (Box.pts_to slot.group CryptoSpec.KexX25519);
+  rewrite (V.pts_to bytes (Seq.create 65 0uy)) as
+    (V.pts_to slot.bytes (Seq.create 65 0uy));
+  assert (pure (B.length (Seq.create 65 0uy) == 65));
+  assert_norm (optional_fixed_bytes_match false (Seq.create 65 0uy) 65 None);
+  lemma_empty_server_kex_bytes ();
+  fold (optional_fixed_bytes_exactly
+          ({ present = slot.present; bytes = slot.bytes }) 65
+          (server_kex_bytes CS.empty_handshake_state));
+  fold (server_key_share_exactly slot CS.empty_handshake_state);
+  slot
+}
+
+fn free_kex_share_exactly (slot:kex_share_storage)
+  requires exists* spec. server_key_share_exactly slot spec
+  ensures emp
+{
+  with spec. unfold (server_key_share_exactly slot spec);
+  with g. _;
+  Box.free slot.group;
+  free_optional_fixed_bytes_exactly ({ present = slot.present; bytes = slot.bytes });
+}
+
 fn free_handshake_exactly (handshake:handshake_storage)
   requires exists* spec. handshake_exactly handshake spec
   ensures emp
@@ -651,8 +700,7 @@ fn free_handshake_exactly (handshake:handshake_storage)
     spec.CS.hs_server_selection);
   with selection_present. _;
   Box.free handshake.server_selection_present;
-  unfold (server_key_share_exactly handshake.server_key_share spec);
-  free_optional_fixed_bytes_exactly handshake.server_key_share;
+  free_kex_share_exactly handshake.server_key_share;
   free_server_key_share_private_exactly handshake.server_key_share_private;
   free_peer_exactly handshake.validated_peer;
   Box.free handshake.certificate_verify_verified;
@@ -848,6 +896,7 @@ fn copy_optional_sized_bytes_to_array
   copy_len
 }
 
+
 fn alloc_empty_optional_fixed32 ()
   requires emp
   returns slot:optional_fixed_bytes
@@ -889,10 +938,13 @@ fn alloc_empty_traffic_key_material ()
 {
   let present = Box.alloc false;
   let traffic_secret = V.alloc 0uy 32sz;
+  let alg = Box.alloc CryptoSpec.AEAD_CHACHA20_POLY1305;
   let traffic_key = V.alloc 0uy 32sz;
   let traffic_iv = V.alloc 0uy 12sz;
-  let slot = { present; traffic_secret; traffic_key; traffic_iv };
+  let slot = { present; traffic_secret; alg; traffic_key; traffic_iv };
   rewrite (Box.pts_to present false) as (Box.pts_to slot.present false);
+  rewrite (Box.pts_to alg CryptoSpec.AEAD_CHACHA20_POLY1305) as
+    (Box.pts_to slot.alg CryptoSpec.AEAD_CHACHA20_POLY1305);
   rewrite (V.pts_to traffic_secret (Seq.create 32 0uy)) as
     (V.pts_to slot.traffic_secret (Seq.create 32 0uy));
   rewrite (V.pts_to traffic_key (Seq.create 32 0uy)) as
@@ -914,20 +966,30 @@ fn alloc_default_cipher_suites ()
             default_connection_config.CS.config_cipher_suites
 {
   let items = V.alloc 0x1303us (max_cipher_suites_sz);
-  let len = Box.alloc 1sz;
+  V.op_Array_Assignment items 1sz 0x1301us;
+  let contents = Ghost.hide (Seq.upd (Seq.create max_cipher_suites 0x1303us) 1 0x1301us);
+  let len = Box.alloc 2sz;
   let slot = { items; len };
-  rewrite (V.pts_to items (Seq.create max_cipher_suites 0x1303us)) as
-    (V.pts_to slot.items (Seq.create max_cipher_suites 0x1303us));
-  rewrite (Box.pts_to len 1sz) as (Box.pts_to slot.len 1sz);
-  assert (pure (Seq.length (Seq.create max_cipher_suites 0x1303us) == max_cipher_suites));
+  rewrite (V.pts_to items (Ghost.reveal contents)) as
+    (V.pts_to slot.items (Ghost.reveal contents));
+  rewrite (Box.pts_to len 2sz) as (Box.pts_to slot.len 2sz);
   Seq.lemma_index_create max_cipher_suites 0x1303us 0;
-  assert (pure (Seq.index (Seq.create max_cipher_suites 0x1303us) 0 == 0x1303us));
+  assert (pure (Seq.length (Ghost.reveal contents) == max_cipher_suites));
+  assert (pure (Seq.index (Ghost.reveal contents) 0 == 0x1303us));
+  assert (pure (Seq.index (Ghost.reveal contents) 1 == 0x1301us));
+  let tail = Ghost.hide (Seq.slice (Ghost.reveal contents) 1 (Seq.length (Ghost.reveal contents)));
+  assert (pure (Seq.index (Ghost.reveal tail) 0 == 0x1301us));
   assert_norm (IM.cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256);
+  assert_norm (IM.cipher_suite_matches 0x1301us T.TLS_AES_128_GCM_SHA256);
   assert_norm (default_connection_config.CS.config_cipher_suites ==
-    [T.TLS_CHACHA20_POLY1305_SHA256]);
+    [T.TLS_CHACHA20_POLY1305_SHA256; T.TLS_AES_128_GCM_SHA256]);
   assert (pure (IM.cipher_suites_match
-    (Seq.create max_cipher_suites 0x1303us)
+    (Ghost.reveal tail)
     1
+    [T.TLS_AES_128_GCM_SHA256]));
+  assert (pure (IM.cipher_suites_match
+    (Ghost.reveal contents)
+    2
     default_connection_config.CS.config_cipher_suites));
   fold (cipher_suite_list_exactly
     slot
@@ -945,20 +1007,33 @@ fn alloc_default_signature_schemes ()
             default_connection_config.CS.config_signature_schemes
 {
   let items = V.alloc 0x0804us (max_signature_schemes_sz);
-  let len = Box.alloc 1sz;
+  V.op_Array_Assignment items 1sz 0x0403us;
+  let contents = Ghost.hide (Seq.upd (Seq.create max_signature_schemes 0x0804us) 1 0x0403us);
+  let len = Box.alloc 2sz;
   let slot = { items; len };
-  rewrite (V.pts_to items (Seq.create max_signature_schemes 0x0804us)) as
-    (V.pts_to slot.items (Seq.create max_signature_schemes 0x0804us));
-  rewrite (Box.pts_to len 1sz) as (Box.pts_to slot.len 1sz);
-  assert (pure (Seq.length (Seq.create max_signature_schemes 0x0804us) == max_signature_schemes));
+  rewrite (V.pts_to items (Ghost.reveal contents)) as
+    (V.pts_to slot.items (Ghost.reveal contents));
+  rewrite (Box.pts_to len 2sz) as (Box.pts_to slot.len 2sz);
   Seq.lemma_index_create max_signature_schemes 0x0804us 0;
-  assert (pure (Seq.index (Seq.create max_signature_schemes 0x0804us) 0 == 0x0804us));
+  assert (pure (Seq.length (Ghost.reveal contents) == max_signature_schemes));
+  assert (pure (Seq.index (Ghost.reveal contents) 0 == 0x0804us));
+  assert (pure (Seq.index (Ghost.reveal contents) 1 == 0x0403us));
+  // The tail sequence after dropping the first entry: its head is the ECDSA
+  // offer, and the recursive `signature_schemes_match` on the empty remainder
+  // is discharged by its `len == 0` base case.
+  let tail = Ghost.hide (Seq.slice (Ghost.reveal contents) 1 (Seq.length (Ghost.reveal contents)));
+  assert (pure (Seq.index (Ghost.reveal tail) 0 == 0x0403us));
   assert_norm (IM.signature_scheme_matches 0x0804us T.Rsa_pss_rsae_sha256);
+  assert_norm (IM.signature_scheme_matches 0x0403us T.Ecdsa_secp256r1_sha256);
   assert_norm (default_connection_config.CS.config_signature_schemes ==
-    [T.Rsa_pss_rsae_sha256]);
+    [T.Rsa_pss_rsae_sha256; T.Ecdsa_secp256r1_sha256]);
   assert (pure (IM.signature_schemes_match
-    (Seq.create max_signature_schemes 0x0804us)
+    (Ghost.reveal tail)
     1
+    [T.Ecdsa_secp256r1_sha256]));
+  assert (pure (IM.signature_schemes_match
+    (Ghost.reveal contents)
+    2
     default_connection_config.CS.config_signature_schemes));
   fold (signature_scheme_list_exactly
     slot
@@ -1411,6 +1486,8 @@ fn alloc_handshake_start_empty ()
   let client_random = V.alloc 0uy 32sz;
   let client_key_share_private = alloc_empty_optional_fixed32 ();
   let client_key_share_public = V.alloc 0uy 32sz;
+  let client_p256_private = alloc_empty_optional_fixed32 ();
+  let client_p256_public = V.alloc 0uy 65sz;
   let cipher_suites_items = V.alloc 0us (max_cipher_suites_sz);
   let cipher_suites_len = Box.alloc 0sz;
   let cipher_suites = { items = cipher_suites_items; len = cipher_suites_len };
@@ -1423,6 +1500,8 @@ fn alloc_handshake_start_empty ()
     client_random;
     client_key_share_private;
     client_key_share_public;
+    client_p256_private;
+    client_p256_public;
     cipher_suites;
     signature_schemes;
   };
@@ -1440,6 +1519,10 @@ fn alloc_handshake_start_empty ()
     (optional_fixed_bytes_exactly start.client_key_share_private 32 None);
   rewrite (V.pts_to client_key_share_public (Seq.create 32 0uy)) as
     (V.pts_to start.client_key_share_public (Seq.create 32 0uy));
+  rewrite (optional_fixed_bytes_exactly client_p256_private 32 None) as
+    (optional_fixed_bytes_exactly start.client_p256_private 32 None);
+  rewrite (V.pts_to client_p256_public (Seq.create 65 0uy)) as
+    (V.pts_to start.client_p256_public (Seq.create 65 0uy));
   rewrite (V.pts_to cipher_suites_items (Seq.create max_cipher_suites 0us)) as
     (V.pts_to start.cipher_suites.items (Seq.create max_cipher_suites 0us));
   rewrite (Box.pts_to cipher_suites_len 0sz) as
@@ -1453,6 +1536,7 @@ fn alloc_handshake_start_empty ()
   assert (pure (Seq.length (Seq.create max_signature_schemes 0us) == max_signature_schemes));
   fold (fixed_bytes_allocated start.client_random 32);
   fold (fixed_bytes_allocated start.client_key_share_public 32);
+  fold (fixed_bytes_allocated start.client_p256_public 65);
   fold (cipher_suite_list_allocated start.cipher_suites max_cipher_suites);
   fold (signature_scheme_list_allocated start.signature_schemes max_signature_schemes);
   fold (handshake_start_fields_allocated start);
@@ -1468,12 +1552,14 @@ fn alloc_client_hello_slot_empty ()
 {
   let present_box = Box.alloc false;
   let client_hello_random = V.alloc 0uy 32sz;
+  let client_hello_session_id = V.alloc 0uy 32sz;
   let client_hello_server_name = V.alloc 0uy (max_hostname_len_sz);
   let client_hello_key_share = V.alloc 0uy 32sz;
   let client_hello_cipher_suites = V.alloc 0us (max_cipher_suites_sz);
   let client_hello_signature_schemes = V.alloc 0us (max_signature_schemes_sz);
   let l = {
     IM.client_hello_random;
+    IM.client_hello_session_id;
     IM.client_hello_server_name;
     IM.client_hello_server_name_len = 0sz;
     IM.client_hello_has_server_name = false;
@@ -1485,6 +1571,8 @@ fn alloc_client_hello_slot_empty ()
   };
   rewrite (V.pts_to client_hello_random (Seq.create 32 0uy)) as
     (V.pts_to l.IM.client_hello_random (Seq.create 32 0uy));
+  rewrite (V.pts_to client_hello_session_id (Seq.create 32 0uy)) as
+    (V.pts_to l.IM.client_hello_session_id (Seq.create 32 0uy));
   rewrite (V.pts_to client_hello_server_name (Seq.create max_hostname_len 0uy)) as
     (V.pts_to l.IM.client_hello_server_name (Seq.create max_hostname_len 0uy));
   rewrite (V.pts_to client_hello_key_share (Seq.create 32 0uy)) as
@@ -1694,7 +1782,7 @@ fn alloc_handshake_empty ()
   let start = alloc_handshake_start_empty ();
   let messages = alloc_handshake_messages_empty ();
   let server_selection_present = Box.alloc false;
-  let server_key_share = alloc_empty_optional_fixed32 ();
+  let server_key_share = alloc_empty_kex_share ();
   let server_key_share_private = alloc_empty_optional_fixed32 ();
   let validated_peer = alloc_peer_empty ();
   let certificate_verify_verified = Box.alloc false;
@@ -1725,7 +1813,7 @@ fn alloc_handshake_empty ()
   fold (server_selection_presence_exactly
     handshake.server_selection_present
     CS.empty_handshake_state.CS.hs_server_selection);
-  rewrite (optional_fixed_bytes_exactly server_key_share 32 None) as
+  rewrite (server_key_share_exactly server_key_share CS.empty_handshake_state) as
     (server_key_share_exactly handshake.server_key_share CS.empty_handshake_state);
   assert (pure (handshake.server_key_share_private == server_key_share_private));
   rewrite (optional_fixed_bytes_exactly server_key_share_private 32 None) as
@@ -2443,6 +2531,64 @@ fn copy_fixed32_array_to_vec
   V.to_vec_pts_to dst;
   with stored. assert (V.pts_to dst stored);
   assert (pure (stored == Ghost.reveal 'src_bytes))
+}
+
+fn copy_fixed65_array_to_vec
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (B.length 'src_bytes == 65 /\
+                 V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 B.length 'old_dst == 65)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst 'src_bytes **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
+{
+  ArrPts.pts_to_len src;
+  V.pts_to_len dst;
+  V.to_array_pts_to dst;
+  Arr.memcpy 65sz src (V.vec_to_array dst);
+  V.to_vec_pts_to dst;
+  with stored. assert (V.pts_to dst stored);
+  assert (pure (stored == Ghost.reveal 'src_bytes))
+}
+
+(* Copy a 32-byte X25519 share into the front of a 65-byte, zero-initialised
+   destination: the runtime image of [CryptoSpec.pad_share_65] for the narrow
+   group.  The tail is required to be zero already, so no zeroing is needed. *)
+fn copy_padded32_array_to_vec65
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (#src_bytes:erased (B.bytes_of_len 32))
+  requires ArrPts.pts_to src src_bytes **
+           V.pts_to dst 'old_dst **
+           pure (V.is_full_vec dst /\
+                 V.length dst == 65 /\
+                 Seq.equal 'old_dst (Seq.create 65 0uy))
+  ensures ArrPts.pts_to src src_bytes **
+          V.pts_to dst (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)) **
+          pure (V.is_full_vec dst /\ V.length dst == 65)
+{
+  ArrPts.pts_to_len src;
+  V.pts_to_len dst;
+  V.to_array_pts_to dst;
+  let dst_slice = Slice.from_array (V.vec_to_array dst) 65sz;
+  let src_slice = Slice.from_array src 32sz;
+  let dst_split = Slice.split dst_slice 32sz;
+  Slice.pts_to_len src_slice;
+  Slice.pts_to_len (fst dst_split);
+  Slice.pts_to_len (snd dst_split);
+  Slice.copy (fst dst_split) src_slice;
+  Slice.to_array src_slice;
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst;
+  with stored. assert (V.pts_to dst stored);
+  Seq.lemma_eq_intro stored (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes));
+  rewrite (V.pts_to dst stored)
+    as (V.pts_to dst (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes)))
 }
 
 fn store_optional_fixed32_from_array

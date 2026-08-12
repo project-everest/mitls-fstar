@@ -12,6 +12,52 @@ module WFL = TLS13.Spec.WireFormatLemmas
 
 open TLS13.ConnectionState.ProtectedWireBase
 
+(* The receiver-side NORMAL FORM of a single-message protected handshake
+   delivery: a received-decode replay whose head is the [ConnNetworkEvent]
+   carrying the message.
+
+   The implementation emits a saturating HEAD [ConnProtectedHandshake] step
+   instead, but the two denote the same transition
+   ([TLS13.Spec.StateMachine.Replay.lemma_single_message_head_step_replay_normalizes]),
+   so the pairing proofs -- which are written against the network shape --
+   apply to either after normalising here. *)
+(* The receiver's head event in normal form: either the network event
+   carrying the message, or a SATURATING head [ConnProtectedHandshake] step
+   for it (one whose [consumed] covers the whole record fragment, so no tail
+   step follows).  Nothing else can describe a single-message record. *)
+unfold let received_handshake_head_normal_form
+  (received_msg:M.handshake_msg)
+  (ev:CS.conn_event)
+  : prop =
+  match ev with
+  | CS.ConnNetworkEvent directed ->
+    directed == ({
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake received_msg;
+    } <: CL.directed_message M.tls_message)
+  | CS.ConnProtectedHandshake step ->
+    step.CS.protected_handshake_message == received_msg /\
+    TLS13.Spec.StateMachine.Replay.single_message_head_step_shape step
+  | CS.ConnLocalEvent _ -> False
+
+unfold let normalized_received_handshake_replay
+  (receiver:CS.connection_model)
+  (received_msg:M.handshake_msg)
+  (receiver_rest:list CS.conn_event)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (receiver_final:CS.connection_model)
+  : prop =
+  TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+    receiver
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake received_msg;
+    } :: receiver_rest)
+    receiver_raw_sent
+    receiver_raw_received
+    receiver_final
+
 val lemma_sent_replay_skip_empty_head_preserves_peer_stream
   (sender:CS.connection_model)
   (ev:CS.conn_event)
@@ -31,7 +77,8 @@ val lemma_sent_replay_skip_empty_head_preserves_peer_stream
           sender_final /\
         (match ev with
          | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+           | CS.ConnProtectedHandshake _ -> True
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists sender1 sender_tail_sent sender_tail_received.
           CS.legal_event sender ev /\
@@ -63,7 +110,8 @@ val lemma_received_replay_skip_empty_head_preserves_peer_stream
           receiver_final /\
         (match ev with
          | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+           | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists receiver1 receiver_tail_sent receiver_tail_received.
           CS.legal_event receiver ev /\
@@ -95,7 +143,8 @@ val lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
           sender_final /\
         (match ev with
          | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+           | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists sender1 sender_tail_sent sender_tail_received.
           CS.legal_event sender ev /\
@@ -127,7 +176,8 @@ val lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
           receiver_final /\
         (match ev with
          | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+           | CS.ConnProtectedHandshake _ -> True
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists receiver1 receiver_tail_sent receiver_tail_received.
           CS.legal_event receiver ev /\
@@ -170,10 +220,12 @@ val lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
           receiver_final /\
         (match sender_ev with
          | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
-        (match receiver_ev with
-         | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
+           | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
+          (match receiver_ev with
+           | CS.ConnLocalEvent _ -> True
+           | CS.ConnProtectedHandshake _ -> True
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists sender1 receiver1
           sender_tail_sent sender_tail_received
@@ -226,10 +278,12 @@ val lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
           receiver_final /\
         (match sender_ev with
          | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
-        (match receiver_ev with
-         | CS.ConnLocalEvent _ -> True
-         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
+           | CS.ConnProtectedHandshake _ -> True
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
+          (match receiver_ev with
+           | CS.ConnLocalEvent _ -> True
+           | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists sender1 receiver1
           sender_tail_sent sender_tail_received
@@ -317,6 +371,67 @@ val lemma_received_event_nonempty_decode_projection_protected
             CL.message_value = msg;
           })
           delta_received)
+
+val lemma_single_message_sender_normalizes_received_handshake_head
+  (sender:CS.connection_model)
+  (receiver:CS.connection_model)
+  (sent_msg:M.handshake_msg)
+  (received_msg:M.handshake_msg)
+  (receiver_head:CS.conn_event)
+  (sender_rest:list CS.conn_event)
+  (receiver_rest:list CS.conn_event)
+  (sender_raw_sent:B.bytes)
+  (sender_raw_received:B.bytes)
+  (receiver_raw_sent:B.bytes)
+  (receiver_raw_received:B.bytes)
+  (sender_final:CS.connection_model)
+  (receiver_final:CS.connection_model)
+  : Lemma
+      (requires
+        write_read_record_material_aligned sender receiver /\
+        CS.protected_handshake_buffer_empty receiver /\
+        protected_handshake_wire_round_trip_message sent_msg /\
+        (match receiver_head with
+         | CS.ConnNetworkEvent directed ->
+           directed.CL.message_direction == CL.Received /\
+           directed.CL.message_value == M.TlsHandshake received_msg
+         | CS.ConnProtectedHandshake step ->
+           (* A BUFFERING step delivers no message -- it sets a record's
+              plaintext aside so that a handshake message spanning several
+              records can be reassembled -- and its
+              [protected_handshake_message] field is inert.  Pinning that
+              inert field to [received_msg] would be meaningless, so a
+              caller reasoning about a step that DELIVERS [received_msg]
+              must say the step is not a buffering one. *)
+           step.CS.protected_handshake_buffering == false /\
+           step.CS.protected_handshake_message == received_msg
+         | CS.ConnLocalEvent _ ->
+           False) /\
+        Seq.equal sender_raw_sent receiver_raw_received /\
+        TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay
+          sender
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value = M.TlsHandshake sent_msg;
+          } :: sender_rest)
+          sender_raw_sent
+          sender_raw_received
+          sender_final /\
+        TLS13.Spec.StateMachine.Replay.conn_events_received_decode_replay
+          receiver
+          (receiver_head :: receiver_rest)
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
+      (ensures
+        received_handshake_head_normal_form received_msg receiver_head /\
+        normalized_received_handshake_replay
+          receiver
+          received_msg
+          receiver_rest
+          receiver_raw_sent
+          receiver_raw_received
+          receiver_final)
 
 val lemma_protected_handshake_event_projection_pair_from_aligned_heads
   (sender:CS.connection_model)
@@ -869,6 +984,7 @@ val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         CS.step_model sender skip_ev == Some sender_after /\
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         sender_after.CS.model_record.CS.record_write.R.seq ==
           receiver.CS.model_record.CS.record_read.R.seq /\
@@ -930,6 +1046,7 @@ val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         CS.step_model sender skip_ev == Some sender_after /\
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         write_read_record_material_aligned sender_after receiver /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1027,6 +1144,7 @@ val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
           R.next_seq receiver.CS.model_record.CS.record_read /\
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         write_read_record_material_aligned sender_after receiver /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1094,6 +1212,7 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         CS.step_model receiver skip_ev == Some receiver_after /\
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         sender.CS.model_record.CS.record_write.R.seq ==
           receiver_after.CS.model_record.CS.record_read.R.seq /\
@@ -1155,6 +1274,7 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         CS.step_model receiver skip_ev == Some receiver_after /\
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1252,6 +1372,7 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
           R.next_seq receiver_after.CS.model_record.CS.record_read /\
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1322,9 +1443,11 @@ val lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads
         CS.step_model receiver receiver_skip_ev == Some receiver_after /\
         (match sender_skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         sender_after.CS.model_record.CS.record_write.R.seq ==
           receiver_after.CS.model_record.CS.record_read.R.seq /\
@@ -1389,9 +1512,11 @@ val lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
         CS.step_model receiver receiver_skip_ev == Some receiver_after /\
         (match sender_skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender_after receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1492,9 +1617,11 @@ val lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
           R.next_seq receiver_after.CS.model_record.CS.record_read /\
         (match sender_skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | CS.ConnLocalEvent _ -> True
+         | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender_after receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
