@@ -1,274 +1,308 @@
 module DH.Sample.StateMachine
 
 (**
-  DH.Sample.StateMachine — the semantic transition relation of the DH sample,
-  one state machine per role, composed with the wire format into
-  `Common.WireFormatStateMachine.wire_format_state_machine`.
+  The single authoritative ISO-DH endpoint semantics.
 
-  The informal protocol (ISO-DH, three messages) is:
+  Rules are intrinsic witnesses of transitions.  Each witness contains all
+  values needed to state both the concrete state change and its semantic story.
+  There is no later audit classifier and no symbolic state machine that has to
+  reconstruct which rule occurred.
 
-      A -> B :  A, g^x
-      B -> A :  B, g^y, Sign_B(A, g^x, g^y)
-      A -> B :  Sign_A(B, g^x, g^y)
-
-  with completion:
-      * the INITIATOR (A) completes after receiving and verifying message 2
-        (learning g^y, deriving the key, and emitting message 3);
-      * the RESPONDER (B) completes after receiving and verifying message 3.
-
-  Each endpoint is a `Common.StateMachine.state_machine` whose `sm_step`
-  relation is given below.  Steps are driven by:
-      * a LOCAL event `StartInitiator x` that kicks off the initiator with a
-        freshly generated scalar x (key generation modelled as external input);
-      * WIRE events carrying the parsed `DH.Sample.Wire.dh_message`s.
-
-  Cryptographic reasoning is entirely delegated to the abstract, trusted
-  `DH.Sample.Crypto` interface — signature checks are the `verify` predicate and
-  key agreement is `dh_agree`.  The interface exposes correctness laws but no
-  concrete or invertible crypto construction.  There is NO dependence on any
-  Dolev–Yao/DY* machinery.
-
-  Apart from the responder's intentionally nondeterministic choice of a fresh
-  scalar, every relation clause pins down the next state and produced outputs.
-  The fresh scalar is "reflected" out of the next state; see the Msg1 clause.
+      A -> B : A, gx
+      B -> A : B, gy, Sign_B(A, gx, gy)
+      A -> B : Sign_A(B, gx, gy)
 *)
 
-module SM   = Common.StateMachine
-module WF   = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module SM = Common.StateMachine
+module E = Common.Protocol.Labelled
+
 open DH.Sample.Types
-open DH.Sample.Crypto
 open DH.Sample.Wire
+open DH.Sample.Crypto
 
-(** Convenient abbreviations for the event / output instantiations. *)
-type dh_event  = SM.event dh_message local_event
-type dh_output = SM.step_output dh_message local_output
-
-(** ── Initiator transition relation ─────────────────────────────────────── *)
-
-(**
-  The initiator's step relation.
-
-    * `LocalEvent (StartInitiator x)` from `Init_Start`:  generate g^x, remember
-      the scalar and share, emit message 1 `Msg1 A g^x`, advance to `Init_Wait2`.
-
-    * `WireEvent (Msg2 B g^y Sign_B)` from `Init_Wait2`:  the responder identity
-      must match the intended peer; the signature `Sign_B` over the transcript
-      (A, g^x, g^y) must verify; the initiator then derives the session key
-      `dh_agree x g^y`, emits message 3 `Sign_A(B, g^x, g^y)`, reports
-      `SessionEstablished`, and advances to `Init_Done`.
-
-  All other (event, state) combinations have no transition (`False`).
-*)
-let initiator_step
-  (st0:endpoint_state)
-  (ev:dh_event)
-  (st1:endpoint_state)
-  (out:dh_output)
-  : GTot prop =
-  match ev with
-  | SM.LocalEvent (StartInitiator x) ->
-    st0.ep_role == Initiator /\ st0.ep_phase == Init_Start /\
-    (match st0.ep_peer with
-     | None -> False
-     | Some _peer ->
-       let gx = dh_exp x in
-       st1 == { st0 with ep_phase = Init_Wait2;
-                         ep_scalar = Some x; ep_my_share = Some gx } /\
-       out.SM.so_wire_outputs == [ Msg1 st0.ep_me gx ] /\
-       out.SM.so_local_outputs == [])
-  | SM.WireEvent (Msg2 b gy sigB) ->
-    st0.ep_role == Initiator /\ st0.ep_phase == Init_Wait2 /\
-    (match st0.ep_peer, st0.ep_scalar, st0.ep_my_share with
-     | Some peer, Some x, Some gx ->
-       b == peer /\
-       verify b (transcript st0.ep_me gx gy) sigB /\
-       (let key = dh_agree x gy in
-        let sigA = sign st0.ep_me (transcript b gx gy) in
-        st1 == { st0 with ep_phase = Init_Done;
-                          ep_peer_share = Some gy; ep_key = Some key } /\
-        out.SM.so_wire_outputs == [ Msg3 sigA ] /\
-        out.SM.so_local_outputs == [ SessionEstablished b key ])
-     | _ -> False)
-  | _ -> False
-
-(** ── Responder transition relation ─────────────────────────────────────── *)
+noeq
+type semantic_event =
+  | PublicShare:
+      private_value:scalar ->
+      public_value:share ->
+      semantic_event
+  | SharedSecret:
+      private_value:scalar ->
+      peer_public_value:share ->
+      result:session_key ->
+      semantic_event
+  | SignatureCreated:
+      signer:principal ->
+      partner:principal ->
+      initiator_share:share ->
+      responder_share:share ->
+      result:signature ->
+      semantic_event
+  | SignatureAccepted:
+      signer:principal ->
+      partner:principal ->
+      initiator_share:share ->
+      responder_share:share ->
+      signature:signature ->
+      semantic_event
+  | Completed:
+      peer:principal ->
+      key:session_key ->
+      semantic_event
 
 (**
-  The responder's step relation.
-
-    * `WireEvent (Msg1 A g^x)` from `Resp_Start`:  the responder generates a
-      fresh scalar y — reflected as `st1.ep_scalar = Some y`, so the relation
-      admits ANY choice of y — computes g^y, learns the peer A and its share
-      g^x, derives the key `dh_agree y g^x`, emits message 2
-      `Msg2 B g^y Sign_B(A, g^x, g^y)`, and advances to `Resp_Wait3`.
-
-    * `WireEvent (Msg3 Sign_A)` from `Resp_Wait3`:  the signature `Sign_A` over
-      the transcript (B, g^x, g^y) must verify; the responder then reports
-      `SessionEstablished` and advances to `Resp_Done`.
-
-  All other (event, state) combinations have no transition (`False`).
+  The four constructors are the four protocol inference rules.  Values repeated
+  from the state or wire message are intentional: they make the rule's complete
+  authenticated transcript and crypto results explicit in one reviewable place.
 *)
-let responder_step
-  (st0:endpoint_state)
-  (ev:dh_event)
-  (st1:endpoint_state)
-  (out:dh_output)
-  : GTot prop =
-  match ev with
-  | SM.WireEvent (Msg1 a gx) ->
-    st0.ep_role == Responder /\ st0.ep_phase == Resp_Start /\
-    (match st1.ep_scalar with
-     | None -> False
-     | Some y ->
-       let gy = dh_exp y in
-       let me = st0.ep_me in
-       let key = dh_agree y gx in
-       let sigB = sign me (transcript a gx gy) in
-       st1 == { st0 with ep_phase = Resp_Wait3; ep_peer = Some a;
-                         ep_scalar = Some y; ep_my_share = Some gy;
-                         ep_peer_share = Some gx; ep_key = Some key } /\
-       out.SM.so_wire_outputs == [ Msg2 me gy sigB ] /\
-       out.SM.so_local_outputs == [])
-  | SM.WireEvent (Msg3 sigA) ->
-    st0.ep_role == Responder /\ st0.ep_phase == Resp_Wait3 /\
-    (match st0.ep_peer, st0.ep_my_share, st0.ep_peer_share, st0.ep_key with
-     | Some a, Some gy, Some gx, Some key ->
-       verify a (transcript st0.ep_me gx gy) sigA /\
-       st1 == { st0 with ep_phase = Resp_Done } /\
-       out.SM.so_wire_outputs == [] /\
-       out.SM.so_local_outputs == [ SessionEstablished a key ]
-     | _ -> False)
-  | _ -> False
+noeq
+type rule_case =
+  | InitiatorStarts:
+      private_value:scalar ->
+      public_value:share ->
+      rule_case
+  | InitiatorAccepts:
+      initiator:principal ->
+      private_value:scalar ->
+      initiator_share:share ->
+      responder:principal ->
+      responder_share:share ->
+      responder_signature:signature ->
+      key:session_key ->
+      initiator_signature:signature ->
+      rule_case
+  | ResponderReplies:
+      responder:principal ->
+      initiator:principal ->
+      initiator_share:share ->
+      private_value:scalar ->
+      responder_share:share ->
+      key:session_key ->
+      responder_signature:signature ->
+      rule_case
+  | ResponderAccepts:
+      responder:principal ->
+      initiator:principal ->
+      initiator_share:share ->
+      responder_share:share ->
+      key:session_key ->
+      initiator_signature:signature ->
+      rule_case
 
-(** ── State-machine and wire-format-state-machine instances ──────────────── *)
+type rule =
+  E.labelled_rule rule_case message scalar semantic_event
 
-(**
-  The initiator endpoint as a `Common.StateMachine.state_machine`, parameterized
-  by its own identity [me] and the intended peer [peer].
-*)
+type output = SM.step_output message local_output
+type trigger = E.trigger message local_event
+
+let initiator_endpoint : E.endpoint_id = 0
+let responder_endpoint : E.endpoint_id = 1
+
+let step_rule
+  (who:E.endpoint_id)
+  (state0:endpoint_state)
+  (event:trigger)
+  (witness:rule)
+  (state1:endpoint_state)
+  (result:output)
+  : GTot prop
+  =
+  match who, event, witness.E.rule_payload with
+  | 0, E.TriggerLocal Start,
+    InitiatorStarts private_value public_value ->
+      state0.role == Initiator /\
+      state0.phase == InitiatorReady /\
+      public_value == public_share private_value /\
+      witness.E.rule_story == [
+        E.StoryFresh private_value;
+        E.StorySemantic (PublicShare private_value public_value);
+        E.StorySend (Message1 state0.me public_value);
+      ] /\
+      state1 == {
+        state0 with
+          phase = InitiatorWaiting;
+          my_scalar = Some private_value;
+          my_share = Some public_value;
+      } /\
+      result == {
+        SM.so_wire_outputs = [ Message1 state0.me public_value ];
+        SM.so_local_outputs = [];
+      }
+
+  | 0, E.TriggerReceive _ (Message2 responder responder_share responder_signature),
+    InitiatorAccepts
+      initiator private_value initiator_share responder' responder_share'
+      responder_signature' key initiator_signature ->
+      state0.role == Initiator /\
+      state0.phase == InitiatorWaiting /\
+      responder == responder' /\
+      responder_share == responder_share' /\
+      responder_signature == responder_signature' /\
+      initiator == state0.me /\
+      state0.peer == Some responder /\
+      state0.my_scalar == Some private_value /\
+      state0.my_share == Some initiator_share /\
+      verify
+        responder
+        (transcript state0.me initiator_share responder_share)
+        responder_signature /\
+      key == derive private_value responder_share /\
+      initiator_signature ==
+        sign state0.me
+          (transcript responder initiator_share responder_share) /\
+      witness.E.rule_story == [
+        E.StorySemantic (
+          SignatureAccepted
+            responder
+            initiator
+            initiator_share
+            responder_share
+            responder_signature);
+        E.StorySemantic (SharedSecret private_value responder_share key);
+        E.StorySemantic (
+          SignatureCreated
+            initiator
+            responder
+            initiator_share
+            responder_share
+            initiator_signature);
+        E.StorySend (Message3 initiator_signature);
+        E.StorySemantic (Completed responder key);
+      ] /\
+      state1 == {
+        state0 with
+          phase = InitiatorComplete;
+          peer_share = Some responder_share;
+          key = Some key;
+      } /\
+      result == {
+        SM.so_wire_outputs = [ Message3 initiator_signature ];
+        SM.so_local_outputs = [ SessionEstablished responder key ];
+      }
+
+  | 1, E.TriggerReceive _ (Message1 initiator initiator_share),
+    ResponderReplies
+      responder initiator' initiator_share' private_value responder_share
+      key responder_signature ->
+      state0.role == Responder /\
+      state0.phase == ResponderReady /\
+      initiator == initiator' /\
+      initiator_share == initiator_share' /\
+      responder == state0.me /\
+      responder_share == public_share private_value /\
+      key == derive private_value initiator_share /\
+      responder_signature ==
+        sign state0.me
+          (transcript initiator initiator_share responder_share) /\
+      witness.E.rule_story == [
+        E.StoryFresh private_value;
+        E.StorySemantic (PublicShare private_value responder_share);
+        E.StorySemantic (SharedSecret private_value initiator_share key);
+        E.StorySemantic (
+          SignatureCreated
+            responder
+            initiator
+            initiator_share
+            responder_share
+            responder_signature);
+        E.StorySend (
+          Message2 state0.me responder_share responder_signature);
+      ] /\
+      state1 == {
+        state0 with
+          phase = ResponderWaiting;
+          peer = Some initiator;
+          my_scalar = Some private_value;
+          my_share = Some responder_share;
+          peer_share = Some initiator_share;
+          key = Some key;
+      } /\
+      result == {
+        SM.so_wire_outputs = [
+          Message2 state0.me responder_share responder_signature
+        ];
+        SM.so_local_outputs = [];
+      }
+
+  | 1, E.TriggerReceive _ (Message3 initiator_signature),
+    ResponderAccepts
+      responder initiator initiator_share responder_share key initiator_signature' ->
+      state0.role == Responder /\
+      state0.phase == ResponderWaiting /\
+      initiator_signature == initiator_signature' /\
+      responder == state0.me /\
+      state0.peer == Some initiator /\
+      state0.peer_share == Some initiator_share /\
+      state0.my_share == Some responder_share /\
+      state0.key == Some key /\
+      verify
+        initiator
+        (transcript state0.me initiator_share responder_share)
+        initiator_signature /\
+      witness.E.rule_story == [
+        E.StorySemantic (
+          SignatureAccepted
+            initiator
+            responder
+            initiator_share
+            responder_share
+            initiator_signature);
+        E.StorySemantic (Completed initiator key);
+      ] /\
+      state1 == { state0 with phase = ResponderComplete } /\
+      result == {
+        SM.so_wire_outputs = [];
+        SM.so_local_outputs = [ SessionEstablished initiator key ];
+      }
+
+  | _, _, _ ->
+    False
+
 noextract
-let initiator_state_machine (me peer:principal)
-  : SM.state_machine endpoint_state dh_message local_event local_output = {
-  SM.sm_initial_state = initial_initiator me peer;
-  SM.sm_step          = initiator_step;
-}
+let endpoint_semantics
+  (initiator responder:principal)
+  : E.endpoint_semantics
+      endpoint_state message local_event local_output scalar semantic_event rule_case
+  =
+  {
+    E.initial_states = [
+      initiator_initial initiator responder;
+      responder_initial responder;
+    ];
+    E.step_rule = step_rule;
+  }
+
+let erased_step
+  (initiator responder:principal)
+  (who:E.endpoint_id)
+  (state0:endpoint_state)
+  (event:trigger)
+  (state1:endpoint_state)
+  (result:output)
+  : GTot prop
+  =
+  E.erased_step
+    (endpoint_semantics initiator responder)
+    who state0 event state1 result
 
 (**
-  The responder endpoint as a `Common.StateMachine.state_machine`, parameterized
-  by its own identity [me].
+  This is the only endpoint completeness result: every erased transition already
+  contains one of the original four rule witnesses.
 *)
-noextract
-let responder_state_machine (me:principal)
-  : SM.state_machine endpoint_state dh_message local_event local_output = {
-  SM.sm_initial_state = initial_responder me;
-  SM.sm_step          = responder_step;
-}
-
-(**
-  Composition (requirement #4): the initiator endpoint as a full
-  `Common.WireFormatStateMachine.wire_format_state_machine`, pairing the
-  transition system with the DH wire format.
-*)
-noextract
-let initiator_system (me peer:principal)
-  : WFSM.wire_format_state_machine endpoint_state dh_message local_event local_output = {
-  WFSM.wfsm_state_machine = initiator_state_machine me peer;
-  WFSM.wfsm_wire_format   = dh_wire_format;
-}
-
-(** Composition: the responder endpoint as a `wire_format_state_machine`. *)
-noextract
-let responder_system (me:principal)
-  : WFSM.wire_format_state_machine endpoint_state dh_message local_event local_output = {
-  WFSM.wfsm_state_machine = responder_state_machine me;
-  WFSM.wfsm_wire_format   = dh_wire_format;
-}
-
-(** ── Adequacy / satisfiability theorems ────────────────────────────────── *)
-
-(*
-  These small theorems demonstrate that the transition relations are not
-  vacuously false and that the protocol's core security-relevant equations hold
-  end-to-end: an honest run's signatures verify, and both endpoints derive the
-  SAME session key.  They connect the state machine to the abstract crypto
-  interface.
-*)
-
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 10"
-
-(** The initial states are valid (reachable) states of their machines. *)
-let lemma_initiator_initial_valid (me peer:principal)
-  : Lemma (ensures SM.valid_state (initiator_state_machine me peer)
-                     (initiator_state_machine me peer).SM.sm_initial_state)
-= SM.lemma_initial_state_valid (initiator_state_machine me peer)
-
-let lemma_responder_initial_valid (me:principal)
-  : Lemma (ensures SM.valid_state (responder_state_machine me)
-                     (responder_state_machine me).SM.sm_initial_state)
-= SM.lemma_initial_state_valid (responder_state_machine me)
-
-(**
-  The initiator's start transition is realizable: from the fresh initiator
-  state there really is a step producing message 1.
-*)
-let lemma_initiator_start_step (me peer:principal) (x:dh_scalar)
+let lemma_erased_step_has_rule
+  (initiator responder:principal)
+  (who:E.endpoint_id)
+  (state0:endpoint_state)
+  (event:trigger)
+  (state1:endpoint_state)
+  (result:output)
   : Lemma
+      (requires
+        erased_step initiator responder who state0 event state1 result)
       (ensures
-        (let st0 = initial_initiator me peer in
-         let gx  = dh_exp x in
-         let st1 = { st0 with ep_phase = Init_Wait2;
-                              ep_scalar = Some x; ep_my_share = Some gx } in
-         let out : dh_output = { SM.so_wire_outputs = [ Msg1 me gx ];
-                                 SM.so_local_outputs = [] } in
-         initiator_step st0 (SM.LocalEvent (StartInitiator x)) st1 out))
-= ()
-
-(**
-  The responder's message-1 transition is realizable for any freshly chosen
-  scalar y: it produces message 2 with an honestly generated signature.
-*)
-let lemma_responder_msg1_step (me a:principal) (gx:dh_share) (y:dh_scalar)
-  : Lemma
-      (ensures
-        (let st0  = initial_responder me in
-         let gy   = dh_exp y in
-         let key  = dh_agree y gx in
-         let sigB = sign me (transcript a gx gy) in
-         let st1  = { st0 with ep_phase = Resp_Wait3; ep_peer = Some a;
-                               ep_scalar = Some y; ep_my_share = Some gy;
-                               ep_peer_share = Some gx; ep_key = Some key } in
-         let out : dh_output = { SM.so_wire_outputs = [ Msg2 me gy sigB ];
-                                 SM.so_local_outputs = [] } in
-         responder_step st0 (SM.WireEvent (Msg1 a gx)) st1 out))
-= ()
-
-(**
-  End-to-end adequacy of an HONEST run with initiator A=[a], responder B=[b],
-  and ephemeral scalars x, y:
-
-    1. the responder's signature Sign_B(A, g^x, g^y) is accepted by the
-       initiator's `verify` check;
-    2. the initiator's signature Sign_A(B, g^x, g^y) is accepted by the
-       responder's `verify` check;
-    3. both endpoints derive the SAME session key (DH agreement).
-
-  This is the specification-level correctness statement tying the wire messages,
-  the signature-checking predicate, and the DH agreement equation together.
-*)
-let lemma_honest_run (a b:principal) (x y:dh_scalar)
-  : Lemma
-      (ensures
-        (let gx = dh_exp x in
-         let gy = dh_exp y in
-         verify b (transcript a gx gy) (sign b (transcript a gx gy)) /\
-         verify a (transcript b gx gy) (sign a (transcript b gx gy)) /\
-         dh_agree x gy == dh_agree y gx))
-=
-  let gx = dh_exp x in
-  let gy = dh_exp y in
-  lemma_sign_verify b (transcript a gx gy);
-  lemma_sign_verify a (transcript b gx gy);
-  lemma_dh_agree x y
-
-#pop-options
+        exists witness.
+          step_rule who state0 event witness state1 result)
+  =
+  E.lemma_erased_has_rule
+    (endpoint_semantics initiator responder)
+    who state0 event state1 result

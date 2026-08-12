@@ -1,24 +1,12 @@
 {
-  "fstar_exe": "../tools/everparse/opt/FStar/out/bin/fstar.exe",
+  "fstar_exe": "../tools/everparse/opt/FStar/bin/fstar.exe",
   "options": [
-    "--cache_checked_modules",
-    "--cache_dir", "_cache",
-    "--already_cached", "Prims,FStar,Pulse,PulseCore,DY",
-    "--warn_error", "-321-241-272-288",
-    "--ext", "optimize_let_vc",
     "--include", "../common",
     "--include", "spec",
-    "--include", "impl",
-    "--include", "spec/symbolic",
+    "--include", "spec/dy",
     "--include", "../third_party/dolev-yao-star-extrinsic/src/core",
-    "--include", "../third_party/dolev-yao-star-extrinsic/cache"
-  ],
-  "include_dirs": [
-    "../common",
-    "spec",
-    "impl",
-    "spec/symbolic",
-    "../third_party/dolev-yao-star-extrinsic/src/core",
-    "../third_party/dolev-yao-star-extrinsic/cache"
+    "--include", "../third_party/dolev-yao-star-extrinsic/cache",
+    "--warn_error", "-321-241-272-288",
+    "--report_assumes", "warn"
   ]
 }
