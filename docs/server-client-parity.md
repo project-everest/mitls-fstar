@@ -505,15 +505,43 @@ week's work.
 4. **G3 (cross-record ClientHello reassembly).**  The blocking site is
    `CS.received_cleartext_tls_message_raw`'s ClientHello arm
    (`TLS13.Spec.StateMachine.fst:2105`), which forces the message to arrive in
-   exactly one `T.Handshake` record.  Weakening it to "one or more records whose
-   fragments concatenate" -- or adding a cleartext analogue of the client-only
-   `legal_protected_handshake_step` buffering event -- invalidates the record
-   shape that roughly 25,000 lines of wire-segmentation and flight-inversion
-   proof are written against: `ProtectedWireSegmentation.fst` (6,683 lines),
-   `System.HsSeqPairing.fst` (5,506), `System.WireStep.fst` (5,115),
-   `ProtectedWireClientFinishedInversion.fst` (4,049) and
-   `ProtectedWireServerFlightInversion.fst` (3,430), across 18 files in total.
-   This is a re-proof of the cleartext segmentation layer, not a patch.
+   exactly one `T.Handshake` record.
+
+   The spec-level cost of weakening it was **measured**, not estimated: the arm
+   was widened to a disjunction admitting a two-record split and the whole tree
+   re-verified.  Only **two** proofs break, and the count matters because the
+   predicate is mentioned about 120 times across 18 modules -- almost all of
+   those uses are *constructions*, which a weaker predicate cannot disturb.
+   The two genuine inverters are:
+
+   * `WFL.lemma_received_client_hello_raw_length`
+     (`TLS13.Spec.WireFormatLemmas.fst:243`), which concludes that a received
+     ClientHello's raw delta has exactly the length of the canonical
+     single-record serialization.  Under a split that is simply false -- the
+     two-record encoding is five bytes longer -- so the lemma has to be
+     restated.  Its eight call sites are all in
+     `ProtectedWireSegmentation.fst`, and all of them are in a *paired* setting
+     where the peer is the verified client; the client's `Sent` arm is
+     `cleartext_tls_message_raw`, which still pins one record, so the
+     single-record fact is recoverable there from the sender's side.
+   * `SP.lemma_received_tls_raw_delta_legal_raw_record_parse_success`
+     (`TLS13.Impl.Server.CanonicalProtocol.fst:295`), which needs the whole
+     delta to parse as one record.  `raw_record_parse_success` would have to
+     become "parses as one or more records".
+
+   So the *specification* is close to tractable.  The work that remains is on
+   the implementation side, and it is real:
+   `TLS13.Impl.Parser.fst`'s buffer decoder decides `NetworkBufferNeedMoreInput`
+   purely at record granularity (a short header, or a header whose fragment has
+   not fully arrived).  A complete record whose fragment is an *incomplete
+   handshake message* falls through to `NetworkBufferDecodeError`.  Supporting a
+   split needs a decoder pass that concatenates the fragments of consecutive
+   cleartext `Handshake` records before attempting `parse_tls_message`, a third
+   decoder outcome so the driver leaves those bytes uncommitted in the retained
+   buffer rather than erroring, and the `CT.network_input_wf` /
+   `received_tls_raw_delta_legal` obligations re-established for the
+   concatenated form.  That is a session's work in a 7,000-line Pulse module,
+   not a patch -- but it is engineering, not research.
 5. **G2 (secp256r1, then HelloRetryRequest).**  The largest.  Both
    `TLS13.Wire.Spec.clientHello_representable` and `IM.is_valid_client_hello`
    *require* an X25519 key share to be present, so P-256-only ClientHellos are
