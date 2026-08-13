@@ -81,6 +81,11 @@ tls13_server_credentials *tls13_openssl_server_credentials_new(
     const uint8_t *private_key,
     size_t private_key_len);
 
+/* Returns the TLS SignatureScheme code point this credential's key can
+   produce (0x0804 for RSA, 0x0403 for P-256), or 0 if unsupported. */
+uint16_t tls13_openssl_server_credential_signature_scheme(
+    const tls13_server_credentials *creds);
+
 bool tls13_openssl_server_sign_rsa_pss_sha256(
     const tls13_server_credentials *creds,
     const uint8_t *message,

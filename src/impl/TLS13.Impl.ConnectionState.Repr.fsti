@@ -1379,8 +1379,12 @@ let server_connection_config
       Some {
         CS.server_certificate_chain = certificate_chain;
         CS.server_credential_identity = credential_identity;
+        (* Parity gap G5: the schemes the server may select are exactly the one
+           its credential can produce.  A TLS 1.3 credential's algorithm is
+           fixed by its SubjectPublicKeyInfo, so this is a function of the
+           configured identity and needs no extra configuration field. *)
         CS.server_allowed_signature_schemes =
-          default_connection_config.CS.config_signature_schemes;
+          [CryptoSpec.credential_signature_scheme credential_identity];
         CS.server_supported_cipher_suites =
           default_connection_config.CS.config_cipher_suites;
         CS.server_supported_groups = [T.X25519];

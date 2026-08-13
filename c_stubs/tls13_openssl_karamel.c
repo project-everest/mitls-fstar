@@ -291,6 +291,17 @@ TLS13_OpenSSL_sign_certificate_verify(
   return result;
 }
 
+/* Parity gap G5: expose the credential's signature scheme so the verified
+   server can negotiate the scheme its own key supports. */
+uint16_t
+TLS13_OpenSSL_server_credential_signature_scheme(
+    TLS13_OpenSSL_server_credentials creds) {
+  if (creds == NULL) {
+    abort();
+  }
+  return tls13_openssl_server_credential_signature_scheme(creds->raw);
+}
+
 FStar_Pervasives_Native_option__size_t
 TLS13_OpenSSL_copy_server_certificate_chain(
     TLS13_OpenSSL_server_credentials creds,

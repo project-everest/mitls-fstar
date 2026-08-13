@@ -439,6 +439,7 @@ fn can_receive_client_finished
     construction. *)
 fn select_supported_server_parameters_runtime
   (c:connection_state)
+  (cred_scheme:U16.t)
   (#server_random:erased (b:B.bytes{B.length b == 32}))
   (#server_private_key:erased (b:B.bytes{B.length b == 32}))
   (#st0:erased CS.connection_state)
@@ -458,7 +459,12 @@ fn select_supported_server_parameters_runtime
                        T.X25519 /\
                      CS.signature_scheme_offered
                        cfg.CS.server_allowed_signature_schemes
-                       T.Rsa_pss_rsae_sha256 /\
+                       (CryptoSpec.credential_signature_scheme
+                         cfg.CS.server_credential_identity) /\
+                     IM.signature_scheme_matches
+                       cred_scheme
+                       (CryptoSpec.credential_signature_scheme
+                         cfg.CS.server_credential_identity) /\
                      CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                    | _, _ -> True))
   returns suite: U16.t
@@ -481,7 +487,9 @@ fn select_supported_server_parameters_runtime
                   CS.server_selected_cipher_suite =
                     IM.cipher_suite_of_u16 suite;
                   CS.server_selected_group = T.X25519;
-                  CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                  CS.server_selected_signature_scheme =
+                    CryptoSpec.credential_signature_scheme
+                      cfg.CS.server_credential_identity;
                   CS.server_random = Ghost.reveal server_random;
                   CS.server_key_share_private =
                     Some (Ghost.reveal server_private_key);

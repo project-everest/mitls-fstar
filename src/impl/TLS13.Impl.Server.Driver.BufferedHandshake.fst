@@ -88,7 +88,8 @@ let lemma_select_server_parameters_ready_can_select
               (CM.server_selected_suite st);
             CS.server_selected_group = T.X25519;
             CS.server_selected_signature_scheme =
-              T.Rsa_pss_rsae_sha256;
+              CryptoSpec.credential_signature_scheme
+                ((Some?.v st.CS.cs_model.CS.model_config.CS.config_server). CS.server_credential_identity);
             CS.server_random = CL.raw_slice payload 0 32;
             CS.server_key_share_private =
               Some (CL.raw_slice payload 32 64);
@@ -96,8 +97,7 @@ let lemma_select_server_parameters_ready_can_select
               CryptoSpec.x25519_public_from_private
                 (CL.raw_slice payload 32 64);
             CS.server_selected_credential =
-              (Some?.v st.CS.cs_model.CS.model_config.CS.config_server).
-                CS.server_credential_identity;
+              (Some?.v st.CS.cs_model.CS.model_config.CS.config_server). CS.server_credential_identity;
           })
 =
   ()
@@ -127,7 +127,8 @@ let lemma_select_server_parameters_input_ready_intro
                (CM.server_selected_suite st);
              CS.server_selected_group = T.X25519;
              CS.server_selected_signature_scheme =
-               T.Rsa_pss_rsae_sha256;
+               CryptoSpec.credential_signature_scheme
+                 (cfg.CS.server_credential_identity);
              CS.server_random = server_random;
              CS.server_key_share_private = Some server_private_key;
              CS.server_key_share_public =
@@ -174,7 +175,8 @@ let lemma_select_server_parameters_call_ready
               (CM.server_selected_suite st);
             CS.server_selected_group = T.X25519;
             CS.server_selected_signature_scheme =
-              T.Rsa_pss_rsae_sha256;
+              CryptoSpec.credential_signature_scheme
+                ((Some?.v st.CS.cs_model.CS.model_config.CS.config_server). CS.server_credential_identity);
             CS.server_random = CL.raw_slice payload 0 32;
             CS.server_key_share_private =
               Some (CL.raw_slice payload 32 64);
@@ -182,8 +184,7 @@ let lemma_select_server_parameters_call_ready
               CryptoSpec.x25519_public_from_private
                 (CL.raw_slice payload 32 64);
             CS.server_selected_credential =
-              (Some?.v st.CS.cs_model.CS.model_config.CS.config_server).
-                CS.server_credential_identity;
+              (Some?.v st.CS.cs_model.CS.model_config.CS.config_server). CS.server_credential_identity;
           })
 =
   lemma_select_server_parameters_ready_can_select st payload;
@@ -528,7 +529,8 @@ fn select_default_server_parameters_from_payload_once
   assert (pure (
     (Some?.v st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection).
       CS.server_selected_signature_scheme ==
-      T.Rsa_pss_rsae_sha256));
+      CryptoSpec.credential_signature_scheme
+        (Ghost.reveal 'credential_identity)));
   assert (pure (
     (Some?.v st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection).
       CS.server_selected_credential ==
@@ -1176,12 +1178,15 @@ let lemma_select_derive_success_server_hello_ready
         CS.server_selected_client_hello = ch;
         CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
         CS.server_selected_group = T.X25519;
-        CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+        CS.server_selected_signature_scheme =
+          CryptoSpec.credential_signature_scheme
+            (cfg.CS.server_credential_identity);
         CS.server_random = server_random;
         CS.server_key_share_private = Some server_private_key;
         CS.server_key_share_public =
           CryptoSpec.x25519_public_from_private server_private_key;
-        CS.server_selected_credential = cfg.CS.server_credential_identity;
+        CS.server_selected_credential =
+          cfg.CS.server_credential_identity;
       } in
       st1 == CM.selected_server_parameters_state st0 selection
     | _ -> False);
@@ -1195,12 +1200,15 @@ let lemma_select_derive_success_server_hello_ready
     CS.server_selected_client_hello = selected_ch;
     CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
     CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+    CS.server_selected_signature_scheme =
+      CryptoSpec.credential_signature_scheme
+        (server_cfg.CS.server_credential_identity);
     CS.server_random = server_random;
     CS.server_key_share_private = Some server_private_key;
     CS.server_key_share_public =
       CryptoSpec.x25519_public_from_private server_private_key;
-    CS.server_selected_credential = server_cfg.CS.server_credential_identity;
+    CS.server_selected_credential =
+      server_cfg.CS.server_credential_identity;
   } in
   assert (st1 == CM.selected_server_parameters_state st0 selection);
   assert (st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==

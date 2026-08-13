@@ -394,7 +394,7 @@ let server_local_event_input_ready
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = CM.server_selected_suite st;
        CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+       CS.server_selected_signature_scheme = CM.server_credential_scheme cfg;
        CS.server_random = server_random;
        CS.server_key_share_private = Some server_private_key;
        CS.server_key_share_public =
@@ -588,11 +588,12 @@ let server_local_event_input_ready
     (match st.CS.cs_model.CS.model_config.CS.config_server,
            st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some cfg, Some selection ->
-       selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
+       selection.CS.server_selected_signature_scheme ==
+         CM.server_credential_scheme cfg /\
        selection.CS.server_selected_credential == cfg.CS.server_credential_identity /\
        CS.signature_scheme_offered
          st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-         T.Rsa_pss_rsae_sha256
+         (CM.server_credential_scheme cfg)
      | _, _ -> False)
   | _ ->
     False
@@ -638,11 +639,11 @@ let server_local_event_input_ready_with_credentials
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->
        selection.CS.server_selected_signature_scheme ==
-         T.Rsa_pss_rsae_sha256 /\
+         CryptoSpec.credential_signature_scheme credential_identity /\
        selection.CS.server_selected_credential == credential_identity /\
        CS.signature_scheme_offered
          st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-         T.Rsa_pss_rsae_sha256
+         (CryptoSpec.credential_signature_scheme credential_identity)
      | None -> False)
   | _ ->
     server_local_event_input_ready st kind payload
@@ -704,14 +705,14 @@ let server_local_event_input_ready_with_state_credentials
     assert (st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None);
     assert (Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
-      .CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256);
+      .CS.server_selected_signature_scheme == CM.server_credential_scheme cfg);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
       .CS.server_selected_credential == cfg.CS.server_credential_identity);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
       .CS.server_selected_credential == credential_identity);
     assert (CS.signature_scheme_offered
       st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-      T.Rsa_pss_rsae_sha256)
+      (CM.server_credential_scheme cfg))
   | _ ->
     ()
 

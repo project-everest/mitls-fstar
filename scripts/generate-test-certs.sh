@@ -37,4 +37,27 @@ openssl x509 -req -days 30 \
 openssl x509 -in "$dest_dir/leaf.pem" -outform DER -out "$dest_dir/leaf.der" >/dev/null 2>&1
 
 cat "$dest_dir/leaf.pem" > "$dest_dir/chain.pem"
+
+# Parity gap G5: an ECDSA P-256 leaf, issued by the same test CA, so the
+# verified server can be exercised with a non-RSA credential.
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+  -subj "/CN=localhost" \
+  -keyout "$dest_dir/ec-leaf.key" \
+  -out "$dest_dir/ec-leaf.csr" \
+  >/dev/null 2>&1
+
+openssl x509 -req -days 30 \
+  -in "$dest_dir/ec-leaf.csr" \
+  -CA "$dest_dir/ca.pem" \
+  -CAkey "$dest_dir/ca.key" \
+  -CAcreateserial \
+  -extfile "$dest_dir/leaf.ext" \
+  -out "$dest_dir/ec-leaf.pem" \
+  >/dev/null 2>&1
+
+openssl x509 -in "$dest_dir/ec-leaf.pem" -outform DER \
+  -out "$dest_dir/ec-leaf.der" >/dev/null 2>&1
+
+cat "$dest_dir/ec-leaf.pem" > "$dest_dir/ec-chain.pem"
+
 echo "Generated test certificates in $dest_dir"

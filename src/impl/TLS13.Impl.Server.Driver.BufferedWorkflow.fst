@@ -26,6 +26,8 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
 module M = TLS13.Messages
+module O = TLS13.OpenSSL
+module U16 = FStar.UInt16
 
 fn control_snapshot
   (d:DS.buffered_driver)
@@ -116,7 +118,8 @@ fn selection_ready
              CM.server_selected_suite 'st0;
            CS.server_selected_group = T.X25519;
            CS.server_selected_signature_scheme =
-             T.Rsa_pss_rsae_sha256;
+             CryptoSpec.credential_signature_scheme
+               cfg.CS.server_credential_identity;
            CS.server_random = Ghost.reveal server_random;
            CS.server_key_share_private =
              Some (Ghost.reveal server_private_key);
@@ -171,7 +174,8 @@ fn selection_ready
         T.X25519 /\
       CS.signature_scheme_offered
         cfg.CS.server_allowed_signature_schemes
-        T.Rsa_pss_rsae_sha256 /\
+        (CryptoSpec.credential_signature_scheme
+          cfg.CS.server_credential_identity) /\
       CS.sni_policy_accepts
         cfg.CS.server_sni_policy
         (TLS13.Wire.Semantics.clientHello_server_name ch)
@@ -182,9 +186,19 @@ fn selection_ready
     (CR.connection_exactly d.DS.buffered_driver_server 'st0);
   (* The negotiation query now returns the *selected* wire code (0 = refuse), so
      the server can accept AES-128-GCM-only clients as well as ChaCha20 ones. *)
+  // Parity gap G5: the scheme the negotiation looks for in the client's offer
+  // is the one this server's credential can produce, read off the credential
+  // itself rather than pinned to rsa_pss_rsae_sha256.
+  assert (pure (DS.server_driver_config_matches_credentials
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  let cred_scheme =
+    O.server_credential_signature_scheme d.DS.buffered_driver_credentials;
   let selected_suite =
     CQ.select_supported_server_parameters_runtime
       d.DS.buffered_driver_server
+      cred_scheme
       #server_random
       #server_private_key;
   let ready = selected_suite <> 0us;

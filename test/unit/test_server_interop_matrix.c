@@ -82,6 +82,13 @@
    is covered by test_extracted_server_openssl_client and test_atlas_loopback. */
 static const uint8_t k_ping[] = {'p', 'i', 'n', 'g'};
 
+/* Which server credential a cell runs against.  See the credential axis in
+   the matrix below. */
+typedef enum {
+  CRED_RSA = 0,
+  CRED_ECDSA_P256,
+} server_credential;
+
 typedef enum {
   FRAMING_NORMAL = 0,
   FRAMING_TCP_DRIBBLE,
@@ -93,6 +100,11 @@ struct case_spec {
   const char *ciphersuites; /* NULL: OpenSSL's own TLS 1.3 default list */
   const char *groups;       /* NULL: OpenSSL's own default group list */
   const char *sigalgs;      /* NULL: OpenSSL's own default sigalg list */
+  /* Which credential the verified server is started with.  The server's
+     allowed signature schemes are exactly the one its own key can produce
+     (TLS13.Crypto.Spec.credential_signature_scheme), so this axis and the
+     sigalgs axis have to agree for a cell to succeed. */
+  server_credential credential;
   bool middlebox_compat;    /* RFC 8446 D.4 compatibility mode */
   framing_mode framing;
   bool expect_ok;
@@ -119,12 +131,12 @@ struct case_spec {
 static const struct case_spec k_cases[] = {
     /* --- Baseline: the profile the verified server implements. ----------- */
     {"baseline-chacha-x25519", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "the server's single supported profile"},
 
     /* --- What a real peer actually offers. ------------------------------ */
-    {"openssl-defaults", NULL, NULL, NULL, true, FRAMING_NORMAL, OK,
+    {"openssl-defaults", NULL, NULL, NULL, CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "OpenSSL's stock TLS 1.3 offer; the server must pick chacha out of it"},
 
@@ -133,7 +145,7 @@ static const struct case_spec k_cases[] = {
        localises a failure to the negotiation surface rather than the driver. */
     {"atlas-client-offer",
      "TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256", "X25519:P-256",
-     "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", true, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "the offer TLS13.Impl.ConnectionState.Repr.default_connection_config makes"},
 
@@ -147,29 +159,29 @@ static const struct case_spec k_cases[] = {
        driver.  TLS13.Spec.StateMachine.server_hello_matches_selection now
        requires only H.is_supported_cipher_suite. */
     {"aes128-only", "TLS_AES_128_GCM_SHA256", "X25519", "rsa_pss_rsae_sha256",
-     true, FRAMING_NORMAL, OK, "TLS_AES_128_GCM_SHA256", "X25519",
+     CRED_RSA, true, FRAMING_NORMAL, OK, "TLS_AES_128_GCM_SHA256", "X25519",
      "fallback arm of the negotiation policy: no chacha offered"},
     {"aes256-only", "TLS_AES_256_GCM_SHA384", "X25519", "rsa_pss_rsae_sha256",
-     true, FRAMING_NORMAL, FAIL, NULL, NULL,
+     CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
      "neither endpoint implements TLS_AES_256_GCM_SHA384 (SHA-384 schedule)"},
     /* Suite preference: chacha is offered but listed last.  The server selects
        by its own preference, not the client's, which RFC 8446 4.1.1 permits. */
     {"aes-first-chacha-last",
      "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256",
-     "X25519", "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "server preference wins: chacha selected though offered last"},
     /* The fallback arm again, but with the unsupported AES-256 listed first:
        exercises "skip what I cannot do, then fall back" rather than "the offer
        had exactly one entry". */
     {"aes256-then-aes128", "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256",
-     "X25519", "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
      "AES-128-GCM selected past an unsupported AES-256-GCM offer"},
     /* AES-128-GCM on the non-trivial framing path, so the fallback arm is
        covered end-to-end through the retry loop as well. */
     {"aes128-tcp-dribble", "TLS_AES_128_GCM_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", true, FRAMING_TCP_DRIBBLE, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_TCP_DRIBBLE, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
      "AES-128-GCM record layer driven through the NeedMoreInput retry loop"},
 
@@ -180,34 +192,84 @@ static const struct case_spec k_cases[] = {
        the X25519 entry, and TLS13.Wire.Spec.clientHello_representable rejects
        outright any ClientHello with no X25519 key share. */
     {"p256-only", "TLS_CHACHA20_POLY1305_SHA256", "P-256",
-     "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, FAIL, NULL, NULL,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
      "GAP: server has no secp256r1 ECDH and no HelloRetryRequest (client has P-256)"},
     {"x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256", "X25519:P-256",
-     "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "two key shares offered; the server takes the X25519 one"},
     /* Both agile axes at once: AES-128-GCM selected while two key shares are
        on offer.  Guards against a regression where the suite fallback is only
        reachable on the single-key-share path. */
     {"aes128-x25519-and-p256", "TLS_AES_128_GCM_SHA256", "X25519:P-256",
-     "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
      "suite fallback and key-share choice exercised together"},
     /* P-256 listed first makes OpenSSL send its key_share for P-256 only and
        list X25519 in supported_groups, which a server without
        HelloRetryRequest cannot use. */
     {"p256-first-x25519-listed", "TLS_CHACHA20_POLY1305_SHA256",
-     "P-256:X25519", "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, FAIL, NULL,
+     "P-256:X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL,
      NULL, "GAP: needs HelloRetryRequest to ask for the X25519 share"},
 
     /* --- Signature-scheme axis. ----------------------------------------- */
     {"rsa-pss-only", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "the scheme the RSA test credential is signed under"},
+    {"ecdsa-only-rsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ecdsa_secp256r1_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
+     "correctly refused: an RSA credential cannot satisfy an ECDSA-only offer"},
+
+    /* --- Credential axis (gap G5). --------------------------------------
+     *
+     * CLOSED.  The server's allowed signature scheme is no longer the literal
+     * rsa_pss_rsae_sha256: it is TLS13.Crypto.Spec.credential_signature_scheme
+     * applied to the credential the server was configured with, and the wire
+     * code written into CertificateVerify comes from the same credential
+     * (TLS13.OpenSSL.server_credential_signature_scheme).  The spec-level
+     * scheme and the wire code therefore cannot drift, and
+     * TLS13.Spec.StateMachine.server_selection_acceptable still demands that
+     * the scheme appear in the client's signature_algorithms.
+     *
+     * These four cells are the two-sided statement of that: the same offer
+     * succeeds or is refused purely as a function of which key the server
+     * holds. */
     {"ecdsa-only", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "ecdsa_secp256r1_sha256", true, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "the test credential is RSA; the server has no ECDSA credential to select"},
+     "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ECDSA P-256 credential signs CertificateVerify under ecdsa_secp256r1_sha256"},
+    {"rsa-pss-only-ecdsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "rsa_pss_rsae_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, FAIL, NULL,
+     NULL,
+     "correctly refused: an ECDSA credential cannot satisfy an RSA-only offer"},
+    /* Both schemes offered: the server picks the one its own key supports,
+       which is the whole point of making the scheme follow the credential. */
+    {"both-sigalgs-ecdsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true,
+     FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ECDSA selected out of a two-scheme offer because the credential is EC"},
+    {"both-sigalgs-rsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", CRED_RSA, true,
+     FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "same offer, RSA credential: the other arm of the same negotiation"},
+    /* The credential axis crossed with the other closed gaps, so an ECDSA
+       credential is not quietly confined to the baseline profile. */
+    {"ecdsa-credential-aes128", "TLS_AES_128_GCM_SHA256", "X25519",
+     "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, OK,
+     "TLS_AES_128_GCM_SHA256", "X25519",
+     "ECDSA credential with the AES-128-GCM fallback arm (gap G1)"},
+    {"ecdsa-credential-no-middlebox-compat", "TLS_CHACHA20_POLY1305_SHA256",
+     "X25519", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, false,
+     FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ECDSA credential with an empty legacy_session_id echo (gap G4)"},
+    {"ecdsa-credential-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_TCP_DRIBBLE, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ECDSA CertificateVerify driven through the NeedMoreInput retry loop"},
+    {"ecdsa-credential-openssl-defaults", NULL, NULL, NULL, CRED_ECDSA_P256,
+     true, FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "a stock OpenSSL client against an ECDSA-credentialled verified server"},
 
     /* --- Middlebox-compatibility axis (RFC 8446 D.4). -------------------- */
     /* CLOSED (gap G4).  With compatibility mode off OpenSSL sends an EMPTY
@@ -222,32 +284,32 @@ static const struct case_spec k_cases[] = {
        and its record 95 + |sid| -- 122/127 only in the compatibility case --
        so the send path sizes its output buffer at run time. */
     {"no-middlebox-compat", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "empty legacy_session_id echoed verbatim: a 90-byte ServerHello"},
     /* The empty-id path crossed with the two other agile axes, so a regression
        that reintroduced a fixed-width echo cannot hide behind the compat case
        on any one of them. */
     {"no-middlebox-compat-aes128", "TLS_AES_128_GCM_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
      "empty session id and the AES-128-GCM fallback arm together"},
     {"no-middlebox-compat-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", false, FRAMING_TCP_DRIBBLE, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_TCP_DRIBBLE, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "empty session id driven through the NeedMoreInput retry loop"},
     {"no-middlebox-compat-x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256",
-     "X25519:P-256", "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, OK,
+     "X25519:P-256", "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "empty session id with two key shares on offer"},
 
     /* --- Framing axis. --------------------------------------------------- */
     {"tcp-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", true, FRAMING_TCP_DRIBBLE, OK,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_TCP_DRIBBLE, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "one record split across many TCP segments: the NeedMoreInput retry loop"},
     {"clienthello-across-two-records", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", true, FRAMING_RECORD_SPLIT, FAIL, NULL, NULL,
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT, FAIL, NULL, NULL,
      "GAP: no server-side cross-record handshake reassembly (the client has it)"},
 };
 
@@ -693,12 +755,20 @@ done:
 /* Returns true when the connection was established AND echoed.  Both peers
    must agree: a client that thinks it succeeded while the server aborted is a
    failure of the cell, not a success. */
+struct credential_material {
+  uint8_t *certificate_chain;
+  size_t certificate_chain_len;
+  uint8_t *private_key;
+  size_t private_key_len;
+};
+
 static bool run_case(const struct case_spec *spec,
-                     const uint8_t *certificate_chain,
-                     size_t certificate_chain_len,
-                     const uint8_t *private_key,
-                     size_t private_key_len,
+                     const struct credential_material *creds,
                      const char *ca_path) {
+  const uint8_t *certificate_chain = creds->certificate_chain;
+  size_t certificate_chain_len = creds->certificate_chain_len;
+  const uint8_t *private_key = creds->private_key;
+  size_t private_key_len = creds->private_key_len;
   uint16_t server_port = 0;
   uint16_t proxy_port = 0;
   if (reserve_loopback_port(&server_port) != 0) {
@@ -758,26 +828,48 @@ int main(int argc, char **argv) {
   uint8_t *private_key = NULL;
   size_t certificate_chain_len = 0;
   size_t private_key_len = 0;
+  uint8_t *ec_certificate_chain = NULL;
+  uint8_t *ec_private_key = NULL;
+  size_t ec_certificate_chain_len = 0;
+  size_t ec_private_key_len = 0;
   int rc = 1;
 
   if (read_file("test/certs/leaf.der", &certificate_chain, &certificate_chain_len) != 0 ||
       read_file("test/certs/leaf.key", &private_key, &private_key_len) != 0) {
     goto done;
   }
+  /* The ECDSA credential is issued by the same test CA, so the client's trust
+     anchor does not vary across the credential axis: only the leaf key does. */
+  if (read_file("test/certs/ec-leaf.der", &ec_certificate_chain,
+                &ec_certificate_chain_len) != 0 ||
+      read_file("test/certs/ec-leaf.key", &ec_private_key, &ec_private_key_len) != 0) {
+    fprintf(stderr,
+            "missing ECDSA test credential; run scripts/generate-test-certs.sh\n");
+    goto done;
+  }
+
+  const struct credential_material credentials[] = {
+      [CRED_RSA] = {certificate_chain, certificate_chain_len, private_key,
+                    private_key_len},
+      [CRED_ECDSA_P256] = {ec_certificate_chain, ec_certificate_chain_len,
+                           ec_private_key, ec_private_key_len},
+  };
 
   printf("Verified TLS 1.3 server: capability matrix (%zu cells)\n", CASE_COUNT);
-  printf("%-34s %-8s %-8s %s\n", "CASE", "EXPECT", "ACTUAL", "VERDICT");
+  printf("%-38s %-6s %-8s %-8s %s\n", "CASE", "CRED", "EXPECT", "ACTUAL",
+         "VERDICT");
 
   size_t mismatches = 0;
   for (size_t i = 0; i < CASE_COUNT; ++i) {
     const struct case_spec *spec = &k_cases[i];
-    bool actual = run_case(spec, certificate_chain, certificate_chain_len,
-                           private_key, private_key_len, "test/certs/ca.pem");
+    bool actual =
+        run_case(spec, &credentials[spec->credential], "test/certs/ca.pem");
     bool agrees = actual == spec->expect_ok;
     if (!agrees) {
       mismatches += 1;
     }
-    printf("%-34s %-8s %-8s %s\n", spec->name,
+    printf("%-38s %-6s %-8s %-8s %s\n", spec->name,
+           spec->credential == CRED_ECDSA_P256 ? "ecdsa" : "rsa",
            spec->expect_ok ? "ok" : "refused", actual ? "ok" : "refused",
            agrees ? "MATCH" : "*** MISMATCH ***");
     if (!agrees) {
@@ -809,5 +901,7 @@ int main(int argc, char **argv) {
 done:
   free(certificate_chain);
   free(private_key);
+  free(ec_certificate_chain);
+  free(ec_private_key);
   return rc;
 }

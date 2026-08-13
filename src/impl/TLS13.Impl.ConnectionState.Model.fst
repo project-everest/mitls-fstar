@@ -286,6 +286,91 @@ let lemma_signature_schemes_match_exists_rsa_offer
   in
   FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
 
+let lemma_signature_scheme_matches_injective
+  (wire:U16.t)
+  (s1 s2:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_scheme_matches wire s1 /\
+                IM.signature_scheme_matches wire s2)
+      (ensures s1 == s2)
+=
+  match s1, s2 with
+  | T.Unknown_signatureScheme n1, T.Unknown_signatureScheme n2 ->
+    assert (U16.v n1 == U16.v n2);
+    U16.v_inj n1 n2
+  | _, _ -> ()
+
+let lemma_signature_schemes_match_first_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                0 < len /\
+                len <= Seq.length wire /\
+                Seq.index wire 0 == target)
+      (ensures CS.signature_scheme_offered schemes scheme)
+=
+  match schemes with
+  | head :: _ ->
+    assert (IM.signature_scheme_matches (Seq.index wire 0) head);
+    lemma_signature_scheme_matches_injective target head scheme
+  | [] ->
+    lemma_signature_schemes_match_length wire len schemes;
+    assert False
+
+let rec lemma_signature_schemes_match_index_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                i < len /\
+                len <= Seq.length wire /\
+                Seq.index wire i == target)
+      (ensures CS.signature_scheme_offered schemes scheme)
+      (decreases i)
+=
+  if i = 0
+  then lemma_signature_schemes_match_first_offer wire len schemes target scheme
+  else
+    match schemes with
+    | head :: rest ->
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (Seq.index wire' (i - 1) == Seq.index wire i);
+      lemma_signature_schemes_match_index_offer wire' (len - 1) rest target scheme (i - 1)
+    | [] ->
+      lemma_signature_schemes_match_length wire len schemes;
+      assert False
+
+let lemma_signature_schemes_match_exists_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ Seq.index wire i == target))
+      (ensures CS.signature_scheme_offered schemes scheme)
+=
+  let aux (i:nat)
+    : Lemma
+        (requires i < len /\ Seq.index wire i == target)
+        (ensures CS.signature_scheme_offered schemes scheme)
+    = lemma_signature_schemes_match_index_offer wire len schemes target scheme i
+  in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
 let rec lemma_cipher_suites_match_absent_offer
   (wire:Seq.seq U16.t)
   (len:nat)

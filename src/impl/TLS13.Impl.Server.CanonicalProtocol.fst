@@ -9,6 +9,7 @@ module CL = TLS13.ConnectionLog
 module CPI = Common.ProtocolImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module SMRep = TLS13.Spec.StateMachine.Replay
 module SMLog = TLS13.Spec.StateMachine.Log
 module SMCan = TLS13.Spec.StateMachine.Canonical
@@ -106,7 +107,7 @@ let server_supported_profile_selection
   : prop =
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-    T.Rsa_pss_rsae_sha256 /\
+    (CryptoSpec.credential_signature_scheme credential_identity) /\
   (match st.CS.cs_model.CS.model_config.CS.config_server with
    | Some cfg ->
      CS.cipher_suite_offered
@@ -123,7 +124,7 @@ let server_supported_profile_selection
        T.X25519 /\
      CS.signature_scheme_offered
        cfg.CS.server_allowed_signature_schemes
-       T.Rsa_pss_rsae_sha256 /\
+       (CryptoSpec.credential_signature_scheme credential_identity) /\
      (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
         CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
@@ -134,7 +135,8 @@ let server_supported_profile_selection
   server_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
-     selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
+     selection.CS.server_selected_signature_scheme ==
+       CryptoSpec.credential_signature_scheme credential_identity /\
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)

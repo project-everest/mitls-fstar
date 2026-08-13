@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -235,6 +236,80 @@ val lemma_signature_schemes_match_exists_rsa_offer
                 len <= Seq.length wire /\
                 (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
       (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+/// The signature scheme the server's credential can produce (parity gap G5).
+/// A TLS 1.3 credential's algorithm is fixed by its SubjectPublicKeyInfo, so
+/// this is a function of the configured identity rather than an extra field --
+/// the same shape as [server_selected_suite], which reads the negotiated suite
+/// back out of the stored ClientHello instead of threading it through the
+/// driver.
+noextract
+let server_credential_scheme (cfg:CS.server_config) : T.signature_scheme =
+  CryptoSpec.credential_signature_scheme cfg.CS.server_credential_identity
+
+/// State-level form of [server_credential_scheme].  Defaults to
+/// rsa_pss_rsae_sha256 on a client state, which has no server config; every
+/// server-side use is guarded by [CS.server_config_present].
+noextract
+let server_selected_scheme (st:CS.connection_state) : T.signature_scheme =
+  match st.CS.cs_model.CS.model_config.CS.config_server with
+  | Some cfg -> server_credential_scheme cfg
+  | None -> T.Rsa_pss_rsae_sha256
+
+/// [IM.signature_scheme_matches] is a bijection between the wire code and the
+/// scheme, so a scan that finds a code determines the scheme it stands for.
+val lemma_signature_scheme_matches_injective
+  (wire:U16.t)
+  (s1 s2:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_scheme_matches wire s1 /\
+                IM.signature_scheme_matches wire s2)
+      (ensures s1 == s2)
+
+/// Scheme-generic forms of the three [..._rsa_offer] lemmas above: what the
+/// server needs once its CertificateVerify algorithm follows the credential
+/// rather than being pinned to rsa_pss_rsae_sha256 (parity gap G5).
+val lemma_signature_schemes_match_first_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                0 < len /\
+                len <= Seq.length wire /\
+                Seq.index wire 0 == target)
+      (ensures CS.signature_scheme_offered schemes scheme)
+
+val lemma_signature_schemes_match_index_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                i < len /\
+                len <= Seq.length wire /\
+                Seq.index wire i == target)
+      (ensures CS.signature_scheme_offered schemes scheme)
+
+val lemma_signature_schemes_match_exists_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ Seq.index wire i == target))
+      (ensures CS.signature_scheme_offered schemes scheme)
 
 /// Converse of the existential offer lemma: if a linear scan of the first [len]
 /// wire entries finds no occurrence of [target], the suite it names is *not* in

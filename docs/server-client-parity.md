@@ -1,9 +1,11 @@
 # Server / client parity: gap analysis and interop test plan
 
-Status date: 2026-08-12.  Branch `interop`.
+Status date: 2026-08-13.  Branch `interop`.
 
-**Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection) is **closed**;
-see the section below.  G2-G5 remain open.
+**Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection), G4
+(variable-length `legacy_session_id` echo) and G5 (ECDSA server credentials)
+are **closed**; see the sections below.  G2 and G3 remain open, and both are
+research-scale rather than incremental -- the closing sections say why.
 
 ## Why this document exists
 
@@ -56,7 +58,7 @@ insist on:
 | HelloRetryRequest | n/a (rejects) | **no** | `TLS13.Impl.Serializer.Handshake.fst:1704` |
 | short/empty `legacy_session_id` echo | n/a | yes (G4 closed) | -- |
 | `rsa_pss_rsae_sha256` credentials | yes | yes | -- |
-| `ecdsa_secp256r1_sha256` credentials | verifies | **cannot present** | `TLS13.Impl.Server.Auth.fst:320` |
+| `ecdsa_secp256r1_sha256` credentials | verifies | yes (G5 closed) | -- |
 | KeyUpdate (send, receive, mandated reply) | yes | yes | -- |
 | ChangeCipherSpec tolerance | yes | yes | -- |
 | TCP short reads / retained buffer | yes | yes | -- |
@@ -308,17 +310,60 @@ of the wire width:
 `no-middlebox-compat` is `ok`, together with three new cells that cross the
 empty-id path with the suite-fallback, retry-loop and two-key-share axes.
 
-### G5. The server can only present an RSA-PSS credential
+### G5. The server can only present an RSA-PSS credential -- **CLOSED**
 
-`TLS13.Impl.Server.Auth.fst:320` builds the CertificateVerify with
-`GCV.algorithm = T.Rsa_pss_rsae_sha256` unconditionally, and
-`TLS13.Impl.Server.CanonicalProtocol.fst:131` requires
-`selection.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256`.  The
-client *verifies* both `Rsa_pss_rsae_sha256` and `Ecdsa_secp256r1_sha256` (its
-`config_signature_schemes` lists both, and the top-100 sweep depends on ECDSA
-chains), so this too is a one-sided capability.  This gap is lower priority
-than G1-G3: it needs an ECDSA signing credential and an ECDSA test certificate,
-not just negotiation.
+**Was:** `TLS13.Impl.Server.Auth.fst` built the CertificateVerify with
+`GCV.algorithm = T.Rsa_pss_rsae_sha256` unconditionally and wrote the literal
+wire code `0x0804us`; `TLS13.Impl.Server.CanonicalProtocol.fst` and eight other
+server modules *required* `selection.server_selected_signature_scheme ==
+T.Rsa_pss_rsae_sha256`; and `tls13_openssl_server_credentials_new` rejected any
+key whose `EVP_PKEY_base_id` was not `EVP_PKEY_RSA`.  The client meanwhile
+verifies both schemes -- its `config_signature_schemes` lists both, and the
+top-100 sweep depends on ECDSA chains -- so this was a one-sided capability.
+
+**Now:** the scheme the server negotiates and signs under is a function of the
+credential it was configured with, so the two cannot drift.
+
+* `TLS13.Crypto.Spec.credential_signature_scheme : public_key -> signature_scheme`
+  names the scheme a credential's key can produce, with
+  `lemma_credential_signature_scheme_supported` (SMT-patterned) restricting it
+  to `Rsa_pss_rsae_sha256` or `Ecdsa_secp256r1_sha256`.  Making it a function of
+  the *identity* rather than a new ghost index on `O.is_server_credentials`
+  is what kept the change small: the index would have rippled through ~74
+  occurrences in 15 modules.
+* `TLS13.Impl.ConnectionState.Repr.server_connection_config` sets
+  `server_allowed_signature_schemes = [credential_signature_scheme identity]`.
+  There is exactly one construction site for a `CS.server_config` and
+  `credential_identity` was already a parameter of it, so no new config field
+  and no signature change were needed.
+* `CQ.select_supported_server_parameters_runtime` takes the wire code as a
+  parameter and scans the client's `signature_algorithms` for *that* code
+  rather than for `0x0804` (`Model.lemma_signature_schemes_match_{first,index,
+  exists}_offer` are the scheme-generic replacements for the old RSA-specific
+  offer lemmas).  The caller in the buffered driver obtains the code from the
+  credential itself via the new `TLS13.OpenSSL.server_credential_signature_scheme`.
+* `TLS13.Impl.Server.Auth` writes that same runtime code into
+  `IM.certificate_verify_scheme` and states `GCV.algorithm =
+  credential_signature_scheme identity` in the model, the two being tied
+  together by `IM.signature_scheme_matches`.  `O.sign_certificate_verify`'s
+  postcondition now says the signature verifies under
+  `credential_signature_scheme identity`.
+* `CS.server_selection_acceptable` needed no change: it already required the
+  selected scheme to be in *both* the server's allowed list and the client's
+  `signature_algorithms`.  The spec was agile all along; only the
+  implementation was pinned.
+* On the C side, `tls13_openssl_server_credentials_new` now accepts P-256 EC
+  keys, the signing stub branches to plain `EVP_DigestSign` with SHA-256 for
+  them, and `scripts/generate-test-certs.sh` issues an ECDSA P-256 leaf from the
+  same test CA -- so the credential axis varies the leaf key and nothing else.
+
+The matrix gained a **credential axis** and eight cells.  `ecdsa-only` is `ok`
+against an ECDSA credential; the two cross cells
+(`ecdsa-only-rsa-credential`, `rsa-pss-only-ecdsa-credential`) are `refused`,
+which is the half of the property that matters: the server must still refuse an
+offer its own key cannot satisfy.  `both-sigalgs-{rsa,ecdsa}-credential` show
+the same client offer resolving either way purely as a function of the server's
+key.
 
 ### What is NOT a gap
 
@@ -364,15 +409,15 @@ exit status fails the test independently of what the client concludes.
 
 ### P2. The server's capability surface is pinned -- `test-server-matrix`
 
-`test/unit/test_server_interop_matrix.c` drives OpenSSL clients across five
-axes -- cipher suites, key-exchange groups, signature schemes,
-middlebox-compatibility mode, and framing -- and compares the observed outcome
-of every cell against a recorded expectation.
+`test/unit/test_server_interop_matrix.c` drives OpenSSL clients across six
+axes -- cipher suites, key-exchange groups, signature schemes, the server's own
+credential, middlebox-compatibility mode, and framing -- and compares the
+observed outcome of every cell against a recorded expectation.
 
 Two design decisions carry the value:
 
 1. **Expectations are two-sided.**  A cell recorded as a gap fails the test if
-   it starts *succeeding*.  When someone implements G2 or G5, the harness names
+   it starts *succeeding*.  When someone implements G2 or G3, the harness names
    the row to flip, so the capability change is recorded in the same commit as
    the implementation.  A "known failures are skipped" harness would let a gap
    close silently and then reopen silently.
@@ -391,29 +436,39 @@ runs through the same proxy code and passes, which is what makes the
 `clienthello-across-two-records` failure attributable to record fragmentation
 rather than to the proxy.
 
-Current ledger (all twenty cells agree):
+Current ledger (all twenty-eight cells agree; `cred` is the key the verified
+server is started with):
 
 ```
-baseline-chacha-x25519             ok        chacha preferred when offered
-openssl-defaults                   ok        stock OpenSSL offer
-atlas-client-offer                 ok        what the verified client sends
-aes128-only                        ok        G1: fallback arm of the policy
-aes256-only                        refused   out of scope for both roles
-aes-first-chacha-last              ok        server preference wins
-aes256-then-aes128                 ok        G1: fallback past an unsupported suite
-aes128-tcp-dribble                 ok        G1: AES-GCM through the retry loop
-p256-only                          refused   G2
-x25519-and-p256                    ok        X25519 selected
-aes128-x25519-and-p256             ok        G1: both agile axes at once
-p256-first-x25519-listed           refused   G2 (needs HelloRetryRequest)
-rsa-pss-only                       ok        the test credential's scheme
-ecdsa-only                         refused   G5
-no-middlebox-compat                ok        G4: empty session id echoed verbatim
-no-middlebox-compat-aes128         ok        G4+G1: empty id and the fallback arm
-no-middlebox-compat-dribble        ok        G4: empty id through the retry loop
-no-middlebox-compat-x25519-and-p256 ok       G4: empty id with two key shares
-tcp-dribble                        ok        retained-buffer retry loop
-clienthello-across-two-records     refused   G3
+CASE                                 cred   outcome
+baseline-chacha-x25519               rsa    ok        chacha preferred when offered
+openssl-defaults                     rsa    ok        stock OpenSSL offer
+atlas-client-offer                   rsa    ok        what the verified client sends
+aes128-only                          rsa    ok        G1: fallback arm of the policy
+aes256-only                          rsa    refused   out of scope for both roles
+aes-first-chacha-last                rsa    ok        server preference wins
+aes256-then-aes128                   rsa    ok        G1: fallback past an unsupported suite
+aes128-tcp-dribble                   rsa    ok        G1: AES-GCM through the retry loop
+p256-only                            rsa    refused   G2
+x25519-and-p256                      rsa    ok        X25519 selected
+aes128-x25519-and-p256               rsa    ok        G1: both agile axes at once
+p256-first-x25519-listed             rsa    refused   G2 (needs HelloRetryRequest)
+rsa-pss-only                         rsa    ok        the RSA credential's scheme
+ecdsa-only-rsa-credential            rsa    refused   G5: RSA key cannot serve an ECDSA-only offer
+ecdsa-only                           ecdsa  ok        G5: ECDSA credential signs CertificateVerify
+rsa-pss-only-ecdsa-credential        ecdsa  refused   G5: EC key cannot serve an RSA-only offer
+both-sigalgs-ecdsa-credential        ecdsa  ok        G5: credential picks ECDSA out of both
+both-sigalgs-rsa-credential          rsa    ok        G5: same offer, the other arm
+ecdsa-credential-aes128              ecdsa  ok        G5+G1
+ecdsa-credential-no-middlebox-compat ecdsa  ok        G5+G4
+ecdsa-credential-dribble             ecdsa  ok        G5: ECDSA through the retry loop
+ecdsa-credential-openssl-defaults    ecdsa  ok        G5: stock OpenSSL vs an EC server
+no-middlebox-compat                  rsa    ok        G4: empty session id echoed verbatim
+no-middlebox-compat-aes128           rsa    ok        G4+G1: empty id and the fallback arm
+no-middlebox-compat-dribble          rsa    ok        G4: empty id through the retry loop
+no-middlebox-compat-x25519-and-p256  rsa    ok        G4: empty id with two key shares
+tcp-dribble                          rsa    ok        retained-buffer retry loop
+clienthello-across-two-records       rsa    refused   G3
 ```
 
 ### P3. The established connection keeps working -- existing tests
@@ -439,14 +494,36 @@ top-100 sweep in `test/interop/sweep.sh`.
 2. ~~**G4 (variable-length session-id echo).**~~  **Done.**  The ServerHello is
    now `90 + |sid|` bytes and its record `95 + |sid|`; `no-middlebox-compat` and
    three new empty-session-id cells are `ok`.
-3. **G3 (cross-record ClientHello reassembly).**  Independent of negotiation,
-   and increasingly load-bearing as client hellos grow.  The client's buffering
-   step is the design to mirror, but on the cleartext network-buffer path rather
-   than the protected one.  Flip `clienthello-across-two-records`.
-4. **G2 (secp256r1, then HelloRetryRequest).**  The largest of the three:
-   generalising `clientHello_representable`, making
-   `server_handshake_selection` group-indexed through `C.kex_group`, and routing
-   the server's ECDH through `TLS13.KEX`.  HRR is a separate, later step.  Flip
-   `p256-only`, then `p256-first-x25519-listed`.
-5. **G5 (ECDSA credentials).**  Needs an ECDSA test credential as well as
-   negotiation.  Flip `ecdsa-only`.
+3. ~~**G5 (ECDSA credentials).**~~  **Done.**  The negotiated scheme is now
+   `credential_signature_scheme` of the configured credential; `ecdsa-only` is
+   `ok` and seven further credential-axis cells pin both directions.
+
+The two that remain are **not** incremental, and this section is deliberate
+about that rather than leaving them on a roadmap that implies they are next
+week's work.
+
+4. **G3 (cross-record ClientHello reassembly).**  The blocking site is
+   `CS.received_cleartext_tls_message_raw`'s ClientHello arm
+   (`TLS13.Spec.StateMachine.fst:2105`), which forces the message to arrive in
+   exactly one `T.Handshake` record.  Weakening it to "one or more records whose
+   fragments concatenate" -- or adding a cleartext analogue of the client-only
+   `legal_protected_handshake_step` buffering event -- invalidates the record
+   shape that roughly 25,000 lines of wire-segmentation and flight-inversion
+   proof are written against: `ProtectedWireSegmentation.fst` (6,683 lines),
+   `System.HsSeqPairing.fst` (5,506), `System.WireStep.fst` (5,115),
+   `ProtectedWireClientFinishedInversion.fst` (4,049) and
+   `ProtectedWireServerFlightInversion.fst` (3,430), across 18 files in total.
+   This is a re-proof of the cleartext segmentation layer, not a patch.
+5. **G2 (secp256r1, then HelloRetryRequest).**  The largest.  Both
+   `TLS13.Wire.Spec.clientHello_representable` and `IM.is_valid_client_hello`
+   *require* an X25519 key share to be present, so P-256-only ClientHellos are
+   rejected before negotiation is even reached; fixing that means generalising
+   the representability predicate, making `server_handshake_selection`
+   group-indexed through `C.kex_group`, and routing the server's ECDH through
+   `TLS13.KEX`.  HelloRetryRequest -- needed for `p256-first-x25519-listed`,
+   and a whole extra flight in the server state machine -- is a separate and
+   later step again.
+
+Until they are done, `clienthello-across-two-records`, `p256-only` and
+`p256-first-x25519-listed` stay recorded as `refused`, and the harness will
+fail if any of them starts succeeding by accident.

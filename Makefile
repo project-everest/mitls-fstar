@@ -1201,7 +1201,8 @@ $(TEST_CERT_STAMP): scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
 	touch $@
 
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: $(TEST_CERT_STAMP)
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der \
+test/certs/ec-chain.pem test/certs/ec-leaf.key test/certs/ec-leaf.der: $(TEST_CERT_STAMP)
 	@test -f $@
 
 test/test_extracted_client_openssl_echo: \
@@ -1776,7 +1777,8 @@ test/test_server_interop_matrix: \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-server-matrix: test/test_server_interop_matrix \
-  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der \
+  test/certs/ec-leaf.key test/certs/ec-leaf.der
 	./test/test_server_interop_matrix
 
 # ── Dependency Checks ──────────────────────────────────────────────

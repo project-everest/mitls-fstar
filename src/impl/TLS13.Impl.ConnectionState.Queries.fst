@@ -2007,6 +2007,7 @@ fn scan_u16_for
 
 fn select_supported_server_parameters_runtime
   (c:connection_state)
+  (cred_scheme:U16.t)
   (#server_random:erased (b:B.bytes{B.length b == 32}))
   (#server_private_key:erased (b:B.bytes{B.length b == 32}))
   (#st0:erased CS.connection_state)
@@ -2026,7 +2027,12 @@ fn select_supported_server_parameters_runtime
                       T.X25519 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
-                      T.Rsa_pss_rsae_sha256 /\
+                      (CryptoSpec.credential_signature_scheme
+                        cfg.CS.server_credential_identity) /\
+                    IM.signature_scheme_matches
+                      cred_scheme
+                      (CryptoSpec.credential_signature_scheme
+                        cfg.CS.server_credential_identity) /\
                     CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                   | _, _ -> True))
   returns suite: U16.t
@@ -2049,7 +2055,9 @@ fn select_supported_server_parameters_runtime
                  CS.server_selected_cipher_suite =
                    IM.cipher_suite_of_u16 suite;
                  CS.server_selected_group = T.X25519;
-                 CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                 CS.server_selected_signature_scheme =
+                   CryptoSpec.credential_signature_scheme
+                     cfg.CS.server_credential_identity;
                  CS.server_random = Ghost.reveal server_random;
                  CS.server_key_share_private =
                    Some (Ghost.reveal server_private_key);
@@ -2125,11 +2133,15 @@ fn select_supported_server_parameters_runtime
       cipher_suites_len
       0x1301us;
   let suite_wire = if offers_chacha { 0x1303us } else { 0x1301us };
-  let offers_rsa_pss =
+  (* Parity gap G5: the scheme the server looks for is the one its credential
+     can produce, handed in by the caller (which holds the credential) as a wire
+     code.  A client that does not offer it is refused, exactly as before -- it
+     is the *target* of the scan that is now agile, not the check. *)
+  let offers_credential_scheme =
     scan_u16_for
       c.handshake.messages.client_hello.IM.client_hello_signature_schemes
       signature_schemes_len
-      0x0804us;
+      cred_scheme;
 
   unfold (key_schedule_exactly
     c.handshake.keys
@@ -2160,7 +2172,7 @@ fn select_supported_server_parameters_runtime
   let cipher_nonempty = SZ.gt cipher_suites_len 0sz;
   let cipher_supported = offers_chacha || offers_aes;
   let signature_nonempty = SZ.gt signature_schemes_len 0sz;
-  let signature_supported = offers_rsa_pss;
+  let signature_supported = offers_credential_scheme;
   let ok =
     control_ok &&
     selection_absent &&
@@ -2248,14 +2260,18 @@ fn select_supported_server_parameters_runtime
     assert (pure (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)) <=
       Seq.length ch_signature_schemes));
     assert (pure (exists (j:nat). j < SZ.v signature_schemes_len /\
-                                 Seq.index ch_signature_schemes j == 0x0804us));
-    lemma_signature_schemes_match_exists_rsa_offer
+                                 Seq.index ch_signature_schemes j == cred_scheme));
+    lemma_signature_schemes_match_exists_offer
       ch_signature_schemes
       (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)))
-      (Ghost.reveal ch_sas);
+      (Ghost.reveal ch_sas)
+      cred_scheme
+      (CryptoSpec.credential_signature_scheme
+        (Ghost.reveal cfg).CS.server_credential_identity);
     assert (pure (CS.signature_scheme_offered
       (Ghost.reveal ch_sas)
-      T.Rsa_pss_rsae_sha256));
+      (CryptoSpec.credential_signature_scheme
+        (Ghost.reveal cfg).CS.server_credential_identity)));
 
     assert (pure (CS.cipher_suite_offered
       (Ghost.reveal cfg).CS.server_supported_cipher_suites
@@ -2265,7 +2281,8 @@ fn select_supported_server_parameters_runtime
       T.X25519));
     assert (pure (CS.signature_scheme_offered
       (Ghost.reveal cfg).CS.server_allowed_signature_schemes
-      T.Rsa_pss_rsae_sha256));
+      (CryptoSpec.credential_signature_scheme
+        (Ghost.reveal cfg).CS.server_credential_identity)));
     assert (pure (CS.sni_policy_accepts
       (Ghost.reveal cfg).CS.server_sni_policy
       (Sem.clientHello_server_name (Ghost.reveal ch))));
@@ -2274,7 +2291,9 @@ fn select_supported_server_parameters_runtime
       CS.server_selected_client_hello = Ghost.reveal ch;
       CS.server_selected_cipher_suite = IM.cipher_suite_of_u16 suite_wire;
       CS.server_selected_group = T.X25519;
-      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+      CS.server_selected_signature_scheme =
+        CryptoSpec.credential_signature_scheme
+          (Ghost.reveal cfg).CS.server_credential_identity;
       CS.server_random = Ghost.reveal server_random;
       CS.server_key_share_private =
         Some (Ghost.reveal server_private_key);

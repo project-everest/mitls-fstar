@@ -53,7 +53,8 @@ val lemma_select_server_parameters_input_ready_intro
                (CM.server_selected_suite st);
              CS.server_selected_group = T.X25519;
              CS.server_selected_signature_scheme =
-               T.Rsa_pss_rsae_sha256;
+               CryptoSpec.credential_signature_scheme
+                 (cfg.CS.server_credential_identity);
              CS.server_random = server_random;
              CS.server_key_share_private = Some server_private_key;
              CS.server_key_share_public =
@@ -81,12 +82,15 @@ let selection_from_payload_correct
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
        CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+       CS.server_selected_signature_scheme =
+         CryptoSpec.credential_signature_scheme
+           (cfg.CS.server_credential_identity);
        CS.server_random = CL.raw_slice payload 0 32;
        CS.server_key_share_private = Some (CL.raw_slice payload 32 64);
        CS.server_key_share_public =
          CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
-       CS.server_selected_credential = cfg.CS.server_credential_identity;
+       CS.server_selected_credential =
+         cfg.CS.server_credential_identity;
      } in
      st1 == CM.selected_server_parameters_state st0 selection
    | _ -> False)

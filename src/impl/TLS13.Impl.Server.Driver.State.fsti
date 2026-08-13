@@ -11,6 +11,7 @@ module CL = TLS13.ConnectionLog
 module CI = Common.ChannelImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module CTypes = TLS13.Impl.CanonicalTypes
 module ES = TLS13.Spec.Endpoint.Server
 module IO = Common.TCP
@@ -488,11 +489,12 @@ let server_driver_supported_profile_selection
   : prop =
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-    T.Rsa_pss_rsae_sha256 /\
+    (CryptoSpec.credential_signature_scheme credential_identity) /\
   server_driver_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
-     selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
+     selection.CS.server_selected_signature_scheme ==
+       CryptoSpec.credential_signature_scheme credential_identity /\
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)

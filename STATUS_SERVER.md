@@ -35,7 +35,8 @@ the repository's first supported profile:
 - TLS 1.3 only.
 - X25519 key exchange.
 - `TLS_CHACHA20_POLY1305_SHA256`.
-- Certificate-based server authentication using `RsaPssRsaeSha256`.
+- Certificate-based server authentication using `RsaPssRsaeSha256` or
+  `EcdsaSecp256r1Sha256`, whichever the configured credential's key supports.
 - No PSK, 0-RTT, HelloRetryRequest, client authentication, resumption, early
   data, or KeyUpdate in the first milestone.
 
@@ -61,6 +62,16 @@ ServerHello is `90 + |sid|` bytes (its record `95 + |sid|`), sized at run time.
 A peer with middlebox-compatibility mode off -- which sends an empty session id
 -- therefore now connects.
 
+Server credentials are no longer pinned to RSA-PSS.  The signature scheme the
+server both *allows* and *signs under* is
+`TLS13.Crypto.Spec.credential_signature_scheme` of the credential it was
+configured with, so an ECDSA P-256 credential negotiates and signs
+`ecdsa_secp256r1_sha256` while an RSA credential negotiates and signs
+`rsa_pss_rsae_sha256` -- and either one correctly refuses an offer its own key
+cannot satisfy.  The wire code written into CertificateVerify comes from the
+same credential (`TLS13.OpenSSL.server_credential_signature_scheme`), so the
+model-level scheme and the byte on the wire cannot drift.
+
 `docs/server-client-parity.md` is the authoritative gap analysis and interop
 test plan.  Two standing gates keep it honest:
 
@@ -69,8 +80,9 @@ test plan.  Two standing gates keep it honest:
   so it is the gate that fails if the client's offer moves past what the server
   can select.
 - `make test-server-matrix` -- the server's capability surface across cipher
-  suites, key-exchange groups, signature schemes, middlebox-compatibility mode
-  and record/TCP framing, with two-sided expectations: a cell recorded as a gap
+  suites, key-exchange groups, signature schemes, the server's own credential
+  (RSA or ECDSA P-256), middlebox-compatibility mode and record/TCP framing.
+  Twenty-eight cells with two-sided expectations: a cell recorded as a gap
   fails if it starts succeeding, so closing a gap must update the ledger.
 
 Both are part of `make test`, and therefore of CI.
