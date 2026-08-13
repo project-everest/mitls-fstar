@@ -3,10 +3,9 @@
  * WHAT THIS IS FOR
  *
  * `test_extracted_server_openssl_client` proves the verified server completes
- * one handshake -- against an OpenSSL client pinned, by hand, to exactly the
- * one profile the server implements (TLS_CHACHA20_POLY1305_SHA256 / X25519 /
- * rsa_pss_rsae_sha256, middlebox-compatibility mode on, one TLS record per
- * flight).  That test cannot answer the question that matters for interop:
+ * one handshake -- against an OpenSSL client pinned, by hand, to exactly one
+ * profile (TLS_CHACHA20_POLY1305_SHA256 / X25519 / rsa_pss_rsae_sha256,
+ * middlebox-compatibility mode on, one TLS record per flight).  That test cannot answer the question that matters for interop:
  * *which* offers does the verified server accept, and which does it refuse?
  * Pinning the peer to the server's own profile makes every gap invisible.
  *
@@ -21,10 +20,12 @@
  * A cell recorded as EXPECT_FAIL is a known parity gap with the verified
  * client, and the test fails if that cell starts SUCCEEDING.  That is not
  * pedantry: it is how the ledger stays honest.  When someone implements
- * AES-128-GCM or secp256r1 on the server, this test tells them exactly which
- * line to flip, and the diff records the capability change in the same commit
- * as the implementation.  A one-sided "known failures are skipped" harness
- * would let the gap close silently and then let it reopen silently.
+ * secp256r1 or an ECDSA credential on the server, this test tells them exactly
+ * which line to flip, and the diff records the capability change in the same
+ * commit as the implementation.  A one-sided "known failures are skipped"
+ * harness would let the gap close silently and then let it reopen silently.
+ * The `aes128-only` cell is the worked example: it was EXPECT_FAIL until the
+ * server became cipher-suite agile, and flipped to OK in that same commit.
  *
  * THE FRAMING AXIS
  *
@@ -135,16 +136,17 @@ static const struct case_spec k_cases[] = {
      "the offer TLS13.Impl.ConnectionState.Repr.default_connection_config makes"},
 
     /* --- Cipher-suite axis. --------------------------------------------- */
-    /* The client negotiates TLS_AES_128_GCM_SHA256 (commit 4b5e7a086) and the
-       record layer carries the AEAD algorithm as an explicit tag (c7ac7eea7),
-       so the machinery exists; the server's SELECTION does not use it.  The
-       cipher suite is a literal in 55 places in the server driver stack and
-       is pinned in the spec by
-       TLS13.Spec.StateMachine.server_hello_matches_selection, which requires
-       `selection.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256`. */
+    /* CLOSED (gap G1).  The server's negotiation is now the deterministic
+       policy TLS13.Impl.ConnectionState.Model.server_selected_suite: prefer
+       ChaCha20-Poly1305, fall back to AES-128-GCM.  It is a function of the
+       stored ClientHello alone, so the ServerHello writer recovers it at
+       runtime (CQ.read_negotiated_server_suite) from the same mirror the
+       selection was made from -- no suite parameter is threaded through the
+       driver.  TLS13.Spec.StateMachine.server_hello_matches_selection now
+       requires only H.is_supported_cipher_suite. */
     {"aes128-only", "TLS_AES_128_GCM_SHA256", "X25519", "rsa_pss_rsae_sha256",
-     true, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "GAP: server cannot select TLS_AES_128_GCM_SHA256 (the client can)"},
+     true, FRAMING_NORMAL, OK, "TLS_AES_128_GCM_SHA256", "X25519",
+     "fallback arm of the negotiation policy: no chacha offered"},
     {"aes256-only", "TLS_AES_256_GCM_SHA384", "X25519", "rsa_pss_rsae_sha256",
      true, FRAMING_NORMAL, FAIL, NULL, NULL,
      "neither endpoint implements TLS_AES_256_GCM_SHA384 (SHA-384 schedule)"},
@@ -155,6 +157,19 @@ static const struct case_spec k_cases[] = {
      "X25519", "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "server preference wins: chacha selected though offered last"},
+    /* The fallback arm again, but with the unsupported AES-256 listed first:
+       exercises "skip what I cannot do, then fall back" rather than "the offer
+       had exactly one entry". */
+    {"aes256-then-aes128", "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256",
+     "X25519", "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "TLS_AES_128_GCM_SHA256", "X25519",
+     "AES-128-GCM selected past an unsupported AES-256-GCM offer"},
+    /* AES-128-GCM on the non-trivial framing path, so the fallback arm is
+       covered end-to-end through the retry loop as well. */
+    {"aes128-tcp-dribble", "TLS_AES_128_GCM_SHA256", "X25519",
+     "rsa_pss_rsae_sha256", true, FRAMING_TCP_DRIBBLE, OK,
+     "TLS_AES_128_GCM_SHA256", "X25519",
+     "AES-128-GCM record layer driven through the NeedMoreInput retry loop"},
 
     /* --- Key-exchange axis. --------------------------------------------- */
     /* The client offers, and can complete, secp256r1 (commit db6f7fb71).  The
@@ -169,6 +184,13 @@ static const struct case_spec k_cases[] = {
      "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "two key shares offered; the server takes the X25519 one"},
+    /* Both agile axes at once: AES-128-GCM selected while two key shares are
+       on offer.  Guards against a regression where the suite fallback is only
+       reachable on the single-key-share path. */
+    {"aes128-x25519-and-p256", "TLS_AES_128_GCM_SHA256", "X25519:P-256",
+     "rsa_pss_rsae_sha256", true, FRAMING_NORMAL, OK,
+     "TLS_AES_128_GCM_SHA256", "X25519",
+     "suite fallback and key-share choice exercised together"},
     /* P-256 listed first makes OpenSSL send its key_share for P-256 only and
        list X25519 in supported_groups, which a server without
        HelloRetryRequest cannot use. */

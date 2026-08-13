@@ -697,6 +697,30 @@ fn intro_handshake_server_hello_vmatch
           (GHS.Body_server_hello_mid cm));
 }
 
+(* ---- U16 wire code -> cipherSuite enum coercion ----
+   Used both by the ServerHello build path (which reads the negotiated
+   suite out of the runtime [L.server_hello] record) and by the
+   ClientHello offer serializer below. *)
+let u16_to_cipher_suite (w: U16.t) : GCS.cipherSuite =
+  if w = 4867us then GCS.TLS_CHACHA20_POLY1305_SHA256
+  else if w = 4865us then GCS.TLS_AES_128_GCM_SHA256
+  else GCS.Unknown_cipherSuite w
+
+let lemma_u16_to_cipher_suite_matches (w: U16.t) (c: GCS.cipherSuite)
+  : Lemma (requires L.cipher_suite_matches w c)
+          (ensures u16_to_cipher_suite w == c)
+  = match c with
+    | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
+      assert_norm (U16.v 4867us == 0x1303);
+      U16.v_inj w 4867us
+    | GCS.TLS_AES_128_GCM_SHA256 ->
+      assert_norm (U16.v 4865us == 0x1301);
+      U16.v_inj w 4865us
+    | GCS.Unknown_cipherSuite n ->
+      assert_norm (U16.v 4867us == 0x1303);
+      assert_norm (U16.v 4865us == 0x1301);
+      U16.v_inj w n
+
 (* ===================================================================== *)
 (* Sem-connection + handshake-level conv lemmas                          *)
 (* ===================================================================== *)
@@ -761,7 +785,6 @@ fn serialize_server_hello_handshake_poc
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
                  Seq.length (reveal sid) == 32 /\
-                 reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                  Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
@@ -775,6 +798,11 @@ fn serialize_server_hello_handshake_poc
   with sid_bytes. assert (V.pts_to lsh.L.server_hello_session_id sid_bytes);
   lemma_canonical_random (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
   lemma_canonical_key_share (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
+  (* The negotiated suite is read out of the runtime record rather than pinned:
+     [is_valid_server_hello] ties the stored U16 wire code to the erased suite of
+     the message, and [lemma_canonical_cs] says that suite is [cs]. *)
+  lemma_canonical_cs (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
+  lemma_u16_to_cipher_suite_matches lsh.L.server_hello_cipher_suite (reveal cs);
   Seq.lemma_eq_elim random (reveal rnd);
   (* The stored share is padded to the widest offered width. *)
   assert (pure (Seq.length (reveal ks) == 32));
@@ -865,8 +893,9 @@ fn serialize_server_hello_handshake_poc
        as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (reveal sid));
 
   (* ---- serverHelloBody vmatch ---- *)
+  let neg_suite = u16_to_cipher_suite lsh.L.server_hello_cipher_suite;
   let shbody_low : GSHBody.serverHelloBody_lowtype =
-    ((sid_lvec, GCS.TLS_CHACHA20_POLY1305_SHA256), (0uy, exts_low));
+    ((sid_lvec, neg_suite), (0uy, exts_low));
   let shm : Ghost.erased GSHBody.serverHelloBody_mid =
     Ghost.hide (((reveal sid <: Seq.seq U8.t), reveal cs), (0uy, ([Ghost.reveal ks_ext; Ghost.reveal sv_ext] <: list GESH.extensionServerHello)));
   rewrite (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch sid_lvec (reveal sid))
@@ -1738,26 +1767,6 @@ fn mk_pair_vclist
 (* ===================================================================== *)
 (* U16 -> leaf coercions and matching lemmas (for the variable vclists)   *)
 (* ===================================================================== *)
-
-let u16_to_cipher_suite (w: U16.t) : GCS.cipherSuite =
-  if w = 4867us then GCS.TLS_CHACHA20_POLY1305_SHA256
-  else if w = 4865us then GCS.TLS_AES_128_GCM_SHA256
-  else GCS.Unknown_cipherSuite w
-
-let lemma_u16_to_cipher_suite_matches (w: U16.t) (c: GCS.cipherSuite)
-  : Lemma (requires L.cipher_suite_matches w c)
-          (ensures u16_to_cipher_suite w == c)
-  = match c with
-    | GCS.TLS_CHACHA20_POLY1305_SHA256 ->
-      assert_norm (U16.v 4867us == 0x1303);
-      U16.v_inj w 4867us
-    | GCS.TLS_AES_128_GCM_SHA256 ->
-      assert_norm (U16.v 4865us == 0x1301);
-      U16.v_inj w 4865us
-    | GCS.Unknown_cipherSuite n ->
-      assert_norm (U16.v 4867us == 0x1303);
-      assert_norm (U16.v 4865us == 0x1301);
-      U16.v_inj w n
 
 (* [u16_to_sig_scheme] + [lemma_u16_to_sig_scheme] are defined above (reused by
    the CertificateVerify serializer); reuse them here for signature_schemes. *)

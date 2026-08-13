@@ -171,8 +171,7 @@ fn process_select_default_server_parameters_from_arrays
                     Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
                   let selection = {
                     CS.server_selected_client_hello = ch;
-                    CS.server_selected_cipher_suite =
-                      T.TLS_CHACHA20_POLY1305_SHA256;
+                    CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
                     CS.server_selected_group = T.X25519;
                     CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                     CS.server_random = Ghost.reveal 'server_random_bytes;
@@ -198,8 +197,7 @@ fn process_select_default_server_parameters_from_arrays
                   | Some ch, Some cfg ->
                     let selection = {
                       CS.server_selected_client_hello = ch;
-                      CS.server_selected_cipher_suite =
-                        T.TLS_CHACHA20_POLY1305_SHA256;
+                      CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
                       CS.server_selected_group = T.X25519;
                       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                       CS.server_random = Ghost.reveal 'server_random_bytes;
@@ -250,8 +248,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
                    Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
                   let selection = {
                    CS.server_selected_client_hello = ch;
-                   CS.server_selected_cipher_suite =
-                     T.TLS_CHACHA20_POLY1305_SHA256;
+                   CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
                    CS.server_selected_group = T.X25519;
                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                    CS.server_random = Ghost.reveal 'server_random_bytes;
@@ -280,8 +277,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
                   | Some ch, Some cfg ->
                    let selection = {
                      CS.server_selected_client_hello = ch;
-                     CS.server_selected_cipher_suite =
-                       T.TLS_CHACHA20_POLY1305_SHA256;
+                     CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
                      CS.server_selected_group = T.X25519;
                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                      CS.server_random = Ghost.reveal 'server_random_bytes;
@@ -330,8 +326,7 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                    Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
                   let selection = {
                    CS.server_selected_client_hello = ch;
-                   CS.server_selected_cipher_suite =
-                     T.TLS_CHACHA20_POLY1305_SHA256;
+                   CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
                    CS.server_selected_group = T.X25519;
                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                    CS.server_random = Ghost.reveal 'server_random_bytes;
@@ -360,8 +355,7 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                   | Some ch, Some cfg ->
                    let selection = {
                      CS.server_selected_client_hello = ch;
-                     CS.server_selected_cipher_suite =
-                       T.TLS_CHACHA20_POLY1305_SHA256;
+                     CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
                      CS.server_selected_group = T.X25519;
                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                      CS.server_random = Ghost.reveal 'server_random_bytes;

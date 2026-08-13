@@ -84,7 +84,7 @@ let lemma_select_server_parameters_ready_can_select
             CS.server_selected_client_hello =
               Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello;
             CS.server_selected_cipher_suite =
-              T.TLS_CHACHA20_POLY1305_SHA256;
+              (CM.server_selected_suite st);
             CS.server_selected_group = T.X25519;
             CS.server_selected_signature_scheme =
               T.Rsa_pss_rsae_sha256;
@@ -123,7 +123,7 @@ let lemma_select_server_parameters_input_ready_intro
            CM.can_select_server_parameters st {
              CS.server_selected_client_hello = ch;
              CS.server_selected_cipher_suite =
-               T.TLS_CHACHA20_POLY1305_SHA256;
+               (CM.server_selected_suite st);
              CS.server_selected_group = T.X25519;
              CS.server_selected_signature_scheme =
                T.Rsa_pss_rsae_sha256;
@@ -170,7 +170,7 @@ let lemma_select_server_parameters_call_ready
             CS.server_selected_client_hello =
               Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello;
             CS.server_selected_cipher_suite =
-              T.TLS_CHACHA20_POLY1305_SHA256;
+              (CM.server_selected_suite st);
             CS.server_selected_group = T.X25519;
             CS.server_selected_signature_scheme =
               T.Rsa_pss_rsae_sha256;
@@ -619,7 +619,7 @@ fn send_server_hello_from_payload_once
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
-           T.TLS_CHACHA20_POLY1305_SHA256 in
+           (CM.server_selected_suite 'st0) in
        CM.can_send_server_hello
          'st0
          sh
@@ -657,7 +657,7 @@ fn send_server_hello_from_payload_once
                   (CryptoSpec.x25519_public_from_private
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
                   (CM.stored_client_hello_session_id 'st0)
-                  T.TLS_CHACHA20_POLY1305_SHA256))))
+                  (CM.server_selected_suite 'st0)))))
           app_out_bytes)
 {
   unfold (DS.buffered_driver_exactly
@@ -716,7 +716,7 @@ fn send_server_hello_from_payload_once
         server_random_bytes
         (CryptoSpec.x25519_public_from_private server_private_key_bytes)
         (CM.stored_client_hello_session_id 'st0)
-        T.TLS_CHACHA20_POLY1305_SHA256);
+        (CM.server_selected_suite 'st0));
   let serialized =
     Ghost.hide
       (CS.serialized_cleartext_tls_message
@@ -1161,7 +1161,7 @@ let lemma_select_derive_success_server_hello_ready
     | Some ch, Some cfg ->
       let selection = {
         CS.server_selected_client_hello = ch;
-        CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
         CS.server_selected_group = T.X25519;
         CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
         CS.server_random = server_random;
@@ -1180,7 +1180,7 @@ let lemma_select_derive_success_server_hello_ready
     Some?.v st0.CS.cs_model.CS.model_config.CS.config_server in
   let selection = {
     CS.server_selected_client_hello = selected_ch;
-    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
     CS.server_selected_group = T.X25519;
     CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
     CS.server_random = server_random;
@@ -1204,7 +1204,7 @@ let lemma_select_derive_success_server_hello_ready
   assert ((selection.CS.server_random <: Seq.lseq U8.t 32) <>
     GSHbody.serverHello_body_cst);
   assert (selection.CS.server_selected_cipher_suite ==
-    T.TLS_CHACHA20_POLY1305_SHA256);
+    (CM.server_selected_suite st0));
   assert (CM.valid_selection selection);
   let sh_sel = CM.server_hello_of_selection selection in
   CM.lemma_server_hello_of_selection_matches selection;
@@ -1250,7 +1250,7 @@ let lemma_assemble_can_send_server_hello
         (Some?.v
           st.CS.cs_model.CS.model_handshake.CS.hs_server_selection).
             CS.server_selected_cipher_suite ==
-          T.TLS_CHACHA20_POLY1305_SHA256 /\
+          (CM.server_selected_suite st) /\
         B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
           Bounds.max_transcript_len /\
         ST.server_local_event_input_ready
@@ -1266,7 +1266,7 @@ let lemma_assemble_can_send_server_hello
              (CryptoSpec.x25519_public_from_private
                (CL.raw_slice payload 32 64))
              (CM.stored_client_hello_session_id st)
-             T.TLS_CHACHA20_POLY1305_SHA256 in
+             (CM.server_selected_suite st) in
          B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
       (ensures
         (let sh =
@@ -1275,7 +1275,7 @@ let lemma_assemble_can_send_server_hello
              (CryptoSpec.x25519_public_from_private
                (CL.raw_slice payload 32 64))
              (CM.stored_client_hello_session_id st)
-             T.TLS_CHACHA20_POLY1305_SHA256 in
+             (CM.server_selected_suite st) in
          CM.can_send_server_hello st sh
            (CS.serialized_cleartext_tls_message
              (M.TlsHandshake (M.ServerHello sh)))))
@@ -1291,7 +1291,7 @@ let lemma_assemble_can_send_server_hello
       server_random
       key_share
       (CM.stored_client_hello_session_id st)
-      T.TLS_CHACHA20_POLY1305_SHA256 in
+      (CM.server_selected_suite st) in
   let selection =
     Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
   assert (Seq.equal selection.CS.server_random server_random);
@@ -1364,7 +1364,7 @@ fn select_derive_send_server_hello_from_payload_once
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
-           T.TLS_CHACHA20_POLY1305_SHA256 in
+           (CM.server_selected_suite 'st0) in
        B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
   returns result:server_flight_result
   ensures

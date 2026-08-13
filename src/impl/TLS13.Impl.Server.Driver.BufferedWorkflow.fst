@@ -113,7 +113,7 @@ fn selection_ready
          CM.can_select_server_parameters 'st0 {
            CS.server_selected_client_hello = ch;
            CS.server_selected_cipher_suite =
-             T.TLS_CHACHA20_POLY1305_SHA256;
+             CM.server_selected_suite 'st0;
            CS.server_selected_group = T.X25519;
            CS.server_selected_signature_scheme =
              T.Rsa_pss_rsae_sha256;
@@ -162,7 +162,10 @@ fn selection_ready
     | Some ch, Some cfg ->
       CS.cipher_suite_offered
         cfg.CS.server_supported_cipher_suites
-        T.TLS_CHACHA20_POLY1305_SHA256 /\
+        (CM.server_selected_suite 'st0) /\
+      CS.cipher_suite_offered
+        cfg.CS.server_supported_cipher_suites
+        T.TLS_AES_128_GCM_SHA256 /\
       CS.named_group_offered
         cfg.CS.server_supported_groups
         T.X25519 /\
@@ -177,11 +180,14 @@ fn selection_ready
     (S.connection_exactly d.DS.buffered_driver_server 'st0)
     as
     (CR.connection_exactly d.DS.buffered_driver_server 'st0);
-  let ready =
-    CQ.can_select_supported_server_parameters_runtime
+  (* The negotiation query now returns the *selected* wire code (0 = refuse), so
+     the server can accept AES-128-GCM-only clients as well as ChaCha20 ones. *)
+  let selected_suite =
+    CQ.select_supported_server_parameters_runtime
       d.DS.buffered_driver_server
       #server_random
       #server_private_key;
+  let ready = selected_suite <> 0us;
   rewrite
     (CR.connection_exactly d.DS.buffered_driver_server 'st0)
     as
@@ -320,7 +326,7 @@ fn rec drive_handshake
                   (CryptoSpec.x25519_public_from_private
                     (TLS13.ConnectionLog.raw_slice material_bytes 32 64))
                   (CM.stored_client_hello_session_id 'st0)
-                  T.TLS_CHACHA20_POLY1305_SHA256;
+                  (CM.server_selected_suite 'st0);
                 let flight =
                   BH.select_derive_send_server_hello_from_payload_once
                     d

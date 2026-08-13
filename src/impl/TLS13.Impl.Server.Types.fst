@@ -392,7 +392,7 @@ let server_local_event_input_ready
      let server_private_key = CL.raw_slice payload 32 64 in
      let selection = {
        CS.server_selected_client_hello = ch;
-       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       CS.server_selected_cipher_suite = CM.server_selected_suite st;
        CS.server_selected_group = T.X25519;
        CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
        CS.server_random = server_random;
@@ -415,6 +415,16 @@ let server_local_event_input_ready
           (Some?.v selection.CS.server_key_share_private)
           server_private_key /\
         CS.server_selection_key_share_consistent selection /\
+        (* Cipher-suite agility (gap G1): the stored selection's suite is the one
+           the deterministic negotiation policy computes from the stored
+           ClientHello.  The select step installs exactly that value, and neither
+           the ClientHello nor the selection changes afterwards, so this is an
+           invariant of every reachable send-ServerHello state.  Carrying it here
+           is what lets the ServerHello writer recover the negotiated suite at
+           runtime (by re-scanning the ClientHello mirror) instead of threading it
+           through the whole driver. *)
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
         // build-direction send obligation: the canonical ServerHello built from
         // the selection (CM.server_hello_of_selection, the server mirror of the
         // client's client_hello_of_start) can be sent.

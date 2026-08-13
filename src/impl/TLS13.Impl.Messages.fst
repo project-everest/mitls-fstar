@@ -398,6 +398,43 @@ let rec cipher_suites_match
     | [] -> False
   else False
 
+(* Runtime coercion from a cipher-suite wire code to the enum.  The server's
+   negotiation runs on the wire codes stored in the ClientHello mirror; this is
+   what lets it name the *selected* suite in the (ghost) selection and in the
+   ServerHello it builds, instead of pinning a single literal. *)
+inline_for_extraction
+let cipher_suite_of_u16 (w:U16.t) : T.cipher_suite =
+  if w = 0x1303us then T.TLS_CHACHA20_POLY1305_SHA256
+  else if w = 0x1301us then T.TLS_AES_128_GCM_SHA256
+  else T.Unknown_cipherSuite w
+
+let lemma_cipher_suite_of_u16_matches (w:U16.t) (c:T.cipher_suite)
+  : Lemma (requires cipher_suite_matches w c)
+          (ensures cipher_suite_of_u16 w == c)
+  = match c with
+    | T.TLS_CHACHA20_POLY1305_SHA256 ->
+      assert_norm (U16.v 0x1303us == 0x1303); U16.v_inj w 0x1303us
+    | T.TLS_AES_128_GCM_SHA256 ->
+      assert_norm (U16.v 0x1301us == 0x1301); U16.v_inj w 0x1301us
+    | T.Unknown_cipherSuite n ->
+      assert_norm (U16.v 0x1303us == 0x1303);
+      assert_norm (U16.v 0x1301us == 0x1301);
+      U16.v_inj w n
+
+(* The two wire codes the server can select, and the fact that each names its
+   suite.  Stated as [assert_norm]-free lemmas so callers can use them under
+   [--fuel 0]. *)
+let lemma_cipher_suite_of_u16_chacha ()
+  : Lemma (cipher_suite_of_u16 0x1303us == T.TLS_CHACHA20_POLY1305_SHA256 /\
+           cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256)
+  = assert_norm (U16.v 0x1303us == 0x1303)
+
+let lemma_cipher_suite_of_u16_aes ()
+  : Lemma (cipher_suite_of_u16 0x1301us == T.TLS_AES_128_GCM_SHA256 /\
+           cipher_suite_matches 0x1301us T.TLS_AES_128_GCM_SHA256)
+  = assert_norm (U16.v 0x1301us == 0x1301);
+    assert_norm (not (0x1301us = 0x1303us))
+
 noextract
 let rec signature_schemes_match
   (wire:Seq.seq U16.t)

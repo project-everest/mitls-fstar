@@ -50,7 +50,7 @@ val lemma_select_server_parameters_input_ready_intro
            CM.can_select_server_parameters st {
              CS.server_selected_client_hello = ch;
              CS.server_selected_cipher_suite =
-               T.TLS_CHACHA20_POLY1305_SHA256;
+               (CM.server_selected_suite st);
              CS.server_selected_group = T.X25519;
              CS.server_selected_signature_scheme =
                T.Rsa_pss_rsae_sha256;
@@ -79,7 +79,7 @@ let selection_from_payload_correct
    | Some ch, Some cfg ->
      let selection = {
        CS.server_selected_client_hello = ch;
-       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
        CS.server_selected_group = T.X25519;
        CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
        CS.server_random = CL.raw_slice payload 0 32;
@@ -103,7 +103,7 @@ let server_hello_from_payload_correct
        (CryptoSpec.x25519_public_from_private
          (CL.raw_slice payload 32 64))
        (CM.stored_client_hello_session_id st0)
-       T.TLS_CHACHA20_POLY1305_SHA256 in
+       (CM.server_selected_suite st0) in
    st1 ==
      CM.sent_server_hello_state
        st0
@@ -266,7 +266,7 @@ fn send_server_hello_from_payload_once
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
-           T.TLS_CHACHA20_POLY1305_SHA256 in
+           (CM.server_selected_suite 'st0) in
        CM.can_send_server_hello
          'st0
          sh
@@ -304,7 +304,7 @@ fn send_server_hello_from_payload_once
                   (CryptoSpec.x25519_public_from_private
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
                   (CM.stored_client_hello_session_id 'st0)
-                  T.TLS_CHACHA20_POLY1305_SHA256))))
+                  (CM.server_selected_suite 'st0)))))
           app_out_bytes)
 
 fn derive_shared_secret_from_payload_once
@@ -408,7 +408,7 @@ fn select_derive_send_server_hello_from_payload_once
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
-           T.TLS_CHACHA20_POLY1305_SHA256 in
+           (CM.server_selected_suite 'st0) in
        B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) == 122))
   returns result:server_flight_result
   ensures

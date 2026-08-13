@@ -1473,7 +1473,7 @@ let server_hello_matches_selection
   (match Sem.serverHello_key_share_x25519 sh with
    | Some k -> B.length k = 32 /\ Seq.equal k selection.server_key_share_public
    | None -> False) /\
-  selection.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+  H.is_supported_cipher_suite selection.server_selected_cipher_suite /\
   Sem.serverHello_cipher_suite sh == Some selection.server_selected_cipher_suite /\
   B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
 let certificate_msg_matches_server_config

@@ -2,6 +2,9 @@
 
 Status date: 2026-08-12.  Branch `interop`.
 
+**Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection) is **closed**;
+see the section below.  G2-G5 remain open.
+
 ## Why this document exists
 
 The top-100 interop push (commits `8b0430278` .. `db6f7fb71`) moved the
@@ -45,7 +48,7 @@ cannot serve, and every one of them is a capability a real peer may insist on:
 | capability | client | server | first blocking site |
 | --- | --- | --- | --- |
 | `TLS_CHACHA20_POLY1305_SHA256` | yes | yes | -- |
-| `TLS_AES_128_GCM_SHA256` | yes | **no** | `TLS13.Spec.StateMachine.server_hello_matches_selection:1476` |
+| `TLS_AES_128_GCM_SHA256` | yes | yes (G1 closed) | -- |
 | X25519 key exchange | yes | yes | -- |
 | `secp256r1` key exchange | yes | **no** | `TLS13.Spec.StateMachine:1626` (server `LocalDeriveSharedSecret`) |
 | cross-record handshake reassembly | yes | **no** | `TLS13.Spec.StateMachine.legal_protected_handshake_step:1986` |
@@ -66,7 +69,7 @@ said so.
 
 ## The gaps in detail
 
-### G1. The server cannot select `TLS_AES_128_GCM_SHA256`
+### G1. The server cannot select `TLS_AES_128_GCM_SHA256` -- CLOSED
 
 The *record layer* is already algorithm-agile for both roles.  Commit
 `c7ac7eea7` replaced the key-length inference (`C.aead_alg_of_key`) with an
@@ -104,6 +107,69 @@ the record layer.
 Interop consequence: a peer that offers only AES-GCM cannot connect.  That is
 not hypothetical -- it is the configuration Microsoft's properties and several
 of the top-100 hosts use, which is precisely why the client needed AES-128-GCM.
+
+#### How it was closed
+
+The obvious shape -- thread a `cipher_suite : U16.t` parameter from the
+selection step down to the ServerHello writer -- would have touched some fifteen
+functions across ten modules, each with its own pre/post-condition to restate.
+It was rejected in favour of making the choice a **deterministic function of
+state the server already stores**:
+
+```fstar
+(* TLS13.Impl.ConnectionState.Model.fsti *)
+noextract
+let server_selected_suite (st:CS.connection_state) : T.cipher_suite =
+  match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+  | Some ch ->
+    if cipher_suite_offered_b (Sem.clientHello_cipher_suites ch)
+         T.TLS_CHACHA20_POLY1305_SHA256
+    then T.TLS_CHACHA20_POLY1305_SHA256
+    else T.TLS_AES_128_GCM_SHA256
+  | None -> T.TLS_CHACHA20_POLY1305_SHA256
+```
+
+Because the policy reads only the stored ClientHello mirror, *any* later point
+in the flow can recompute it and get the same answer.  So the ServerHello writer
+does not need the suite passed to it: `TLS13.Impl.ConnectionState.Queries.
+read_negotiated_server_suite` re-scans the stored ClientHello at write time and
+returns the wire code, with the postcondition
+`IM.cipher_suite_of_u16 suite == CM.server_selected_suite st0`.  The fifty-five
+literal sites became fifty-five occurrences of `CM.server_selected_suite 'st0`,
+a mechanical substitution with no new parameters.
+
+Three supporting pieces were needed:
+
+* **A decidable offer test.**  `CS.cipher_suite_offered` is `prop`-valued, so a
+  `Tot` function cannot scrutinise it.  `cipher_suite_offered_b` is its boolean
+  companion, tied to it by `lemma_cipher_suite_offered_b` (an SMT pattern), so
+  the policy is total and the spec-level lemmas still speak in `prop`.
+* **A conclusive scan.**  The runtime scan `scan_u16_for` previously only
+  promised soundness on `found == true`.  Deciding *absence* of ChaCha20 --
+  which is what selects the fallback -- needs the negative direction too, so its
+  postcondition and loop invariant were strengthened to
+  `found == false ==> forall j < len. bytes[j] <> target`.
+* **A linkage between the selection and the write.**  The spec requires the
+  emitted suite to equal the *stored selection's* suite, while the writer can
+  only recompute the *policy*.  The two are tied together by adding
+  `selection.server_selected_cipher_suite == CM.server_selected_suite st` to the
+  `LocalSendServerHello` arm of `ST.server_local_event_input_ready`.  That arm
+  is cheap to strengthen precisely because
+  `server_internal_ready_implies_kind_ready` deliberately excludes it, so its
+  only producers are explicit lemmas in `TLS13.Impl.Server.Send` and the
+  concrete driver code -- there is no generic introduction rule to repair.
+
+`server_hello_matches_selection` now requires only
+`H.is_supported_cipher_suite selection.server_selected_cipher_suite`, and
+`TLS13.Impl.Server.CanonicalProtocol.server_supported_profile_selection`
+additionally requires the configuration to offer AES-128-GCM, which the default
+server config does.
+
+Observable result: the `aes128-only`, `aes256-then-aes128`, `aes128-tcp-dribble`
+and `aes128-x25519-and-p256` matrix cells all negotiate
+`TLS_AES_128_GCM_SHA256` against a real OpenSSL client, and the four
+ChaCha-preferring cells are unchanged -- server preference still wins when both
+are offered.
 
 ### G2. The server has no `secp256r1` key exchange, and no HelloRetryRequest
 
@@ -279,7 +345,7 @@ of every cell against a recorded expectation.
 Two design decisions carry the value:
 
 1. **Expectations are two-sided.**  A cell recorded as a gap fails the test if
-   it starts *succeeding*.  When someone implements G1 or G2, the harness names
+   it starts *succeeding*.  When someone implements G2 or G5, the harness names
    the row to flip, so the capability change is recorded in the same commit as
    the implementation.  A "known failures are skipped" harness would let a gap
    close silently and then reopen silently.
@@ -298,17 +364,20 @@ runs through the same proxy code and passes, which is what makes the
 `clienthello-across-two-records` failure attributable to record fragmentation
 rather than to the proxy.
 
-Current ledger (all fourteen cells agree):
+Current ledger (all seventeen cells agree):
 
 ```
-baseline-chacha-x25519             ok        the server's single profile
+baseline-chacha-x25519             ok        chacha preferred when offered
 openssl-defaults                   ok        stock OpenSSL offer
 atlas-client-offer                 ok        what the verified client sends
-aes128-only                        refused   G1
+aes128-only                        ok        G1: fallback arm of the policy
 aes256-only                        refused   out of scope for both roles
 aes-first-chacha-last              ok        server preference wins
+aes256-then-aes128                 ok        G1: fallback past an unsupported suite
+aes128-tcp-dribble                 ok        G1: AES-GCM through the retry loop
 p256-only                          refused   G2
 x25519-and-p256                    ok        X25519 selected
+aes128-x25519-and-p256             ok        G1: both agile axes at once
 p256-first-x25519-listed           refused   G2 (needs HelloRetryRequest)
 rsa-pss-only                       ok        the test credential's scheme
 ecdsa-only                         refused   G5
@@ -334,10 +403,9 @@ top-100 sweep in `test/interop/sweep.sh`.
 
 ## Recommended order for closing the gaps
 
-1. **G1 (AES-128-GCM selection).**  Highest interop value per unit of proof
-   work: the record layer, key schedule and ServerHello constructor are already
-   agile, so the change is concentrated in those 55 selection sites and the
-   exact-length ServerHello lemmas.  Flip the `aes128-only` cell.
+1. ~~**G1 (AES-128-GCM selection).**~~  **Done.**  Closed by the deterministic
+   negotiation policy described above; `aes128-only` and three new AES-128 cells
+   are `ok`.
 2. **G3 (cross-record ClientHello reassembly).**  Independent of negotiation,
    and increasingly load-bearing as client hellos grow.  The client's buffering
    step is the design to mirror, but on the cleartext network-buffer path rather

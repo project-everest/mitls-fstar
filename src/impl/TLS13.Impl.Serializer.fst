@@ -1529,7 +1529,6 @@ fn serialize_server_hello_from_selection
                 (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                 Seq.length (Ghost.reveal ks) == 32 /\
                 Seq.length (Ghost.reveal sid) == 32 /\
-                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                 Ghost.reveal sh ==
                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
@@ -1562,7 +1561,6 @@ fn serialize_server_hello_record_from_selection
                 (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                 Seq.length (Ghost.reveal ks) == 32 /\
                 Seq.length (Ghost.reveal sid) == 32 /\
-                Ghost.reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                 Ghost.reveal sh ==
                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})

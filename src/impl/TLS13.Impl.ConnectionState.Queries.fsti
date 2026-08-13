@@ -424,7 +424,20 @@ fn can_receive_client_finished
                 CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
               }))
 
-fn can_select_supported_server_parameters_runtime
+(** Cipher-suite negotiation.
+
+    Returns the wire code of the suite the server selects, or [0us] if it
+    cannot select any (0x0000 is TLS_NULL_WITH_NULL_NULL, never a TLS 1.3
+    offer, so it is unambiguous as a "refused" marker).  Server preference
+    order is ChaCha20-Poly1305 first, then AES-128-GCM: the offer is scanned
+    for each in turn, so a client that lists AES first still gets ChaCha if it
+    offers both.
+
+    A non-zero result carries the full [can_select_server_parameters]
+    obligation for the selection naming *that* suite, so the caller can hand
+    the same wire code to the ServerHello builder and the two stay in step by
+    construction. *)
+fn select_supported_server_parameters_runtime
   (c:connection_state)
   (#server_random:erased (b:B.bytes{B.length b == 32}))
   (#server_private_key:erased (b:B.bytes{B.length b == 32}))
@@ -437,6 +450,9 @@ fn can_select_supported_server_parameters_runtime
                      CS.cipher_suite_offered
                        cfg.CS.server_supported_cipher_suites
                        T.TLS_CHACHA20_POLY1305_SHA256 /\
+                     CS.cipher_suite_offered
+                       cfg.CS.server_supported_cipher_suites
+                       T.TLS_AES_128_GCM_SHA256 /\
                      CS.named_group_offered
                        cfg.CS.server_supported_groups
                        T.X25519 /\
@@ -445,9 +461,10 @@ fn can_select_supported_server_parameters_runtime
                        T.Rsa_pss_rsae_sha256 /\
                      CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                    | _, _ -> True))
-  returns ok: bool
+  returns suite: U16.t
   ensures connection_exactly c st0 **
-          pure (ok ==>
+          pure (suite <> 0us ==>
+            (suite == 0x1303us \/ suite == 0x1301us) /\
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived /\
             st0.CS.cs_model.CS.model_config.CS.config_role ==
@@ -462,7 +479,7 @@ fn can_select_supported_server_parameters_runtime
                 let selection = {
                   CS.server_selected_client_hello = ch;
                   CS.server_selected_cipher_suite =
-                    T.TLS_CHACHA20_POLY1305_SHA256;
+                    IM.cipher_suite_of_u16 suite;
                   CS.server_selected_group = T.X25519;
                   CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
                   CS.server_random = Ghost.reveal server_random;
@@ -1175,6 +1192,25 @@ fn can_receive_close_notify
              st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+
+/// Runtime re-computation of the server's cipher-suite negotiation policy from
+/// the stored ClientHello mirror.  Returns the *wire* code of the suite the
+/// server selects: 0x1303 (ChaCha20-Poly1305) when the client offers it, and
+/// 0x1301 (AES-128-GCM) otherwise.  The postcondition ties the result to the
+/// ghost policy function [Model.server_selected_suite], so the ServerHello
+/// build path can emit the negotiated suite without threading it through the
+/// driver: the policy is a function of the ClientHello alone, and the mirror
+/// that ClientHello lives in is immutable for the rest of the handshake.
+fn read_negotiated_server_suite
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello)
+  returns suite: U16.t
+  ensures connection_exactly c st0 **
+          pure ((suite == 0x1303us \/ suite == 0x1301us) /\
+                IM.cipher_suite_of_u16 suite ==
+                  server_selected_suite (Ghost.reveal st0))
 
 /// Read the (clamped, 32-byte) legacy_session_id of the stored ClientHello
 /// into [out].  Total: when no ClientHello is stored the mirror still holds

@@ -44,7 +44,15 @@ the repository's first supported profile:
 The client has since moved past that first profile: it negotiates
 `TLS_AES_128_GCM_SHA256` as well as ChaCha20-Poly1305, offers and completes
 `secp256r1` as well as X25519, and reassembles a handshake message split across
-several records.  The server implements none of the three.
+several records.
+
+The server now matches it on the first of the three: it selects
+`TLS_AES_128_GCM_SHA256` when a peer does not offer ChaCha20-Poly1305, via the
+deterministic policy `TLS13.Impl.ConnectionState.Model.server_selected_suite`
+(prefer ChaCha20, fall back to AES-128-GCM), which is a function of the stored
+ClientHello alone, so the ServerHello writer recovers the choice at runtime
+rather than having it threaded through the driver.  `secp256r1` and cross-record
+reassembly remain server-side gaps.
 
 `docs/server-client-parity.md` is the authoritative gap analysis and interop
 test plan.  Two standing gates keep it honest:

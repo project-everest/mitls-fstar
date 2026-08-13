@@ -119,7 +119,7 @@ val lemma_server_hello_of_selection_eq_witness
         (CM.sho_random sel)
         sel.CS.server_key_share_public
         (CM.sho_session_id sel)
-        T.TLS_CHACHA20_POLY1305_SHA256)
+        (CM.sho_cipher_suite sel))
 
 (* Build-direction bridge for CanonicalProtocol's symbolic LocalSendServerHello
    arm.  [ST.server_local_event_input_ready]/LocalSendServerHello carries the
@@ -148,6 +148,8 @@ val lemma_can_send_server_hello_witness_of_selection
       Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
                 (server_private_key <: Seq.seq U8.t) /\
       CS.server_selection_key_share_consistent selection /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
       CM.can_send_server_hello st (CM.server_hello_of_selection selection)
         (CS.serialized_cleartext_tls_message
           (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
@@ -156,7 +158,7 @@ val lemma_can_send_server_hello_witness_of_selection
       (let sh = mk_server_hello_witness server_random
                   (CryptoSpec.x25519_public_from_private server_private_key)
                   (CM.stored_client_hello_session_id st)
-                  T.TLS_CHACHA20_POLY1305_SHA256 in
+                  (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh
          (CS.serialized_cleartext_tls_message
            (M.TlsHandshake (M.ServerHello sh)))))
@@ -196,7 +198,8 @@ val lemma_input_ready_server_hello_of_selection
                 (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
       (selection.CS.server_key_share_public <: B.bytes) ==
         CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
-      selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      selection.CS.server_selected_cipher_suite == CM.server_selected_suite st)
     (ensures
       ST.server_local_event_input_ready st ST.LocalSendServerHello material)
 
@@ -240,7 +243,7 @@ val lemma_server_process_local_obligations
                    (CL.raw_slice payload 0 32)
                    (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
-                   T.TLS_CHACHA20_POLY1305_SHA256 in
+                   (CM.server_selected_suite st) in
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake (M.ServerHello sh))))) /\
@@ -356,6 +359,7 @@ fn process_send_server_hello_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
                  Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
@@ -364,7 +368,7 @@ fn process_send_server_hello_serialized
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
                      (CM.stored_client_hello_session_id 'st0)
-                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
+                     (CM.server_selected_suite 'st0) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -414,12 +418,13 @@ fn process_send_server_hello_from_arrays
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -436,7 +441,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -474,13 +479,14 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                  (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -498,7 +504,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
                  (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                        (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                        (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message

@@ -229,6 +229,38 @@ val lemma_signature_schemes_match_exists_rsa_offer
                 (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
       (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
 
+/// Converse of the existential offer lemma: if a linear scan of the first [len]
+/// wire entries finds no occurrence of [target], the suite it names is *not* in
+/// the offered list.  A conclusive negative is what lets the server's runtime
+/// negotiation be proven equal to the policy function [server_selected_suite]
+/// rather than merely a sound under-approximation of it.
+val lemma_cipher_suites_match_absent_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (target:U16.t)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (forall (i:nat). i < len ==> Seq.index wire i <> target))
+      (ensures ~(CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target)))
+
+/// Suite-agile form of the existential offer lemma: for either of the two wire
+/// codes the server can select, a runtime scan hit proves the *named* suite was
+/// offered.  This is what lets the server select AES-128-GCM when the client
+/// does not offer ChaCha20-Poly1305, without duplicating the ServerHello gate.
+val lemma_cipher_suites_match_exists_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (target:U16.t)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (target == 0x1303us \/ target == 0x1301us) /\
+                (exists (i:nat). i < len /\ Seq.index wire i == target))
+      (ensures CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target))
+
 val lemma_cipher_suites_match_exists_chacha_offer
   (wire:Seq.seq U16.t)
   (len:nat)
@@ -390,7 +422,7 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
 // server_hello_of_selection is an identity and the record matches the selection.
 let valid_selection (sel:CS.server_handshake_selection) : prop =
   (sel.CS.server_random <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-  sel.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256
+  H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite
 
 // clamp: a 32-byte server random differing from the HRR sentinel (identity under
 // valid_selection).  The all-zero fallback differs from serverHello_body_cst at
@@ -403,6 +435,58 @@ let sho_random (sel:CS.server_handshake_selection)
     else (Seq.lemma_index_create 32 0uy 0;
           assert_norm (Seq.index GSHB.serverHello_body_cst 0 == 0xcfuy);
           Seq.create 32 0uy)
+
+(* clamp: the negotiated cipher suite, defaulted to ChaCha20-Poly1305 for an
+   unsupported selection (identity under [valid_selection]).  Keeping
+   [server_hello_of_selection] total means the ServerHello builder must produce
+   *some* suite even for a selection the server could never have made. *)
+noextract
+let sho_cipher_suite (sel:CS.server_handshake_selection)
+  : (cs:GCS.cipherSuite { H.is_supported_cipher_suite cs })
+  = if H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite
+    then sel.CS.server_selected_cipher_suite
+    else T.TLS_CHACHA20_POLY1305_SHA256
+
+(** The server's cipher-suite negotiation *policy*, as a total function of the
+    stored ClientHello.
+
+    ATLAS's server prefers ChaCha20-Poly1305 and falls back to AES-128-GCM, so
+    the selected suite is determined by the ClientHello alone: no extra state,
+    no extra parameter to thread, and the ServerHello build path can recompute
+    it from the same stored ClientHello mirror the selection was made from.
+
+    Total by construction: if the client offers neither suite this returns
+    AES-128-GCM, but then [CS.server_selection_acceptable] fails (the selected
+    suite is not in [Sem.clientHello_cipher_suites]), so the handshake is
+    refused before the value is ever used.  Likewise for the [None] case, which
+    is unreachable in [HsClientHelloReceived]. *)
+(* Decidable companion of [CS.cipher_suite_offered] (which is [prop]-valued, so
+   it cannot be scrutinised by a [Tot] function). *)
+noextract
+let rec cipher_suite_offered_b (suites:list T.cipher_suite) (suite:T.cipher_suite)
+  : Tot bool (decreases suites)
+  = match suites with
+    | [] -> false
+    | offered :: rest -> offered = suite || cipher_suite_offered_b rest suite
+
+val lemma_cipher_suite_offered_b (suites:list T.cipher_suite) (suite:T.cipher_suite)
+  : Lemma (cipher_suite_offered_b suites suite <==> CS.cipher_suite_offered suites suite)
+          [SMTPat (cipher_suite_offered_b suites suite)]
+
+noextract
+let server_selected_suite (st:CS.connection_state) : T.cipher_suite
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch ->
+      if cipher_suite_offered_b
+           (Sem.clientHello_cipher_suites ch)
+           T.TLS_CHACHA20_POLY1305_SHA256
+      then T.TLS_CHACHA20_POLY1305_SHA256
+      else T.TLS_AES_128_GCM_SHA256
+    | None -> T.TLS_CHACHA20_POLY1305_SHA256
+
+(* The negotiated suite is always one ATLAS's record layer can key. *)
+val lemma_server_selected_suite_supported (st:CS.connection_state)
+  : Lemma (H.is_supported_cipher_suite (server_selected_suite st))
 
 (* The 32-byte legacy_session_id of the ClientHello currently stored in the
    connection state -- i.e. exactly what the ServerHello must echo back for
@@ -429,7 +513,7 @@ noextract
 let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
   = let rnd : Seq.lseq U8.t 32 = sho_random sel in
     let ks : B.bytes = sel.CS.server_key_share_public in
-    let cs : GCS.cipherSuite = T.TLS_CHACHA20_POLY1305_SHA256 in
+    let cs : GCS.cipherSuite = sho_cipher_suite sel in
     let ke : GKSE.keyShareEntry_key_exchange = ks in
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
     GNG.namedGroup_bytesize_eq GNG.X25519;

@@ -112,6 +112,12 @@ let server_supported_profile_selection
      CS.cipher_suite_offered
        cfg.CS.server_supported_cipher_suites
        T.TLS_CHACHA20_POLY1305_SHA256 /\
+     (* Cipher-suite agility (gap G1): the server negotiates ChaCha20-Poly1305
+        when offered and falls back to AES-128-GCM otherwise, so its profile
+        must support both.  The default server config offers exactly these two. *)
+     CS.cipher_suite_offered
+       cfg.CS.server_supported_cipher_suites
+       T.TLS_AES_128_GCM_SHA256 /\
      CS.named_group_offered
        cfg.CS.server_supported_groups
        T.X25519 /\

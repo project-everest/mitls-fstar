@@ -31,6 +31,7 @@ module SZ = FStar.SizeT
 module Tr = TLS13.Transcript
 module U64 = FStar.UInt64
 module U8 = FStar.UInt8
+module U16 = FStar.UInt16
 module V = Pulse.Lib.Vec
 module Ref = Pulse.Lib.Reference
 module W = TLS13.Wire.Spec
@@ -318,7 +319,7 @@ let lemma_server_hello_of_selection_eq_witness
         (CM.sho_random sel)
         sel.CS.server_key_share_public
         (CM.sho_session_id sel)
-        T.TLS_CHACHA20_POLY1305_SHA256)
+        (CM.sho_cipher_suite sel))
   = ()
 #pop-options
 
@@ -349,18 +350,18 @@ let lemma_can_send_server_hello_session_id_irrelevant
       Seq.length sid1 == 32 /\
       Seq.length sid2 == 32 /\
       (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-      (let sh1 = mk_server_hello_witness random key_share sid1 T.TLS_CHACHA20_POLY1305_SHA256 in
+      (let sh1 = mk_server_hello_witness random key_share sid1 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh1
          (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh1)))))
     (ensures
-      (let sh2 = mk_server_hello_witness random key_share sid2 T.TLS_CHACHA20_POLY1305_SHA256 in
+      (let sh2 = mk_server_hello_witness random key_share sid2 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh2
          (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh2)))))
   =
-  let sh1 = mk_server_hello_witness random key_share sid1 T.TLS_CHACHA20_POLY1305_SHA256 in
-  let sh2 = mk_server_hello_witness random key_share sid2 T.TLS_CHACHA20_POLY1305_SHA256 in
-  lemma_mk_server_hello_witness_bytesize random key_share sid1 T.TLS_CHACHA20_POLY1305_SHA256;
-  lemma_mk_server_hello_witness_bytesize random key_share sid2 T.TLS_CHACHA20_POLY1305_SHA256;
+  let sh1 = mk_server_hello_witness random key_share sid1 (CM.server_selected_suite st) in
+  let sh2 = mk_server_hello_witness random key_share sid2 (CM.server_selected_suite st) in
+  lemma_mk_server_hello_witness_bytesize random key_share sid1 (CM.server_selected_suite st);
+  lemma_mk_server_hello_witness_bytesize random key_share sid2 (CM.server_selected_suite st);
   ()
 #pop-options
 
@@ -398,6 +399,8 @@ let lemma_can_send_server_hello_witness_of_selection
       Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
                 (server_private_key <: Seq.seq U8.t) /\
       CS.server_selection_key_share_consistent selection /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
       CM.can_send_server_hello st (CM.server_hello_of_selection selection)
         (CS.serialized_cleartext_tls_message
           (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
@@ -406,7 +409,7 @@ let lemma_can_send_server_hello_witness_of_selection
       (let sh = mk_server_hello_witness server_random
                   (CryptoSpec.x25519_public_from_private server_private_key)
                   (CM.stored_client_hello_session_id st)
-                  T.TLS_CHACHA20_POLY1305_SHA256 in
+                  (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh
          (CS.serialized_cleartext_tls_message
            (M.TlsHandshake (M.ServerHello sh)))))
@@ -438,7 +441,7 @@ let lemma_can_send_server_hello_witness_of_selection
   assert (sh0 == mk_server_hello_witness server_random
                    (CryptoSpec.x25519_public_from_private server_private_key)
                    (CM.sho_session_id selection)
-                   T.TLS_CHACHA20_POLY1305_SHA256);
+                   (CM.server_selected_suite st));
   // The send path echoes the *stored ClientHello's* session id rather than the
   // selection's copy; the send obligation does not see the echo at all.
   lemma_can_send_server_hello_session_id_irrelevant
@@ -484,7 +487,8 @@ let lemma_input_ready_server_hello_of_selection
                 (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
       (selection.CS.server_key_share_public <: B.bytes) ==
         CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
-      selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      selection.CS.server_selected_cipher_suite == CM.server_selected_suite st)
     (ensures
       ST.server_local_event_input_ready st ST.LocalSendServerHello material)
   =
@@ -581,7 +585,7 @@ let lemma_server_process_local_obligations
                    (CL.raw_slice payload 0 32)
                    (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
-                   T.TLS_CHACHA20_POLY1305_SHA256 in
+                   (CM.server_selected_suite st) in
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake (M.ServerHello sh))))) /\
@@ -623,7 +627,7 @@ let lemma_server_process_local_obligations
                    (CL.raw_slice payload 0 32)
                    (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
-                   T.TLS_CHACHA20_POLY1305_SHA256 in
+                   (CM.server_selected_suite st) in
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake (M.ServerHello sh)))))
@@ -1038,6 +1042,7 @@ fn process_send_server_hello_serialized
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
                  Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
@@ -1046,7 +1051,7 @@ fn process_send_server_hello_serialized
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
                      (CM.stored_client_hello_session_id 'st0)
-                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
+                     ((CM.server_selected_suite 'st0)) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1081,14 +1086,14 @@ fn process_send_server_hello_serialized
     (Ghost.reveal server_random_bytes)
     (Ghost.reveal server_key_share_bytes)
     (CM.stored_client_hello_session_id 'st0)
-    (T.TLS_CHACHA20_POLY1305_SHA256);
+    ((CM.server_selected_suite 'st0));
   let written_raw =
     Ser.serialize_server_hello_record_from_selection
       #sh
       #server_random_bytes
       #server_key_share_bytes
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
-      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
+      #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
       network_out
       network_out_len;
@@ -1111,7 +1116,7 @@ fn process_send_server_hello_serialized
       #server_random_bytes
       #server_key_share_bytes
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
-      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
+      #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
       fragment
       122sz;
@@ -1274,6 +1279,7 @@ fn build_server_hello_from_arrays
   (server_random:array U8.t)
   (server_key_share:array U8.t)
   (session_id:array U8.t)
+  (cipher_suite:U16.t)
   (#sh:erased GSH.serverHello)
   requires pts_to server_random 'server_random_bytes **
            pts_to server_key_share 'server_key_share_bytes **
@@ -1284,7 +1290,8 @@ fn build_server_hello_from_arrays
                 // TODO-A1: ServerHello random must differ from the HRR sentinel
                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal 'session_id_bytes) (T.TLS_CHACHA20_POLY1305_SHA256)))
+                (cipher_suite == 0x1303us \/ cipher_suite == 0x1301us) /\
+                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal 'session_id_bytes) (IM.cipher_suite_of_u16 cipher_suite)))
   returns lsh:IM.server_hello
   ensures pts_to server_random 'server_random_bytes **
           pts_to server_key_share 'server_key_share_bytes **
@@ -1305,7 +1312,7 @@ fn build_server_hello_from_arrays
     IM.server_hello_session_id = session_id_vec;
     IM.server_hello_key_share = key_share_vec;
     IM.server_hello_kex_group = CryptoSpec.KexX25519;
-    IM.server_hello_cipher_suite = 0x1303us;
+    IM.server_hello_cipher_suite = cipher_suite;
   };
   with random_bytes. assert (V.pts_to random_vec random_bytes);
   with session_id_vec_bytes. assert (V.pts_to session_id_vec session_id_vec_bytes);
@@ -1314,7 +1321,8 @@ fn build_server_hello_from_arrays
   assert (pure (Seq.equal session_id_vec_bytes (Ghost.reveal 'session_id_bytes)));
   assert (pure (Seq.equal key_share_bytes
     (CryptoSpec.pad_share_65 (Ghost.reveal 'server_key_share_bytes))));
-  assert_norm (IM.cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256);
+  IM.lemma_cipher_suite_of_u16_chacha ();
+  IM.lemma_cipher_suite_of_u16_aes ();
   rewrite (V.pts_to random_vec random_bytes)
     as (V.pts_to lsh.IM.server_hello_random random_bytes);
   rewrite (V.pts_to session_id_vec session_id_vec_bytes)
@@ -1346,12 +1354,13 @@ fn process_send_server_hello_from_arrays
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1368,7 +1377,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -1387,18 +1396,26 @@ fn process_send_server_hello_from_arrays
                   network_out_bytes
                   app_out_bytes)
 {
-  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) <: GSH.serverHello);
+  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) <: GSH.serverHello);
   let mut session_id = [| 0uy; 32sz |];
   rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
   CQ.read_client_hello_session_id s session_id;
   rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
   with sid_bytes. assert (pts_to session_id sid_bytes);
   Seq.lemma_eq_elim (Ghost.reveal sid_bytes) (CM.stored_client_hello_session_id 'st0);
+  (* Recover the negotiated suite from the stored ClientHello mirror.  The
+     ghost selection's suite is that policy value (carried by
+     [ST.server_local_event_input_ready]/LocalSendServerHello), so the emitted
+     ServerHello names exactly the suite the state machine selected. *)
+  rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
+  let negotiated_suite = CQ.read_negotiated_server_suite s;
+  rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
   let lsh =
     build_server_hello_from_arrays
       server_random
       server_key_share
       session_id
+      negotiated_suite
       #sh;
   process_send_server_hello_serialized
     s
@@ -1431,13 +1448,14 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len == 127 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                  (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                     (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                     (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1455,7 +1473,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
                  (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -1480,7 +1498,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
   assert (pure (server_key_share_bytes ==
     CryptoSpec.x25519_public_from_private (Ghost.reveal 'server_private_key_bytes)));
   assert (pure (B.length server_key_share_bytes == 32));
-  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256));
+  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)));
   assert (pure (CM.can_send_server_hello
     'st0
     (Ghost.reveal sh)

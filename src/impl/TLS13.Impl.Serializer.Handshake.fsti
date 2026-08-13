@@ -272,7 +272,6 @@ fn serialize_server_hello_handshake_poc
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
                  Seq.length (reveal sid) == 32 /\
-                 reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
                  Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.

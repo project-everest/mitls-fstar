@@ -286,6 +286,61 @@ let lemma_signature_schemes_match_exists_rsa_offer
   in
   FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
 
+let rec lemma_cipher_suites_match_absent_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (target:U16.t)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (forall (i:nat). i < len ==> Seq.index wire i <> target))
+      (ensures ~(CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target)))
+      (decreases len)
+=
+  if len = 0 then ()
+  else
+    match suites with
+    | suite :: rest ->
+      // head: the wire code at 0 is not [target], and [cipher_suite_of_u16] is
+      // injective on wire codes, so the head suite is not the named one.
+      IM.lemma_cipher_suite_of_u16_matches (Seq.index wire 0) suite;
+      let wire' = Seq.slice wire 1 (Seq.length wire) in
+      assert (forall (i:nat). i < len - 1 ==> Seq.index wire' i == Seq.index wire (i + 1));
+      lemma_cipher_suites_match_absent_offer wire' (len - 1) rest target
+    | [] ->
+      lemma_cipher_suites_match_length wire len suites
+
+let lemma_cipher_suites_match_exists_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (target:U16.t)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (target == 0x1303us \/ target == 0x1301us) /\
+                (exists (i:nat). i < len /\ Seq.index wire i == target))
+      (ensures CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target))
+=
+  IM.lemma_cipher_suite_of_u16_chacha ();
+  IM.lemma_cipher_suite_of_u16_aes ();
+  let aux (i:nat)
+    : Lemma
+        (requires i < len /\ Seq.index wire i == target)
+        (ensures CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target))
+    = if target = 0x1303us
+      then begin
+        assert_norm (U16.v 0x1303us == 0x1303);
+        lemma_cipher_suites_match_index_chacha_offer wire len suites i
+      end
+      else begin
+        assert_norm (U16.v 0x1301us == 0x1301);
+        lemma_cipher_suites_match_index_aes_offer wire len suites i
+      end
+  in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
 let lemma_cipher_suites_match_exists_chacha_offer
   (wire:Seq.seq U16.t)
   (len:nat)
@@ -313,6 +368,17 @@ let lemma_cipher_suites_match_exists_chacha_offer
 // by unfolding client_hello_of_start and the accessors (fuel for the extension
 // list walks).
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 400"
+let rec lemma_cipher_suite_offered_b (suites:list T.cipher_suite) (suite:T.cipher_suite)
+  : Lemma (cipher_suite_offered_b suites suite <==> CS.cipher_suite_offered suites suite)
+          [SMTPat (cipher_suite_offered_b suites suite)]
+  = match suites with
+    | [] -> ()
+    | _ :: rest -> lemma_cipher_suite_offered_b rest suite
+
+let lemma_server_selected_suite_supported (st:CS.connection_state)
+  : Lemma (H.is_supported_cipher_suite (server_selected_suite st))
+  = ()
+
 let lemma_client_hello_of_start_matches
   (start:CS.handshake_start)
   : Lemma (requires valid_start start)
@@ -366,7 +432,7 @@ let lemma_server_hello_of_selection_bytesize
   GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
   GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
   GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
-  GCS.cipherSuite_bytesize_eq T.TLS_CHACHA20_POLY1305_SHA256;
+  GCS.cipherSuite_bytesize_eq (sho_cipher_suite sel);
   GNG.namedGroup_bytesize_eq GNG.X25519;
   GKSE.keyShareEntry_key_exchange_bytesize_eqn
     (sel.CS.server_key_share_public <: GKSE.keyShareEntry_key_exchange);
