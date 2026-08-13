@@ -54,6 +54,13 @@ ClientHello alone, so the ServerHello writer recovers the choice at runtime
 rather than having it threaded through the driver.  `secp256r1` and cross-record
 reassembly remain server-side gaps.
 
+The server also echoes the offered `legacy_session_id` **verbatim**, as
+RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries
+the id as a zero-padded 32-byte buffer plus an explicit width, and the
+ServerHello is `90 + |sid|` bytes (its record `95 + |sid|`), sized at run time.
+A peer with middlebox-compatibility mode off -- which sends an empty session id
+-- therefore now connects.
+
 `docs/server-client-parity.md` is the authoritative gap analysis and interop
 test plan.  Two standing gates keep it honest:
 

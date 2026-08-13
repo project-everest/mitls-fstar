@@ -2625,19 +2625,81 @@ fn copy_padded_share_into
   Seq.lemma_eq_intro dbytes (CryptoSpec.pad_share_65 (Ghost.reveal src_bytes));
 }
 
-(* Copy a legacy_session_id / legacy_session_id_echo lvec into a fixed 32-byte
-   destination vec, but only if it really is 32 bytes long.  [lvec_len] is a
-   sound runtime stand-in for the ghost vector length (see the refinement on
-   LowParse.PulseParse.Bytes.lvec), so this needs no length lookup.
+(* Copy [n] bytes of [src] into the front of the 32-byte [dst], zeroing the
+   remaining bytes.  This is the runtime image of
+   [TLS13.Wire.Semantics.pad_session_id_32]; it mirrors
+   [copy_padded_share_into] exactly. *)
+fn copy_session_id_prefix_into
+  (dst: V.vec U8.t)
+  (src: V.vec U8.t)
+  (n: SZ.t)
+  (#src_bytes: erased (s:Seq.seq U8.t { Seq.length s <= 32 }))
+  requires V.pts_to dst 'dst_bytes ** V.pts_to src src_bytes **
+           pure (V.is_full_vec dst /\ V.length dst == 32 /\
+                 V.is_full_vec src /\ V.length src == SZ.v n)
+  ensures V.pts_to src src_bytes **
+          (exists* dst_bytes2.
+            V.pts_to dst dst_bytes2 **
+            pure (V.is_full_vec dst /\
+                  V.length dst == 32 /\
+                  Seq.length dst_bytes2 == 32 /\
+                  Seq.equal dst_bytes2
+                    (TLS13.Wire.Semantics.pad_session_id_32 (Ghost.reveal src_bytes))))
+{
+  V.pts_to_len src;
+  V.pts_to_len dst;
+  let mut i = 0sz;
+  while (
+    let iv = !i;
+    iv `SZ.lt` 32sz
+  )
+  invariant exists* iv dbytes.
+    R.pts_to i iv **
+    V.pts_to dst dbytes **
+    V.pts_to src src_bytes **
+    pure (
+      SZ.v iv <= 32 /\
+      V.is_full_vec dst /\ V.length dst == 32 /\
+      V.is_full_vec src /\ V.length src == SZ.v n /\
+      Seq.length dbytes == 32 /\
+      (forall (k:nat). k < SZ.v iv ==>
+        Seq.index dbytes k ==
+          Seq.index (TLS13.Wire.Semantics.pad_session_id_32 (Ghost.reveal src_bytes)) k)
+    )
+  decreases (32 - SZ.v (!i))
+  {
+    let iv = !i;
+    if (iv `SZ.lt` n) {
+      let b = V.op_Array_Access src iv;
+      V.op_Array_Assignment dst iv b;
+      SZ.fits_lte (SZ.v iv + 1) 32;
+      i := iv `SZ.add` 1sz;
+    } else {
+      V.op_Array_Assignment dst iv 0uy;
+      SZ.fits_lte (SZ.v iv + 1) 32;
+      i := iv `SZ.add` 1sz;
+    }
+  };
+  with dbytes. assert (V.pts_to dst dbytes);
+  Seq.lemma_eq_intro dbytes
+    (TLS13.Wire.Semantics.pad_session_id_32 (Ghost.reveal src_bytes));
+}
 
-   The implementation fixes the session-id width at 32 bytes: that is what
-   every TLS 1.3 client running in middlebox-compatibility mode (RFC 8446 D.4)
-   sends, and it keeps the whole ServerHello/ClientHello wire image a constant
-   size.  A session id of a different length is still parsed (it is legal TLS)
-   but normalises to all-zeros, exactly like
-   [TLS13.Wire.Semantics.session_id_32]; the destination is required to start
-   out zeroed, so the mismatching case is a no-op. *)
-fn copy_session_id_32_checked
+(* Copy a legacy_session_id / legacy_session_id_echo lvec VERBATIM into the
+   prefix of a fixed 32-byte destination vec, zeroing the tail, and return the
+   width.  [lvec_len] is a sound runtime stand-in for the ghost vector length
+   (see the refinement on LowParse.PulseParse.Bytes.lvec), so this needs no
+   length lookup.
+
+   RFC 8446 4.1.3 requires the server to echo `legacy_session_id` back
+   unchanged, whatever its length, so the width has to survive this copy.  It
+   does so in the RETURNED length, never in the buffer: the buffer stays a
+   compile-time-constant 32 bytes, which is the same representation
+   [copy_padded_share_into] uses for a key share whose logical width depends on
+   the negotiated group.  The wire type is `opaque<0..32>` so the codec already
+   bounds the length; the `> 32` branch is dead on the wire but is discharged
+   here anyway, and agrees with [TLS13.Wire.Semantics.session_id_bounded]. *)
+fn copy_session_id_into
   (dst: V.vec U8.t)
   (src: PPBY.lvec U8.t)
   (#v: Ghost.erased (Seq.seq U8.t))
@@ -2645,24 +2707,35 @@ fn copy_session_id_32_checked
            LSeqB.vmatch_copy_seqbytes src v **
            pure (V.is_full_vec dst /\ V.length dst == 32 /\
                  Seq.equal (Ghost.reveal 'dst_bytes) (Seq.create 32 0uy))
+  returns sid_len: SZ.t
   ensures LSeqB.vmatch_copy_seqbytes src v **
           (exists* dst_bytes2.
             V.pts_to dst dst_bytes2 **
             pure (V.is_full_vec dst /\
                   V.length dst == 32 /\
                   Seq.length dst_bytes2 == 32 /\
-                  Seq.equal dst_bytes2 (TLS13.Wire.Semantics.session_id_32 (Ghost.reveal v))))
+                  SZ.v sid_len ==
+                    Seq.length (TLS13.Wire.Semantics.session_id_bounded (Ghost.reveal v)) /\
+                  Seq.equal dst_bytes2
+                    (TLS13.Wire.Semantics.pad_session_id_32
+                       (TLS13.Wire.Semantics.session_id_bounded (Ghost.reveal v)))))
 {
-  if (SZ.eq src.PPBY.lvec_len 32sz) {
+  if (SZ.lte src.PPBY.lvec_len 32sz) {
     unfold (LSeqB.vmatch_copy_seqbytes src v);
     V.pts_to_len src.PPBY.lvec_vec;
-    copy_vec_32_into dst src.PPBY.lvec_vec;
+    copy_session_id_prefix_into dst src.PPBY.lvec_vec src.PPBY.lvec_len;
     fold (LSeqB.vmatch_copy_seqbytes src v);
+    src.PPBY.lvec_len
   } else {
     unfold (LSeqB.vmatch_copy_seqbytes src v);
     V.pts_to_len src.PPBY.lvec_vec;
     fold (LSeqB.vmatch_copy_seqbytes src v);
     V.pts_to_len dst;
+    Seq.lemma_eq_elim
+      (Seq.create 32 0uy)
+      (TLS13.Wire.Semantics.pad_session_id_32
+         (TLS13.Wire.Semantics.session_id_bounded (Ghost.reveal v)));
+    0sz
   }
 }
 
@@ -5623,14 +5696,19 @@ fn parse_handshake_message
                              (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
                        as (LSeqB.vmatch_copy_seqbytes
                              (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))));
-                  copy_session_id_32_checked sidvec (fst (fst (dsnd (snd (snd xsh)))))
+                  let sidlen = copy_session_id_into sidvec (fst (fst (dsnd (snd (snd xsh)))))
                                  #(fst (fst (dsnd (snd (snd cm)))));
                   with sidbytes. assert (V.pts_to sidvec sidbytes **
                     pure (V.is_full_vec sidvec /\
                           V.length sidvec == 32 /\
                           Seq.length sidbytes == 32 /\
+                          SZ.v sidlen ==
+                            Seq.length (TLS13.Wire.Semantics.session_id_bounded
+                                          (fst (fst (dsnd (snd (snd cm)))))) /\
                           Seq.equal sidbytes
-                            (TLS13.Wire.Semantics.session_id_32 (fst (fst (dsnd (snd (snd cm))))))));
+                            (TLS13.Wire.Semantics.pad_session_id_32
+                               (TLS13.Wire.Semantics.session_id_bounded
+                                  (fst (fst (dsnd (snd (snd cm))))))))); 
                   rewrite (LSeqB.vmatch_copy_seqbytes
                              (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
                        as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch
@@ -5655,6 +5733,7 @@ fn parse_handshake_message
                     WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
                     let lsh = ({ L.server_hello_random = randvec;
                                  L.server_hello_session_id = sidvec;
+                                 L.server_hello_session_id_len = sidlen;
                                  L.server_hello_key_share = Mktuple3?._1 res;
                                  L.server_hello_kex_group = Mktuple3?._3 res;
                                  L.server_hello_cipher_suite = 0x1303us });
@@ -5710,14 +5789,19 @@ fn parse_handshake_message
                              (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
                        as (LSeqB.vmatch_copy_seqbytes
                              (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))));
-                  copy_session_id_32_checked sidvec (fst (fst (dsnd (snd (snd xsh)))))
+                  let sidlen = copy_session_id_into sidvec (fst (fst (dsnd (snd (snd xsh)))))
                                  #(fst (fst (dsnd (snd (snd cm)))));
                   with sidbytes. assert (V.pts_to sidvec sidbytes **
                     pure (V.is_full_vec sidvec /\
                           V.length sidvec == 32 /\
                           Seq.length sidbytes == 32 /\
+                          SZ.v sidlen ==
+                            Seq.length (TLS13.Wire.Semantics.session_id_bounded
+                                          (fst (fst (dsnd (snd (snd cm)))))) /\
                           Seq.equal sidbytes
-                            (TLS13.Wire.Semantics.session_id_32 (fst (fst (dsnd (snd (snd cm))))))));
+                            (TLS13.Wire.Semantics.pad_session_id_32
+                               (TLS13.Wire.Semantics.session_id_bounded
+                                  (fst (fst (dsnd (snd (snd cm))))))))); 
                   rewrite (LSeqB.vmatch_copy_seqbytes
                              (fst (fst (dsnd (snd (snd xsh))))) (fst (fst (dsnd (snd (snd cm))))))
                        as (GSHBody.serverHelloBody_legacy_session_id_echo_vmatch
@@ -5742,6 +5826,7 @@ fn parse_handshake_message
                     WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
                     let lsh = ({ L.server_hello_random = randvec;
                                  L.server_hello_session_id = sidvec;
+                                 L.server_hello_session_id_len = sidlen;
                                  L.server_hello_key_share = Mktuple3?._1 res;
                                  L.server_hello_kex_group = Mktuple3?._3 res;
                                  L.server_hello_cipher_suite = 0x1301us });
@@ -5910,13 +5995,17 @@ fn parse_handshake_message
           fold (LSeqB.vmatch_copy_seqbytes
                   (snd (fst (fst xch))) (snd (fst (fst cm))));
           let sidvec = V.alloc 0uy 32sz;
-          copy_session_id_32_checked sidvec (fst (snd (fst xch)))
+          let sidlen = copy_session_id_into sidvec (fst (snd (fst xch)))
                          #(fst (snd (fst cm)));
           with sidbytes. assert (V.pts_to sidvec sidbytes **
             pure (V.is_full_vec sidvec /\
                   V.length sidvec == 32 /\
                   Seq.length sidbytes == 32 /\
-                  Seq.equal sidbytes (TLS13.Wire.Semantics.session_id_32 (fst (snd (fst cm))))));
+                  SZ.v sidlen ==
+                    Seq.length (TLS13.Wire.Semantics.session_id_bounded (fst (snd (fst cm)))) /\
+                  Seq.equal sidbytes
+                    (TLS13.Wire.Semantics.pad_session_id_32
+                       (TLS13.Wire.Semantics.session_id_bounded (fst (snd (fst cm)))))));
           let cs_res = build_ch_cipher_suites (snd (snd (fst xch))) #(snd (snd (fst cm)));
           with csbytes. assert (V.pts_to (Mktuple3?._1 cs_res) csbytes **
             pure (V.is_full_vec (Mktuple3?._1 cs_res) /\
@@ -6037,6 +6126,7 @@ fn parse_handshake_message
               (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
             let lch = ({ L.client_hello_random = randvec;
                          L.client_hello_session_id = sidvec;
+                         L.client_hello_session_id_len = sidlen;
                          L.client_hello_server_name = Mktuple8?._1 ext_res;
                          L.client_hello_server_name_len = Mktuple8?._2 ext_res;
                          L.client_hello_has_server_name = Mktuple8?._3 ext_res;
@@ -6071,10 +6161,11 @@ fn parse_handshake_message
                           (TLS13.Wire.Semantics.clientHello_random (Ghost.reveal mch))));
             assert (pure (((Ghost.reveal mch).GCH.legacy_session_id <: Seq.seq U8.t) ==
                           (fst (snd (fst cm)) <: Seq.seq U8.t)));
-            assert (pure (TLS13.Wire.Semantics.clientHello_session_id_32 (Ghost.reveal mch) ==
-                          TLS13.Wire.Semantics.session_id_32 (fst (snd (fst cm)))));
+            assert (pure (TLS13.Wire.Semantics.clientHello_session_id (Ghost.reveal mch) ==
+                          TLS13.Wire.Semantics.session_id_bounded (fst (snd (fst cm)))));
             assert (pure (Seq.equal sidbytes
-                          (TLS13.Wire.Semantics.clientHello_session_id_32 (Ghost.reveal mch))));
+                          (TLS13.Wire.Semantics.pad_session_id_32
+                             (TLS13.Wire.Semantics.clientHello_session_id (Ghost.reveal mch)))));
             assert (pure (L.cipher_suites_match csbytes
                           (SZ.v lch.L.client_hello_cipher_suites_len)
                           (TLS13.Wire.Semantics.clientHello_cipher_suites (Ghost.reveal mch))));

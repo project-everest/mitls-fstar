@@ -124,6 +124,13 @@ let client_hello_server_name_len_for (m:GCH.clientHello) : SZ.t =
   | Some sn -> bounded_u16_sizet (B.length sn)
   | None -> 0sz
 
+(* The width of the offered legacy_session_id, which RFC 8446 4.1.3 makes the
+   width of the ServerHello's echo.  0..32; 32 for a middlebox-compatibility
+   peer (RFC 8446 D.4) and 0 for one with compatibility mode off. *)
+noextract
+let client_hello_session_id_len_for (m:GCH.clientHello) : SZ.t =
+  bounded_u16_sizet (Seq.length (Sem.clientHello_session_id m))
+
 (* Whether the ClientHello actually carried a server_name (SNI) extension.  The
    extension is optional in RFC 6066 and absent whenever a client connects to a
    bare IP literal, so this is genuinely a property of the message rather than a
@@ -488,25 +495,27 @@ let server_selected_suite (st:CS.connection_state) : T.cipher_suite
 val lemma_server_selected_suite_supported (st:CS.connection_state)
   : Lemma (H.is_supported_cipher_suite (server_selected_suite st))
 
-(* The 32-byte legacy_session_id of the ClientHello currently stored in the
-   connection state -- i.e. exactly what the ServerHello must echo back for
-   RFC 8446 D.4 middlebox compatibility.  Ghost-only: the runtime value is
-   read out of the stored ClientHello mirror.  Defined for every state (the
-   all-zero default is never observable, because the ServerHello send path
-   runs only in HsClientHelloReceived). *)
+(* The legacy_session_id of the ClientHello currently stored in the connection
+   state -- i.e. exactly what the ServerHello must echo back, VERBATIM, under
+   RFC 8446 4.1.3.  Its length is whatever the peer sent: 32 bytes from a
+   middlebox-compatibility-mode client (RFC 8446 D.4), and EMPTY from a client
+   with compatibility mode off.  Ghost-only: the runtime value is read out of
+   the stored ClientHello mirror.  Defined for every state (the empty default
+   is never observable, because the ServerHello send path runs only in
+   HsClientHelloReceived). *)
 noextract
 let stored_client_hello_session_id (st:CS.connection_state)
-  : (b:Seq.seq U8.t { Seq.length b == 32 })
+  : (b:Seq.seq U8.t { Seq.length b <= 32 })
   = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
-    | Some ch -> Sem.clientHello_session_id_32 ch
-    | None -> Seq.create 32 0uy
+    | Some ch -> Sem.clientHello_session_id ch
+    | None -> Seq.empty
 
-(* clamp: the echoed legacy_session_id is fixed at 32 bytes (identity under
-   valid_selection; see the middlebox-compatibility note above). *)
+(* clamp: the echoed legacy_session_id is the offered one, verbatim (identity
+   under valid_selection; see the echo note above). *)
 noextract
 let sho_session_id (sel:CS.server_handshake_selection)
-  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b == 32 })
-  = Sem.clientHello_session_id_32 sel.CS.server_selected_client_hello
+  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b <= 32 })
+  = Sem.clientHello_session_id sel.CS.server_selected_client_hello
 
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
@@ -710,17 +719,21 @@ val lemma_client_hello_of_start_matches
 
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
-// exactly 122 bytes (legacy_version TLS_1p2 + 32-byte random + 32-byte session-id echo +
-// CHACHA cipher suite + null compression + [X25519 key_share; supported_versions]).
-// Reveals serialize_handshake to the generated serializer and computes the
-// bytesize; used to discharge the transcript-length obligation inside
-// can_send_server_hello for the server build direction.
+// exactly 90 + |session_id| bytes (legacy_version TLS_1p2 + 32-byte random +
+// 1-byte session-id-echo length + the echo itself + cipher suite + null
+// compression + [X25519 key_share; supported_versions]).  The echo is the
+// client's, verbatim, so this is 122 for a middlebox-compatibility-mode peer
+// (RFC 8446 D.4, |session_id| == 32) and 90 for a peer with compatibility mode
+// off (|session_id| == 0).  Reveals serialize_handshake to the generated
+// serializer and computes the bytesize; used to discharge the transcript-length
+// obligation inside can_send_server_hello for the server build direction.
 val lemma_server_hello_of_selection_bytesize
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 122)
+              (M.ServerHello (server_hello_of_selection sel))) ==
+            90 + Seq.length (sho_session_id sel))
 
 // Server mirror: under valid_selection, the canonical server_hello_of_selection
 // satisfies the spec's server_hello_matches_selection: every

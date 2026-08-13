@@ -502,6 +502,7 @@ fn process_send_server_hello
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
+  (sid_len:SZ.t)
   (#sh:erased GSH.serverHello)
   (#server_random_bytes: erased B.bytes)
   (#server_key_share_bytes: erased B.bytes)
@@ -515,7 +516,10 @@ fn process_send_server_hello_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
+                 SZ.v sid_len ==
+                   Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
@@ -574,7 +578,8 @@ fn process_send_server_hello_from_arrays
                  B.length 'server_key_share_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
@@ -635,7 +640,8 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'server_private_key_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
@@ -1863,7 +1869,9 @@ fn process_local_event
                  // to True (no GSH.serverHello witness builder in Model yet).  The
                  // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
                  // for a symbolic random.  Both threaded as explicit caller obligation.
-                 (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 127 ==>
+                 (kind == ST.LocalSendServerHello /\
+                  SZ.v network_out_len ==
+                    95 + Seq.length (CM.stored_client_hello_session_id 'st0) ==>
                   (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
                    let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                    (Seq.length server_random_bytes == 32 ==>
@@ -1942,7 +1950,9 @@ fn process_local_event_with_credentials
                 // to True (no GSH.serverHello witness builder in Model yet).  The
                 // cst-guard (random != HelloRetryRequest sentinel) is also unresolvable
                 // for a symbolic random.  Both threaded as explicit caller obligation.
-                (kind == ST.LocalSendServerHello /\ SZ.v network_out_len == 127 ==>
+                (kind == ST.LocalSendServerHello /\
+                  SZ.v network_out_len ==
+                    95 + Seq.length (CM.stored_client_hello_session_id 'st0) ==>
                  (let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
                   let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                   (Seq.length server_random_bytes == 32 ==>

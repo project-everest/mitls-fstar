@@ -42,8 +42,9 @@ good news, and it is not luck: the client offers ChaCha20-Poly1305 first and
 sends an X25519 key share alongside its P-256 one, so the server's single
 profile is always inside the client's offer.
 
-They are **not** at parity.  The client can negotiate four things the server
-cannot serve, and every one of them is a capability a real peer may insist on:
+They are **not** at parity.  The client can still negotiate three things the
+server cannot serve, and every one of them is a capability a real peer may
+insist on:
 
 | capability | client | server | first blocking site |
 | --- | --- | --- | --- |
@@ -53,7 +54,7 @@ cannot serve, and every one of them is a capability a real peer may insist on:
 | `secp256r1` key exchange | yes | **no** | `TLS13.Spec.StateMachine:1626` (server `LocalDeriveSharedSecret`) |
 | cross-record handshake reassembly | yes | **no** | `TLS13.Spec.StateMachine.legal_protected_handshake_step:1986` |
 | HelloRetryRequest | n/a (rejects) | **no** | `TLS13.Impl.Serializer.Handshake.fst:1704` |
-| short/empty `legacy_session_id` echo | n/a | **no** | `TLS13.Wire.Semantics.clientHello_session_id_32:71` |
+| short/empty `legacy_session_id` echo | n/a | yes (G4 closed) | -- |
 | `rsa_pss_rsae_sha256` credentials | yes | yes | -- |
 | `ecdsa_secp256r1_sha256` credentials | verifies | **cannot present** | `TLS13.Impl.Server.Auth.fst:320` |
 | KeyUpdate (send, receive, mandated reply) | yes | yes | -- |
@@ -265,21 +266,47 @@ A related, milder limitation applies to both roles: `parse_tls_message`
 (`TLS13.Wire.Spec.fst:921`, handshake arm at `:927`) requires `consumed == B.length fragment`, so several
 handshake messages coalesced into one record are rejected rather than drained.
 
-### G4. The server echoes a padded `legacy_session_id`
+### G4. The server echoes a padded `legacy_session_id` -- **CLOSED**
 
-`Sem.clientHello_session_id_32` (`TLS13.Wire.Semantics.fst:71`) normalises the
-client's `legacy_session_id` to exactly 32 bytes, and
-`TLS13.Impl.Server.Send.fst:221` echoes those 32 bytes verbatim -- clamping to
-32 zero bytes if the stored value is not 32 long.  The whole ServerHello size
-reasoning depends on this: `lemma_mk_server_hello_witness_bytesize`
-(`Send.fst:252`) proves the ServerHello is *exactly* 122 bytes, on the
-hypothesis `Seq.length session_id == 32`.
+*Was:* `Sem.clientHello_session_id_32` normalised the client's
+`legacy_session_id` to exactly 32 bytes and the send path echoed those 32 bytes
+-- clamping to 32 *zero* bytes when the stored value was shorter.  The whole
+ServerHello size reasoning rested on this: `lemma_mk_server_hello_witness_bytesize`
+proved the ServerHello was *exactly* 122 bytes, on the hypothesis
+`Seq.length session_id == 32`.  A client with middlebox-compatibility mode off
+sends an empty session id, got 32 zero bytes back, and had to abort under
+RFC 8446 4.1.3.
 
-A client in middlebox-compatibility mode always sends a 32-byte session id, so
-this is invisible in practice -- and it is why the existing OpenSSL test passes
-with compatibility mode deliberately left on.  A client with compatibility mode
-*off* sends an empty session id, gets 32 zero bytes back, and must abort under
-RFC 8446 4.1.3.  This is the `no-middlebox-compat` cell.
+*Now:* the session id is carried the way key shares already were -- a
+fixed-width buffer plus an explicit length, with the length as the sole carrier
+of the wire width:
+
+* `TLS13.Wire.Semantics.clientHello_session_id` returns the offered id at its
+  true width (`{ Seq.length r <= 32 }`), and `pad_session_id_32` zero-pads it
+  into the 32-byte mirror buffer.  `serverHello_session_id_echo` is likewise
+  width-carrying.  This is exactly the shape `CryptoSpec.pad_share_65` uses for
+  a key share whose logical width depends on the group.
+* The runtime mirror stores the width.  `IM.client_hello` and `IM.server_hello`
+  gained a `*_session_id_len : SZ.t` field, and -- because the stored
+  `IM.client_hello` slot is allocated once and its scalar fields are never
+  rewritten -- `handshake_message_storage` gained a `client_hello_session_id_len
+  : box SZ.t`, alongside the other ClientHello metadata lengths.
+  `CQ.read_client_hello_session_id` now returns that width.
+* Sizes follow the width.  `lemma_server_hello_of_selection_bytesize` and
+  `lemma_mk_server_hello_witness_bytesize` now prove the ServerHello *message*
+  is `90 + |sid|` bytes and `lemma_sh_size` that its *record* is `95 + |sid|`
+  (122/127 only in the compatibility case).  Every `== 127` precondition on the
+  send path became `== 95 + Seq.length (CM.stored_client_hello_session_id st)`,
+  and the two fixed-size output buffers (in `Serializer.ServerHello` and in the
+  buffered driver) became heap `Pulse.Lib.Vec`s sized at run time.
+* The linkage that makes this sound is carried where G1's already is: the
+  `LocalSendServerHello` arm of `ST.server_local_event_input_ready` now states
+  `hs_client_hello == Some selection.server_selected_client_hello`, so the id
+  the writer recovers from the mirror is provably the id the Model-level
+  canonical ServerHello echoes.
+
+`no-middlebox-compat` is `ok`, together with three new cells that cross the
+empty-id path with the suite-fallback, retry-loop and two-key-share axes.
 
 ### G5. The server can only present an RSA-PSS credential
 
@@ -364,7 +391,7 @@ runs through the same proxy code and passes, which is what makes the
 `clienthello-across-two-records` failure attributable to record fragmentation
 rather than to the proxy.
 
-Current ledger (all seventeen cells agree):
+Current ledger (all twenty cells agree):
 
 ```
 baseline-chacha-x25519             ok        chacha preferred when offered
@@ -381,7 +408,10 @@ aes128-x25519-and-p256             ok        G1: both agile axes at once
 p256-first-x25519-listed           refused   G2 (needs HelloRetryRequest)
 rsa-pss-only                       ok        the test credential's scheme
 ecdsa-only                         refused   G5
-no-middlebox-compat                refused   G4
+no-middlebox-compat                ok        G4: empty session id echoed verbatim
+no-middlebox-compat-aes128         ok        G4+G1: empty id and the fallback arm
+no-middlebox-compat-dribble        ok        G4: empty id through the retry loop
+no-middlebox-compat-x25519-and-p256 ok       G4: empty id with two key shares
 tcp-dribble                        ok        retained-buffer retry loop
 clienthello-across-two-records     refused   G3
 ```
@@ -406,17 +436,17 @@ top-100 sweep in `test/interop/sweep.sh`.
 1. ~~**G1 (AES-128-GCM selection).**~~  **Done.**  Closed by the deterministic
    negotiation policy described above; `aes128-only` and three new AES-128 cells
    are `ok`.
-2. **G3 (cross-record ClientHello reassembly).**  Independent of negotiation,
+2. ~~**G4 (variable-length session-id echo).**~~  **Done.**  The ServerHello is
+   now `90 + |sid|` bytes and its record `95 + |sid|`; `no-middlebox-compat` and
+   three new empty-session-id cells are `ok`.
+3. **G3 (cross-record ClientHello reassembly).**  Independent of negotiation,
    and increasingly load-bearing as client hellos grow.  The client's buffering
    step is the design to mirror, but on the cleartext network-buffer path rather
    than the protected one.  Flip `clienthello-across-two-records`.
-3. **G2 (secp256r1, then HelloRetryRequest).**  The largest of the three:
+4. **G2 (secp256r1, then HelloRetryRequest).**  The largest of the three:
    generalising `clientHello_representable`, making
    `server_handshake_selection` group-indexed through `C.kex_group`, and routing
    the server's ECDH through `TLS13.KEX`.  HRR is a separate, later step.  Flip
    `p256-only`, then `p256-first-x25519-listed`.
-4. **G4 (variable-length session-id echo).**  Small in wire terms, but it
-   unpins the exact 122-byte ServerHello length that the send path's length
-   reasoning currently rests on.  Flip `no-middlebox-compat`.
 5. **G5 (ECDSA credentials).**  Needs an ECDSA test credential as well as
    negotiation.  Flip `ecdsa-only`.

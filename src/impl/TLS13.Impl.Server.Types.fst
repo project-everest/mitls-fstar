@@ -424,6 +424,16 @@ let server_local_event_input_ready
            runtime (by re-scanning the ClientHello mirror) instead of threading it
            through the whole driver. *)
         Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        (* Verbatim legacy_session_id echo (gap G4, RFC 8446 4.1.3): the send
+           path echoes the *stored* ClientHello's id (recovered at runtime from
+           the mirror) while the Model-level canonical builder names the
+           selection's copy.  The echo now carries a width, and that width is
+           visible in the ServerHello's serialized size, so the two must be the
+           same message.  The select step records exactly the stored
+           ClientHello, and neither field changes afterwards, so this is an
+           invariant of every reachable send-ServerHello state. *)
+        st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+          Some selection.CS.server_selected_client_hello /\
         selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
         // build-direction send obligation: the canonical ServerHello built from
         // the selection (CM.server_hello_of_selection, the server mirror of the

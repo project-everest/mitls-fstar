@@ -37,19 +37,19 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                 SZ.v out_len == 122 /\
+                 SZ.v out_len == 90 + Seq.length (Ghost.reveal sid) /\
                  Seq.length (Ghost.reveal rnd) == 32 /\
                  (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (Ghost.reveal ks) == 32 /\
-                 Seq.length (Ghost.reveal sid) == 32 /\
+                 Seq.length (Ghost.reveal sid) <= 32 /\
                  Ghost.reveal sh ==
                    SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 122 /\
-                SZ.v written == 122 /\
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
                   (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
@@ -60,25 +60,27 @@ fn serialize_server_hello_record_from_selection
   (#sid: erased B.bytes)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
+  (sid_len: SZ.t)
   (out: array U8.t)
   (out_len: SZ.t)
   (#old_bytes: erased B.bytes)
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                 SZ.v out_len == 127 /\
+                 SZ.v sid_len == Seq.length (Ghost.reveal sid) /\
+                 SZ.v out_len == 95 + Seq.length (Ghost.reveal sid) /\
                  Seq.length (Ghost.reveal rnd) == 32 /\
                  (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (Ghost.reveal ks) == 32 /\
-                 Seq.length (Ghost.reveal sid) == 32 /\
+                 Seq.length (Ghost.reveal sid) <= 32 /\
                  Ghost.reveal sh ==
                    SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 127 /\
-                SZ.v written == 127 /\
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes
                   (WS.serialize_record
                     T.Handshake
@@ -87,5 +89,5 @@ fn serialize_server_hello_record_from_selection
                   Some
                     (T.Handshake,
                      WS.serialize_handshake (M.ServerHello (Ghost.reveal sh)),
-                     127) /\
+                     SZ.v out_len) /\
                 CS.raw_records_exactly out_bytes T.Handshake 1)

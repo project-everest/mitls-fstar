@@ -1935,12 +1935,14 @@ fn try_send_key_update
         c.handshake.messages.client_hello_server_name_len
         c.handshake.messages.client_hello_cipher_suites_len
         c.handshake.messages.client_hello_signature_schemes_len
+        c.handshake.messages.client_hello_session_id_len
         st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
         (client_hello_metadata_exactly
           c.handshake.messages.client_hello_has_server_name
           c.handshake.messages.client_hello_server_name_len
           c.handshake.messages.client_hello_cipher_suites_len
           c.handshake.messages.client_hello_signature_schemes_len
+          c.handshake.messages.client_hello_session_id_len
           (sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
       fold (handshake_messages_exactly
         c.handshake.messages
@@ -2458,12 +2460,14 @@ fn server_try_send_key_update
         c.handshake.messages.client_hello_server_name_len
         c.handshake.messages.client_hello_cipher_suites_len
         c.handshake.messages.client_hello_signature_schemes_len
+        c.handshake.messages.client_hello_session_id_len
         st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
         (client_hello_metadata_exactly
           c.handshake.messages.client_hello_has_server_name
           c.handshake.messages.client_hello_server_name_len
           c.handshake.messages.client_hello_cipher_suites_len
           c.handshake.messages.client_hello_signature_schemes_len
+          c.handshake.messages.client_hello_session_id_len
           (server_sent_key_update_state st0 req (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
       fold (handshake_messages_exactly
         c.handshake.messages

@@ -610,12 +610,14 @@ fn select_server_parameters
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
     (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
       (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages
@@ -761,12 +763,14 @@ fn select_server_parameters_with_private_from_array
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
     (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
       (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages
@@ -2642,6 +2646,7 @@ fn try_send_client_hello
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     with old_ch_has_server_name old_ch_server_name_len
          old_ch_cipher_suites_len old_ch_signature_schemes_len. _;
@@ -2857,6 +2862,13 @@ fn try_send_client_hello
     c.handshake.messages.client_hello_server_name_len := metadata_server_name_len;
     c.handshake.messages.client_hello_cipher_suites_len := metadata_cipher_suites_len;
     c.handshake.messages.client_hello_signature_schemes_len := metadata_signature_schemes_len;
+    // The client always offers the 32-byte middlebox-compatibility session id
+    // (client_hello_of_start reuses the client random), so the mirror's width
+    // slot is the constant 32 (gap G4).
+    assert (pure (Seq.length
+      (Sem.clientHello_session_id (Ghost.reveal ch)) == 32));
+    assert (pure (client_hello_session_id_len_for (Ghost.reveal ch) == 32sz));
+    c.handshake.messages.client_hello_session_id_len := 32sz;
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello
@@ -2866,6 +2878,7 @@ fn try_send_client_hello
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
       (Some (Ghost.reveal ch)));
     fold (handshake_messages_exactly
       c.handshake.messages

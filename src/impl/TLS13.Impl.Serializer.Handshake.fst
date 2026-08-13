@@ -448,7 +448,7 @@ fn serialize_empty_encrypted_extensions_poc
 noextract
 let poc_sh_mid (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello_mid
-    (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+    (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
     (ensures fun _ -> True)
   = let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share (kse <: GESH.extensionServerHello_extension_data_key_share) in
@@ -462,7 +462,7 @@ let poc_sh_mid (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
 (* ---- forward conv lemma: the canonical mid converts to the canonical record ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_sh_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
           (ensures GSH.serverHello_conv (poc_sh_mid rnd ks sid cs) == Some (poc_canonical_sh rnd ks sid cs))
   = GNG.namedGroup_bytesize_eq GNG.X25519;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn (ks <: GKSE.keyShareEntry_key_exchange);
@@ -507,11 +507,14 @@ let lemma_sh_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
     ()
 #pop-options
 
-(* ---- size lemma: the canonical ServerHello handshake message is 90 bytes ---- *)
+(* ---- size lemma: the canonical ServerHello handshake message is
+   90 bytes plus the echoed legacy_session_id (RFC 8446 4.1.3): 122 for a
+   middlebox-compatibility peer, 90 for one with compat mode off ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_sh_size (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
-          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs)) == 122)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
+          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs))
+                     == 90 + Seq.length sid)
   = let sh = poc_canonical_sh rnd ks sid cs in
     let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
@@ -524,6 +527,10 @@ let lemma_sh_size (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
     GSHBody.serverHelloBody_extensions_list_bytesize_nil;
     GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
     GSHBody.serverHelloBody_extensions_list_bytesize_cons ks_ext [sv_ext];
+    (* The only variable-width field: RFC 8446 4.1.3's legacy_session_id_echo,
+       a 0..32 vlbytes, contributing 1 + |sid| bytes. *)
+    GSHBody.serverHelloBody_legacy_session_id_echo_bytesize_eqn
+      (sid <: GSHBody.serverHelloBody_legacy_session_id_echo);
     ()
 #pop-options
 
@@ -726,17 +733,24 @@ let lemma_u16_to_cipher_suite_matches (w: U16.t) (c: GCS.cipherSuite)
 (* ===================================================================== *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_canonical_random (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
           (ensures Sem.serverHello_random (poc_canonical_sh rnd ks sid cs) == Some (rnd <: Seq.lseq U8.t 32))
   = ()
 
 let lemma_canonical_key_share (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
           (ensures Sem.serverHello_key_share_x25519 (poc_canonical_sh rnd ks sid cs) == Some (ks <: Seq.seq U8.t))
   = ()
 
+(* The canonical ServerHello echoes [sid] verbatim, which is what
+   [is_valid_server_hello] pins the runtime length field against. *)
+let lemma_canonical_session_id (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
+          (ensures Seq.equal (Sem.serverHello_session_id_echo (poc_canonical_sh rnd ks sid cs)) sid)
+  = ()
+
 let lemma_canonical_cs (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
           (ensures Sem.serverHello_cipher_suite (poc_canonical_sh rnd ks sid cs) == Some cs)
   = ()
 
@@ -759,7 +773,7 @@ let lemma_sv_ext_conv ()
   = ()
 
 let lemma_sh_handshake_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
           (ensures GHS.handshake_conv (GHS.Body_server_hello_mid (poc_sh_mid rnd ks sid cs))
                      == Some (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs)))
   = lemma_sh_conv_fwd rnd ks sid cs
@@ -780,16 +794,17 @@ fn serialize_server_hello_handshake_poc
   (out_len: SZ.t)
   (#old: erased B.bytes)
   requires L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out (reveal old) **
-           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 122 /\
+           pure (B.length (reveal old) == SZ.v out_len /\
+                 SZ.v out_len == 90 + Seq.length (reveal sid) /\
                  Seq.length (reveal rnd) == 32 /\
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
-                 Seq.length (reveal sid) == 32 /\
+                 Seq.length (reveal sid) <= 32 /\
                  Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **
-          pure (B.length out_bytes == 122 /\ SZ.v written == 122 /\
+          pure (B.length out_bytes == SZ.v out_len /\ SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 {
   unfold (L.is_valid_server_hello lsh (reveal sh));
@@ -802,13 +817,16 @@ fn serialize_server_hello_handshake_poc
      [is_valid_server_hello] ties the stored U16 wire code to the erased suite of
      the message, and [lemma_canonical_cs] says that suite is [cs]. *)
   lemma_canonical_cs (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
+  lemma_canonical_session_id (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
   lemma_u16_to_cipher_suite_matches lsh.L.server_hello_cipher_suite (reveal cs);
   Seq.lemma_eq_elim random (reveal rnd);
   (* The stored share is padded to the widest offered width. *)
   assert (pure (Seq.length (reveal ks) == 32));
   Seq.lemma_eq_elim key_share (CryptoSpec.pad_share_65 (reveal ks));
   assert (pure (Seq.equal (Seq.slice key_share 0 32) (reveal ks)));
-  Seq.lemma_eq_elim sid_bytes (reveal sid);
+  (* The stored id is zero-padded to the mirror's 32-byte width; the logical
+     id is the [sid_len]-byte prefix (RFC 8446 4.1.3 echo). *)
+  Seq.lemma_eq_elim sid_bytes (Sem.pad_session_id_32 (reveal sid));
   (* copy random & key_share into fresh exact-32 vecs; is_valid stays intact *)
   V.pts_to_len lsh.L.server_hello_random;
   let rnd_vec = alloc_copy_vec_exact lsh.L.server_hello_random 32sz 32sz;
@@ -821,7 +839,9 @@ fn serialize_server_hello_handshake_poc
   with ks_copy. assert (V.pts_to ks_vec ks_copy);
   Seq.lemma_eq_elim ks_copy (reveal ks);
   V.pts_to_len lsh.L.server_hello_session_id;
-  let sid_vec = alloc_copy_vec_exact lsh.L.server_hello_session_id 32sz 32sz;
+  let sid_vec =
+    alloc_copy_vec_exact lsh.L.server_hello_session_id
+      lsh.L.server_hello_session_id_len 32sz;
   with sid_copy. assert (V.pts_to sid_vec sid_copy);
   Seq.lemma_eq_elim sid_copy (reveal sid);
   fold (L.is_valid_server_hello lsh (reveal sh));
@@ -885,8 +905,10 @@ fn serialize_server_hello_handshake_poc
             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
   let exts_low = PPVCL.vmatch_vclist_some_intro 2sz ext_vec #(Seq.upd (Seq.create 2 ks_low) 1 sv_low) #[Ghost.reveal ks_ext; Ghost.reveal sv_ext] [Ghost.reveal ks_ext; Ghost.reveal sv_ext];
 
-  (* ---- 32-byte session-id-echo lvec (RFC 8446 D.4 middlebox compat) ---- *)
-  let sid_lvec : PPBY.lvec U8.t = { PPBY.lvec_vec = sid_vec; PPBY.lvec_len = 32sz };
+  (* ---- session-id-echo lvec: exactly the offered width (RFC 8446 4.1.3;
+     32 under middlebox compatibility mode, 0 with it off) ---- *)
+  let sid_lvec : PPBY.lvec U8.t =
+    { PPBY.lvec_vec = sid_vec; PPBY.lvec_len = lsh.L.server_hello_session_id_len };
   rewrite (V.pts_to sid_vec (reveal sid)) as (V.pts_to sid_lvec.PPBY.lvec_vec (reveal sid));
   fold (LSeqB.vmatch_copy_seqbytes sid_lvec (reveal sid));
   rewrite (LSeqB.vmatch_copy_seqbytes sid_lvec (reveal sid))

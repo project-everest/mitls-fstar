@@ -187,11 +187,11 @@ let mk_server_hello_witness
   : (sh:GSH.serverHello {
       (Seq.length random == 32 /\
        (Seq.length random == 32 ==> (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-       Seq.length session_id == 32 /\
+       Seq.length session_id <= 32 /\
        Seq.length key_share == 32) ==>
       ((match Sem.serverHello_random sh with Some r -> Seq.equal r random | None -> False) /\
        Sem.serverHello_cipher_suite sh == Some cs /\
-       Seq.equal (Sem.serverHello_session_id_echo_32 sh) session_id /\
+       Seq.equal (Sem.serverHello_session_id_echo sh) session_id /\
        (match Sem.serverHello_key_share_x25519 sh with
         | Some k -> Seq.equal k key_share
         | None -> False)) })
@@ -219,10 +219,11 @@ let mk_server_hello_witness
           GESH.extensionServerHello_bytesize ks_ext +
           GESH.extensionServerHello_bytesize sv_ext);
   let exts : GSHB.serverHelloBody_extensions = [ks_ext; sv_ext] in
-  (* RFC 8446 D.4 middlebox compatibility: echo the client's 32-byte
-     legacy_session_id verbatim.  Clamped to keep this function total. *)
+  (* RFC 8446 4.1.3: echo the client's legacy_session_id verbatim, whatever
+     its width (32 under D.4 middlebox compatibility mode, 0 with it off).
+     Clamped at the codec's 32-byte ceiling to keep this function total. *)
   let sid : GSHB.serverHelloBody_legacy_session_id_echo =
-    if Seq.length session_id = 32 then session_id else Seq.create 32 0uy in
+    if Seq.length session_id <= 32 then session_id else Seq.empty in
   let body : GSHB.serverHelloBody = {
     GSHB.legacy_session_id_echo = sid;
     GSHB.cipher_suite = cs;
@@ -246,8 +247,10 @@ let mk_server_hello_witness
 #pop-options
 
 (* The canonical ServerHello produced by [mk_server_hello_witness] (key_share +
-   supported_versions extensions) serializes to exactly 122 bytes on the wire.
-   This discharges the [|serialize_handshake (M.ServerHello sh)| == 122]
+   supported_versions extensions) serializes to exactly 90 + |session_id|
+   bytes on the wire (RFC 8446 4.1.3 makes the echo verbatim): 122 for a
+   middlebox-compatibility peer, 90 for one with compatibility mode off.
+   This discharges the [|serialize_handshake (M.ServerHello sh)|]
    preconditions threaded through the server send path. *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_mk_server_hello_witness_bytesize
@@ -258,11 +261,12 @@ let lemma_mk_server_hello_witness_bytesize
   : Lemma
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-              Seq.length session_id == 32 /\
+              Seq.length session_id <= 32 /\
               Seq.length key_share == 32)
     (ensures
       B.length (W.serialize_handshake
-        (M.ServerHello (mk_server_hello_witness random key_share session_id cs))) == 122)
+        (M.ServerHello (mk_server_hello_witness random key_share session_id cs)))
+        == 90 + Seq.length session_id)
   = let sh = mk_server_hello_witness random key_share session_id cs in
     Rev.lemma_serialize_handshake_server_hello sh;
     GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
@@ -293,7 +297,7 @@ let lemma_mk_server_hello_witness_eq_poc
   : Lemma
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-              Seq.length session_id == 32 /\
+              Seq.length session_id <= 32 /\
               Seq.length key_share == 32)
     (ensures
       mk_server_hello_witness random key_share session_id cs ==
@@ -328,11 +332,12 @@ let lemma_server_hello_of_selection_eq_witness
 (*                                                                          *)
 (* [CM.can_send_server_hello] constrains the ServerHello only through       *)
 (* [CS.server_hello_matches_selection] (random / key share / cipher suite), *)
-(* the serialized length (a constant 122 for any 32-byte echo) and          *)
+(* the serialized length (90 + |echo|, hence equal for equal-width echoes)  *)
 (* [CS.event_raw_delta_legal], which just ties [raw_sent] to the            *)
 (* serialization of the very same message.  None of these mention the       *)
 (* echo, so the obligation transports between two witnesses that differ     *)
-(* only in their 32-byte legacy_session_id.  This is what lets the send     *)
+(* only in the *contents* of an equal-width legacy_session_id.  This is     *)
+(* what lets the send                                                       *)
 (* path echo the *stored ClientHello's* session id while the Model-level    *)
 (* canonical builder names the selection's copy.                            *)
 (* ----------------------------------------------------------------------- *)
@@ -347,8 +352,12 @@ let lemma_can_send_server_hello_session_id_irrelevant
     (requires
       Seq.length random == 32 /\
       Seq.length key_share == 32 /\
-      Seq.length sid1 == 32 /\
-      Seq.length sid2 == 32 /\
+      Seq.length sid1 <= 32 /\
+      Seq.length sid2 <= 32 /\
+      // RFC 8446 4.1.3 makes the echo verbatim, so the ServerHello's
+      // serialized size (90 + |echo|) -- which the send obligation's
+      // transcript bound DOES see -- is fixed by the echo's width alone.
+      Seq.length sid1 == Seq.length sid2 /\
       (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
       (let sh1 = mk_server_hello_witness random key_share sid1 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh1
@@ -399,7 +408,11 @@ let lemma_can_send_server_hello_witness_of_selection
       Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
                 (server_private_key <: Seq.seq U8.t) /\
       CS.server_selection_key_share_consistent selection /\
-      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      // RFC 8446 4.1.3: the send path echoes the *stored* ClientHello's
+      // legacy_session_id while the Model builder names the selection's copy.
+      // The echo is now width-carrying, so the two must be the same message.
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection.CS.server_selected_client_hello /\
       selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
       CM.can_send_server_hello st (CM.server_hello_of_selection selection)
         (CS.serialized_cleartext_tls_message
@@ -479,6 +492,11 @@ let lemma_input_ready_server_hello_of_selection
       st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
         122 <= Bounds.max_transcript_len /\
+      // See lemma_can_send_server_hello_witness_of_selection: the echo is
+      // width-carrying, so the stored ClientHello and the selection's copy
+      // must be the same message (RFC 8446 4.1.3).
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection.CS.server_selected_client_hello /\
       Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
                 (CL.raw_slice material 0 32 <: Seq.seq U8.t) /\
       ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
@@ -502,7 +520,8 @@ let lemma_input_ready_server_hello_of_selection
                     (CL.raw_slice material 32 64 <: Seq.seq U8.t);
   assert (CS.server_selection_key_share_consistent selection);
   // valid_selection holds (random off HRR sentinel + CHACHA cipher suite), so
-  // the canonical builder matches the selection and serialises to 122 bytes;
+  // the canonical builder matches the selection and serialises to
+  // 90 + |legacy_session_id_echo| (<= 122) bytes;
   // legal_event / event_raw_delta_legal / can_send_server_hello follow, exactly
   // as in Driver.Handshake's inline discharge.
   assert (CM.valid_selection selection);
@@ -510,7 +529,8 @@ let lemma_input_ready_server_hello_of_selection
   CM.lemma_server_hello_of_selection_matches selection;
   CM.lemma_server_hello_of_selection_bytesize selection;
   assert (CS.server_hello_matches_selection selection sh_sel);
-  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 122);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) ==
+          90 + Seq.length (CM.sho_session_id selection));
   assert (CS.legal_event
     st.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -577,7 +597,8 @@ let lemma_server_process_local_obligations
          Bounds.max_transcript_len /\
        CM.can_verify_client_finished st
          (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
-      (kind == ST.LocalSendServerHello /\ out_len_v == 127 ==>
+      (kind == ST.LocalSendServerHello /\
+       out_len_v == 95 + Seq.length (CM.stored_client_hello_session_id st) ==>
        (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
@@ -619,7 +640,7 @@ let lemma_server_process_local_obligations
       assert (CM.can_verify_client_finished st fin) )
   | ST.LocalSendServerHello ->
     introduce
-      out_len_v == 127 ==>
+      out_len_v == 95 + Seq.length (CM.stored_client_hello_session_id st) ==>
       ((Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
@@ -1027,6 +1048,7 @@ fn process_send_server_hello
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
+  (sid_len:SZ.t)
   (#sh:erased GSH.serverHello)
   (#server_random_bytes: erased B.bytes)
   (#server_key_share_bytes: erased B.bytes)
@@ -1040,7 +1062,10 @@ fn process_send_server_hello_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
+                 SZ.v sid_len ==
+                   Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
@@ -1095,11 +1120,12 @@ fn process_send_server_hello_serialized
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
       #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
+      sid_len
       network_out
       network_out_len;
   with network_out_bytes. assert (pts_to network_out network_out_bytes);
-  assert (pure (B.length network_out_bytes == 127));
-  assert (pure (SZ.v written_raw == 127));
+  assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+  assert (pure (SZ.v written_raw == SZ.v network_out_len));
   assert (pure (Seq.equal
     network_out_bytes
     (CS.serialized_cleartext_tls_message
@@ -1109,7 +1135,12 @@ fn process_send_server_hello_serialized
     sh
     network_out_bytes));
 
-  let mut fragment = [| 0uy; 122sz |];
+  (* RFC 8446 4.1.3: the handshake message is 90 bytes plus the echoed
+     legacy_session_id, so the transcript fragment buffer is sized at run
+     time.  Pulse stack arrays need a constant extent, hence the heap vec. *)
+  let fragment_len = 90sz `SZ.add` sid_len;
+  let fragment_vec = V.alloc 0uy fragment_len;
+  V.to_array_pts_to fragment_vec;
   let written_fragment =
     Ser.serialize_server_hello_from_selection
       #sh
@@ -1118,11 +1149,11 @@ fn process_send_server_hello_serialized
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
       #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
-      fragment
-      122sz;
-  with fragment_bytes. assert (pts_to fragment fragment_bytes);
-  assert (pure (B.length fragment_bytes == 122));
-  assert (pure (SZ.v written_fragment == 122));
+      (V.vec_to_array fragment_vec)
+      fragment_len;
+  with fragment_bytes. assert (pts_to (V.vec_to_array fragment_vec) fragment_bytes);
+  assert (pure (B.length fragment_bytes == SZ.v fragment_len));
+  assert (pure (SZ.v written_fragment == SZ.v fragment_len));
   assert (pure (Seq.equal
     fragment_bytes
     (W.serialize_handshake (M.ServerHello sh))));
@@ -1132,13 +1163,15 @@ fn process_send_server_hello_serialized
   CLH.mark_sent_server_hello
     s
     network_out
-    fragment
+    (V.vec_to_array fragment_vec)
     written_fragment
     lsh
     #sh;
   fold (connection_exactly
     s
     (CM.sent_server_hello_state 'st0 sh network_out_bytes));
+  V.to_vec_pts_to fragment_vec;
+  V.free fragment_vec;
 
   let resp = {
     ST.network_out_len = written_raw;
@@ -1279,19 +1312,27 @@ fn build_server_hello_from_arrays
   (server_random:array U8.t)
   (server_key_share:array U8.t)
   (session_id:array U8.t)
+  (session_id_len:SZ.t)
   (cipher_suite:U16.t)
   (#sh:erased GSH.serverHello)
+  (#sid:erased B.bytes)
   requires pts_to server_random 'server_random_bytes **
            pts_to server_key_share 'server_key_share_bytes **
            pts_to session_id 'session_id_bytes **
            pure (B.length 'server_random_bytes == 32 /\
                 B.length 'server_key_share_bytes == 32 /\
                 B.length 'session_id_bytes == 32 /\
+                // RFC 8446 4.1.3: the echoed id is the offered one verbatim,
+                // carried as a 32-byte zero-padded mirror plus its true width.
+                Seq.length (Ghost.reveal sid) <= 32 /\
+                SZ.v session_id_len == Seq.length (Ghost.reveal sid) /\
+                Seq.equal (Ghost.reveal 'session_id_bytes)
+                          (Sem.pad_session_id_32 (Ghost.reveal sid)) /\
                 // TODO-A1: ServerHello random must differ from the HRR sentinel
                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                 (cipher_suite == 0x1303us \/ cipher_suite == 0x1301us) /\
-                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal 'session_id_bytes) (IM.cipher_suite_of_u16 cipher_suite)))
+                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal sid) (IM.cipher_suite_of_u16 cipher_suite)))
   returns lsh:IM.server_hello
   ensures pts_to server_random 'server_random_bytes **
           pts_to server_key_share 'server_key_share_bytes **
@@ -1310,6 +1351,7 @@ fn build_server_hello_from_arrays
   let lsh = {
     IM.server_hello_random = random_vec;
     IM.server_hello_session_id = session_id_vec;
+    IM.server_hello_session_id_len = session_id_len;
     IM.server_hello_key_share = key_share_vec;
     IM.server_hello_kex_group = CryptoSpec.KexX25519;
     IM.server_hello_cipher_suite = cipher_suite;
@@ -1319,6 +1361,8 @@ fn build_server_hello_from_arrays
   with key_share_bytes. assert (V.pts_to key_share_vec key_share_bytes);
   assert (pure (Seq.equal random_bytes (Ghost.reveal 'server_random_bytes)));
   assert (pure (Seq.equal session_id_vec_bytes (Ghost.reveal 'session_id_bytes)));
+  assert (pure (Seq.equal (Sem.serverHello_session_id_echo (Ghost.reveal sh))
+                          (Ghost.reveal sid)));
   assert (pure (Seq.equal key_share_bytes
     (CryptoSpec.pad_share_65 (Ghost.reveal 'server_key_share_bytes))));
   IM.lemma_cipher_suite_of_u16_chacha ();
@@ -1352,7 +1396,8 @@ fn process_send_server_hello_from_arrays
                  B.length 'server_key_share_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
@@ -1399,10 +1444,11 @@ fn process_send_server_hello_from_arrays
   let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) <: GSH.serverHello);
   let mut session_id = [| 0uy; 32sz |];
   rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
-  CQ.read_client_hello_session_id s session_id;
+  let session_id_len = CQ.read_client_hello_session_id s session_id;
   rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
   with sid_bytes. assert (pts_to session_id sid_bytes);
-  Seq.lemma_eq_elim (Ghost.reveal sid_bytes) (CM.stored_client_hello_session_id 'st0);
+  Seq.lemma_eq_elim (Ghost.reveal sid_bytes)
+    (Sem.pad_session_id_32 (CM.stored_client_hello_session_id 'st0));
   (* Recover the negotiated suite from the stored ClientHello mirror.  The
      ghost selection's suite is that policy value (carried by
      [ST.server_local_event_input_ready]/LocalSendServerHello), so the emitted
@@ -1415,11 +1461,14 @@ fn process_send_server_hello_from_arrays
       server_random
       server_key_share
       session_id
+      session_id_len
       negotiated_suite
-      #sh;
+      #sh
+      #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes));
   process_send_server_hello_serialized
     s
     lsh
+    session_id_len
     #sh
     #('server_random_bytes)
     #('server_key_share_bytes)
@@ -1446,7 +1495,8 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'server_private_key_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest

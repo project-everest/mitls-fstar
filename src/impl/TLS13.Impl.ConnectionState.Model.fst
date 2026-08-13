@@ -416,17 +416,20 @@ let lemma_client_hello_of_start_matches
 // Server mirror of the client record-size reasoning inside
 // lemma_client_hello_of_start_matches: reveal serialize_handshake to the
 // generated serializer and compute the exact bytesize of the canonical
-// ServerHello.  It equals 122 (legacy_version TLS_1p2 + 32-byte random +
-// 32-byte session-id echo + CHACHA cipher suite + null compression +
-// [key_share(X25519, 32 bytes); supported_versions(TLS_1p3)]).  Structurally
-// identical to TLS13.Impl.Server.Send.lemma_mk_server_hello_witness_bytesize.
+// ServerHello.  It equals 90 + |session_id| (legacy_version TLS_1p2 + 32-byte
+// random + 1-byte session-id-echo length + the echo + cipher suite + null
+// compression + [key_share(X25519, 32 bytes); supported_versions(TLS_1p3)]),
+// i.e. 122 for a middlebox-compatibility-mode peer and 90 for one with
+// compatibility mode off.  Structurally identical to
+// TLS13.Impl.Server.Send.lemma_mk_server_hello_witness_bytesize.
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_server_hello_of_selection_bytesize
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 122)
+              (M.ServerHello (server_hello_of_selection sel))) ==
+            90 + Seq.length (sho_session_id sel))
 = let sh = server_hello_of_selection sel in
   Rev.lemma_serialize_handshake_server_hello sh;
   GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
@@ -436,6 +439,7 @@ let lemma_server_hello_of_selection_bytesize
   GNG.namedGroup_bytesize_eq GNG.X25519;
   GKSE.keyShareEntry_key_exchange_bytesize_eqn
     (sel.CS.server_key_share_public <: GKSE.keyShareEntry_key_exchange);
+  GSHBody.serverHelloBody_legacy_session_id_echo_bytesize_eqn (sho_session_id sel);
   GSHBody.serverHelloBody_extensions_list_bytesize_nil;
   ()
 #pop-options
@@ -447,7 +451,8 @@ let lemma_server_hello_of_selection_bytesize
 // TLS13.Impl.Serializer.Handshake) by unfolding server_hello_of_selection and
 // the accessors (fuel for the 2-extension list walk).  The ServerHello
 // wire-profile bound (serialized handshake <= 16640) in
-// server_hello_matches_selection is discharged from the exact bytesize (122).
+// server_hello_matches_selection is discharged from the exact bytesize
+// (90 + |session_id|, at most 122).
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_server_hello_of_selection_matches
   (sel:CS.server_handshake_selection)

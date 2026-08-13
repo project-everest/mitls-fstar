@@ -1212,10 +1212,17 @@ fn read_negotiated_server_suite
                 IM.cipher_suite_of_u16 suite ==
                   server_selected_suite (Ghost.reveal st0))
 
-/// Read the (clamped, 32-byte) legacy_session_id of the stored ClientHello
-/// into [out].  Total: when no ClientHello is stored the mirror still holds
-/// its all-zero initial content, which is what
-/// [Model.stored_client_hello_session_id] reports for such a state.
+/// Read the offered legacy_session_id of the stored ClientHello into [out],
+/// zero-padded to the mirror's fixed 32-byte width, and return its true wire
+/// length.  RFC 8446 4.1.3 obliges the server to echo the id *verbatim*, so
+/// the length is as much a part of the answer as the bytes: a peer with
+/// middlebox compatibility mode off (RFC 8446 D.4) offers an empty id and
+/// must get an empty one back.
+///
+/// Total: when no ClientHello is stored the mirror still holds its all-zero
+/// initial content and the length box still holds 0, which is exactly what
+/// [Model.stored_client_hello_session_id] reports (the empty sequence) for
+/// such a state.
 fn read_client_hello_session_id
   (c:connection_state)
   (out:array U8.t)
@@ -1224,8 +1231,11 @@ fn read_client_hello_session_id
   requires connection_exactly c st0 **
            pts_to out pout **
            pure (B.length pout == 32)
+  returns sid_len: SZ.t
   ensures exists* (o:Seq.seq U8.t).
             connection_exactly c st0 **
             pts_to out o **
             pure (B.length o == 32 /\
-                  Seq.equal o (stored_client_hello_session_id st0))
+                  SZ.v sid_len == Seq.length (stored_client_hello_session_id st0) /\
+                  Seq.equal o
+                    (Sem.pad_session_id_32 (stored_client_hello_session_id st0)))

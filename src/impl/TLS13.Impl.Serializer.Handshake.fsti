@@ -70,7 +70,7 @@ module WS = TLS13.Wire.Spec
 noextract
 let poc_canonical_sh (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello
-    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
     (ensures fun _ -> True)
   = let ke : GKSE.keyShareEntry_key_exchange = ks in
     let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
@@ -267,16 +267,17 @@ fn serialize_server_hello_handshake_poc
   (out_len: SZ.t)
   (#old: erased B.bytes)
   requires L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out (reveal old) **
-           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 122 /\
+           pure (B.length (reveal old) == SZ.v out_len /\
+                 SZ.v out_len == 90 + Seq.length (reveal sid) /\
                  Seq.length (reveal rnd) == 32 /\
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
-                 Seq.length (reveal sid) == 32 /\
+                 Seq.length (reveal sid) <= 32 /\
                  Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **
-          pure (B.length out_bytes == 122 /\ SZ.v written == 122 /\
+          pure (B.length out_bytes == SZ.v out_len /\ SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
 fn serialize_certificate_handshake_poc

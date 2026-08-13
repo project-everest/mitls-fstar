@@ -2089,6 +2089,7 @@ fn select_supported_server_parameters_runtime
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with ch_has_server_name ch_server_name_len
        ch_cipher_suites_len ch_signature_schemes_len. _;
@@ -2295,6 +2296,7 @@ fn select_supported_server_parameters_runtime
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
@@ -2320,6 +2322,7 @@ fn select_supported_server_parameters_runtime
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
@@ -6860,6 +6863,7 @@ fn read_negotiated_server_suite
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with ch_has_server_name ch_server_name_len
        ch_cipher_suites_len ch_signature_schemes_len. _;
@@ -6901,6 +6905,7 @@ fn read_negotiated_server_suite
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (client_hello_slot_exactly
     c.handshake.messages.client_hello_present
@@ -6924,11 +6929,14 @@ fn read_client_hello_session_id
   requires connection_exactly c st0 **
            pts_to out pout **
            pure (B.length pout == 32)
+  returns sid_len: SZ.t
   ensures exists* (o:Seq.seq U8.t).
             connection_exactly c st0 **
             pts_to out o **
             pure (B.length o == 32 /\
-                  Seq.equal o (stored_client_hello_session_id st0))
+                  SZ.v sid_len == Seq.length (stored_client_hello_session_id st0) /\
+                  Seq.equal o
+                    (Sem.pad_session_id_32 (stored_client_hello_session_id st0)))
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -6952,14 +6960,33 @@ fn read_client_hello_session_id
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_session_id;
 
   assert (pure (Seq.equal (Ghost.reveal ch_session_id)
-                          (stored_client_hello_session_id (Ghost.reveal st0))));
+                          (Sem.pad_session_id_32
+                            (stored_client_hello_session_id (Ghost.reveal st0)))));
 
   fold (client_hello_slot_exactly
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+
+  unfold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  let sid_len = !c.handshake.messages.client_hello_session_id_len;
+  fold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+
   fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
   fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
+  sid_len
 }

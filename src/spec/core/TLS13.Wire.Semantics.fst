@@ -57,19 +57,38 @@ let clientHello_random (ch: GCH.clientHello) : Seq.lseq U8.t 32 =
 let clientHello_legacy_session_id (ch: GCH.clientHello) : Seq.seq U8.t =
   ch.GCH.legacy_session_id <: Seq.seq U8.t
 
-/// The legacy_session_id, normalised to exactly 32 bytes.
+/// The legacy_session_id, verbatim, with its wire bound made syntactic.
 ///
-/// RFC 8446 D.4 (middlebox compatibility) clients -- i.e. every browser and
-/// curl -- always send a 32-byte legacy_session_id, and the implementation
-/// fixes the width at 32 so the whole ClientHello/ServerHello wire image stays
-/// a constant size.  A ClientHello carrying a different session-id length is
-/// still parsed (it is legal TLS), but is normalised to all-zeros here, so the
-/// ServerHello echoes zeros and such a client will reject the handshake.
-let session_id_32 (s: Seq.seq U8.t) : (r:Seq.seq U8.t { Seq.length r == 32 }) =
-  if Seq.length s = 32 then s else Seq.create 32 0uy
+/// RFC 8446 4.1.3 requires the server to echo `legacy_session_id` back
+/// UNCHANGED, whatever its length: a client running in middlebox-compatibility
+/// mode (RFC 8446 D.4 -- every browser, and curl) sends 32 random bytes, while
+/// a client with compatibility mode OFF (`openssl s_client -no_middlebox`, and
+/// any TLS-1.3-only peer) sends an EMPTY one.  Echoing a normalised 32 bytes in
+/// the second case makes a conforming client abort with `illegal_parameter`,
+/// so the length has to be carried through the server unchanged.
+///
+/// The wire type is `opaque legacy_session_id<0..32>`, so the codec already
+/// guarantees the bound; [session_id_bounded] only makes it syntactically
+/// available to callers that hold a bare `Seq.seq U8.t`.
+let session_id_bounded (s: Seq.seq U8.t) : (r:Seq.seq U8.t { Seq.length r <= 32 }) =
+  if Seq.length s <= 32 then s else Seq.empty
 
-let clientHello_session_id_32 (ch: GCH.clientHello) : (r:Seq.seq U8.t { Seq.length r == 32 }) =
-  session_id_32 (clientHello_legacy_session_id ch)
+let clientHello_session_id (ch: GCH.clientHello) : (r:Seq.seq U8.t { Seq.length r <= 32 }) =
+  session_id_bounded (clientHello_legacy_session_id ch)
+
+/// The runtime mirror of a session id is a fixed 32-byte buffer plus an
+/// explicit length, exactly as [TLS13.Crypto.Spec.pad_share_65] does for a
+/// key share whose logical width depends on the group.  Zero-padding the tail
+/// keeps the buffer a compile-time constant while the LENGTH stays the sole
+/// carrier of the wire width; nothing ever recovers the width from the buffer.
+let pad_session_id_32 (s: Seq.seq U8.t { Seq.length s <= 32 })
+  : (r:Seq.seq U8.t { Seq.length r == 32 }) =
+  Seq.append s (Seq.create (32 - Seq.length s) 0uy)
+
+let lemma_pad_session_id_32_prefix (s: Seq.seq U8.t { Seq.length s <= 32 })
+  : Lemma (ensures Seq.equal (Seq.slice (pad_session_id_32 s) 0 (Seq.length s)) s)
+          [SMTPat (pad_session_id_32 s)]
+  = ()
 
 /// The offered cipher suites (the length refinement is dropped).
 let clientHello_cipher_suites (ch: GCH.clientHello) : list GCS.cipherSuite =
@@ -181,13 +200,14 @@ let serverHello_legacy_session_id_echo (sh: GSH.serverHello) : option (Seq.seq U
   | None -> None
   | Some body -> Some (body.GSHB.legacy_session_id_echo <: Seq.seq U8.t)
 
-/// The echoed legacy_session_id, normalised to exactly 32 bytes (see
-/// [clientHello_session_id_32]).
-let serverHello_session_id_echo_32 (sh: GSH.serverHello)
-  : (r:Seq.seq U8.t { Seq.length r == 32 }) =
+/// The echoed legacy_session_id, verbatim (see [clientHello_session_id]).
+/// A HelloRetryRequest carries no body and so echoes nothing; that case is
+/// reported as the empty id.
+let serverHello_session_id_echo (sh: GSH.serverHello)
+  : (r:Seq.seq U8.t { Seq.length r <= 32 }) =
   match serverHello_legacy_session_id_echo sh with
-  | None -> Seq.create 32 0uy
-  | Some s -> session_id_32 s
+  | None -> Seq.empty
+  | Some s -> session_id_bounded s
 
 /// Find the X25519 key-share in the ServerHello extensions, if present.
 let rec sh_find_key_share (l: list GESH.extensionServerHello)

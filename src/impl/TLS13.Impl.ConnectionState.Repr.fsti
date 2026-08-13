@@ -170,6 +170,11 @@ type handshake_message_storage = {
   client_hello_server_name_len: box SZ.t;
   client_hello_cipher_suites_len: box SZ.t;
   client_hello_signature_schemes_len: box SZ.t;
+  (* The offered legacy_session_id's width, which RFC 8446 4.1.3 makes the
+     width the ServerHello must echo.  Mutable, like the other metadata: the
+     mirror's [IM.client_hello] struct is allocated once and its own length
+     fields cannot be rewritten when a ClientHello arrives. *)
+  client_hello_session_id_len: box SZ.t;
   server_hello: box (option IM.server_hello);
   encrypted_extensions: box (option IM.encrypted_extensions);
   certificate: box (option IM.certificate_msg);
@@ -917,7 +922,8 @@ let client_hello_slot_exactly
             match spec with
             | Some m ->
               Seq.equal random (Sem.clientHello_random m) /\
-              Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
+              Seq.equal session_id
+                (Sem.pad_session_id_32 (Sem.clientHello_session_id m)) /\
               IM.optional_byte_prefix_matches
                 (client_hello_has_sni m)
                 server_name
@@ -942,8 +948,8 @@ let client_hello_slot_exactly
             // The slot is allocated but empty: the session-id mirror still
             // holds its all-zero initial content, which is exactly what
             // [TLS13.Impl.ConnectionState.Model.stored_client_hello_session_id]
-            // reports for a state with no stored ClientHello.  Pinning it here
-            // makes the runtime session-id reader total.
+            // reports (at length 0) for a state with no stored ClientHello.
+            // Pinning it here makes the runtime session-id reader total.
             spec == None /\ Seq.equal session_id (Seq.create 32 0uy)))
 
 let client_hello_metadata_exactly
@@ -951,24 +957,29 @@ let client_hello_metadata_exactly
   (server_name_len_box:box SZ.t)
   (cipher_suites_len_box:box SZ.t)
   (signature_schemes_len_box:box SZ.t)
+  (session_id_len_box:box SZ.t)
   (spec:option GCH.clientHello)
   : slprop =
-  exists* has_server_name server_name_len cipher_suites_len signature_schemes_len.
+  exists* has_server_name server_name_len cipher_suites_len signature_schemes_len
+          session_id_len.
     Box.pts_to has_server_name_box has_server_name **
     Box.pts_to server_name_len_box server_name_len **
     Box.pts_to cipher_suites_len_box cipher_suites_len **
     Box.pts_to signature_schemes_len_box signature_schemes_len **
+    Box.pts_to session_id_len_box session_id_len **
     pure (match spec with
       | Some m ->
         has_server_name == client_hello_has_sni m /\
         server_name_len == client_hello_server_name_len_for m /\
         cipher_suites_len == client_hello_cipher_suites_len_for m /\
-        signature_schemes_len == client_hello_signature_schemes_len_for m
+        signature_schemes_len == client_hello_signature_schemes_len_for m /\
+        session_id_len == client_hello_session_id_len_for m
       | None ->
         has_server_name == false /\
         server_name_len == 0sz /\
         cipher_suites_len == 0sz /\
-        signature_schemes_len == 0sz)
+        signature_schemes_len == 0sz /\
+        session_id_len == 0sz)
 
 let server_hello_slot_exactly
   ([@@@mkey] slot:box (option IM.server_hello))
@@ -1045,6 +1056,7 @@ let handshake_messages_exactly
     msgs.client_hello_server_name_len
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
+    msgs.client_hello_session_id_len
     hs.CS.hs_client_hello **
   server_hello_slot_exactly msgs.server_hello hs.CS.hs_server_hello **
   encrypted_extensions_slot_exactly msgs.encrypted_extensions hs.CS.hs_encrypted_extensions **

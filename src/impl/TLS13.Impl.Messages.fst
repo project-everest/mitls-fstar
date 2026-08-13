@@ -74,7 +74,11 @@ let max_record_fragment_len : nat = 16640
 noeq
 type client_hello = {
   client_hello_random: V.vec U8.t;
+  (* 32 bytes, zero-padded past [client_hello_session_id_len]; the length is
+     the sole carrier of the wire width (RFC 8446 4.1.3 requires the server to
+     echo it verbatim, and a compatibility-mode-off peer sends an empty one). *)
   client_hello_session_id: V.vec U8.t;
+  client_hello_session_id_len: SZ.t;
   client_hello_server_name: V.vec U8.t;
   client_hello_server_name_len: SZ.t;
   client_hello_has_server_name: bool;
@@ -88,7 +92,10 @@ type client_hello = {
 noeq
 type server_hello = {
   server_hello_random: V.vec U8.t;
+  (* 32 bytes, zero-padded past [server_hello_session_id_len]; see
+     [client_hello_session_id]. *)
   server_hello_session_id: V.vec U8.t;
+  server_hello_session_id_len: SZ.t;
   (* 65 bytes: the widest group ATLAS offers, with the share zero-padded.
      [server_hello_kex_group] is the group the server named in its
      `KeyShareEntry` and says which prefix is the logical share; it is never
@@ -496,7 +503,8 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
       V.is_full_vec l.client_hello_session_id /\
       V.length l.client_hello_session_id == 32 /\
       B.length session_id == 32 /\
-      Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
+      SZ.v l.client_hello_session_id_len == Seq.length (Sem.clientHello_session_id m) /\
+      Seq.equal session_id (Sem.pad_session_id_32 (Sem.clientHello_session_id m)) /\
       V.is_full_vec l.client_hello_server_name /\
       V.is_full_vec l.client_hello_key_share /\
       V.is_full_vec l.client_hello_cipher_suites /\
@@ -545,7 +553,8 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slpro
       V.is_full_vec l.server_hello_session_id /\
       V.length l.server_hello_session_id == 32 /\
       B.length session_id == 32 /\
-      Seq.equal session_id (Sem.serverHello_session_id_echo_32 m) /\
+      SZ.v l.server_hello_session_id_len == Seq.length (Sem.serverHello_session_id_echo m) /\
+      Seq.equal session_id (Sem.pad_session_id_32 (Sem.serverHello_session_id_echo m)) /\
       V.is_full_vec l.server_hello_key_share /\
       V.length l.server_hello_random == 32 /\
       V.length l.server_hello_key_share == 65 /\

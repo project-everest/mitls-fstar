@@ -80,18 +80,20 @@ val mk_server_hello_witness
   : (sh:GSH.serverHello {
       (Seq.length random == 32 /\
        (Seq.length random == 32 ==> (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-       Seq.length session_id == 32 /\
+       Seq.length session_id <= 32 /\
        Seq.length key_share == 32) ==>
       ((match Sem.serverHello_random sh with Some r -> Seq.equal r random | None -> False) /\
        Sem.serverHello_cipher_suite sh == Some cs /\
-       Seq.equal (Sem.serverHello_session_id_echo_32 sh) session_id /\
+       Seq.equal (Sem.serverHello_session_id_echo sh) session_id /\
        (match Sem.serverHello_key_share_x25519 sh with
         | Some k -> Seq.equal k key_share
         | None -> False)) })
 
 (* The canonical ServerHello (key_share + supported_versions extensions) built by
-   [mk_server_hello_witness] serializes to exactly 122 bytes; discharges the
-   [|serialize_handshake (M.ServerHello sh)| == 122] send-path preconditions. *)
+   [mk_server_hello_witness] serializes to exactly 90 + |session_id| bytes
+   (RFC 8446 4.1.3 makes the echo verbatim): 122 for a middlebox-compatibility
+   peer, 90 for one with compatibility mode off.  Discharges the
+   [|serialize_handshake (M.ServerHello sh)|] send-path preconditions. *)
 val lemma_mk_server_hello_witness_bytesize
   (random: B.bytes)
   (key_share: B.bytes)
@@ -100,11 +102,12 @@ val lemma_mk_server_hello_witness_bytesize
   : Lemma
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-              Seq.length session_id == 32 /\
+              Seq.length session_id <= 32 /\
               Seq.length key_share == 32)
     (ensures
       B.length (W.serialize_handshake
-        (M.ServerHello (mk_server_hello_witness random key_share session_id cs))) == 122)
+        (M.ServerHello (mk_server_hello_witness random key_share session_id cs)))
+        == 90 + Seq.length session_id)
 
 (* Build-direction bridge (server ServerHello): the Model-level canonical
    builder [CM.server_hello_of_selection] coincides with the send-path witness
@@ -148,7 +151,11 @@ val lemma_can_send_server_hello_witness_of_selection
       Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
                 (server_private_key <: Seq.seq U8.t) /\
       CS.server_selection_key_share_consistent selection /\
-      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      // RFC 8446 4.1.3: the send path echoes the *stored* ClientHello's
+      // legacy_session_id while the Model builder names the selection's copy.
+      // The echo is width-carrying, so the two must be the same message.
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection.CS.server_selected_client_hello /\
       selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
       CM.can_send_server_hello st (CM.server_hello_of_selection selection)
         (CS.serialized_cleartext_tls_message
@@ -190,6 +197,11 @@ val lemma_input_ready_server_hello_of_selection
       st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
         122 <= Bounds.max_transcript_len /\
+      // See lemma_can_send_server_hello_witness_of_selection: the echo is
+      // width-carrying, so the stored ClientHello and the selection's copy
+      // must be the same message (RFC 8446 4.1.3).
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection.CS.server_selected_client_hello /\
       Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
                 (CL.raw_slice material 0 32 <: Seq.seq U8.t) /\
       ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
@@ -235,7 +247,8 @@ val lemma_server_process_local_obligations
          Bounds.max_transcript_len /\
        CM.can_verify_client_finished st
          (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
-      (kind == ST.LocalSendServerHello /\ out_len_v == 127 ==>
+      (kind == ST.LocalSendServerHello /\
+       out_len_v == 95 + Seq.length (CM.stored_client_hello_session_id st) ==>
        (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
@@ -344,6 +357,7 @@ fn process_send_server_hello
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
+  (sid_len:SZ.t)
   (#sh:erased GSH.serverHello)
   (#server_random_bytes: erased B.bytes)
   (#server_key_share_bytes: erased B.bytes)
@@ -357,7 +371,10 @@ fn process_send_server_hello_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
+                 SZ.v sid_len ==
+                   Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
@@ -416,7 +433,8 @@ fn process_send_server_hello_from_arrays
                  B.length 'server_key_share_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
@@ -477,7 +495,8 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'server_private_key_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   95 + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest

@@ -31,6 +31,7 @@ module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
 
@@ -679,9 +680,19 @@ fn send_server_hello_from_payload_once
     assert (pts_to server_random server_random_bytes);
   with server_private_key_bytes.
     assert (pts_to server_private_key server_private_key_bytes);
-  let mut server_hello_out = [| 0uy; 127sz |];
+  let mut driver_session_id = [| 0uy; 32sz |];
+  unfold (S.connection_exactly d.buffered_driver_server 'st0);
+  let driver_sid_len = CQ.read_client_hello_session_id
+    d.buffered_driver_server driver_session_id;
+  fold (S.connection_exactly d.buffered_driver_server 'st0);
+  // The ServerHello record is 95 + |legacy_session_id| bytes (gap G4): the echo
+  // is verbatim, so the output buffer must be sized at run time.
+  assert (pure (SZ.fits (95 + SZ.v driver_sid_len)));
+  let server_hello_out_len = 95sz `SZ.add` driver_sid_len;
+  let server_hello_vec = V.alloc 0uy server_hello_out_len;
+  V.to_array_pts_to server_hello_vec;
   with old_server_hello_out.
-    assert (pts_to server_hello_out old_server_hello_out);
+    assert (pts_to (V.vec_to_array server_hello_vec) old_server_hello_out);
   assert (pure (Seq.equal
     server_random_bytes
     (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)));
@@ -699,8 +710,8 @@ fn send_server_hello_from_payload_once
       d.buffered_driver_server
       server_random
       server_private_key
-      server_hello_out
-      127sz
+      (V.vec_to_array server_hello_vec)
+      server_hello_out_len
       app_out
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
@@ -708,7 +719,7 @@ fn send_server_hello_from_payload_once
       S.connection_exactly d.buffered_driver_server st1 **
       pts_to server_random server_random_bytes **
       pts_to server_private_key server_private_key_bytes **
-      pts_to server_hello_out network_out_bytes **
+      pts_to (V.vec_to_array server_hello_vec) network_out_bytes **
       pts_to app_out app_out_bytes);
   let sh =
     Ghost.hide
@@ -756,7 +767,7 @@ fn send_server_hello_from_payload_once
   let written =
     BT.write
       d.buffered_driver_channel
-      server_hello_out
+      (V.vec_to_array server_hello_vec)
       resp.ST.network_out_len;
   assert (pure (written == resp.ST.network_out_len));
   let sent_delta =
@@ -903,6 +914,8 @@ fn send_server_hello_from_payload_once
     (Ghost.reveal 'credential_identity)
     (Ghost.reveal 'buffered)
     'buffered_len);
+  V.to_vec_pts_to server_hello_vec;
+  V.free server_hello_vec;
   resp
 }
 
@@ -1210,7 +1223,10 @@ let lemma_select_derive_success_server_hello_ready
   CM.lemma_server_hello_of_selection_matches selection;
   CM.lemma_server_hello_of_selection_bytesize selection;
   assert (CS.server_hello_matches_selection selection sh_sel);
-  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 122);
+  assert (st2.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some selection.CS.server_selected_client_hello);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) ==
+    90 + Seq.length (CM.sho_session_id selection));
   assert (CS.legal_event
     st2.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1267,7 +1283,8 @@ let lemma_assemble_can_send_server_hello
                (CL.raw_slice payload 32 64))
              (CM.stored_client_hello_session_id st)
              (CM.server_selected_suite st) in
-         B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
+         B.length (W.serialize_handshake (M.ServerHello sh)) ==
+           90 + Seq.length (CM.stored_client_hello_session_id st)))
       (ensures
         (let sh =
            SS.mk_server_hello_witness
@@ -1365,7 +1382,8 @@ fn select_derive_send_server_hello_from_payload_once
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
            (CM.server_selected_suite 'st0) in
-       B.length (W.serialize_handshake (M.ServerHello sh)) == 122))
+       B.length (W.serialize_handshake (M.ServerHello sh)) ==
+         90 + Seq.length (CM.stored_client_hello_session_id 'st0)))
   returns result:server_flight_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

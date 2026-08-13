@@ -409,7 +409,8 @@ fn select_derive_send_server_hello_from_payload_once
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
            (CM.server_selected_suite 'st0) in
-       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) == 122))
+       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) ==
+         90 + Seq.length (CM.stored_client_hello_session_id 'st0)))
   returns result:server_flight_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

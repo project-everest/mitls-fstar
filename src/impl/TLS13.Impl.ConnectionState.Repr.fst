@@ -336,12 +336,14 @@ fn free_client_hello_metadata
   (server_name_len_box:box SZ.t)
   (cipher_suites_len_box:box SZ.t)
   (signature_schemes_len_box:box SZ.t)
+  (session_id_len_box:box SZ.t)
   requires exists* spec.
     client_hello_metadata_exactly
       has_server_name_box
       server_name_len_box
       cipher_suites_len_box
       signature_schemes_len_box
+      session_id_len_box
       spec
   ensures emp
 {
@@ -351,12 +353,15 @@ fn free_client_hello_metadata
       server_name_len_box
       cipher_suites_len_box
       signature_schemes_len_box
+      session_id_len_box
       spec);
-  with has_server_name server_name_len cipher_suites_len signature_schemes_len. _;
+  with has_server_name server_name_len cipher_suites_len signature_schemes_len
+       session_id_len. _;
   Box.free has_server_name_box;
   Box.free server_name_len_box;
   Box.free cipher_suites_len_box;
   Box.free signature_schemes_len_box;
+  Box.free session_id_len_box;
 }
 
 fn free_server_hello_slot (slot:box (option IM.server_hello))
@@ -547,7 +552,8 @@ fn free_handshake_messages_exactly (messages:handshake_message_storage)
     messages.client_hello_has_server_name
     messages.client_hello_server_name_len
     messages.client_hello_cipher_suites_len
-    messages.client_hello_signature_schemes_len;
+    messages.client_hello_signature_schemes_len
+    messages.client_hello_session_id_len;
   free_server_hello_slot messages.server_hello;
   free_encrypted_extensions_slot messages.encrypted_extensions;
   free_certificate_slot messages.certificate;
@@ -1560,6 +1566,7 @@ fn alloc_client_hello_slot_empty ()
   let l = {
     IM.client_hello_random;
     IM.client_hello_session_id;
+    IM.client_hello_session_id_len = 0sz;
     IM.client_hello_server_name;
     IM.client_hello_server_name_len = 0sz;
     IM.client_hello_has_server_name = false;
@@ -1604,6 +1611,7 @@ fn alloc_handshake_messages_empty ()
   let client_hello_server_name_len : box SZ.t = Box.alloc 0sz;
   let client_hello_cipher_suites_len : box SZ.t = Box.alloc 0sz;
   let client_hello_signature_schemes_len : box SZ.t = Box.alloc 0sz;
+  let client_hello_session_id_len : box SZ.t = Box.alloc 0sz;
   rewrite (client_hello_slot_exactly client_hello_slot.ch_present client_hello_slot.ch_value None) as
     (client_hello_slot_exactly client_hello_present client_hello None);
   let server_hello : box (option IM.server_hello) = Box.alloc (None #IM.server_hello);
@@ -1622,6 +1630,7 @@ fn alloc_handshake_messages_empty ()
     client_hello_server_name_len;
     client_hello_cipher_suites_len;
     client_hello_signature_schemes_len;
+    client_hello_session_id_len;
     server_hello;
     encrypted_extensions;
     certificate;
@@ -1639,23 +1648,28 @@ fn alloc_handshake_messages_empty ()
     (Box.pts_to msgs.client_hello_cipher_suites_len 0sz);
   rewrite (Box.pts_to client_hello_signature_schemes_len 0sz) as
     (Box.pts_to msgs.client_hello_signature_schemes_len 0sz);
+  rewrite (Box.pts_to client_hello_session_id_len 0sz) as
+    (Box.pts_to msgs.client_hello_session_id_len 0sz);
   fold (client_hello_metadata_exactly
     msgs.client_hello_has_server_name
     msgs.client_hello_server_name_len
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
+    msgs.client_hello_session_id_len
     None);
   rewrite (client_hello_metadata_exactly
     msgs.client_hello_has_server_name
     msgs.client_hello_server_name_len
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
+    msgs.client_hello_session_id_len
     None) as
     (client_hello_metadata_exactly
       msgs.client_hello_has_server_name
       msgs.client_hello_server_name_len
       msgs.client_hello_cipher_suites_len
       msgs.client_hello_signature_schemes_len
+      msgs.client_hello_session_id_len
       CS.empty_handshake_state.CS.hs_client_hello);
   rewrite (Box.pts_to server_hello None) as (Box.pts_to msgs.server_hello None);
   rewrite (Box.pts_to encrypted_extensions None) as

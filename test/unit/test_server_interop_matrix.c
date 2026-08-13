@@ -26,6 +26,8 @@
  * harness would let the gap close silently and then let it reopen silently.
  * The `aes128-only` cell is the worked example: it was EXPECT_FAIL until the
  * server became cipher-suite agile, and flipped to OK in that same commit.
+ * `no-middlebox-compat` is the second: it flipped when the server learned to
+ * echo the offered legacy_session_id verbatim.
  *
  * THE FRAMING AXIS
  *
@@ -208,14 +210,36 @@ static const struct case_spec k_cases[] = {
      "the test credential is RSA; the server has no ECDSA credential to select"},
 
     /* --- Middlebox-compatibility axis (RFC 8446 D.4). -------------------- */
-    /* With compatibility mode off OpenSSL sends an EMPTY legacy_session_id and
-       no ChangeCipherSpec.  The server stores the session id through
-       Sem.clientHello_session_id_32, which pads a short id to 32 bytes, and
-       echoes those 32 bytes; RFC 8446 4.1.3 requires the echo to equal what
-       was sent, so a conforming client rejects the ServerHello. */
+    /* CLOSED (gap G4).  With compatibility mode off OpenSSL sends an EMPTY
+       legacy_session_id and no ChangeCipherSpec.  RFC 8446 4.1.3 requires the
+       ServerHello's legacy_session_id_echo to be the offered id VERBATIM, so a
+       fixed 32-byte mirror could not serve both widths.  The mirror now carries
+       the id as a 32-byte zero-padded buffer plus an explicit width
+       (TLS13.Wire.Semantics.pad_session_id_32 / clientHello_session_id, the
+       same shape CryptoSpec.pad_share_65 uses for key shares), and the width is
+       stored in the connection as a box alongside the other ClientHello
+       metadata lengths.  The ServerHello message is therefore 90 + |sid| bytes
+       and its record 95 + |sid| -- 122/127 only in the compatibility case --
+       so the send path sizes its output buffer at run time. */
     {"no-middlebox-compat", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "GAP: an empty legacy_session_id is echoed back as 32 zero bytes"},
+     "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "empty legacy_session_id echoed verbatim: a 90-byte ServerHello"},
+    /* The empty-id path crossed with the two other agile axes, so a regression
+       that reintroduced a fixed-width echo cannot hide behind the compat case
+       on any one of them. */
+    {"no-middlebox-compat-aes128", "TLS_AES_128_GCM_SHA256", "X25519",
+     "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, OK,
+     "TLS_AES_128_GCM_SHA256", "X25519",
+     "empty session id and the AES-128-GCM fallback arm together"},
+    {"no-middlebox-compat-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "rsa_pss_rsae_sha256", false, FRAMING_TCP_DRIBBLE, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "empty session id driven through the NeedMoreInput retry loop"},
+    {"no-middlebox-compat-x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256",
+     "X25519:P-256", "rsa_pss_rsae_sha256", false, FRAMING_NORMAL, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "empty session id with two key shares on offer"},
 
     /* --- Framing axis. --------------------------------------------------- */
     {"tcp-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
