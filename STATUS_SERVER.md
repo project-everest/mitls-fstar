@@ -39,6 +39,27 @@ the repository's first supported profile:
 - No PSK, 0-RTT, HelloRetryRequest, client authentication, resumption, early
   data, or KeyUpdate in the first milestone.
 
+## Parity with the client
+
+The client has since moved past that first profile: it negotiates
+`TLS_AES_128_GCM_SHA256` as well as ChaCha20-Poly1305, offers and completes
+`secp256r1` as well as X25519, and reassembles a handshake message split across
+several records.  The server implements none of the three.
+
+`docs/server-client-parity.md` is the authoritative gap analysis and interop
+test plan.  Two standing gates keep it honest:
+
+- `make test-atlas-loopback` -- the verified client against the verified server.
+  The only test in the tree whose ClientHello is the one ATLAS actually sends,
+  so it is the gate that fails if the client's offer moves past what the server
+  can select.
+- `make test-server-matrix` -- the server's capability surface across cipher
+  suites, key-exchange groups, signature schemes, middlebox-compatibility mode
+  and record/TCP framing, with two-sided expectations: a cell recorded as a gap
+  fails if it starts succeeding, so closing a gap must update the ledger.
+
+Both are part of `make test`, and therefore of CI.
+
 The proof goal has two connected layers.
 
 1. **Spec-level agreement**: the role-parametric TLS state-machine spec should
