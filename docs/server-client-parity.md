@@ -5,7 +5,10 @@ Status date: 2026-08-13.  Branch `interop`.
 **Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection), G4
 (variable-length `legacy_session_id` echo) and G5 (ECDSA server credentials)
 are **closed**; see the sections below.  G2 and G3 remain open, and both are
-research-scale rather than incremental -- the closing sections say why.
+research-scale rather than incremental -- the closing sections say why, now
+from *measurement* rather than estimate: G3's buffering design was built
+against the whole tree and its fallout enumerated, and G2's surface was
+counted.
 
 ## Why this document exists
 
@@ -267,6 +270,16 @@ some stacks split them).
 A related, milder limitation applies to both roles: `parse_tls_message`
 (`TLS13.Wire.Spec.fst:921`, handshake arm at `:927`) requires `consumed == B.length fragment`, so several
 handshake messages coalesced into one record are rejected rather than drained.
+
+The mirror-the-client design for closing this was subsequently **built against
+the whole tree and measured**; the spec-level fallout turned out to be small and
+mechanical, but the implementation needs a concrete reassembly buffer in the
+server's connection representation before the spec mechanism buys any
+capability.  The full measurement -- which modules need a new match
+arm, why `lemma_received_client_hello_raw_length` has to be restated as a
+determinism property rather than a length one, which three cross-endpoint
+pairing theorems have to be restricted, and why the decoder rather than the
+state machine is the blocker -- is recorded in the roadmap entry for G3 below.
 
 ### G4. The server echoes a padded `legacy_session_id` -- **CLOSED**
 
@@ -574,7 +587,80 @@ week's work.
    the predicate is load-bearing in 18 modules, but because one-record-per-step
    is an invariant of the System layer, and relaxing it means giving the server
    the buffering event the client has.
-5. **G2 (secp256r1, then HelloRetryRequest).**  The largest.  Both
+
+   **The buffering-event design was then built and measured end to end.**  A
+   `ConnCleartextHandshake` constructor was added to `conn_event`, with
+   `hb_cleartext_handshake_bytes` in `hs_buffers`, a
+   `legal_cleartext_handshake_step` gated on `ServerEndpoint` and
+   `HsAwaitingClientHello`, a `step_cleartext_handshake` that touches nothing
+   but the buffer, a `received_cleartext_tls_message_raw_buffered` raw-delta
+   rule, and an empty-buffer bridge lemma carrying an `SMTPat` so that every
+   pre-existing proof stays applicable whenever the buffer is empty.  The whole
+   tree was then re-verified repeatedly to enumerate the fallout.  The result is
+   worth recording, because it is not what the mention-count predicted:
+
+   * **The exhaustiveness fallout is small and mechanical.**  Despite
+     `ConnProtectedHandshake` appearing 425 times in 59 files, under twenty
+     modules needed a new arm, and every one of them was `[]`, `None`, `True`,
+     `False`, `record`, `pending` or a one-line `()`: `Endpoint.API`,
+     `Endpoint.Client`, `Endpoint.Server`, `StateMachine.Canonical`,
+     `StateMachine.Log`, `StateMachine.Correspondence`, `StateMachine.KeyMaterial`,
+     `StateMachine.Replay`, `Spec.WireFormatLemmas`, `ConnectionState.Lemmas`,
+     `ConnectionState.RecordKeyEpoch`, `ConnectionState.AppDataBufferEmpty`,
+     `ConnectionState.ServerHelloSelectionLink`, `ProtectedWireHead`,
+     `System.ServerNotCFR`, plus `Impl.Client.Types`, `Impl.Server.ChannelLog`
+     and `Impl.Client.Driver.State` on the implementation side.  A cleartext
+     buffering step advances no key schedule, no read sequence, no transcript
+     and no log, so it is inert almost everywhere.
+   * **`WFL.lemma_received_client_hello_raw_length` had to be restated, and the
+     restatement is instructive.**  It cannot be stated against the canonical
+     single-record serialization at all, because a reassembled handshake message
+     may be longer than one record's fragment can hold.  What survives, and is
+     all the replay-determinism proofs actually use, is that the buffer is a
+     *function of the model*: two replays of the same delivery from the same
+     model see the same buffer, hence the same remaining fragment, hence the
+     same record length.  Restated that way it proves cleanly.
+   * **The real casualty is the cross-endpoint pairing layer.**
+     `lemma_paired_replay_split_prefixes_equal_single_client_hello` and its two
+     companions match the client's *sent* records against the server's
+     *received* records one for one, and a server that reassembles does not
+     align that way -- the delivering record carries only the tail of the
+     message.  They can only be kept by adding a
+     `cleartext_handshake_buffer_empty server_model` hypothesis, i.e. by
+     restricting a proved property to the case the feature does not occur.
+   * **The blocker is on the implementation side, and it is not the third
+     decoder outcome.**  `TLS13.Impl.Parser.DecoderWF.lemma_mk_cleartext_network_input_wf`
+     must establish `CT.received_tls_raw_delta_legal st0 msg raw` from nothing
+     but the record it just parsed.  Under the buffered rule that is *false*
+     whenever the buffer is non-empty and the new record's fragment happens to
+     parse as a whole ClientHello on its own, so the decoder can no longer
+     discharge it without knowing the model's reassembly buffer.  The decoder is
+     shared by both roles (`Client.fst` and `Server.Network.fst` both call
+     `decode_network_buffer`), so this is not a server-local change.
+
+   That last point is the crux: **the server needs a concrete reassembly buffer
+   in its connection representation, tied by invariant to
+   `pending_cleartext_handshake` of the ghost model** -- exactly the plumbing the
+   client's protected buffer already has, which spans thirteen implementation
+   modules including `ConnectionState.Repr`, `ConnectionState.Network`,
+   `ConnectionState.Queries`, `ConnectionState.LocalHandshake`,
+   `System.WireStep` and `System.AppExtrasInv`.  Until that concrete buffer
+   exists, landing the spec mechanism alone would buy no capability while
+   weakening three proved pairing theorems, so the spec work was deliberately
+   **not** merged; it is preserved as a patch rather than carried as dead weight.
+
+   Order of work, when it is picked up: (1) concrete pending buffer in the
+   server representation plus its model-correspondence invariant; (2) the third
+   decoder outcome and a buffer-aware `network_input_wf`; (3) the spec
+   mechanism above; (4) the pairing-theorem hypotheses; (5) flip
+   `clienthello-across-two-records`, and add a three-record cell and an
+   over-cap cell to pin the boundaries.
+5. **G2 (secp256r1, then HelloRetryRequest).**  The largest; its surface was
+   counted rather than guessed -- `server_key_share_private` occurs 166 times in
+   27 modules, `server_key_share_public` 78 times in 20, and
+   `server_selected_group` 41 times in 11, because
+   `server_handshake_selection` is X25519-*shaped*, not merely X25519-valued.
+   Both
    `TLS13.Wire.Spec.clientHello_representable` and `IM.is_valid_client_hello`
    *require* an X25519 key share to be present, so P-256-only ClientHellos are
    rejected before negotiation is even reached; fixing that means generalising
