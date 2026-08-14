@@ -529,19 +529,51 @@ week's work.
      delta to parse as one record.  `raw_record_parse_success` would have to
      become "parses as one or more records".
 
-   So the *specification* is close to tractable.  The work that remains is on
-   the implementation side, and it is real:
-   `TLS13.Impl.Parser.fst`'s buffer decoder decides `NetworkBufferNeedMoreInput`
-   purely at record granularity (a short header, or a header whose fragment has
-   not fully arrived).  A complete record whose fragment is an *incomplete
-   handshake message* falls through to `NetworkBufferDecodeError`.  Supporting a
-   split needs a decoder pass that concatenates the fragments of consecutive
-   cleartext `Handshake` records before attempting `parse_tls_message`, a third
-   decoder outcome so the driver leaves those bytes uncommitted in the retained
-   buffer rather than erroring, and the `CT.network_input_wf` /
-   `received_tls_raw_delta_legal` obligations re-established for the
-   concatenated form.  That is a session's work in a 7,000-line Pulse module,
-   not a patch -- but it is engineering, not research.
+   **That measurement is a lower bound, and taking it for the whole cost would
+   be a mistake.**  Weakening a predicate can only disturb its *consumers*, and
+   two consumers is genuinely all there are.  But nothing in the tree yet
+   *produces* a two-record delta, so the probe never exercised the obligations
+   that arise on the producing side.  Those are where the actual obstacle is,
+   and it is structural:
+
+   * `TLS13.Spec.Endpoint.Wire.wire_message` carries a proof field
+     `wm_parse_ok : squash (parse_record_wire wm_raw == Some (ct, frag,
+     B.length wm_raw))` -- a wire message **is** exactly one record, by
+     construction.
+   * A network step is `server_step st0 (SM.WireEvent wire) st1`, consuming one
+     `wire_message`, and `TLS13.Impl.Server.CanonicalProtocol` discharges
+     `Seq.equal (CW.wire_serialize wire) consumed` for the consumed prefix.
+
+   One step therefore consumes exactly one record, and a ClientHello arriving in
+   two records has no way to become one step.  (`CS.protected_record_count` is
+   *not* the obstacle -- it is consulted only on the non-cleartext branch of
+   `network_message_raw_delta_legal`, so the cleartext ClientHello path never
+   reaches it.)
+
+   The way through is the one the client already uses, and it is worth copying
+   rather than inventing: `legal_protected_handshake_step` gives the client a
+   **buffering step** that takes delivery of a record and sets its plaintext
+   aside without interpreting it, so one record is still one step and the
+   message is emitted only when the reassembly buffer holds a whole one.  It is
+   explicitly gated `config_role == ClientEndpoint` and lives on the protected
+   path.  G3 is that mechanism built again for the server on the *cleartext*
+   path: a buffering event in the connection model, its reassembly buffer in
+   `hs_buffers`, and the exhaustive matches over `conn_event` in the state
+   machine and the `TLS13.System.*` pairing layer extended to carry it.
+
+   Only then does the implementation work matter -- and it is real too:
+   `TLS13.Impl.Parser.fst`'s buffer decoder decides
+   `NetworkBufferNeedMoreInput` purely at record granularity (a short header, or
+   a header whose fragment has not fully arrived).  A complete record whose
+   fragment is an *incomplete handshake message* falls through to
+   `NetworkBufferDecodeError`; it needs a third outcome so the driver leaves
+   those bytes uncommitted in the retained buffer instead of erroring.
+
+   So the original "this is a re-proof, not a patch" verdict stands, but for a
+   sharper reason than the mention-count that first suggested it: not because
+   the predicate is load-bearing in 18 modules, but because one-record-per-step
+   is an invariant of the System layer, and relaxing it means giving the server
+   the buffering event the client has.
 5. **G2 (secp256r1, then HelloRetryRequest).**  The largest.  Both
    `TLS13.Wire.Spec.clientHello_representable` and `IM.is_valid_client_hello`
    *require* an X25519 key share to be present, so P-256-only ClientHellos are
