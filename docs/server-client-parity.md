@@ -422,10 +422,10 @@ exit status fails the test independently of what the client concludes.
 
 ### P2. The server's capability surface is pinned -- `test-server-matrix`
 
-`test/unit/test_server_interop_matrix.c` drives OpenSSL clients across six
+`test/unit/test_server_interop_matrix.c` drives OpenSSL clients across seven
 axes -- cipher suites, key-exchange groups, signature schemes, the server's own
-credential, middlebox-compatibility mode, and framing -- and compares the
-observed outcome of every cell against a recorded expectation.
+credential, middlebox-compatibility mode, framing, and protocol version -- and
+compares the observed outcome of every cell against a recorded expectation.
 
 Two design decisions carry the value:
 
@@ -449,7 +449,16 @@ runs through the same proxy code and passes, which is what makes the
 `clienthello-across-two-records` failure attributable to record fragmentation
 rather than to the proxy.
 
-Current ledger (all twenty-eight cells agree; `cred` is the key the verified
+A third decision was added once the first three gaps closed: **a gap is
+recorded on more than one axis wherever it is claimed to be axis-independent.**
+G2 is a key-exchange gap and G3 a record-layer one, so neither should depend on
+the credential or the suite; `ecdsa-credential-p256-only` and
+`aes128-clienthello-across-two-records` say so as ledger entries rather than as
+prose.  A partial fix that closed a gap on only one axis -- P-256 that works for
+RSA credentials but not EC ones, say -- would otherwise look like a complete
+one.
+
+Current ledger (all thirty-four cells agree; `cred` is the key the verified
 server is started with):
 
 ```
@@ -466,6 +475,7 @@ p256-only                            rsa    refused   G2
 x25519-and-p256                      rsa    ok        X25519 selected
 aes128-x25519-and-p256               rsa    ok        G1: both agile axes at once
 p256-first-x25519-listed             rsa    refused   G2 (needs HelloRetryRequest)
+ecdsa-credential-p256-only           ecdsa  refused   G2 is independent of the credential axis
 rsa-pss-only                         rsa    ok        the RSA credential's scheme
 ecdsa-only-rsa-credential            rsa    refused   G5: RSA key cannot serve an ECDSA-only offer
 ecdsa-only                           ecdsa  ok        G5: ECDSA credential signs CertificateVerify
@@ -476,13 +486,28 @@ ecdsa-credential-aes128              ecdsa  ok        G5+G1
 ecdsa-credential-no-middlebox-compat ecdsa  ok        G5+G4
 ecdsa-credential-dribble             ecdsa  ok        G5: ECDSA through the retry loop
 ecdsa-credential-openssl-defaults    ecdsa  ok        G5: stock OpenSSL vs an EC server
+ecdsa-credential-x25519-and-p256     ecdsa  ok        G5 with two key shares on offer
+ecdsa-credential-aes-first-chacha-last ecdsa ok       G5 with the server's suite preference
+ecdsa-credential-aes128-no-middlebox-dribble ecdsa ok G5+G1+G4 and the retry loop at once
 no-middlebox-compat                  rsa    ok        G4: empty session id echoed verbatim
 no-middlebox-compat-aes128           rsa    ok        G4+G1: empty id and the fallback arm
 no-middlebox-compat-dribble          rsa    ok        G4: empty id through the retry loop
 no-middlebox-compat-x25519-and-p256  rsa    ok        G4: empty id with two key shares
 tcp-dribble                          rsa    ok        retained-buffer retry loop
 clienthello-across-two-records       rsa    refused   G3
+aes128-clienthello-across-two-records rsa   refused   G3 is independent of the suite axis
+tls12-only                           rsa    refused   correctly refused: no TLS 1.3 in supported_versions
 ```
+
+The last row is the one negative capability assertion that is not a gap.  The
+verified server implements exactly one protocol version, and
+`TLS13.Wire.Spec.clientHello_representable` requires the extension scan to have
+seen a `supported_versions` entry naming TLS 1.3, so a TLS 1.2 ClientHello is
+refused at the parser rather than downgraded.  The cell pins that: it fails if
+the server ever starts accepting an offer that does not name TLS 1.3.  It is
+also the reason the version axis exists at all -- every other cell pins the
+OpenSSL client to TLS 1.3 with `min == max`, so no cell can silently start
+succeeding for the wrong version.
 
 ### P3. The established connection keeps working -- existing tests
 
@@ -660,16 +685,74 @@ week's work.
    27 modules, `server_key_share_public` 78 times in 20, and
    `server_selected_group` 41 times in 11, because
    `server_handshake_selection` is X25519-*shaped*, not merely X25519-valued.
-   Both
-   `TLS13.Wire.Spec.clientHello_representable` and `IM.is_valid_client_hello`
-   *require* an X25519 key share to be present, so P-256-only ClientHellos are
-   rejected before negotiation is even reached; fixing that means generalising
-   the representability predicate, making `server_handshake_selection`
-   group-indexed through `C.kex_group`, and routing the server's ECDH through
-   `TLS13.KEX`.  HelloRetryRequest -- needed for `p256-first-x25519-listed`,
-   and a whole extra flight in the server state machine -- is a separate and
-   later step again.
 
-Until they are done, `clienthello-across-two-records`, `p256-only` and
-`p256-first-x25519-listed` stay recorded as `refused`, and the harness will
-fail if any of them starts succeeding by accident.
+   The surface was then also *mapped*, and the map is much more encouraging
+   than the count.  **Nothing in the crypto or key-exchange layer needs to
+   change.**  `TLS13.Crypto.Spec` already exports `kex_group`, `kex_public_len`,
+   `kex_public g`, `kex_public_from_private g`, `kex_shared g`, `pad_share_65` /
+   `unpad_share_65` and `lemma_kex_shared_agreement`; `TLS13.KEX` already
+   exports the runtime agile ECDH `kex_shared_runtime g sk pk65 out`; and
+   `TLS13.Crypto.p256_public_from_private` is already a binding the *client*
+   calls.  The model-level accessors are agile too:
+   `TLS13.Spec.StateMachine.client_hello_kex ch g`, `server_hello_kex sh`,
+   `negotiated_kex_group`, `start_kex_private/public`.  Every one of these was
+   built for the client, which already offers and completes P-256, and every
+   one of them is directly reusable by the server.
+
+   What is X25519-shaped is only the *server's own* four areas, and each has a
+   client-side template to copy:
+
+   * **Key generation** -- `TLS13.Impl.Server.Setup.fst:758` calls
+     `Crypto.x25519_public_from_private` into a 32-byte buffer.  The client's
+     `TLS13.Impl.ConnectionState.LocalHandshake.try_start_handshake` (~:139-161)
+     generates *both* pairs into a 32-byte private and a 65-byte public, and
+     stores them as two parallel fields.  This is additive: keep
+     `server_key_share_private/public` and add `server_p256_private/public`, so
+     the ~150 existing occurrences keep their meaning.
+   * **ECDH** -- `LocalHandshake.try_derive_server_shared_secret_from_private_array`
+     (~:5231) calls the raw `Crypto.x25519_shared_runtime` and reads the peer
+     share through the 32-byte-only `Sem.clientHello_key_share_x25519`.  The
+     client's `try_derive_shared_secret` (~:4950) already calls
+     `KEX.kex_shared_runtime` under a stored group tag; the server needs the
+     same shape, and the group-dependent obligations then have to be re-proved
+     through `Server.Keys.fst`.
+   * **ServerHello writer** -- `TLS13.Impl.Server.Send.fst:202` hard-codes
+     `GKE.group = GNG.X25519` and clamps the share to 32 bytes, and the
+     `90`/`95`/`122` byte-length lemmas are proved against that.  Encouragingly
+     the *storage* is already 65-byte padded (`:1345-1356`, with an explicit
+     `IM.server_hello_kex_group` field), and the output buffer is already sized
+     at run time as `90 + |session_id|`; the work is to make the base
+     `90 + (share_width - 32)` and the tag a parameter.
+   * **The ClientHello scan** -- `TLS13.Impl.Parser.scan_ch_key_share` (~:4287)
+     writes into a 32-byte vector via `probe_copy_x25519_key`, which stops at
+     the first X25519 entry and skips every other group; the server's stored
+     mirror `Repr.client_hello_slot_exactly` (~:891-923) is a single 32-byte
+     slot.  The client-facing `scan_sh_key_share` / `try_copy_kex_share`
+     (~:3776 / ~:3632) is *already* the agile version -- it accepts X25519 at 32
+     or Secp256r1 at 65 into a padded 65-byte buffer and returns the group tag.
+     Rewriting the ClientHello scan against that template, and generalising
+     `Wire.Spec.ch_extensions` / `kse_list_find_x25519` /
+     `clientHello_representable` from "find the first X25519 share" to "find the
+     first share at a group the server supports", is the deepest part.
+
+   So the honest shape of G2 is: two additive changes with working templates,
+   two invasive ones, and no new cryptography.  The single biggest obstacle is
+   that the server's *spec* invariants are monomorphically typed --
+   `server_key_share_private: option C.x25519_private` and
+   `x25519_public_from_private` / `x25519_shared` appear inside
+   `server_selection_key_share_consistent` and every downstream lemma in
+   `Server.Keys`, `ConnectionState.Lemmas` and `StateMachine.Correspondence` --
+   so the re-typing has to be carried through roughly a hundred proof sites.
+   The additive two-field pattern is what keeps that from being a rewrite.
+
+   HelloRetryRequest -- needed for `p256-first-x25519-listed`, and a whole
+   extra flight in the server state machine -- is a separate and later step
+   again.
+
+Until they are done, `clienthello-across-two-records`,
+`aes128-clienthello-across-two-records`, `p256-only`,
+`ecdsa-credential-p256-only` and `p256-first-x25519-listed` stay recorded as
+`refused`, and the harness will fail if any of them starts succeeding by
+accident.  The two duplicated rows are deliberate: they are what makes a
+*partial* fix -- one that closes a gap on one axis but not the other --
+distinguishable from a complete one.

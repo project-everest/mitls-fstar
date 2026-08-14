@@ -81,9 +81,12 @@ test plan.  Two standing gates keep it honest:
   can select.
 - `make test-server-matrix` -- the server's capability surface across cipher
   suites, key-exchange groups, signature schemes, the server's own credential
-  (RSA or ECDSA P-256), middlebox-compatibility mode and record/TCP framing.
-  Twenty-eight cells with two-sided expectations: a cell recorded as a gap
-  fails if it starts succeeding, so closing a gap must update the ledger.
+  (RSA or ECDSA P-256), middlebox-compatibility mode, record/TCP framing and
+  protocol version.  Thirty-four cells with two-sided expectations: a cell
+  recorded as a gap fails if it starts succeeding, so closing a gap must update
+  the ledger.  Gaps claimed to be independent of an axis are recorded twice
+  (`ecdsa-credential-p256-only`, `aes128-clienthello-across-two-records`) so
+  that a fix which closes one only on one axis is visible as such.
 
 Both are part of `make test`, and therefore of CI.
 

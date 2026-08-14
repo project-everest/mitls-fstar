@@ -118,6 +118,12 @@ struct case_spec {
   const char *expect_cipher;
   const char *expect_group;
   const char *note;
+  /* The single protocol version the OpenSSL client is pinned to (min == max),
+     as an OpenSSL version constant.  Every cell but the version-axis one is
+     TLS13_ONLY.  TLS1_2_VERSION produces a ClientHello with no
+     supported_versions entry naming TLS 1.3, which the verified server must
+     refuse -- it implements exactly one protocol version. */
+  int version;
 };
 
 /* ── The matrix ────────────────────────────────────────────────────────────
@@ -127,18 +133,20 @@ struct case_spec {
  */
 #define OK true
 #define FAIL false
+/* The protocol version every cell but the version-axis one offers. */
+#define TLS13_ONLY TLS1_3_VERSION
 
 static const struct case_spec k_cases[] = {
     /* --- Baseline: the profile the verified server implements. ----------- */
     {"baseline-chacha-x25519", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "the server's single supported profile"},
+     "the server's single supported profile", TLS13_ONLY},
 
     /* --- What a real peer actually offers. ------------------------------ */
     {"openssl-defaults", NULL, NULL, NULL, CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "OpenSSL's stock TLS 1.3 offer; the server must pick chacha out of it"},
+     "OpenSSL's stock TLS 1.3 offer; the server must pick chacha out of it", TLS13_ONLY},
 
     /* The verified CLIENT's own offer, transcribed.  This is the same shape
        test_atlas_loopback drives through the real client; having it here too
@@ -147,7 +155,7 @@ static const struct case_spec k_cases[] = {
      "TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256", "X25519:P-256",
      "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "the offer TLS13.Impl.ConnectionState.Repr.default_connection_config makes"},
+     "the offer TLS13.Impl.ConnectionState.Repr.default_connection_config makes", TLS13_ONLY},
 
     /* --- Cipher-suite axis. --------------------------------------------- */
     /* CLOSED (gap G1).  The server's negotiation is now the deterministic
@@ -160,30 +168,30 @@ static const struct case_spec k_cases[] = {
        requires only H.is_supported_cipher_suite. */
     {"aes128-only", "TLS_AES_128_GCM_SHA256", "X25519", "rsa_pss_rsae_sha256",
      CRED_RSA, true, FRAMING_NORMAL, OK, "TLS_AES_128_GCM_SHA256", "X25519",
-     "fallback arm of the negotiation policy: no chacha offered"},
+     "fallback arm of the negotiation policy: no chacha offered", TLS13_ONLY},
     {"aes256-only", "TLS_AES_256_GCM_SHA384", "X25519", "rsa_pss_rsae_sha256",
      CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "neither endpoint implements TLS_AES_256_GCM_SHA384 (SHA-384 schedule)"},
+     "neither endpoint implements TLS_AES_256_GCM_SHA384 (SHA-384 schedule)", TLS13_ONLY},
     /* Suite preference: chacha is offered but listed last.  The server selects
        by its own preference, not the client's, which RFC 8446 4.1.1 permits. */
     {"aes-first-chacha-last",
      "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256",
      "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "server preference wins: chacha selected though offered last"},
+     "server preference wins: chacha selected though offered last", TLS13_ONLY},
     /* The fallback arm again, but with the unsupported AES-256 listed first:
        exercises "skip what I cannot do, then fall back" rather than "the offer
        had exactly one entry". */
     {"aes256-then-aes128", "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256",
      "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
-     "AES-128-GCM selected past an unsupported AES-256-GCM offer"},
+     "AES-128-GCM selected past an unsupported AES-256-GCM offer", TLS13_ONLY},
     /* AES-128-GCM on the non-trivial framing path, so the fallback arm is
        covered end-to-end through the retry loop as well. */
     {"aes128-tcp-dribble", "TLS_AES_128_GCM_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_TCP_DRIBBLE, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
-     "AES-128-GCM record layer driven through the NeedMoreInput retry loop"},
+     "AES-128-GCM record layer driven through the NeedMoreInput retry loop", TLS13_ONLY},
 
     /* --- Key-exchange axis. --------------------------------------------- */
     /* The client offers, and can complete, secp256r1 (commit db6f7fb71).  The
@@ -193,33 +201,41 @@ static const struct case_spec k_cases[] = {
        outright any ClientHello with no X25519 key share. */
     {"p256-only", "TLS_CHACHA20_POLY1305_SHA256", "P-256",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "GAP: server has no secp256r1 ECDH and no HelloRetryRequest (client has P-256)"},
+     "GAP: server has no secp256r1 ECDH and no HelloRetryRequest (client has P-256)", TLS13_ONLY},
     {"x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256", "X25519:P-256",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "two key shares offered; the server takes the X25519 one"},
+     "two key shares offered; the server takes the X25519 one", TLS13_ONLY},
     /* Both agile axes at once: AES-128-GCM selected while two key shares are
        on offer.  Guards against a regression where the suite fallback is only
        reachable on the single-key-share path. */
     {"aes128-x25519-and-p256", "TLS_AES_128_GCM_SHA256", "X25519:P-256",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
-     "suite fallback and key-share choice exercised together"},
+     "suite fallback and key-share choice exercised together", TLS13_ONLY},
     /* P-256 listed first makes OpenSSL send its key_share for P-256 only and
        list X25519 in supported_groups, which a server without
        HelloRetryRequest cannot use. */
     {"p256-first-x25519-listed", "TLS_CHACHA20_POLY1305_SHA256",
      "P-256:X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL,
-     NULL, "GAP: needs HelloRetryRequest to ask for the X25519 share"},
+     NULL, "GAP: needs HelloRetryRequest to ask for the X25519 share", TLS13_ONLY},
+    /* The same gap under a different credential.  G2 is a key-exchange gap, so
+       it must not depend on the signature axis; recording it twice is what
+       makes a future partial fix (P-256 that only works for RSA, say) visible
+       rather than silently accepted. */
+    {"ecdsa-credential-p256-only", "TLS_CHACHA20_POLY1305_SHA256", "P-256",
+     "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, FAIL,
+     NULL, NULL,
+     "GAP (G2): the key-exchange gap is independent of the credential axis", TLS13_ONLY},
 
     /* --- Signature-scheme axis. ----------------------------------------- */
     {"rsa-pss-only", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "the scheme the RSA test credential is signed under"},
+     "the scheme the RSA test credential is signed under", TLS13_ONLY},
     {"ecdsa-only-rsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "ecdsa_secp256r1_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "correctly refused: an RSA credential cannot satisfy an ECDSA-only offer"},
+     "correctly refused: an RSA credential cannot satisfy an ECDSA-only offer", TLS13_ONLY},
 
     /* --- Credential axis (gap G5). --------------------------------------
      *
@@ -238,38 +254,58 @@ static const struct case_spec k_cases[] = {
     {"ecdsa-only", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "ECDSA P-256 credential signs CertificateVerify under ecdsa_secp256r1_sha256"},
+     "ECDSA P-256 credential signs CertificateVerify under ecdsa_secp256r1_sha256", TLS13_ONLY},
     {"rsa-pss-only-ecdsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, FAIL, NULL,
      NULL,
-     "correctly refused: an ECDSA credential cannot satisfy an RSA-only offer"},
+     "correctly refused: an ECDSA credential cannot satisfy an RSA-only offer", TLS13_ONLY},
     /* Both schemes offered: the server picks the one its own key supports,
        which is the whole point of making the scheme follow the credential. */
     {"both-sigalgs-ecdsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true,
      FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "ECDSA selected out of a two-scheme offer because the credential is EC"},
+     "ECDSA selected out of a two-scheme offer because the credential is EC", TLS13_ONLY},
     {"both-sigalgs-rsa-credential", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256:ecdsa_secp256r1_sha256", CRED_RSA, true,
      FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "same offer, RSA credential: the other arm of the same negotiation"},
+     "same offer, RSA credential: the other arm of the same negotiation", TLS13_ONLY},
     /* The credential axis crossed with the other closed gaps, so an ECDSA
        credential is not quietly confined to the baseline profile. */
     {"ecdsa-credential-aes128", "TLS_AES_128_GCM_SHA256", "X25519",
      "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
-     "ECDSA credential with the AES-128-GCM fallback arm (gap G1)"},
+     "ECDSA credential with the AES-128-GCM fallback arm (gap G1)", TLS13_ONLY},
     {"ecdsa-credential-no-middlebox-compat", "TLS_CHACHA20_POLY1305_SHA256",
      "X25519", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, false,
      FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "ECDSA credential with an empty legacy_session_id echo (gap G4)"},
+     "ECDSA credential with an empty legacy_session_id echo (gap G4)", TLS13_ONLY},
     {"ecdsa-credential-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_TCP_DRIBBLE, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "ECDSA CertificateVerify driven through the NeedMoreInput retry loop"},
+     "ECDSA CertificateVerify driven through the NeedMoreInput retry loop", TLS13_ONLY},
     {"ecdsa-credential-openssl-defaults", NULL, NULL, NULL, CRED_ECDSA_P256,
      true, FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "a stock OpenSSL client against an ECDSA-credentialled verified server"},
+     "a stock OpenSSL client against an ECDSA-credentialled verified server", TLS13_ONLY},
+    /* The credential axis crossed with the remaining two negotiation axes, so
+       that "the scheme follows the credential" cannot silently become "the
+       scheme follows the credential, but only when nothing else varies". */
+    {"ecdsa-credential-x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256",
+     "X25519:P-256", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true,
+     FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ECDSA credential while two key shares are on offer", TLS13_ONLY},
+    {"ecdsa-credential-aes-first-chacha-last",
+     "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256",
+     "X25519", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL,
+     OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "ECDSA credential with the server's own suite preference exercised", TLS13_ONLY},
+    /* All three closed gaps at once: ECDSA credential (G5), the AES-128-GCM
+       fallback arm (G1) and the empty legacy_session_id echo (G4), on the
+       retry loop (framing).  If any one of them is only reachable when the
+       others are at their default, this cell is the one that says so. */
+    {"ecdsa-credential-aes128-no-middlebox-dribble", "TLS_AES_128_GCM_SHA256",
+     "X25519", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, false,
+     FRAMING_TCP_DRIBBLE, OK, "TLS_AES_128_GCM_SHA256", "X25519",
+     "gaps G1, G4 and G5 crossed with the NeedMoreInput retry loop", TLS13_ONLY},
 
     /* --- Middlebox-compatibility axis (RFC 8446 D.4). -------------------- */
     /* CLOSED (gap G4).  With compatibility mode off OpenSSL sends an EMPTY
@@ -286,31 +322,51 @@ static const struct case_spec k_cases[] = {
     {"no-middlebox-compat", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "empty legacy_session_id echoed verbatim: a 90-byte ServerHello"},
+     "empty legacy_session_id echoed verbatim: a 90-byte ServerHello", TLS13_ONLY},
     /* The empty-id path crossed with the two other agile axes, so a regression
        that reintroduced a fixed-width echo cannot hide behind the compat case
        on any one of them. */
     {"no-middlebox-compat-aes128", "TLS_AES_128_GCM_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
-     "empty session id and the AES-128-GCM fallback arm together"},
+     "empty session id and the AES-128-GCM fallback arm together", TLS13_ONLY},
     {"no-middlebox-compat-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_TCP_DRIBBLE, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "empty session id driven through the NeedMoreInput retry loop"},
+     "empty session id driven through the NeedMoreInput retry loop", TLS13_ONLY},
     {"no-middlebox-compat-x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256",
      "X25519:P-256", "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "empty session id with two key shares on offer"},
+     "empty session id with two key shares on offer", TLS13_ONLY},
 
     /* --- Framing axis. --------------------------------------------------- */
     {"tcp-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_TCP_DRIBBLE, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "one record split across many TCP segments: the NeedMoreInput retry loop"},
+     "one record split across many TCP segments: the NeedMoreInput retry loop", TLS13_ONLY},
     {"clienthello-across-two-records", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT, FAIL, NULL, NULL,
-     "GAP: no server-side cross-record handshake reassembly (the client has it)"},
+     "GAP: no server-side cross-record handshake reassembly (the client has it)", TLS13_ONLY},
+    /* G3 is a record-layer gap, so it must not depend on the suite axis
+       either.  Same reasoning as ecdsa-credential-p256-only above. */
+    {"aes128-clienthello-across-two-records", "TLS_AES_128_GCM_SHA256",
+     "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT,
+     FAIL, NULL, NULL,
+     "GAP (G3): the reassembly gap is independent of the cipher-suite axis", TLS13_ONLY},
+
+    /* --- Protocol-version axis. ------------------------------------------
+     *
+     * The verified server implements exactly one protocol version.  A TLS 1.2
+     * ClientHello carries no supported_versions extension naming TLS 1.3, and
+     * TLS13.Wire.Spec.clientHello_representable requires the scan to have seen
+     * one (`saw_supported_versions`), so the ClientHello is refused at the
+     * parser rather than downgraded.  This cell is a negative capability
+     * assertion: it fails loudly if the server ever starts accepting an offer
+     * that does not name TLS 1.3. */
+    {"tls12-only", NULL, NULL, NULL, CRED_RSA, true, FRAMING_NORMAL, FAIL,
+     NULL, NULL,
+     "correctly refused: no supported_versions entry naming TLS 1.3",
+     TLS1_2_VERSION},
 };
 
 #define CASE_COUNT (sizeof k_cases / sizeof k_cases[0])
@@ -667,8 +723,8 @@ static int run_openssl_client(const struct case_spec *spec, uint16_t port,
   if (ctx == NULL) {
     goto done;
   }
-  if (SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) != 1 ||
-      SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) != 1 ||
+  if (SSL_CTX_set_min_proto_version(ctx, spec->version) != 1 ||
+      SSL_CTX_set_max_proto_version(ctx, spec->version) != 1 ||
       SSL_CTX_load_verify_locations(ctx, ca_path, NULL) != 1) {
     goto done;
   }
