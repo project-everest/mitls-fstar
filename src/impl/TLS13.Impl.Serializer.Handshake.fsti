@@ -328,6 +328,18 @@ val lemma_ch_key_share (rnd sni ks pks sid: B.bytes)
                     LL.length cs <= 16 /\ LL.length sa <= 16)
           (ensures Sem.clientHello_key_share_x25519 (poc_canonical_ch rnd sni ks pks sid cs sa) == Some (ks <: Seq.seq U8.t))
 
+(* Mirror of [lemma_ch_key_share] at the second offered group.  The canonical
+   ClientHello's key_share extension carries two KeyShareEntry values --
+   X25519 then secp256r1 (see [CM.cho_ks_ext]) -- so the secp256r1 finder
+   returns the 65-byte uncompressed point. *)
+val lemma_ch_p256_key_share (rnd sni ks pks sid: B.bytes)
+  (cs: GCH.clientHello_cipher_suites)
+  (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length pks == 65 /\ Seq.length sid == 32 /\
+                    1 <= Seq.length sni /\ Seq.length sni <= 255 /\
+                    LL.length cs <= 16 /\ LL.length sa <= 16)
+          (ensures Sem.clientHello_key_share_secp256r1 (poc_canonical_ch rnd sni ks pks sid cs sa) == Some (pks <: Seq.seq U8.t))
+
 val lemma_ch_cipher_suites (rnd sni ks pks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)
   (sa: GECH.extensionClientHello_extension_data_signature_algorithms)

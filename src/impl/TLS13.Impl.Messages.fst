@@ -542,16 +542,22 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
       (match Sem.clientHello_key_share_x25519 m with
        | Some k -> B.length k == 32 /\ Seq.equal key_share k
        | None -> False) /\
-      (* One-directional on purpose: the flag promises the stored bytes are the
-         peer's secp256r1 offer, but nothing yet promises the flag is set
-         whenever the peer made one.  Strengthening this to an iff, and turning
-         the X25519 clause just above into a disjunction over the two, is what
-         actually widens the accepted set -- see docs/server-p256-plan.md S6. *)
-      (if l.client_hello_has_p256_key_share
-       then (match Sem.clientHello_key_share_secp256r1 m with
-             | Some k -> B.length k == 65 /\ Seq.equal p256_key_share k
-             | None -> False)
-       else True) /\
+      (* An iff: the flag is set exactly when the peer offered a well-formed
+         (65-byte, uncompressed-point) secp256r1 share, and when it is set the
+         stored bytes are that share.  A secp256r1 KeyShareEntry of any other
+         length is treated as no offer at all rather than as a parse failure,
+         which is what the RFC 8446 4.2.8 "ignore unrecognised/unusable groups"
+         reading requires -- the peer may legitimately offer several groups.
+
+         The X25519 clause just above is still `| None -> False`, so an offer
+         recorded here is not yet an offer the server will act on; turning that
+         clause into a disjunction over the two groups is what widens the
+         accepted set -- see docs/server-p256-plan.md S6. *)
+      (match Sem.clientHello_key_share_secp256r1 m with
+       | Some k ->
+         l.client_hello_has_p256_key_share == (B.length k = 65) /\
+         (B.length k == 65 ==> Seq.equal p256_key_share k)
+       | None -> l.client_hello_has_p256_key_share == false) /\
       cipher_suites_match
         cipher_suites
         (SZ.v l.client_hello_cipher_suites_len)

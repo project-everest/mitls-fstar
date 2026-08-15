@@ -880,6 +880,15 @@ fn mark_received_client_hello
   V.to_vec_pts_to lch.IM.client_hello_key_share;
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
 
+  V.to_array_pts_to lch.IM.client_hello_p256_key_share;
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
+  Arr.memcpy
+    65sz
+    (V.vec_to_array lch.IM.client_hello_p256_key_share)
+    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_p256_key_share);
+  V.to_vec_pts_to lch.IM.client_hello_p256_key_share;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
+
   V.to_array_pts_to lch.IM.client_hello_cipher_suites;
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
   Arr.memcpy
@@ -944,6 +953,7 @@ fn mark_received_client_hello
   with stored_random. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_random stored_random);
   with stored_server_name. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_server_name stored_server_name);
   with stored_key_share. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_key_share stored_key_share);
+  with stored_p256_key_share. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share stored_p256_key_share);
   with stored_cipher_suites. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_cipher_suites stored_cipher_suites);
   with stored_signature_schemes. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes stored_signature_schemes);
 
@@ -956,6 +966,9 @@ fn mark_received_client_hello
   assert (pure (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
     | Some k -> B.length k == 32 /\ Seq.equal stored_key_share k
     | None -> False));
+  assert (pure (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+    | Some k -> B.length k == 65 ==> Seq.equal stored_p256_key_share k
+    | None -> True));
   assert (pure (IM.cipher_suites_match
     stored_cipher_suites
     (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)))

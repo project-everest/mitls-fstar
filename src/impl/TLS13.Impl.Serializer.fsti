@@ -476,6 +476,7 @@ fn serialize_client_hello_from_start
                   cipher_suites cipher_suites_len
                   signature_schemes signature_schemes_len
                   old_present old_l_random old_l_session_id old_l_server_name old_l_key_share
+                  old_l_p256_key_share
                   old_l_cipher_suites old_l_signature_schemes
                   old_client_hello_bytes_len old_client_hello_bytes old_network_out.
           V.pts_to start_random random **
@@ -492,6 +493,7 @@ fn serialize_client_hello_from_start
           V.pts_to l.L.client_hello_session_id old_l_session_id **
           V.pts_to l.L.client_hello_server_name old_l_server_name **
           V.pts_to l.L.client_hello_key_share old_l_key_share **
+          V.pts_to l.L.client_hello_p256_key_share old_l_p256_key_share **
           V.pts_to l.L.client_hello_cipher_suites old_l_cipher_suites **
           V.pts_to l.L.client_hello_signature_schemes old_l_signature_schemes **
           V.pts_to client_hello_bytes old_client_hello_bytes **
@@ -508,6 +510,7 @@ fn serialize_client_hello_from_start
                 V.is_full_vec l.L.client_hello_session_id /\
                 V.is_full_vec l.L.client_hello_server_name /\
                 V.is_full_vec l.L.client_hello_key_share /\
+                V.is_full_vec l.L.client_hello_p256_key_share /\
                 V.is_full_vec l.L.client_hello_cipher_suites /\
                 V.is_full_vec l.L.client_hello_signature_schemes /\
                 V.is_full_vec client_hello_bytes /\
@@ -521,6 +524,7 @@ fn serialize_client_hello_from_start
                 V.length l.L.client_hello_session_id == 32 /\
                 V.length l.L.client_hello_server_name == L.max_server_name_len /\
                 V.length l.L.client_hello_key_share == 32 /\
+                V.length l.L.client_hello_p256_key_share == 65 /\
                 V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
                 V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
                 V.length client_hello_bytes == 8192 /\
@@ -533,6 +537,7 @@ fn serialize_client_hello_from_start
                 B.length old_l_session_id == 32 /\
                 B.length old_l_server_name == L.max_server_name_len /\
                 B.length old_l_key_share == 32 /\
+                B.length old_l_p256_key_share == 65 /\
                 Seq.length old_l_cipher_suites == L.max_cipher_suites /\
                 Seq.length old_l_signature_schemes == L.max_signature_schemes /\
                 B.length old_client_hello_bytes == 8192 /\
@@ -584,6 +589,7 @@ fn serialize_client_hello_from_start
           V.pts_to l.L.client_hello_session_id random **
           V.pts_to l.L.client_hello_server_name server_name **
           V.pts_to l.L.client_hello_key_share key_share **
+          V.pts_to l.L.client_hello_p256_key_share (Ghost.reveal pks) **
           V.pts_to l.L.client_hello_cipher_suites cipher_suites **
           V.pts_to l.L.client_hello_signature_schemes signature_schemes **
           V.pts_to client_hello_bytes handshake_bytes **
@@ -599,6 +605,7 @@ fn serialize_client_hello_from_start
                V.is_full_vec l.L.client_hello_session_id /\
                V.is_full_vec l.L.client_hello_server_name /\
                V.is_full_vec l.L.client_hello_key_share /\
+               V.is_full_vec l.L.client_hello_p256_key_share /\
                V.is_full_vec l.L.client_hello_cipher_suites /\
                V.is_full_vec l.L.client_hello_signature_schemes /\
                V.is_full_vec client_hello_bytes /\
@@ -612,6 +619,7 @@ fn serialize_client_hello_from_start
                V.length l.L.client_hello_session_id == 32 /\
                V.length l.L.client_hello_server_name == L.max_server_name_len /\
                V.length l.L.client_hello_key_share == 32 /\
+               V.length l.L.client_hello_p256_key_share == 65 /\
                V.length l.L.client_hello_cipher_suites == L.max_cipher_suites /\
                V.length l.L.client_hello_signature_schemes == L.max_signature_schemes /\
                V.length client_hello_bytes == 8192 /\
@@ -646,6 +654,9 @@ fn serialize_client_hello_from_start
                  (Sem.clientHello_server_name (Ghost.reveal ch)) /\
                (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
                 | Some k -> B.length k == 32 /\ Seq.equal key_share k
+                | None -> False) /\
+               (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+                | Some k -> B.length k == 65 /\ Seq.equal (Ghost.reveal pks) k
                 | None -> False) /\
                L.cipher_suites_match
                  cipher_suites

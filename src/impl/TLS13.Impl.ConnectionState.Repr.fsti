@@ -906,14 +906,13 @@ let client_hello_slot_exactly
     V.pts_to l.IM.client_hello_session_id session_id **
     V.pts_to l.IM.client_hello_server_name server_name **
     V.pts_to l.IM.client_hello_key_share key_share **
-    (* Storage only, for now.  The slot's [IM.client_hello] struct is allocated
-       once and its scalar fields cannot be rewritten -- the same reason the
-       session-id width lives in a metadata box rather than in the struct -- so
-       [client_hello_has_p256_key_share] cannot be constrained from here.  When
-       the parser starts filling this slot the flag becomes a box beside the
-       other metadata and its meaning is stated there; see
-       docs/server-p256-plan.md.  [IM.is_valid_client_hello] does carry the
-       meaning already, because the structs it describes are built fresh. *)
+    (* The slot's [IM.client_hello] struct is allocated once and its scalar
+       fields cannot be rewritten -- the same reason the session-id width lives
+       in a metadata box -- so the struct's own
+       [client_hello_has_p256_key_share] flag says nothing here.  Whether the
+       peer offered a usable secp256r1 share is instead a property of the spec
+       message, and the runtime reads it off the [client_hello_kex_group]
+       metadata box; the bytes are constrained below. *)
     V.pts_to l.IM.client_hello_p256_key_share p256_key_share **
     V.pts_to l.IM.client_hello_cipher_suites cipher_suites **
     V.pts_to l.IM.client_hello_signature_schemes signature_schemes **
@@ -952,6 +951,14 @@ let client_hello_slot_exactly
               (match Sem.clientHello_key_share_x25519 m with
                | Some k -> B.length k == 32 /\ Seq.equal key_share k
                | None -> False) /\
+              (* The peer's secp256r1 offer, when it made a usable one.  Stated
+                 as a property of the message rather than of a struct scalar, so
+                 no flag has to be rewritten when a ClientHello is stored; an
+                 entry at any length other than 65 is no offer at all (RFC 8446
+                 4.2.8), and places no demand on the mirror. *)
+              (match Sem.clientHello_key_share_secp256r1 m with
+               | Some k -> B.length k == 65 ==> Seq.equal p256_key_share k
+               | None -> True) /\
               IM.cipher_suites_match
                 cipher_suites
                 (SZ.v (client_hello_cipher_suites_len_for m))

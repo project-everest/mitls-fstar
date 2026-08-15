@@ -2729,6 +2729,13 @@ fn try_send_client_hello
          cipher_suites cipher_suites_len
          signature_schemes signature_schemes_len
          handshake_bytes network_out_bytes handshake_len. _;
+    // The client offers two groups, so its own mirror carries both shares; the
+    // serializer fills the secp256r1 slot from start_client_p256_public exactly
+    // as it fills the X25519 one.
+    assert (pure (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+      | Some k -> B.length k == 65 /\
+                  Seq.equal (Ghost.reveal pks_g) k
+      | None -> False));
 
     assert (pure (B.length network_out_bytes == SZ.v network_out_len));
     assert (pure (SZ.v written <= B.length network_out_bytes));
