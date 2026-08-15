@@ -863,6 +863,53 @@ state a *size*.
 Files touched: `Impl.Serializer.Handshake.fsti/.fst`, `Impl.Serializer.fsti/.fst`,
 `Impl.Serializer.ServerHello.fsti/.fst`, `Impl.Server.Send.fst`.
 
+### S6.7b — the next capability-neutral stage, specified at line level
+
+S6.7 generalised the *spec-level* size arithmetic.  The Pulse write chain above
+it is still pinned, and it can be pre-staged the same way: give it a runtime
+share width and have every caller pass `32sz`.  That is capability-neutral, and
+it retires the last runtime-length question before the flip.
+
+The chain, bottom to top:
+
+| # | declaration | file |
+| --- | --- | --- |
+| 1 | `poc_sh_mid`, `lemma_sh_conv_fwd`, `lemma_canonical_random/_session_id/_cs`, `lemma_ks_ext_conv`, `lemma_sh_handshake_conv_fwd` | `Impl.Serializer.Handshake.fst:449,465,742,754,759,766,784` |
+| 2 | `serialize_server_hello_handshake_poc` | `Impl.Serializer.Handshake.fsti:259`, `.fst:794` |
+| 3 | `serialize_server_hello_handshake` and its `_poc` wrapper | `Impl.Serializer.fsti:312,349`, `.fst:1527,1567` |
+| 4 | `serialize_server_hello*` | `Impl.Serializer.ServerHello.fsti:40,77`, `.fst:39,81` |
+| 5 | `serialize_server_hello_from_selection` and `fragment_len` | `Impl.Server.Send.fst:1158` and its `.fsti` |
+
+The uniform edit at every level:
+
+* add `(g: GNG.namedGroup)` (ghost above level 2, since the group tag is erased
+  at run time) and `(ks_len: SZ.t)` (concrete from level 2 up);
+* `Seq.length ks == 32` becomes `SZ.v ks_len == Seq.length ks /\ 32 <= SZ.v ks_len /\ SZ.v ks_len <= 65`;
+* `SZ.v out_len == 90 + Seq.length sid` becomes `SZ.v out_len == 58 + SZ.v ks_len + Seq.length sid`;
+* every caller passes `GNG.X25519` and `32sz`, so all forty numeric sites still
+  derive `90 + |sid|` and the matrix cannot move.
+
+Two things in the body of `serialize_server_hello_handshake_poc`
+(`Impl.Serializer.Handshake.fst:794-975`) are genuinely X25519-shaped and are
+the real content of the stage:
+
+* `Seq.lemma_eq_elim key_share (CryptoSpec.pad_share_65 (reveal ks))` followed
+  by `assert (pure (Seq.equal (Seq.slice key_share 0 32) (reveal ks)))` — the
+  `32` becomes `SZ.v ks_len`, and the `alloc_copy_vec_exact` of the share must
+  copy `ks_len` bytes rather than `32sz`.  The mirror is already a 65-byte vec,
+  so nothing widens; only the prefix width becomes a variable.
+* `lemma_canonical_key_share` (`:742`) concludes through
+  `Sem.serverHello_key_share_x25519`, which is group-specific by construction.
+  It should stay pinned at X25519 in this stage and move to
+  `Sem.serverHello_key_share_bytes` / `serverHello_key_share_group` (both of
+  which already exist, `Wire.Semantics.fst:239,247`) at the flip, when its
+  consumers move too.
+
+After S6.7b the flip reduces to: the acceptance gate (the 169 `ch_extensions`
+occurrences, which is then the only large item left), the ECDH's specification,
+`Setup.fst`'s seven selection builders, the configured group list and the three
+named pins, and the ledger.
+
 ### S6 as re-measured — what is left is one atomic commit
 
 With S6.1-S6.5 landed, the remaining work is genuinely indivisible, and the
