@@ -652,11 +652,35 @@ needs, exactly mirroring `lemma_reveal_kse_list_find_x25519_nil` / `_cons`
 both groups and returns the group it found, so the entry-level copy is done; the
 new work is the list walk and its `list_drop` invariant.
 
-> **Measured risk.**  `scan_ch_extensions:4443` carries
-> `--z3rlimit 800 --fuel 2 --ifuel 2 --restart-solver` and returns an 8-tuple.
-> S6.2 makes it a 10-tuple (P-256 vec + found flag).  Budget this as the single
-> most expensive item in S6, and land it *before* touching representability so
-> that a failure here costs nothing else.
+> **Do not widen `scan_ch_extensions`.**  It carries
+> `--z3rlimit 800 --fuel 2 --ifuel 2 --restart-solver`, returns an 8-tuple, and
+> its loop invariant threads nine mutable references plus three ghost
+> accumulators through a four-way extension dispatch.  Adding a ninth and tenth
+> component means re-proving all of that.
+>
+> Take a **second, standalone pass** over the same extension list instead:
+>
+> ```
+> fn scan_ch_p256_key_share
+>   (ext_lo: GCH.clientHello_extensions_lowtype)
+>   (#cext: Ghost.erased GCH.clientHello_extensions_mid)
+>   requires  PPVCL.vmatch_vclist ... ext_lo cext
+>   returns   res: (V.vec U8.t & bool)
+>   ensures   PPVCL.vmatch_vclist ... ext_lo cext ** exists* kb.
+>             V.pts_to (fst res) kb ** pure (Seq.length kb == 65 /\ ...)
+> ```
+>
+> This is legitimate rather than a workaround: `clientHello_key_share_secp256r1`
+> is *specified* as an independent walk (`Wire.Semantics.fst:147-156`), not as a
+> component of the commit-first `ch_extensions` scan, so a separate pass matches
+> the specification's own structure and its proof obligation is a single arm
+> rather than a fifth thread through a four-way dispatch.  The cost is one extra
+> O(n) pass over an extension list bounded by the record size.
+>
+> The walker needs `RV.reveal_ch_find_key_share_secp256r1` with nil/cons
+> lemmas, the two `kse_list_find_secp256r1` reveal lemmas of S6.1, and a
+> `probe_copy_p256_key` beside `probe_copy_x25519_key:3683`.  Land all of it
+> *before* touching representability, so a failure here costs nothing else.
 
 **S6.3 — the acceptance gate.**  `clientHello_representable:472` becomes
 
