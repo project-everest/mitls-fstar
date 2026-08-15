@@ -624,6 +624,97 @@ selection has a private key" is a group-independent fact.
 `p256-first-x25519-listed` **stays `refused`**: it needs HelloRetryRequest,
 which is a separate flight in the server state machine and is out of scope here.
 
+### S6 as measured (after S4/S5, commit `c02ab1b13`)
+
+**There is no partial credit in S6.**  A `p256-only` ClientHello is blocked at
+five independent points, and *all five* must move before any cell flips:
+
+| # | blocker | site |
+| --- | --- | --- |
+| 1 | the parse gate demands an X25519 share | `Wire.Spec.clientHello_representable:472` and its Parser mirror |
+| 2 | the concrete mirror's invariant demands one too | `Impl.Messages.is_valid_client_hello:542` (`\| None -> False`) |
+| 3 | the configured groups are X25519-only | `Impl.ConnectionState.Repr.fsti` `server_supported_groups` |
+| 4 | the ServerHello writer emits `GNG.X25519` and a 32-byte share | `Impl.ConnectionState.Model.fsti` `server_hello_of_selection` |
+| 5 | the ECDH is `x25519_shared` | `Impl.ConnectionState.LocalHandshake.fst` |
+
+So S6 cannot be staged capability-neutrally the way S1-S5 were.  It is one
+commit, and the order below is the dependency order.
+
+**S6.1 — the secp256r1 finder's reveal lemmas.**
+`Sem.kse_list_find_secp256r1` / `ch_find_key_share_secp256r1` /
+`clientHello_key_share_secp256r1` already exist (`Wire.Semantics.fst:138-156`,
+landed in S1).  What is missing is the pair of reveal lemmas the Pulse scanner
+needs, exactly mirroring `lemma_reveal_kse_list_find_x25519_nil` / `_cons`
+(`Wire.Spec.Reveal.Handshake.fsti:138-145`, bodies `= ()` at `.fst:77-79`).
+
+**S6.2 — the scanner.**  Mirror `Impl.Parser.scan_ch_key_share:4287-4440` as a
+65-byte `scan_ch_p256_key_share`.  `try_copy_kex_share:3632` already handles
+both groups and returns the group it found, so the entry-level copy is done; the
+new work is the list walk and its `list_drop` invariant.
+
+> **Measured risk.**  `scan_ch_extensions:4443` carries
+> `--z3rlimit 800 --fuel 2 --ifuel 2 --restart-solver` and returns an 8-tuple.
+> S6.2 makes it a 10-tuple (P-256 vec + found flag).  Budget this as the single
+> most expensive item in S6, and land it *before* touching representability so
+> that a failure here costs nothing else.
+
+**S6.3 — the acceptance gate.**  `clientHello_representable:472` becomes
+
+```
+| Some (server_name, key_share, _, sig_schemes) ->
+  (Some? key_share || ch_offers_p256_share b) && ...
+```
+
+with `ch_offers_p256_share b = (match Sem.clientHello_key_share_secp256r1 b with
+Some k -> B.length k = 65 | None -> false)`.
+
+> **This deliberately does not change `ch_extensions`' arity.**  The S2
+> measurement (169 occurrences, 62 in `Impl.Parser.fst` and 51 in
+> `Wire.Spec.Reveal.Handshake.fst(i)`) was the cost of a *fifth tuple
+> component*.  Reading the P-256 offer straight off the message with a
+> `Sem.*` accessor, rather than threading it through the commit-first scan,
+> avoids that cost entirely: the scan's four components keep their meaning and
+> every one of the 169 sites is untouched.
+
+`is_valid_client_hello:542` then turns its X25519 clause into a disjunction and
+its P-256 clause into an iff.  Per finding R8 this needs
+`client_hello_has_p256_key_share` *and* a new `has_x25519_key_share` to live in
+metadata `Box`es, not in the `IM.client_hello` struct: the slot invariant
+describes a struct allocated once whose scalars are never rewritten.
+
+**S6.4 — the writer.**  `server_hello_of_selection` builds at
+`CS.server_selected_kex_group sel`, taking its share from
+`CS.server_kex_public sel (CS.server_selected_kex_group sel)`; `valid_selection`
+drops its third conjunct.  `lemma_server_hello_of_selection_bytesize` becomes
+`58 + |ks| + |sid|`, so `90 + |sid|` and `95 + |sid|` become runtime lengths.
+
+Measured: **35 numeric sites in 8 files** —
+`Impl.ConnectionState.Model.fst:504,517,540`,
+`Impl.ConnectionState.Model.fsti:809,823,830`,
+`Impl.Serializer.fst:1527,1561`,
+`Impl.Serializer.Handshake.fst:517,798`,
+`Impl.Serializer.ServerHello.fst:39,75`,
+`Impl.Server.Driver.BufferedHandshake.fst:699,701,1247,1252,1310,1409`,
+`Impl.Server.fst:798,880,961,2674,2915,3218`,
+`Impl.Server.Send.fst:250,269,335,358,533,539,542,610,652,1075,1409,1508`.
+
+The runtime recovers the length the same way G1 recovers the cipher suite and
+G4 recovers the session-id width: as a function of the stored ClientHello, via a
+new `CM.server_selected_group` policy beside `CM.server_selected_suite`.  No new
+driver payload and no new connection-state field is needed.
+
+**S6.5 — the ECDH.**  `KEX.kex_shared_runtime g`, following the client template
+at `Impl.ConnectionState.LocalHandshake.fst:4801`, padding with
+`CryptoSpec.pad_share_65`.
+
+**S6.6 — turn it on.**  `server_supported_groups` to
+`[T.X25519; T.Secp256r1]`, policy "prefer X25519 when offered, else P-256" (so
+`make test-atlas-loopback` keeps selecting X25519), then **delete
+`CR.server_selection_group_pinned`** and every conjunct that mentions it
+(`Model.fsti` `valid_selection`, `Impl.Server.Types` × 4, `LocalHandshake`,
+`Server.Keys`, `Server`, `Queries`, `Server.Schedule`, `Server.Setup`,
+`Server.Send`), and flip the two ledger cells.
+
 ---
 
 ## 8. Risk register
