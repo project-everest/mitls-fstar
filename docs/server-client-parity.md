@@ -756,6 +756,28 @@ week's work.
    can be abandoned at any stage with the gate still green and no theorem
    weakened.  That file also carries the same treatment of G3.
 
+   **Stage S1 has landed** (`c909c4b8b`).  `server_handshake_selection` now
+   carries `server_p256_private` / `server_p256_public` beside the X25519 pair,
+   and `server_selection_key_share_consistent` is a two-clause, group-indexed
+   statement.  Three invariants -- `server_selected_client_hello_reachable_shape`
+   and both `server_x25519_*_projection`s -- now carry the group-indexed reading
+   rather than only the X25519 one.  The accessors `server_kex_private`,
+   `server_kex_public` and `server_selected_kex_group` mirror the client's
+   `start_kex_*` exactly.  No cell moved and no behaviour changed.
+
+   S1 also produced a result that reshapes the rest of the plan.  Rewriting
+   `legal_event`'s server `LocalDeriveSharedSecret` arm into group-dispatched
+   form fails in 5 files for one reason: both directions of those proofs need
+   *"the selected group is X25519"*, and the spec cannot supply it --
+   `server_selection_acceptable` only offers `named_group_offered` over
+   `cfg.server_supported_groups`, which is an arbitrary list at the spec level
+   and is `[T.X25519]` only in the implementation's config.  The invariant that
+   would supply it is the `server_x25519_*_projection` family, whose
+   generalisation drags in every consumer of the ServerHello's 32-byte share.
+   So the derive arm cannot be generalised before the ServerHello writer is;
+   stages S4 and S5 must land as one commit.  Stages S2 (parser gate) and S3
+   (server P-256 keygen) remain independent of that and can go first.
+
 Until they are done, `clienthello-across-two-records`,
 `aes128-clienthello-across-two-records`, `p256-only`,
 `ecdsa-credential-p256-only` and `p256-first-x25519-listed` stay recorded as

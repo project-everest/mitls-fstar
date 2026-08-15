@@ -55,6 +55,13 @@ ClientHello alone, so the ServerHello writer recovers the choice at runtime
 rather than having it threaded through the driver.  `secp256r1` and cross-record
 reassembly remain server-side gaps.
 
+`secp256r1` is being closed in staged, capability-neutral steps against the
+file-and-line plan in `docs/server-p256-plan.md`; the configured
+`server_supported_groups` stays `[T.X25519]` until the last of them, so no stage
+before that can move a matrix cell.  The first has landed: the server's
+selection now carries a per-group keypair and its self-consistency invariant is
+group-indexed rather than X25519-specific.
+
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries
 the id as a zero-padded 32-byte buffer plus an explicit width, and the
