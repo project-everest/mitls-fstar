@@ -189,14 +189,32 @@ type server_handshake_selection = {
   server_random: B.bytes_of_len 32;
   server_key_share_private: option C.x25519_private;
   server_key_share_public: C.x25519_public;
+  (* The server generates a keypair for every group it supports, exactly as the
+     client does (see [handshake_start]), so that [server_selected_group] -- and
+     not a share's length -- decides which one the ECDH runs with.  Keeping the
+     X25519 pair in its own fields rather than indexing one pair by the selected
+     group is deliberate: it is what lets every proof that predates secp256r1
+     support keep its current statement. *)
+  server_p256_private: option C.p256_private;
+  server_p256_public: C.p256_public;
   server_selected_credential: server_credential_identity;
 }
 let server_selection_key_share_consistent
   (selection:server_handshake_selection)
   : prop =
-  match selection.server_key_share_private with
-  | Some sk -> C.x25519_public_from_private sk == selection.server_key_share_public
-  | None -> True
+  (match selection.server_key_share_private with
+   | Some sk -> C.x25519_public_from_private sk == selection.server_key_share_public
+   | None -> True) /\
+  (match selection.server_p256_private with
+   | Some sk -> C.p256_public_from_private sk == selection.server_p256_public
+   | None -> True)
+
+(** Stands in [server_p256_public] wherever the server has not generated a
+    secp256r1 keypair.  [server_p256_private] is [None] alongside it, so
+    [server_selection_key_share_consistent] places no demand on the value, and
+    [server_selected_group] never names secp256r1 while the configured
+    [server_supported_groups] does not offer it. **)
+let server_p256_absent : C.p256_public = B.zeros 65
 type handshake_state = {
   hs_start: option handshake_start;
   hs_server_selection: option server_handshake_selection;
@@ -338,6 +356,56 @@ let client_hello_kex (ch:GCH.clientHello) (g:C.kex_group) : option (C.kex_public
   match g with
   | C.KexX25519 -> client_hello_key_share ch
   | C.KexP256 -> client_hello_p256_key_share ch
+
+(** The server's own private/public pair for a group, the exact mirror of
+    [start_kex_private] / [start_kex_public].  Both pairs are always generated;
+    [server_selected_group] selects which one the ECDH uses. **)
+let server_kex_private
+  (selection:server_handshake_selection)
+  (g:C.kex_group)
+  : option C.kex_private
+  = match g with
+    | C.KexX25519 -> selection.server_key_share_private
+    | C.KexP256 -> selection.server_p256_private
+
+let server_kex_public
+  (selection:server_handshake_selection)
+  (g:C.kex_group)
+  : C.kex_public g
+  = match g with
+    | C.KexX25519 -> selection.server_key_share_public
+    | C.KexP256 -> selection.server_p256_public
+
+(** The group the server chose, as a [kex_group] rather than a wire tag. **)
+let server_selected_kex_group (selection:server_handshake_selection) : C.kex_group =
+  kex_group_of_named_group selection.server_selected_group
+
+(** The X25519 instances of the two accessors are the legacy fields, definitionally.
+    Carried with patterns so that the proofs written before secp256r1 support --
+    which speak of [server_key_share_private] / [server_key_share_public]
+    directly -- keep discharging without being restated. **)
+let lemma_server_kex_x25519_is_legacy (selection:server_handshake_selection)
+  : Lemma
+      (ensures
+        server_kex_private selection C.KexX25519 == selection.server_key_share_private /\
+        server_kex_public selection C.KexX25519 == selection.server_key_share_public)
+      [SMTPat (server_kex_private selection C.KexX25519)]
+  = ()
+
+(** [server_selection_key_share_consistent] states the private/public agreement
+    per group; this is its group-dispatched reading, the mirror of
+    [lemma_start_kex_public_from_private]. **)
+let lemma_server_kex_public_from_private
+  (selection:server_handshake_selection)
+  (g:C.kex_group)
+  : Lemma
+      (requires server_selection_key_share_consistent selection /\
+                Some? (server_kex_private selection g))
+      (ensures C.kex_public_from_private g (Some?.v (server_kex_private selection g)) ==
+               server_kex_public selection g)
+  = match g with
+    | C.KexX25519 -> ()
+    | C.KexP256 -> ()
 type record_layer_state = {
   record_read: R.direction_state;
   record_write: R.direction_state;
@@ -1629,6 +1697,16 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     (match hs.hs_server_selection with
      | Some selection ->
        server_selection_key_share_consistent selection /\
+       (* Still X25519-specific.  Making this dispatch on
+          [server_selected_kex_group selection] -- the mirror of the client's arm
+          above -- also forces the whole server_x25519_*_projection invariant
+          family in TLS13.Spec.StateMachine.Correspondence and
+          TLS13.ConnectionState.Lemmas to be restated over [server_kex_public],
+          because neither direction of those proofs can recover "the selected
+          group is X25519" from the spec-level config.  That is stage S4/S5 work
+          in docs/server-p256-plan.md; the vocabulary it needs
+          ([server_kex_private], [server_kex_public],
+          [server_selected_kex_group]) is in place above. *)
        (match selection.server_key_share_private with
        | Some sk ->
          (match client_hello_key_share selection.server_selected_client_hello with

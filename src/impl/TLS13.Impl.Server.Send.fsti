@@ -210,6 +210,10 @@ val lemma_input_ready_server_hello_of_selection
                 (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
       (selection.CS.server_key_share_public <: B.bytes) ==
         CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
+      // The selection agrees with itself on every group it carries a keypair
+      // for, not only on X25519.  [material] only carries the X25519 pair, so
+      // the secp256r1 half has to be assumed rather than reconstructed here.
+      CS.server_selection_key_share_consistent selection /\
       Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
       selection.CS.server_selected_cipher_suite == CM.server_selected_suite st)
     (ensures

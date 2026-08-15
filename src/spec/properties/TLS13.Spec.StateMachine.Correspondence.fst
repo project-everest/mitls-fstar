@@ -325,6 +325,11 @@ let server_x25519_key_share_projection
         sh_ks == selection.server_key_share_public /\
         C.x25519_public_from_private server_sk ==
           selection.server_key_share_public /\
+        (* The selection agrees with itself on every group it carries a keypair
+           for.  The X25519 conjunct just above is what the ServerHello and the
+           ECDH are stated over today; this one is what survives when a second
+           group is added. *)
+        server_selection_key_share_consistent selection /\
         C.x25519_shared server_sk ch_ks == Some shared
        | _, _ -> False)
      | None ->
@@ -348,6 +353,7 @@ let server_x25519_pre_server_hello_projection
           selection.server_selected_client_hello == ch /\
           C.x25519_public_from_private server_sk ==
             selection.server_key_share_public /\
+          server_selection_key_share_consistent selection /\
           C.x25519_shared server_sk ch_ks == Some shared
         | None -> False)
      | None ->

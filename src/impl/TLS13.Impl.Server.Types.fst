@@ -399,6 +399,8 @@ let server_local_event_input_ready
        CS.server_key_share_private = Some server_private_key;
        CS.server_key_share_public =
          CryptoSpec.x25519_public_from_private server_private_key;
+       CS.server_p256_private = None;
+       CS.server_p256_public = CS.server_p256_absent;
        CS.server_selected_credential = cfg.CS.server_credential_identity;
      } in
      CM.can_select_server_parameters st selection)

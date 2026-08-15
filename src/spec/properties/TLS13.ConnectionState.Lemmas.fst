@@ -1305,12 +1305,7 @@ let server_selected_client_hello_reachable_shape
   match hs.hs_server_selection with
   | Some selection ->
     hs.hs_client_hello == Some selection.server_selected_client_hello /\
-    (match selection.server_key_share_private with
-     | Some server_sk ->
-       C.x25519_public_from_private server_sk ==
-         selection.server_key_share_public
-     | None ->
-       True)
+    server_selection_key_share_consistent selection
   | None ->
     True
 

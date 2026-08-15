@@ -143,9 +143,56 @@ Each stage ends with: `make -k -j60 verify` (0 errors), `make check-admits`
 
 ## 2. Stage S1 — spec: agile server selection (no capability)
 
-**Goal:** `server_handshake_selection` can *describe* a P-256 server, and the
-server's `LocalDeriveSharedSecret` arm is stated agilely.  Nothing yet produces
-a P-256 selection.
+**Goal:** `server_handshake_selection` can *describe* a P-256 server.  Nothing
+yet produces a P-256 selection.
+
+> **Landed, with one scope change.**  The stage as written also rewrote the
+> server's `LocalDeriveSharedSecret` arm of `legal_event` into the
+> group-dispatched form.  That was tried, measured, and pulled back out; see
+> "S1 as landed" below.
+
+#### S1 as landed
+
+Rewriting the derive arm to
+`match server_kex_private selection (server_selected_kex_group selection)` cost
+**7 errors in 5 files** -- `Impl.Server.Send`, `ConnectionState.Lemmas` (x3),
+`Impl.ConnectionState.LocalHandshake`, `Impl.Server.Driver.BufferedNetwork`,
+`Impl.Driver.Pairing` -- and all 7 have the same root cause, which the plan had
+not anticipated:
+
+> Both directions of those proofs need *"the selected group is X25519"*, and
+> nothing in the **spec** can supply it.  `server_selection_acceptable` gives
+> `named_group_offered cfg.server_supported_groups selection.server_selected_group`,
+> but `cfg.server_supported_groups` is an arbitrary list at the spec level -- it
+> is only `[T.X25519]` in the *implementation's* config
+> (`Impl.ConnectionState.Repr.fsti:1390`).  So the fact is true of every
+> reachable state today but is not stated by any invariant.
+
+The invariant that would state it is the `server_x25519_*_projection` family
+(`Spec.StateMachine.Correspondence.fst:310,334,373`), and generalising it to
+`server_kex_public` drags in every consumer that reads the ServerHello's
+32-byte share -- `Impl.Server.Send`, `Impl.Driver.Pairing`,
+`ConnectionState.ServerHelloSelectionLink`.  That is the same body of work as
+S5, so **the derive-arm rewrite moves out of S1 and into a combined S4/S5**,
+and a comment at the arm records why.
+
+What S1 did land, all green:
+
+| file | change |
+| --- | --- |
+| `Spec.StateMachine.fst` | `server_p256_private : option C.p256_private` and `server_p256_public : C.p256_public` added to `server_handshake_selection` |
+| `Spec.StateMachine.fst` | `server_selection_key_share_consistent` becomes a two-clause conjunction, one clause per group |
+| `Spec.StateMachine.fst` | `server_p256_absent : C.p256_public` -- the stand-in public value used wherever no P-256 keypair was generated |
+| `Spec.StateMachine.fst` | `server_kex_private`, `server_kex_public`, `server_selected_kex_group`, `lemma_server_kex_x25519_is_legacy` (with `SMTPat`), `lemma_server_kex_public_from_private` |
+| 10 impl files, 39 literals | `server_p256_private = None; server_p256_public = server_p256_absent` |
+| `ConnectionState.Lemmas.fst:1301` | `server_selected_client_hello_reachable_shape` now says `server_selection_key_share_consistent selection` rather than inlining only the X25519 clause |
+| `Correspondence.fst:310,334` | both server projections gain `server_selection_key_share_consistent selection` as a conjunct |
+| `Impl.Server.Send.fst(i)` | `lemma_input_ready_server_hello_of_selection` takes the full consistency as a hypothesis -- `material` carries only the X25519 pair, so the P-256 clause cannot be reconstructed from it |
+
+The last three rows are the interesting ones: the *only* real content of S1 is
+that "the selection agrees with itself about its keypairs" is now a
+group-indexed statement, and every invariant that carried the X25519 reading of
+it now carries the group-indexed one.  That is exactly the hook S4/S5 need.
 
 ### S1.1 `src/spec/core/TLS13.Spec.StateMachine.fst`
 
@@ -414,6 +461,7 @@ which is a separate flight in the server state machine and is out of scope here.
 | R2 | `lemma_ch_extensions_connect` doubles in case count (S2.1) | write the P-256 finder in the same "stop at first entry of this group" style as `Sem.kse_list_find_x25519` so the two proofs are literally symmetric |
 | R3 | The EverParse serializer chain (S5.2) resists parameterisation | split into "add the parameter, instantiate at X25519" then "pass the real group" |
 | R4 | Z3 stops unfolding `server_kex_private/public` at the ~40 legacy sites | ship `lemma_server_kex_x25519_is_legacy` with an `SMTPat` in S1 |
+| R6 | *(observed in S1)* A spec-level obligation "the selected group is X25519" is unprovable, because the spec's `server_supported_groups` is an arbitrary list | keep `legal_event`'s server derive arm X25519-shaped until S4/S5 generalise the `server_x25519_*_projection` family in the same commit |
 | R5 | Verify cycles are 10-24 min, so blind iteration is expensive | iterate per-module with `fstar.exe` first; `make` dies at the `.depend` stage (`Makefile:315`) on any syntax error, so never run `make` on unparsed code |
 
 ## 9. Exit criteria
