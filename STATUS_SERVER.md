@@ -119,6 +119,32 @@ the thirty-two-byte share width in the same declaration, and the two are not
 separable -- parameterising the tag alone would build a message no peer would
 accept.  `docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
 
+Cross-record reassembly -- one ClientHello arriving as two TLS records -- is
+still refused, and the obstacle has now been located precisely rather than
+estimated.  It is *not* the decoder, and it is not
+`process_client_hello`: that routine takes the raw delta and the handshake
+fragment as two separate arrays and constrains them independently, so it never
+asks that the fragment be one record's worth of the raw.  The obstacle is one
+layer above the record layer.  `TLS13.Spec.Endpoint.Wire.wire_message` carries a
+proof field pinning its raw bytes to a single parsed record, a network step
+consumes exactly one such message, and the server driver's whole correctness
+statement is phrased against that class through
+`TLS13.Impl.Server.CanonicalProtocol` -- a module on the driver's critical path,
+not a standalone theorem.  **One protocol step consumes exactly one TLS record**
+is therefore the invariant that has to give.
+
+Widening the state machine's ClientHello arm to admit a split -- as a
+disjunction, so that only proofs which *invert* the predicate can break -- was
+built and put through a full verify: two failures, one benign and one at exactly
+that boundary.  That measurement makes the choice of design clear.  The route
+worth taking is the one the client already uses on its protected path: a
+*buffering step* that takes delivery of one record and sets its bytes aside
+without interpreting them, so that one step is still one record and the message
+is emitted only once the buffer holds a whole one.  It is the larger diff and
+the smaller blast radius, because the wire class, the canonical protocol
+refinement and the cross-endpoint pairing theorems all keep their present shape.
+`docs/server-p256-plan.md` carries both routes with their costs.
+
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries
 the id as a zero-padded 32-byte buffer plus an explicit width, and the

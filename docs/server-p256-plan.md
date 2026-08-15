@@ -914,19 +914,152 @@ Concretely the single commit must carry, together:
 
 # G3 line-level plan: server cross-record ClientHello reassembly
 
-Recorded at the same granularity because the analysis is already done (see
-`docs/server-client-parity.md`, roadmap item 4).  The spec mechanism exists as a
-1212-line patch; the blocker is that it cannot be *used* without a concrete
-buffer.  Order of work:
+**Status: re-scoped and re-measured.  The blocker recorded in the first version
+of this section was wrong.  The real one is one layer higher, and there are now
+two costed routes instead of one.**
+
+## What the first version of this plan got wrong
+
+It named
+`TLS13.Impl.Parser.DecoderWF.lemma_mk_cleartext_network_input_wf:245`
+as "the blocker", on the theory that a reassembled ClientHello could not be
+handed to the server's processing layer without a buffer-aware
+`network_input_wf`.  That is not so.  `process_client_hello`
+(`src/impl/TLS13.Impl.Server.Network.fsti:33`, `.fst:83`) takes `raw` and
+`fragment` as **two separate arrays**, and constrains them independently:
+
+- on `raw`: `CS.event_raw_delta_legal ... raw_bytes` (hence
+  `received_cleartext_tls_message_raw`);
+- on `fragment`: `Seq.equal fragment_bytes (WS.serialize_handshake (M.ClientHello ch))`.
+
+There is **no** requirement anywhere in that contract that `fragment` be *the
+fragment of a single record of* `raw`.  So the whole server ClientHello
+processing layer is already record-count-agnostic, and a server-only coalescing
+decoder can discharge both obligations directly without ever going through
+`decoder_fragment_relation` / `network_input_wf`.  Those two predicates are
+shared by every receive path on both roles and need not be weakened.
+
+## The measurement
+
+Widening the ClientHello arm of `received_cleartext_tls_message_raw`
+(`src/spec/core/TLS13.Spec.StateMachine.fst`) **as a disjunction** — keeping the
+existing single-record disjunct verbatim and adding
+"n >= 1 Handshake records whose concatenated fragments parse as the message" —
+was implemented as a probe and put through a full `make -k -j60 verify`.
+
+Keeping the old disjunct verbatim is what makes this tractable: only *inversion*
+sites can break, never *establishing* sites.  The result was **two** errors
+across 89 rebuilt modules:
+
+| # | site | nature |
+| --- | --- | --- |
+| 1 | `src/spec/properties/TLS13.Spec.WireFormatLemmas.fst:128-152` (`lemma_client_hello_sent_received_eq`); an earlier probe with a slightly different disjunct surfaced `lemma_received_client_hello_raw_length` (`:243`) in the same module instead | Benign.  It has the *sender's* form (`cleartext_tls_message_raw`, which pins one record) and `Seq.equal sent_raw received_raw` in scope, so the n >= 2 disjunct is refutable.  Needs one bridge lemma: a one-record stream's `concat_record_fragments` is that record's fragment.  The proof already exists inside `ConnectionState.Lemmas.lemma_raw_records_exactly_single_serialized`, which derives `parse_record_prefix raw == { values = [{outer; fragment}]; residual = empty }` explicitly. |
+| 2 | `src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:324` (`lemma_received_tls_raw_delta_legal_raw_record_parse_success`) | **Not benign.  This is the real wall.** |
+
+## The real wall: one protocol step consumes exactly one record
+
+Site 2 concludes `CT.raw_record_parse_success raw_received`, i.e.
+`parse_record_wire raw == Some (ct, frag, B.length raw)` — the *whole* of the
+step's received bytes is one record.  For a two-record ClientHello that is
+simply false.  It is not an artefact: it feeds
+`lemma_server_consumed_prefix_parse`, which turns the consumed bytes into a
+`CW.wire_message`, and
+
+```fstar
+(* src/spec/core/TLS13.Spec.Endpoint.Wire.fst *)
+type wire_message = {
+  wm_raw: B.bytes;
+  wm_content_type: T.content_type;
+  wm_fragment: M.sealed_record;
+  wm_parse_ok:
+    squash (WS.parse_record_wire wm_raw ==
+              Some (wm_content_type, wm_fragment, B.length wm_raw));
+}
+```
+
+`wire_message` is **one record by construction**, `wire_parse` consumes exactly
+one record, and the server driver's entire correctness statement is phrased
+against this class through `TLS13.Impl.Server.CanonicalProtocol`.  That module
+is *not* a standalone meta-theorem — it is aliased as `SP`/`CP` by
+`Server.CanonicalQueries`, `Server.ChannelImplementation`, `Server.Driver` and
+all six `Server.Driver.Buffered*` modules.  So:
+
+> **The invariant that blocks G3 is "one network protocol step consumes exactly
+> one TLS record", and it is load-bearing for the server driver, the canonical
+> protocol refinement, and the cross-endpoint pairing theorems.**
+
+Note also that error 2 failing means its dependents were skipped by `make -k`;
+"2 errors" is a lower bound on that route's fallout, not the total.
+
+## The two routes, costed
+
+### Route A — widen the raw (the probe's route)
+
+One protocol step may consume n >= 1 records.  Implementation cost is near zero
+(`process_client_hello` already accepts it).  Spec cost is the wire-format
+layer: `wire_message` must become "the record *group* consumed by one step",
+`wire_parse` must become a streaming parser that coalesces consecutive Handshake
+records until the concatenation is a whole handshake message, and every
+`Common.WireFormat` law (prefix determinism, consumed-length, append
+invariance) must be re-proven for it.  `Server.CanonicalProtocol` and the
+pairing theory are generic over the class, so in principle they follow — but
+site 2 shows they also reason about the one-record shape directly.
+
+- Pro: no new event, no ghost buffer, no concrete buffer, no third decoder
+  outcome, trivial implementation.
+- Con: touches the semantic core that both roles and the pairing theorems are
+  built on.  A regression here is a regression in the flagship theorems.
+
+### Route B — the buffering event (the archived design)
+
+`files/g3-spec-attempt.patch` in the session workspace (1212 lines) adds a
+`ConnCleartextHandshake` event, an `hb_cleartext_handshake_bytes` ghost buffer,
+`legal_cleartext_handshake_step`, and a concrete server reassembly buffer.
+
+The point that was *not* appreciated when it was archived: **Route B preserves
+"one step = one record"**.  Each buffering step consumes exactly one record and
+appends its fragment to the buffer; the final step consumes the last record and
+takes the ClientHello transition.  So `wire_message`, `wire_parse`,
+`Server.CanonicalProtocol` and the pairing theorems keep their present shape.
+That is why the archived design added an event instead of widening the raw — it
+is architecturally the conservative choice, and the earlier verdict that it was
+"wrong-headed" was itself wrong.
+
+- Pro: the semantic core is untouched; the risk is confined to the server.
+- Con: 87 occurrences across 20 files for the concrete buffer, a third decoder
+  outcome in `TLS13.Impl.Parser.fst:7163-7210` (call sites `:7184,7194,7581,7592`),
+  a buffer-aware `network_input_wf`, and
+  `cleartext_handshake_buffer_empty server_model` added to the three
+  cross-endpoint pairing lemmas
+  (`ProtectedWireSegmentation.fst(i):4281,4703,5539,5709`).
+
+### Recommendation
+
+**Route B.**  It is the larger diff but the smaller blast radius, and unlike
+Route A it cannot regress the client or the pairing theorems.  Route A should
+only be revisited if the wire-format class turns out to admit a streaming
+`wire_parse` cheaply — that is a self-contained experiment on one small file
+(`TLS13.Spec.Endpoint.Wire.fst`) and is the right first probe if Route A is ever
+reopened.
+
+## Route B, ordered
 
 | # | step | where |
 | --- | --- | --- |
-| 1 | Concrete pending buffer in the server representation, plus the invariant tying it to the ghost `pending_cleartext_handshake`.  Mirror `hb_encrypted_server_handshake_bytes` — 87 occurrences across 20 files: `ConnectionState.Repr.fst(i)`, `ConnectionState.Network.fst(i)`, `ConnectionState.Queries.fst(i)`, `ConnectionState.LocalHandshake.fst`, `System.WireStep.fst`, `System.AppExtrasInv.fst`, `Client.Types.fst`, `Client.fst`, `Client.CanonicalProtocol.fst`, `Client.Drain.fst` | `src/impl/` |
-| 2 | Third decoder outcome ("complete record, incomplete handshake message") in `TLS13.Impl.Parser.fst` cleartext path `:7163-7210`; call sites `:7184,7194,7581,7592` | `src/impl/TLS13.Impl.Parser.fst` |
-| 3 | Buffer-aware `network_input_wf` (`TLS13.Impl.Client.Types.fst:1972`) so that `DecoderWF.lemma_mk_cleartext_network_input_wf:245` can discharge `received_tls_raw_delta_legal` — **this is the blocker; start here when scoping, finish here when building** | `src/impl/TLS13.Impl.Parser.DecoderWF.fst:245,274` |
-| 4 | Re-apply the archived spec patch (`ConnCleartextHandshake` event, `hb_cleartext_handshake_bytes`, `legal_cleartext_handshake_step`, `step_cleartext_handshake`, the empty-buffer bridge lemma with its `SMTPat`) | `src/spec/core/TLS13.Spec.StateMachine.fst` |
-| 5 | Add `cleartext_handshake_buffer_empty server_model` to the three cross-endpoint pairing lemmas | `TLS13.ConnectionState.ProtectedWireSegmentation.fst(i):4281,4703,5539,5709` |
-| 6 | Flip `clienthello-across-two-records` **and** `aes128-clienthello-across-two-records`; add a three-record cell and an over-cap cell (>32768) | `test/unit/test_server_interop_matrix.c` |
+| 1 | Re-apply the archived spec patch (`ConnCleartextHandshake` event, `hb_cleartext_handshake_bytes`, `legal_cleartext_handshake_step`, `step_cleartext_handshake`, the empty-buffer bridge lemma with its `SMTPat`) | `src/spec/core/TLS13.Spec.StateMachine.fst` |
+| 2 | Add `cleartext_handshake_buffer_empty server_model` to the three cross-endpoint pairing lemmas | `ProtectedWireSegmentation.fst(i):4281,4703,5539,5709` |
+| 3 | Concrete pending buffer in the server representation plus the invariant tying it to the ghost buffer.  Mirror `hb_encrypted_server_handshake_bytes` — 87 occurrences across 20 files | `src/impl/` |
+| 4 | Third decoder outcome ("complete record, incomplete handshake message") | `src/impl/TLS13.Impl.Parser.fst:7163-7210`, call sites `:7184,7194,7581,7592` |
+| 5 | Buffer-aware `network_input_wf` and `lemma_mk_cleartext_network_input_wf` | `Client.Types.fst:1992`, `Parser.DecoderWF.fst:232,245,274` |
+| 6 | Byte cap, mirroring `max_pending_protected_handshake = 32768` | `src/spec/core/TLS13.Spec.StateMachine.fst` |
+| 7 | Flip `clienthello-across-two-records` **and** `aes128-clienthello-across-two-records`; add a three-record cell and an over-cap cell | `test/unit/test_server_interop_matrix.c` |
 
-Step 3 is the one that decides whether G3 is feasible; steps 1 and 2 are
-prerequisites for it, and steps 4-6 are the parts already understood.
+Steps 1-2 are spec-only and capability-neutral: they can land as an independent
+green commit before any implementation work starts, exactly as G2's S1-S6.6 did.
+
+## Related limitation, both roles
+
+`WS.parse_tls_message` (`src/spec/core/TLS13.Wire.Spec.fst:921`) requires
+`consumed == B.length fragment`, so **two handshake messages coalesced into one
+record** are rejected on both the client and the server.  This is a separate
+gap from G3 and is not addressed by either route above.

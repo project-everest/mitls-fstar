@@ -287,15 +287,44 @@ A related, milder limitation applies to both roles: `parse_tls_message`
 (`TLS13.Wire.Spec.fst:921`, handshake arm at `:927`) requires `consumed == B.length fragment`, so several
 handshake messages coalesced into one record are rejected rather than drained.
 
-The mirror-the-client design for closing this was subsequently **built against
-the whole tree and measured**; the spec-level fallout turned out to be small and
-mechanical, but the implementation needs a concrete reassembly buffer in the
-server's connection representation before the spec mechanism buys any
-capability.  The full measurement -- which modules need a new match
-arm, why `lemma_received_client_hello_raw_length` has to be restated as a
-determinism property rather than a length one, which three cross-endpoint
-pairing theorems have to be restricted, and why the decoder rather than the
-state machine is the blocker -- is recorded in the roadmap entry for G3 below.
+Two designs for closing this have now been built against the whole tree and
+measured.  The blocker is **not** where the first analysis put it.
+
+* The first analysis named
+  `TLS13.Impl.Parser.DecoderWF.lemma_mk_cleartext_network_input_wf:245` -- a
+  buffer-aware `network_input_wf` -- as the blocker.  That is wrong.
+  `process_client_hello` (`TLS13.Impl.Server.Network.fsti:33`) takes `raw` and
+  `fragment` as two *separate* arrays and constrains them independently
+  (`event_raw_delta_legal` on the former, `Seq.equal fragment (serialize_handshake ...)`
+  on the latter).  Nothing requires `fragment` to be the fragment of a single
+  record of `raw`, so the server's ClientHello processing layer is already
+  record-count-agnostic and `network_input_wf` need never be weakened.
+* Widening the ClientHello arm of `received_cleartext_tls_message_raw`
+  *disjunctively* (old disjunct kept verbatim, so only inversion sites can
+  break) was re-implemented and put through a full verify: **two** errors across
+  89 rebuilt modules, confirming the earlier count.  This probe's formulation
+  broke `WFL.lemma_client_hello_sent_received_eq`
+  (`TLS13.Spec.WireFormatLemmas.fst:128`) rather than
+  `WFL.lemma_received_client_hello_raw_length` (`:243`); both live in that
+  module and both are inverters, so which one surfaces first depends on the
+  exact shape of the added disjunct.  Either is benign -- each has the
+  *sender's* single-record form in scope and so can refute the split case.  The
+  other error, `TLS13.Impl.Server.CanonicalProtocol.fst:324`, is the real wall,
+  and `make -k` skipping its dependents makes "two" a lower bound.
+* **The real wall is that one protocol step consumes exactly one TLS record.**
+  `TLS13.Spec.Endpoint.Wire.wire_message` carries a `wm_parse_ok` squash pinning
+  `parse_record_wire wm_raw == Some (ct, frag, B.length wm_raw)`, and the server
+  driver's correctness statement is phrased against that class throughout
+  `TLS13.Impl.Server.CanonicalProtocol` -- which is on the driver's critical
+  path, aliased by `Server.Driver` and all six `Server.Driver.Buffered*`
+  modules, not a standalone meta-theorem.
+
+Consequently the *archived* design -- a `ConnCleartextHandshake` buffering event,
+where each buffering step still consumes exactly one record -- is the
+architecturally conservative route, because it leaves `wire_message`, the
+canonical protocol refinement and the cross-endpoint pairing theorems untouched.
+Both routes, their costs and the recommendation are written up in
+`docs/server-p256-plan.md`, section "G3 line-level plan".
 
 ### G4. The server echoes a padded `legacy_session_id` -- **CLOSED**
 
