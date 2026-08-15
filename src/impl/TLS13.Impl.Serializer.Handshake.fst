@@ -463,7 +463,7 @@ let poc_sh_mid (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_sh_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
-          (ensures GSH.serverHello_conv (poc_sh_mid rnd ks sid cs) == Some (poc_canonical_sh rnd ks sid cs))
+          (ensures GSH.serverHello_conv (poc_sh_mid rnd ks sid cs) == Some (poc_canonical_sh rnd ks sid GNG.X25519 cs))
   = GNG.namedGroup_bytesize_eq GNG.X25519;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn (ks <: GKSE.keyShareEntry_key_exchange);
     GSHBody.serverHelloBody_extensions_list_bytesize_nil;
@@ -507,22 +507,30 @@ let lemma_sh_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
     ()
 #pop-options
 
-(* ---- size lemma: the canonical ServerHello handshake message is
-   90 bytes plus the echoed legacy_session_id (RFC 8446 4.1.3): 122 for a
-   middlebox-compatibility peer, 90 for one with compat mode off ---- *)
+(* ---- size lemma: the canonical ServerHello handshake message is 58 bytes,
+   plus the server's key share, plus the echoed legacy_session_id (RFC 8446
+   4.1.3).  Both variable widths are carried symbolically rather than as
+   constants: a [namedGroup] is a fixed two-byte enum whatever the group, so
+   the group tag contributes nothing to the arithmetic, and the share
+   contributes its own length.  At X25519's 32-byte share this is the familiar
+   [90 + |sid|] -- 122 for a middlebox-compatibility peer, 90 for one with
+   compat mode off -- and at secp256r1's 65-byte share it is [123 + |sid|]. ---- *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
-let lemma_sh_size (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
-  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
-          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs))
-                     == 90 + Seq.length sid)
-  = let sh = poc_canonical_sh rnd ks sid cs in
+let lemma_sh_size (rnd ks sid: B.bytes) (g: GNG.namedGroup) (cs: GCS.cipherSuite)
+  : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ 32 <= Seq.length ks /\ Seq.length ks <= 65 /\ Seq.length sid <= 32)
+          (ensures GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks sid g cs))
+                     == 58 + Seq.length ks + Seq.length sid)
+  = let sh = poc_canonical_sh rnd ks sid g cs in
     let sv_ext : GESH.extensionServerHello = GESH.Extension_data_supported_versions (GPV.TLS_1p3 <: GESH.extensionServerHello_extension_data_supported_versions) in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
+    let kse : GKSE.keyShareEntry = { GKSE.group = g; GKSE.key_exchange = (ks <: GKSE.keyShareEntry_key_exchange) } in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share (kse <: GESH.extensionServerHello_extension_data_key_share) in
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     GCS.cipherSuite_bytesize_eq cs;
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GNG.namedGroup_bytesize_eq g;
+    (* [namedGroup]'s parser kind is [strong_parser_kind 2 2], so its
+       serialization is two bytes at every group, not just at X25519. *)
+    LP.serialize_length GNG.namedGroup_serializer g;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn (ks <: GKSE.keyShareEntry_key_exchange);
     GSHBody.serverHelloBody_extensions_list_bytesize_nil;
     GSHBody.serverHelloBody_extensions_list_bytesize_cons sv_ext [];
@@ -734,24 +742,24 @@ let lemma_u16_to_cipher_suite_matches (w: U16.t) (c: GCS.cipherSuite)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_canonical_random (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
-          (ensures Sem.serverHello_random (poc_canonical_sh rnd ks sid cs) == Some (rnd <: Seq.lseq U8.t 32))
+          (ensures Sem.serverHello_random (poc_canonical_sh rnd ks sid GNG.X25519 cs) == Some (rnd <: Seq.lseq U8.t 32))
   = ()
 
 let lemma_canonical_key_share (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
-          (ensures Sem.serverHello_key_share_x25519 (poc_canonical_sh rnd ks sid cs) == Some (ks <: Seq.seq U8.t))
+          (ensures Sem.serverHello_key_share_x25519 (poc_canonical_sh rnd ks sid GNG.X25519 cs) == Some (ks <: Seq.seq U8.t))
   = ()
 
 (* The canonical ServerHello echoes [sid] verbatim, which is what
    [is_valid_server_hello] pins the runtime length field against. *)
 let lemma_canonical_session_id (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
-          (ensures Seq.equal (Sem.serverHello_session_id_echo (poc_canonical_sh rnd ks sid cs)) sid)
+          (ensures Seq.equal (Sem.serverHello_session_id_echo (poc_canonical_sh rnd ks sid GNG.X25519 cs)) sid)
   = ()
 
 let lemma_canonical_cs (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
-          (ensures Sem.serverHello_cipher_suite (poc_canonical_sh rnd ks sid cs) == Some cs)
+          (ensures Sem.serverHello_cipher_suite (poc_canonical_sh rnd ks sid GNG.X25519 cs) == Some cs)
   = ()
 
 let lemma_ks_ext_conv (ks: B.bytes)
@@ -775,7 +783,7 @@ let lemma_sv_ext_conv ()
 let lemma_sh_handshake_conv_fwd (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
   : Lemma (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
           (ensures GHS.handshake_conv (GHS.Body_server_hello_mid (poc_sh_mid rnd ks sid cs))
-                     == Some (GHS.Body_server_hello (poc_canonical_sh rnd ks sid cs)))
+                     == Some (GHS.Body_server_hello (poc_canonical_sh rnd ks sid GNG.X25519 cs)))
   = lemma_sh_conv_fwd rnd ks sid cs
 #pop-options
 
@@ -800,7 +808,7 @@ fn serialize_server_hello_handshake_poc
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
                  Seq.length (reveal sid) <= 32 /\
-                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
+                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) GNG.X25519 (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **
@@ -958,8 +966,8 @@ fn serialize_server_hello_handshake_poc
              s perr;
   with v'. assert (S.pts_to s v');
   lemma_sh_handshake_conv_fwd (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
-  lemma_sh_size (reveal rnd) (reveal ks) (reveal sid) (reveal cs);
-  GHS.handshake_bytesize_eq (GHS.Body_server_hello (poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs)));
+  lemma_sh_size (reveal rnd) (reveal ks) (reveal sid) GNG.X25519 (reveal cs);
+  GHS.handshake_bytesize_eq (GHS.Body_server_hello (poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) GNG.X25519 (reveal cs)));
   S.to_array s;
   A.pts_to_len out;
   Rev.lemma_serialize_handshake_server_hello (Ghost.reveal sh);

@@ -42,7 +42,7 @@ fn serialize_server_hello_from_selection
                  Seq.length (Ghost.reveal ks) == 32 /\
                  Seq.length (Ghost.reveal sid) <= 32 /\
                  Ghost.reveal sh ==
-                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
+                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) TLS13.Wire.Generated.NamedGroup.X25519 (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
@@ -78,7 +78,7 @@ fn serialize_server_hello_record_from_selection
                  Seq.length (Ghost.reveal ks) == 32 /\
                  Seq.length (Ghost.reveal sid) <= 32 /\
                  Ghost.reveal sh ==
-                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal cs))
+                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) TLS13.Wire.Generated.NamedGroup.X25519 (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **

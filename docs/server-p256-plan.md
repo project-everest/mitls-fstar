@@ -830,6 +830,39 @@ drivers -> the canonical-protocol lemmas that discharge
 therefore derives the two facts it needs from the slot invariant, in three named
 asserts the flip will delete.
 
+
+### S6.7 as landed — the ServerHello length arithmetic, pre-staged
+
+`poc_canonical_sh` now takes the group as a parameter and accepts any share
+width in `32..65`; `lemma_sh_size` correspondingly proves
+
+```fstar
+GHS.handshake_bytesize (GHS.Body_server_hello (poc_canonical_sh rnd ks sid g cs))
+  == 58 + Seq.length ks + Seq.length sid
+```
+
+which is `90 + |sid|` at X25519's 32-byte share and `123 + |sid|` at
+secp256r1's 65-byte one.  Every one of the nineteen application sites still
+passes `GNG.X25519`, and every downstream precondition still says
+`Seq.length ks == 32`, so all forty numeric sites keep deriving `90 + |sid|` by
+arithmetic and **none of them moved**.  Capability-neutral; the matrix stayed at
+34/34.
+
+The proof needed one ingredient that the X25519-specific version got for free.
+At a literal group Z3 computes `namedGroup_bytesize GNG.X25519 == 2` by
+evaluation; at a variable group it cannot.  `namedGroup`'s parser kind is
+`LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)`, so
+`LP.serialize_length GNG.namedGroup_serializer g` supplies `2 <= len <= 2`
+generically.  With that one call added, both the interface and the
+implementation verified on the first attempt at the existing `--fuel 8 --ifuel 8
+--z3rlimit 120`.  The precedent that made this predictable was
+`CM.server_hello_of_selection` (`Impl.ConnectionState.Model.fsti:652`), which has
+built a ServerHello at a variable group since S4/S5 — it just never had to
+state a *size*.
+
+Files touched: `Impl.Serializer.Handshake.fsti/.fst`, `Impl.Serializer.fsti/.fst`,
+`Impl.Serializer.ServerHello.fsti/.fst`, `Impl.Server.Send.fst`.
+
 ### S6 as re-measured — what is left is one atomic commit
 
 With S6.1-S6.5 landed, the remaining work is genuinely indivisible, and the
@@ -864,18 +897,20 @@ Concretely the single commit must carry, together:
 3. **Policy.**  `Setup.fst`'s seven selection builders set
    `server_selected_group` from the stored ClientHello (the runtime value is now
    available: it is the S6.4 box).
-4. **Lengths.**  The 35 numeric sites enumerated below become runtime lengths
-   `58 + kex_public_len g + |sid|`, once `valid_selection` drops its third
-   conjunct.  *This is the part that cannot be pre-staged, and the reason is
-   `SerH.poc_canonical_sh` (`Serializer.Handshake.fsti:71`), the transparent
-   canonical builder the whole write path is defined against.  It pins **two**
-   things at once — `GKSE.group = GNG.X25519` and `requires Seq.length ks == 32`
-   — and they are not separable: parameterising the tag while keeping the length
-   at 32 builds a message no peer would accept, and relaxing the length is
-   exactly the 35-site change.  29 occurrences across 9 files move together.*
-   One thing is already right: the concrete mirror's
-   `IM.server_hello_key_share` is **already** a 65-byte vec
-   (`Impl.Messages.fst:587`), so no storage widens.
+4. **Lengths.**  ~~This is the part that cannot be pre-staged.~~  **It was
+   pre-staged; see S6.7 below.**  The claim rested on `SerH.poc_canonical_sh`
+   (`Serializer.Handshake.fsti:71`) pinning **two** things at once —
+   `GKSE.group = GNG.X25519` and `requires Seq.length ks == 32` — which is
+   true, and on the inference that because they must move together they must
+   move *at the flip*, which does not follow.  Moving both together is
+   capability-neutral as long as every caller keeps passing X25519 and a
+   32-byte share.  What remains at flip time is the single runtime expression
+   `fragment_len = 90sz `SZ.add` sid_len`
+   (`Impl.Server.Send.fst:1158`), which becomes `58sz + ks_len + sid_len` once
+   `valid_selection` drops its third conjunct, plus the `Seq.length ks == 32`
+   preconditions on the Pulse serializer chain.  One thing was already right:
+   the concrete mirror's `IM.server_hello_key_share` is **already** a 65-byte
+   vec (`Impl.Messages.fst:587`), so no storage widens.
 5. **Groups and pins.**  `server_supported_groups = [T.X25519; T.Secp256r1]`;
    delete `CR.server_selection_group_pinned` and every conjunct mentioning it,
    plus the three hypotheses S6.3 introduced.

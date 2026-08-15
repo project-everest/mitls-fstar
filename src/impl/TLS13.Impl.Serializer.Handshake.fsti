@@ -68,13 +68,13 @@ module WS = TLS13.Wire.Spec
    of TLS13.Impl.Server.Send.mk_server_hello_witness) ---- *)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
-let poc_canonical_sh (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+let poc_canonical_sh (rnd ks sid: B.bytes) (g: GNG.namedGroup) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello
-    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid <= 32)
+    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ 32 <= Seq.length ks /\ Seq.length ks <= 65 /\ Seq.length sid <= 32)
     (ensures fun _ -> True)
   = let ke : GKSE.keyShareEntry_key_exchange = ks in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    let kse : GKSE.keyShareEntry = { GKSE.group = g; GKSE.key_exchange = ke } in
+    GNG.namedGroup_bytesize_eq g;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
     let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
@@ -273,7 +273,7 @@ fn serialize_server_hello_handshake_poc
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
                  Seq.length (reveal ks) == 32 /\
                  Seq.length (reveal sid) <= 32 /\
-                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
+                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) GNG.X25519 (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **

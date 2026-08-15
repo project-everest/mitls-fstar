@@ -112,12 +112,27 @@ acceptance gate is exactly what makes the negotiated group a constant.  The
 moment a ClientHello without an X25519 share is accepted, the ECDH, the
 selection policy, the ServerHello length arithmetic and the configured group
 list all face a group they cannot yet handle, with no runtime rejection path to
-fall back on -- so they must move together.  The ServerHello's length arithmetic
-is the part that resisted every attempt to pre-stage it: the transparent
-canonical builder the whole write path is defined against pins the group tag and
-the thirty-two-byte share width in the same declaration, and the two are not
-separable -- parameterising the tag alone would build a message no peer would
-accept.  `docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
+fall back on -- so they must move together.  The ServerHello's length arithmetic was
+thought to resist pre-staging, on the grounds that the transparent canonical
+builder the whole write path is defined against pins the group tag and the
+thirty-two-byte share width in the same declaration.  That is true, and it is
+also beside the point: the two have to move *together*, but moving them together
+is still capability-neutral so long as every caller keeps passing X25519 and a
+thirty-two-byte share.  So it has now been pre-staged.  The canonical builder
+takes the group as a parameter, and the size lemma reads
+
+    58 + |key_share| + |legacy_session_id_echo|
+
+which is the familiar `90 + |sid|` at X25519's thirty-two-byte share and
+`123 + |sid|` at secp256r1's sixty-five-byte one.  Nothing about that proof was
+X25519-specific once it was written down properly: a `namedGroup` is a two-byte
+enum at *every* group, which its parser kind already says, so the group tag
+contributes a constant and drops out of the arithmetic entirely.  What is left
+for the final commit is the acceptance gate, the selection policy, the
+configured group list, the ECDH's specification, and one runtime expression --
+`fragment_len = 90sz + sid_len` in `TLS13.Impl.Server.Send` -- which becomes
+`58sz + ks_len + sid_len`.  `docs/server-p256-plan.md` §7 carries the
+file-and-line breakdown.
 
 Cross-record reassembly -- one ClientHello arriving as two TLS records -- is
 still refused, and the obstacle has now been located precisely rather than

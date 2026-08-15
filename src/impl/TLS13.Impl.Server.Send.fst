@@ -287,7 +287,7 @@ let lemma_mk_server_hello_witness_bytesize
    with sid = the echoed 32-byte session id, cipher_suite = cs, compression = 0, extensions =
    [key_share(X25519, ks); supported_versions(TLS_1p3)]); only the local module
    aliases differ.  Establishing this lets callers discharge the serializer's
-   [sh == SerH.poc_canonical_sh rnd ks sid cs] precondition. *)
+   [sh == SerH.poc_canonical_sh rnd ks sid g cs] precondition. *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
 let lemma_mk_server_hello_witness_eq_poc
   (random: B.bytes)
@@ -301,7 +301,7 @@ let lemma_mk_server_hello_witness_eq_poc
               Seq.length key_share == 32)
     (ensures
       mk_server_hello_witness random key_share session_id cs ==
-      SerH.poc_canonical_sh random key_share session_id cs)
+      SerH.poc_canonical_sh random key_share session_id GNG.X25519 cs)
   = ()
 #pop-options
 
