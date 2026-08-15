@@ -83,6 +83,13 @@ type client_hello = {
   client_hello_server_name_len: SZ.t;
   client_hello_has_server_name: bool;
   client_hello_key_share: V.vec U8.t;
+  (* 65 bytes: the uncompressed secp256r1 point the peer offered, when it
+     offered one.  Held in its own slot rather than widening
+     [client_hello_key_share], so that every proof stated over the X25519 share
+     keeps its statement.  [client_hello_has_p256_key_share] says whether the
+     bytes are meaningful. *)
+  client_hello_p256_key_share: V.vec U8.t;
+  client_hello_has_p256_key_share: bool;
   client_hello_cipher_suites: V.vec U16.t;
   client_hello_cipher_suites_len: SZ.t;
   client_hello_signature_schemes: V.vec U16.t;
@@ -491,11 +498,12 @@ let rec certificate_chain_matches
   else False
 
 let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slprop =
-  exists* random session_id server_name key_share cipher_suites signature_schemes.
+  exists* random session_id server_name key_share p256_key_share cipher_suites signature_schemes.
     V.pts_to l.client_hello_random random **
     V.pts_to l.client_hello_session_id session_id **
     V.pts_to l.client_hello_server_name server_name **
     V.pts_to l.client_hello_key_share key_share **
+    V.pts_to l.client_hello_p256_key_share p256_key_share **
     V.pts_to l.client_hello_cipher_suites cipher_suites **
     V.pts_to l.client_hello_signature_schemes signature_schemes **
     pure (
@@ -507,16 +515,19 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
       Seq.equal session_id (Sem.pad_session_id_32 (Sem.clientHello_session_id m)) /\
       V.is_full_vec l.client_hello_server_name /\
       V.is_full_vec l.client_hello_key_share /\
+      V.is_full_vec l.client_hello_p256_key_share /\
       V.is_full_vec l.client_hello_cipher_suites /\
       V.is_full_vec l.client_hello_signature_schemes /\
       V.length l.client_hello_random == 32 /\
       V.length l.client_hello_server_name == max_server_name_len /\
       V.length l.client_hello_key_share == 32 /\
+      V.length l.client_hello_p256_key_share == 65 /\
       V.length l.client_hello_cipher_suites == max_cipher_suites /\
       V.length l.client_hello_signature_schemes == max_signature_schemes /\
       B.length random == 32 /\
       B.length server_name == max_server_name_len /\
       B.length key_share == 32 /\
+      B.length p256_key_share == 65 /\
       Seq.length cipher_suites == max_cipher_suites /\
       Seq.length signature_schemes == max_signature_schemes /\
       SZ.v l.client_hello_server_name_len <= B.length server_name /\
@@ -531,6 +542,16 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
       (match Sem.clientHello_key_share_x25519 m with
        | Some k -> B.length k == 32 /\ Seq.equal key_share k
        | None -> False) /\
+      (* One-directional on purpose: the flag promises the stored bytes are the
+         peer's secp256r1 offer, but nothing yet promises the flag is set
+         whenever the peer made one.  Strengthening this to an iff, and turning
+         the X25519 clause just above into a disjunction over the two, is what
+         actually widens the accepted set -- see docs/server-p256-plan.md S6. *)
+      (if l.client_hello_has_p256_key_share
+       then (match Sem.clientHello_key_share_secp256r1 m with
+             | Some k -> B.length k == 65 /\ Seq.equal p256_key_share k
+             | None -> False)
+       else True) /\
       cipher_suites_match
         cipher_suites
         (SZ.v l.client_hello_cipher_suites_len)
@@ -712,11 +733,13 @@ fn free_client_hello
   ensures emp
 {
   with m. unfold (is_valid_client_hello l m);
-  with random session_id server_name key_share cipher_suites signature_schemes. _;
+  with random session_id server_name key_share p256_key_share
+       cipher_suites signature_schemes. _;
   V.free l.client_hello_random;
   V.free l.client_hello_session_id;
   V.free l.client_hello_server_name;
   V.free l.client_hello_key_share;
+  V.free l.client_hello_p256_key_share;
   V.free l.client_hello_cipher_suites;
   V.free l.client_hello_signature_schemes;
 }

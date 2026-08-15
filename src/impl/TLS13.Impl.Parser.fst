@@ -6124,6 +6124,14 @@ fn parse_handshake_message
                           Some (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
             lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
               (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
+            (* The secp256r1 slot exists but is not filled yet: the accept
+               gate ([clientHello_representable]) still demands an X25519
+               share, so nothing can select P-256 and nothing may read these
+               bytes.  [client_hello_has_p256_key_share = false] discharges the
+               slot's one-directional obligation outright.  Probing the
+               key_share list for a secp256r1 entry is stage S4/S6 work; see
+               docs/server-p256-plan.md. *)
+            let p256_key_share_vec = V.alloc 0uy 65sz;
             let lch = ({ L.client_hello_random = randvec;
                          L.client_hello_session_id = sidvec;
                          L.client_hello_session_id_len = sidlen;
@@ -6131,6 +6139,8 @@ fn parse_handshake_message
                          L.client_hello_server_name_len = Mktuple8?._2 ext_res;
                          L.client_hello_has_server_name = Mktuple8?._3 ext_res;
                          L.client_hello_key_share = Mktuple8?._4 ext_res;
+                         L.client_hello_p256_key_share = p256_key_share_vec;
+                         L.client_hello_has_p256_key_share = false;
                          L.client_hello_cipher_suites = Mktuple3?._1 cs_res;
                          L.client_hello_cipher_suites_len = Mktuple3?._2 cs_res;
                          L.client_hello_signature_schemes = Mktuple8?._6 ext_res;
@@ -6143,6 +6153,8 @@ fn parse_handshake_message
                  as (V.pts_to lch.L.client_hello_server_name snbytes);
             rewrite (V.pts_to (Mktuple8?._4 ext_res) kbytes)
                  as (V.pts_to lch.L.client_hello_key_share kbytes);
+            rewrite (V.pts_to p256_key_share_vec (Seq.create 65 0uy))
+                 as (V.pts_to lch.L.client_hello_p256_key_share (Seq.create 65 0uy));
             rewrite (V.pts_to (Mktuple3?._1 cs_res) csbytes)
                  as (V.pts_to lch.L.client_hello_cipher_suites csbytes);
             rewrite (V.pts_to (Mktuple8?._6 ext_res) sigbytes)
@@ -6197,6 +6209,9 @@ fn parse_handshake_message
             assert (pure (V.length lch.L.client_hello_random == 32));
             assert (pure (V.length lch.L.client_hello_server_name == L.max_server_name_len));
             assert (pure (V.length lch.L.client_hello_key_share == 32));
+            assert (pure (V.is_full_vec lch.L.client_hello_p256_key_share));
+            assert (pure (V.length lch.L.client_hello_p256_key_share == 65));
+            assert (pure (B.length (Seq.create 65 0uy) == 65));
             assert (pure (V.length lch.L.client_hello_cipher_suites == L.max_cipher_suites));
             assert (pure (V.length lch.L.client_hello_signature_schemes == L.max_signature_schemes));
             assert (pure (SZ.v lch.L.client_hello_server_name_len <= B.length snbytes));

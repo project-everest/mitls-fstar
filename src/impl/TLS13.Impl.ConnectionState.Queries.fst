@@ -1258,7 +1258,7 @@ fn can_send_client_hello_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share
        ch_cipher_suites ch_signature_schemes.
     assert (pure True);
   unfold (sized_bytes_exactly
@@ -2092,7 +2092,7 @@ fn select_supported_server_parameters_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -2404,7 +2404,7 @@ fn can_schedule_select_server_parameters_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share
        ch_cipher_suites ch_signature_schemes. _;
 
   let tag = !c.control.control_tag;
@@ -2497,7 +2497,7 @@ fn can_schedule_derive_shared_secret_runtime
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (key_schedule_exactly
     c.handshake.keys
@@ -6879,7 +6879,7 @@ fn read_negotiated_server_suite
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share
        ch_cipher_suites ch_signature_schemes. _;
   unfold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -6969,7 +6969,7 @@ fn read_client_hello_session_id
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share
        ch_cipher_suites ch_signature_schemes.
     assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_session_id ch_session_id);
 

@@ -2052,6 +2052,12 @@ fn serialize_client_hello_from_start
   copy_vec_to_vec_u16 start_cipher_suites l.L.client_hello_cipher_suites 64sz;
   copy_vec_to_vec_u16 start_signature_schemes l.L.client_hello_signature_schemes 32sz;
 
+  (* [l]'s caller does not own a secp256r1 slot -- the client's own P-256 share
+     travels separately as [start_p256_key_share] -- so the canonical structure
+     gets a scratch one, freed once ownership is recovered below.  It is never
+     read: [client_hello_has_p256_key_share = false] makes the slot's clause
+     vacuous. *)
+  let l_poc_p256_key_share = V.alloc 0uy 65sz;
   (* build canonical-pinned structure sharing l's vecs (only scalars differ) *)
   let l_poc : L.client_hello = {
     L.client_hello_random = l.L.client_hello_random;
@@ -2061,6 +2067,8 @@ fn serialize_client_hello_from_start
     L.client_hello_server_name_len = hostname_len;
     L.client_hello_has_server_name = true;
     L.client_hello_key_share = l.L.client_hello_key_share;
+    L.client_hello_p256_key_share = l_poc_p256_key_share;
+    L.client_hello_has_p256_key_share = false;
     L.client_hello_cipher_suites = l.L.client_hello_cipher_suites;
     L.client_hello_cipher_suites_len = cipher_suites_len_runtime;
     L.client_hello_signature_schemes = l.L.client_hello_signature_schemes;
@@ -2080,6 +2088,8 @@ fn serialize_client_hello_from_start
        as (V.pts_to l_poc.L.client_hello_server_name server_name);
   rewrite (V.pts_to l.L.client_hello_key_share key_share)
        as (V.pts_to l_poc.L.client_hello_key_share key_share);
+  rewrite (V.pts_to l_poc_p256_key_share (Seq.create 65 0uy))
+       as (V.pts_to l_poc.L.client_hello_p256_key_share (Seq.create 65 0uy));
   rewrite (V.pts_to l.L.client_hello_cipher_suites cipher_suites)
        as (V.pts_to l_poc.L.client_hello_cipher_suites cipher_suites);
   rewrite (V.pts_to l.L.client_hello_signature_schemes signature_schemes)
@@ -2126,6 +2136,10 @@ fn serialize_client_hello_from_start
 
   (* recover l's vec ownership; second copy re-pins l's content to the start values *)
   unfold (L.is_valid_client_hello l_poc (Ghost.reveal ch));
+  with w_p256. assert (V.pts_to l_poc.L.client_hello_p256_key_share w_p256);
+  rewrite (V.pts_to l_poc.L.client_hello_p256_key_share w_p256)
+       as (V.pts_to l_poc_p256_key_share w_p256);
+  V.free l_poc_p256_key_share;
   with w_rnd. assert (V.pts_to l_poc.L.client_hello_random w_rnd);
   rewrite (V.pts_to l_poc.L.client_hello_random w_rnd)
        as (V.pts_to l.L.client_hello_random w_rnd);

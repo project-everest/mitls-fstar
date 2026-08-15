@@ -2894,6 +2894,26 @@ fn process_local_event
       let dispatch_sid_len = CQ.read_client_hello_session_id s dispatch_session_id;
       fold (connection_exactly s 'st0);
       if (network_out_len = 95sz `SZ.add` dispatch_sid_len) {
+        // The LocalSendServerHello obligation reaches us as a guarded implication in
+        // process_local_event's precondition.  Discharging the guard and projecting the
+        // conclusion in two named steps keeps the SMT context of the call below small;
+        // leaving it implicit makes this query sensitive to unrelated growth of the
+        // connection invariant (see the client-side analogue in
+        // TLS13.Impl.Client.ChannelImplementation).
+        assert (pure (SZ.v network_out_len ==
+                        95 + Seq.length (CM.stored_client_hello_session_id 'st0)));
+        assert (pure (
+          let server_random_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 in
+          let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
+          (Seq.length server_random_bytes == 32 ==>
+           (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
+          (let sh = SS.mk_server_hello_witness server_random_bytes
+             (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+             (CM.stored_client_hello_session_id 'st0)
+             (CM.server_selected_suite 'st0) in
+           CM.can_send_server_hello 'st0 sh
+             (CS.serialized_cleartext_tls_message
+               (M.TlsHandshake (M.ServerHello sh))))));
         let mut server_random = [| 0uy; 32sz |];
         let mut server_private_key = [| 0uy; 32sz |];
         SMat.copy_server_random_and_private_from_payload

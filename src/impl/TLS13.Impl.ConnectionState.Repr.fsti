@@ -892,30 +892,43 @@ let client_hello_slot_exactly
   ([@@@mkey] l:IM.client_hello)
   (spec:option GCH.clientHello)
   : slprop =
-  exists* present random session_id server_name key_share cipher_suites signature_schemes.
+  exists* present random session_id server_name key_share p256_key_share
+          cipher_suites signature_schemes.
     Box.pts_to present_box present **
     V.pts_to l.IM.client_hello_random random **
     V.pts_to l.IM.client_hello_session_id session_id **
     V.pts_to l.IM.client_hello_server_name server_name **
     V.pts_to l.IM.client_hello_key_share key_share **
+    (* Storage only, for now.  The slot's [IM.client_hello] struct is allocated
+       once and its scalar fields cannot be rewritten -- the same reason the
+       session-id width lives in a metadata box rather than in the struct -- so
+       [client_hello_has_p256_key_share] cannot be constrained from here.  When
+       the parser starts filling this slot the flag becomes a box beside the
+       other metadata and its meaning is stated there; see
+       docs/server-p256-plan.md.  [IM.is_valid_client_hello] does carry the
+       meaning already, because the structs it describes are built fresh. *)
+    V.pts_to l.IM.client_hello_p256_key_share p256_key_share **
     V.pts_to l.IM.client_hello_cipher_suites cipher_suites **
     V.pts_to l.IM.client_hello_signature_schemes signature_schemes **
     pure (V.is_full_vec l.IM.client_hello_random /\
           V.is_full_vec l.IM.client_hello_session_id /\
           V.is_full_vec l.IM.client_hello_server_name /\
           V.is_full_vec l.IM.client_hello_key_share /\
+          V.is_full_vec l.IM.client_hello_p256_key_share /\
           V.is_full_vec l.IM.client_hello_cipher_suites /\
           V.is_full_vec l.IM.client_hello_signature_schemes /\
           V.length l.IM.client_hello_random == 32 /\
           V.length l.IM.client_hello_session_id == 32 /\
           V.length l.IM.client_hello_server_name == max_hostname_len /\
           V.length l.IM.client_hello_key_share == 32 /\
+          V.length l.IM.client_hello_p256_key_share == 65 /\
           V.length l.IM.client_hello_cipher_suites == max_cipher_suites /\
           V.length l.IM.client_hello_signature_schemes == max_signature_schemes /\
           B.length random == 32 /\
           B.length session_id == 32 /\
           B.length server_name == max_hostname_len /\
           B.length key_share == 32 /\
+          B.length p256_key_share == 65 /\
           Seq.length cipher_suites == max_cipher_suites /\
           Seq.length signature_schemes == max_signature_schemes /\
           (if present then

@@ -321,12 +321,14 @@ fn free_client_hello_slot
   ensures emp
 {
   with spec. unfold (client_hello_slot_exactly present_box value spec);
-  with present random session_id server_name key_share cipher_suites signature_schemes. _;
+  with present random session_id server_name key_share p256_key_share
+       cipher_suites signature_schemes. _;
   Box.free present_box;
   V.free value.IM.client_hello_random;
   V.free value.IM.client_hello_session_id;
   V.free value.IM.client_hello_server_name;
   V.free value.IM.client_hello_key_share;
+  V.free value.IM.client_hello_p256_key_share;
   V.free value.IM.client_hello_cipher_suites;
   V.free value.IM.client_hello_signature_schemes;
 }
@@ -1561,6 +1563,7 @@ fn alloc_client_hello_slot_empty ()
   let client_hello_session_id = V.alloc 0uy 32sz;
   let client_hello_server_name = V.alloc 0uy (max_hostname_len_sz);
   let client_hello_key_share = V.alloc 0uy 32sz;
+  let client_hello_p256_key_share = V.alloc 0uy 65sz;
   let client_hello_cipher_suites = V.alloc 0us (max_cipher_suites_sz);
   let client_hello_signature_schemes = V.alloc 0us (max_signature_schemes_sz);
   let l = {
@@ -1571,6 +1574,8 @@ fn alloc_client_hello_slot_empty ()
     IM.client_hello_server_name_len = 0sz;
     IM.client_hello_has_server_name = false;
     IM.client_hello_key_share;
+    IM.client_hello_p256_key_share;
+    IM.client_hello_has_p256_key_share = false;
     IM.client_hello_cipher_suites;
     IM.client_hello_cipher_suites_len = 0sz;
     IM.client_hello_signature_schemes;
@@ -1584,11 +1589,14 @@ fn alloc_client_hello_slot_empty ()
     (V.pts_to l.IM.client_hello_server_name (Seq.create max_hostname_len 0uy));
   rewrite (V.pts_to client_hello_key_share (Seq.create 32 0uy)) as
     (V.pts_to l.IM.client_hello_key_share (Seq.create 32 0uy));
+  rewrite (V.pts_to client_hello_p256_key_share (Seq.create 65 0uy)) as
+    (V.pts_to l.IM.client_hello_p256_key_share (Seq.create 65 0uy));
   rewrite (V.pts_to client_hello_cipher_suites (Seq.create max_cipher_suites 0us)) as
     (V.pts_to l.IM.client_hello_cipher_suites (Seq.create max_cipher_suites 0us));
   rewrite (V.pts_to client_hello_signature_schemes (Seq.create max_signature_schemes 0us)) as
     (V.pts_to l.IM.client_hello_signature_schemes (Seq.create max_signature_schemes 0us));
   assert (pure (B.length (Seq.create 32 0uy) == 32));
+  assert (pure (B.length (Seq.create 65 0uy) == 65));
   assert (pure (B.length (Seq.create max_hostname_len 0uy) == max_hostname_len));
   assert (pure (Seq.length (Seq.create max_cipher_suites 0us) == max_cipher_suites));
   assert (pure (Seq.length (Seq.create max_signature_schemes 0us) == max_signature_schemes));

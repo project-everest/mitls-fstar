@@ -301,6 +301,26 @@ let legal_response_for_event
   response_app_out_matches_event resp ev app_out /\
   legal_delta st0 st1 ev raw_sent raw_received
 
+(** [response_wf] is [legal_response_for_event]'s first conjunct.  Projecting it
+    by unfolding costs a full re-derivation underneath the connection-state
+    invariant at every use site, which is the search that gets more expensive as
+    that invariant grows; naming it once keeps the callers cheap. **)
+let lemma_legal_response_for_event_wf
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received
+          network_out app_out)
+      (ensures response_wf resp network_out app_out)
+  = ()
+
 let lemma_legal_response_for_event_app_log_delta
   (st0:CS.connection_state)
   (st1:CS.connection_state)

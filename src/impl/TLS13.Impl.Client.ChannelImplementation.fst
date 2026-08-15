@@ -453,6 +453,14 @@ let lemma_network_response_app_out_length
         (fun raw_received ->
           CT.legal_response_for_event
             st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    // Name the witness's defining property before projecting [response_wf] out
+    // of it.  Without this step Z3 has to rediscover it underneath the whole
+    // connection-state invariant, which is exactly the search that gets more
+    // expensive whenever that invariant grows.
+    assert (CT.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    CT.lemma_legal_response_for_event_wf
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
     assert (CT.response_wf resp network_out app_out);
     Seq.lemma_len_slice app_out 0 (SZ.v resp.CT.app_out_len)
   )

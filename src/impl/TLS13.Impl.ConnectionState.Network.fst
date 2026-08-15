@@ -820,7 +820,8 @@ fn mark_received_client_hello
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with old_client_hello_present old_l_random old_l_session_id old_l_server_name
-       old_l_key_share old_l_cipher_suites old_l_signature_schemes. _;
+       old_l_key_share old_l_p256_key_share old_l_cipher_suites
+       old_l_signature_schemes. _;
   unfold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
     c.handshake.messages.client_hello_server_name_len
@@ -954,6 +955,7 @@ fn mark_received_client_hello
   V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_random;
   V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_server_name;
   V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_key_share;
+  V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
   V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_cipher_suites;
   V.pts_to_len c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
 
