@@ -60,7 +60,13 @@ file-and-line plan in `docs/server-p256-plan.md`; the configured
 `server_supported_groups` stays `[T.X25519]` until the last of them, so no stage
 before that can move a matrix cell.  The first has landed: the server's
 selection now carries a per-group keypair and its self-consistency invariant is
-group-indexed rather than X25519-specific.
+group-indexed rather than X25519-specific.  The second has landed too: the
+concrete ClientHello mirror now carries a 65-byte secp256r1 key-share slot
+alongside the X25519 one, so the remaining stages can fill it without further
+structural churn.  Accepting a P-256-only ClientHello (widening the parser's
+acceptance gate) was measured to be 169 `ch_extensions` occurrences of work
+that buys no capability while the configured groups are X25519-only, so it was
+deferred to the stage that actually turns the feature on.
 
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries

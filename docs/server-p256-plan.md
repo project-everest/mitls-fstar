@@ -254,6 +254,13 @@ let server_selected_kex_group_policy (st:CS.connection_state) : C.kex_group
 
 ## 3. Stage S2 — parser: accept a P-256 ClientHello (no capability)
 
+> **RESCOPED — see "S2 as landed" at the end of this section (commit
+> `76c48ed62`).**  S2.1 (the `Wire.Spec.fst` acceptance gate) and the
+> acceptance half of S2.2 were measured to be too expensive for the capability
+> they buy at this stage and were **moved to S6**.  What actually landed is
+> S2.3 + S2.4 only: storage plumbing.  The subsections below are kept as the
+> record of the original design; read them together with the landing note.
+
 **Goal:** a P-256-only ClientHello *parses* and lands in the mirror.  The server
 still refuses it later, because its configured groups are X25519-only.
 
@@ -307,6 +314,63 @@ Also update the `.fsti` declarations for each of the above.
 `server_selection_acceptable` because `server_supported_groups = [T.X25519]`.
 34/34 cells unchanged — **`p256-only` must still be `refused`**, and the matrix
 proves it.
+
+### S2 as landed (commit `76c48ed62`)
+
+**Measurement that forced the rescope.** `ch_extensions` has **169**
+occurrences (62 in `TLS13.Impl.Parser.fst`, 51 in
+`TLS13.Wire.Spec.Reveal.Handshake.fst(i)`).  Changing its arity — the whole of
+S2.1 and the acceptance half of S2.2 — touches every one of them and buys *no*
+capability while `server_supported_groups = [T.X25519]`, because the request is
+refused one layer up regardless.  S2 was therefore reduced to pure storage
+plumbing and **the acceptance gate moved wholesale into S6**, where it is paid
+for by an actual matrix-cell flip.
+
+**Additive slot, not a widened one.** `client_hello_key_share` has 72
+occurrences in 25 files but only **3 real construction sites**
+(`Repr.fst:1563`, `Serializer.fst:~2063`, `Parser.fst:~6133`).  Rather than
+widen it to a group-tagged 65-byte slot, S2 added a *separate*
+`client_hello_p256_key_share : V.vec U8.t` (65 bytes) plus
+`client_hello_has_p256_key_share : bool`, so all 72 existing occurrences keep
+meaning exactly what they meant.  `is_valid_client_hello` got the matching
+existential, `pts_to`, shape facts, and a one-directional meaning clause tying
+the flag to `Sem.clientHello_key_share_secp256r1`.
+
+**Finding — the flag cannot live in `client_hello_slot_exactly`.**  The slot
+invariant describes an `IM.client_hello` struct that is **allocated once** and
+thereafter mutated only through its vectors; its *scalar* fields cannot be
+rewritten.  Constraining `client_hello_has_p256_key_share` there is therefore
+unprovable.  This is precisely why the codebase already keeps the session-id
+width in a separate metadata **`Box`** rather than in the struct (see the
+comment at `ConnectionState.Network.fst` ~`:914`).  The slot invariant
+consequently carries **ownership and shape only**; the meaning stays in
+`is_valid_client_hello`, whose structs the parser builds fresh.
+
+> **Consequence for S4/S6.**  Before anything actually *fills* the P-256 slot,
+> `client_hello_has_p256_key_share` must be lifted out of the struct into a
+> metadata `Box` beside the session-id width.  Budget this as the first task of
+> S6.  A comment at `Repr.fsti`'s `client_hello_slot_exactly` records it.
+
+**`Serializer.fst` needs a scratch vector.**  `l_poc` shares `l`'s vectors, but
+`l`'s caller owns no secp256r1 slot — the *client's own* P-256 share travels
+separately as `start_p256_key_share`.  `l_poc` therefore gets a scratch 65-byte
+vector, allocated before the record and freed immediately after the
+`is_valid_client_hello` unfold.
+
+**Two distant proofs destabilised.**  Growing a slprop this widely used
+enlarges the SMT context of every proof that mentions it:
+
+| site | symptom | repair |
+| --- | --- | --- |
+| `Client.ChannelImplementation.lemma_network_response_app_out_length:409` | already at `--split_queries always --z3rlimit 50`, started failing | new named projection lemma `Client.Types.lemma_legal_response_for_event_wf`.  An intermediate `assert` alone only moved the error one line down — that is what identified the *projection*, not the witness, as the cost |
+| `Impl.Server.process_local_event:2910` (`LocalSendServerHello` arm) | the call's precondition (a bundle of `server_end_to_end_invariant`, the `95 + |sid|` length equation and `can_send_server_hello`) no longer discharged | discharge `process_local_event`'s guarded `LocalSendServerHello` hypothesis in **two named `assert (pure ...)`s before the call**, instead of letting Z3 instantiate the implication inside the call's VC |
+
+Neither repair is an rlimit or `z3seed` bump.  Both are instances of the same
+rule: when context growth breaks a distant proof, *name the projection*.
+
+**Gates as landed.** `make verify` 0 errors, `make check-admits` 0 admits,
+`make test` 34/34 cells matching the ledger — no cell moved, S2 being
+capability-neutral by construction.
 
 ---
 
@@ -435,6 +499,15 @@ handles *both* groups for the `supported_groups` list, so the bytesize lemmas fo
 
 ## 7. Stage S6 — turn it on, flip the ledger
 
+> **S6 absorbed the acceptance gate that S2 originally carried.**  Before the
+> steps below, S6 must first do what S2.1/S2.2 described: widen
+> `Wire.Spec.clientHello_representable:472`, the `ch_extensions` key-share arm,
+> `Impl.Parser.scan_ch_key_share:4287` / `scan_ch_extensions:4443`, and
+> `is_valid_client_hello`'s key-share clause, so that a P-256-only ClientHello
+> is *accepted*.  It must also lift `client_hello_has_p256_key_share` out of the
+> `IM.client_hello` struct into a metadata `Box` (see "S2 as landed", finding
+> R8), since the slot invariant cannot constrain a struct scalar.
+
 1. `src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1390` —
    `CS.server_supported_groups = [T.X25519]` → `[T.X25519; T.Secp256r1]`.
 2. `Setup.fst:477,505,533,587,618,647,702` — `CS.server_selected_group = T.X25519`
@@ -462,6 +535,8 @@ which is a separate flight in the server state machine and is out of scope here.
 | R3 | The EverParse serializer chain (S5.2) resists parameterisation | split into "add the parameter, instantiate at X25519" then "pass the real group" |
 | R4 | Z3 stops unfolding `server_kex_private/public` at the ~40 legacy sites | ship `lemma_server_kex_x25519_is_legacy` with an `SMTPat` in S1 |
 | R6 | *(observed in S1)* A spec-level obligation "the selected group is X25519" is unprovable, because the spec's `server_supported_groups` is an arbitrary list | keep `legal_event`'s server derive arm X25519-shaped until S4/S5 generalise the `server_x25519_*_projection` family in the same commit |
+| R7 | *(observed in S2)* Growing a widely-used slprop (here `is_valid_client_hello` / `client_hello_slot_exactly`) enlarges the SMT context of every proof that mentions it and breaks *distant, unrelated* queries | do **not** reach for `--z3rlimit` or `--z3seed`.  Name the failing projection as a lemma, or discharge a guarded hypothesis in explicit `assert (pure ...)` steps before the call that needs it.  Two such repairs were needed in S2 (`ChannelImplementation:409`, `Server:2910`); budget one or two per structural slprop change |
+| R8 | *(observed in S2)* A `bool` field of a struct that the slot invariant owns cannot be constrained by that invariant — the struct is allocated once and its scalars are never rewritten | keep meaning in `is_valid_client_hello` (fresh structs) and move any flag the slot must know about into a metadata `Box`, as the session-id width already is |
 | R5 | Verify cycles are 10-24 min, so blind iteration is expensive | iterate per-module with `fstar.exe` first; `make` dies at the `.depend` stage (`Makefile:315`) on any syntax error, so never run `make` on unparsed code |
 
 ## 9. Exit criteria

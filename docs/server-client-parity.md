@@ -778,6 +778,35 @@ week's work.
    stages S4 and S5 must land as one commit.  Stages S2 (parser gate) and S3
    (server P-256 keygen) remain independent of that and can go first.
 
+   **Stage S2 has landed** (`76c48ed62`), but rescoped.  The plan had S2 widen
+   the spec-level acceptance gate so that a P-256-only ClientHello *parses*.
+   Measurement said no: `ch_extensions` has 169 occurrences (62 in
+   `TLS13.Impl.Parser.fst`, 51 in `TLS13.Wire.Spec.Reveal.Handshake.fst(i)`),
+   and changing its arity buys no capability while the request is refused one
+   layer up at `server_selection_acceptable`.  The gate therefore moved
+   wholesale into the final stage, where a matrix-cell flip pays for it.  What
+   landed instead is storage plumbing: `TLS13.Impl.Messages.client_hello` gains
+   a 65-byte `client_hello_p256_key_share` and a `client_hello_has_p256_key_share`
+   flag; `is_valid_client_hello` and `client_hello_slot_exactly` gain the
+   matching ownership and shape; and the allocator, parser, serializer and free
+   paths were extended.  The slot is *additive* rather than a widening of
+   `client_hello_key_share` (72 occurrences in 25 files, but only three real
+   construction sites), so every existing occurrence keeps its meaning.
+
+   S2 produced two findings worth recording.  First, the `has_p256` flag
+   **cannot be constrained by `client_hello_slot_exactly`**: that invariant
+   describes a struct allocated once whose scalar fields are never rewritten,
+   which is exactly why the session-id width already lives in a separate
+   metadata `Box`.  So the slot invariant carries ownership and shape only, and
+   the flag must become a `Box` before anything actually fills the slot.
+   Second, growing a slprop this widely used enlarges the SMT context of every
+   proof that mentions it, and two distant, unrelated queries broke --
+   `Client.ChannelImplementation.lemma_network_response_app_out_length` and the
+   `LocalSendServerHello` arm of `Impl.Server.process_local_event`.  Both were
+   repaired by *naming the projection* (a new lemma in one case, two explicit
+   `assert (pure ...)` steps discharging a guarded hypothesis in the other), not
+   by raising an rlimit or changing a `z3seed`.
+
 Until they are done, `clienthello-across-two-records`,
 `aes128-clienthello-across-two-records`, `p256-only`,
 `ecdsa-credential-p256-only` and `p256-first-x25519-listed` stay recorded as
