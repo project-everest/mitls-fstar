@@ -77,6 +77,9 @@ fn process_select_server_parameters
                   B.length 'old_app_out == SZ.v app_out_len /\
                   ST.server_end_to_end_invariant 'st0 /\
                   CM.can_select_server_parameters 'st0 selection /\
+                  // The runtime stores no group tag; CR.server_selection_group_pinned
+                  // records the choice in the representation.  Removed by G2 stage S6.
+                  CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                   CR.server_selection_absent
                     'st0.CS.cs_model.CS.model_handshake /\
                   CR.server_selection_private_absent selection)
@@ -117,6 +120,9 @@ fn process_select_server_parameters_with_private_from_array
                   B.length 'old_app_out == SZ.v app_out_len /\
                   ST.server_end_to_end_invariant 'st0 /\
                   CM.can_select_server_parameters 'st0 selection /\
+                  // The runtime stores no group tag; CR.server_selection_group_pinned
+                  // records the choice in the representation.  Removed by G2 stage S6.
+                  CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                   CR.server_selection_absent
                     'st0.CS.cs_model.CS.model_handshake /\
                   Some? selection.CS.server_key_share_private /\

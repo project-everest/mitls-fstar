@@ -1143,13 +1143,34 @@ let server_selection_private_absent
   | Some _ -> False
   | None -> True
 
+(**
+  The selected group is a purely ghost field of [CS.server_handshake_selection]:
+  the runtime stores the 32 private bytes and a presence flag, never a group tag,
+  because ATLAS's server role transmits exactly one share.  [CS.legal_event] and
+  [CS.server_hello_matches_selection] are group-indexed, so without this
+  representation-level pin nothing downstream -- the scheduler, the ServerHello
+  writer, the ECDH -- could learn which group its own stored selection names.
+
+  This is the single place the server role's X25519-only key exchange is
+  recorded; G2 stage S6 replaces it with a stored group tag and deletes the
+  matching conjuncts in [TLS13.Impl.ConnectionState.Model.valid_selection] and
+  [TLS13.Impl.Server.Types.server_local_event_input_ready].
+**)
+let server_selection_group_pinned
+  (selection:option CS.server_handshake_selection)
+  : prop =
+  match selection with
+  | Some sel -> CS.server_selected_kex_group sel == CryptoSpec.KexX25519
+  | None -> True
+
 let server_selection_presence_exactly
   ([@@@mkey] present_box:box bool)
   (selection:option CS.server_handshake_selection)
   : slprop =
   exists* present.
     Box.pts_to present_box present **
-    pure (present == Some? selection)
+    pure (present == Some? selection /\
+          server_selection_group_pinned selection)
 
 let server_key_share_private_exactly
   ([@@@mkey] slot:optional_fixed_bytes)

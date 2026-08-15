@@ -11,6 +11,7 @@ module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -115,6 +116,10 @@ fn select_server_parameters
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (can_select_server_parameters st0 selection /\
+                 // The runtime stores no group tag, so the caller has to name the
+                 // selection's group; CR.server_selection_group_pinned records it
+                 // in the representation.  G2 stage S6 removes this.
+                 CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  server_selection_private_absent selection)
@@ -138,6 +143,10 @@ fn select_server_parameters_with_private_from_array
            ArrPts.pts_to server_private_key 'server_private_key_bytes **
            pure (B.length 'server_private_key_bytes == 32 /\
                  can_select_server_parameters st0 selection /\
+                 // The runtime stores no group tag, so the caller has to name the
+                 // selection's group; CR.server_selection_group_pinned records it
+                 // in the representation.  G2 stage S6 removes this.
+                 CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  Some? selection.CS.server_key_share_private /\
@@ -830,6 +839,14 @@ fn try_derive_server_shared_secret_from_private_array
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
+                    (* CS.legal_event's LocalDeriveSharedSecret arm is group-indexed:
+                       it runs the ECDH at CS.server_selected_kex_group.  This
+                       routine still calls the raw Crypto.x25519_shared_runtime on
+                       the mirror's 32-byte X25519 slot, so it only realises that
+                       arm at X25519, and says so.  Dispatching through
+                       KEX.kex_shared_runtime is stage S6 of
+                       docs/server-p256-plan.md. *)
+                    CS.server_selected_kex_group selection == TLS13.Crypto.Spec.KexX25519 /\
                     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\

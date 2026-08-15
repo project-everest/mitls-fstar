@@ -2475,6 +2475,7 @@ fn can_schedule_derive_shared_secret_runtime
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
              | Some selection ->
                CS.server_selection_key_share_consistent selection /\
+               CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                  Some selection.CS.server_selected_client_hello
              | None -> False))
@@ -2556,6 +2557,7 @@ fn can_schedule_derive_shared_secret_runtime
       match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
         CS.server_selection_key_share_consistent selection /\
+        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
         st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
           Some selection.CS.server_selected_client_hello
       | None -> False));
@@ -2629,6 +2631,7 @@ fn can_send_server_hello_runtime
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
              | Some selection ->
                CS.server_selection_key_share_consistent selection /\
+               CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
@@ -2724,6 +2727,7 @@ fn can_send_server_hello_runtime
       match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
         CS.server_selection_key_share_consistent selection /\
+        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
         Some? selection.CS.server_key_share_private
       | None -> False));
     fold (optional_secret_exactly

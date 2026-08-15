@@ -107,6 +107,7 @@ let next_local_action_sound
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
+         CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
          st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
            Some selection.CS.server_selected_client_hello
        | None -> False)
@@ -120,6 +121,7 @@ let next_local_action_sound
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
+         CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
          Some? selection.CS.server_key_share_private
        | None -> False)
     | LocalInstallServerHandshakeTrafficKeys ->
@@ -418,6 +420,10 @@ let server_local_event_input_ready
           (Some?.v selection.CS.server_key_share_private)
           server_private_key /\
         CS.server_selection_key_share_consistent selection /\
+        (* See the note on the LocalDeriveSharedSecret arm below: the ServerHello
+           writer still emits a 32-byte X25519 KeyShareEntry, so it only realises
+           the group-indexed CS.server_hello_matches_selection at X25519. *)
+        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
         (* Cipher-suite agility (gap G1): the stored selection's suite is the one
            the deterministic negotiation policy computes from the stored
            ClientHello.  The select step installs exactly that value, and neither
@@ -514,6 +520,17 @@ let server_local_event_input_ready
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->
        CS.server_selection_key_share_consistent selection /\
+       (* Where this implementation's remaining X25519-only-ness lives.  Both
+          CS.legal_event's LocalDeriveSharedSecret arm and
+          CS.server_hello_matches_selection are group-indexed, dispatching on
+          CS.server_selected_kex_group.  The server's ECDH still calls the raw
+          Crypto.x25519_shared_runtime and its ServerHello writer still emits a
+          32-byte X25519 KeyShareEntry, so both only realise their arm at
+          X25519.  Naming it here -- once, at the input gate -- rather than
+          baking X25519 into the specification is what keeps the whole send path
+          at its concrete 90/95/122-byte lengths.  Stage S6 of
+          docs/server-p256-plan.md removes it. *)
+       CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
        st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
          Some selection.CS.server_selected_client_hello /\
        Some? selection.CS.server_key_share_private /\

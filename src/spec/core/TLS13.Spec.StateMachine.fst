@@ -216,7 +216,14 @@ let server_selection_key_share_consistent
    | None -> True) /\
   (match selection.server_p256_private with
    | Some sk -> C.p256_public_from_private sk == selection.server_p256_public
-   | None -> True)
+   | None -> True) /\
+  (* The two keypairs are drawn together or not at all: the implementation
+     derives both publics from the same 32 secret bytes, so a selection that
+     carries one private carries the other.  This is what lets a proof that
+     recovers [Some? (server_kex_private selection g)] at the *selected* group
+     conclude [Some? selection.server_key_share_private], which the runtime
+     representation predicates are phrased in terms of. *)
+  (Some? selection.server_key_share_private <==> Some? selection.server_p256_private)
 
 (** Stands in [server_p256_public] wherever the server has not generated a
     secp256r1 keypair.  [server_p256_private] is [None] alongside it, so
@@ -1548,8 +1555,15 @@ let server_hello_matches_selection
   (match Sem.serverHello_random sh with
    | Some r -> Seq.equal r selection.server_random
    | None -> False) /\
-  (match Sem.serverHello_key_share_x25519 sh with
-   | Some k -> B.length k = 32 /\ Seq.equal k selection.server_key_share_public
+  (* Dispatch on the group the server named in its own KeyShareEntry, exactly as
+     the client's [client_x25519_key_share_projection] does.  The group is read
+     back off the message rather than recovered from the configuration, and it
+     is then required to be the one the selection names -- which is what ties the
+     wire image to the keypair the ECDH will run with. *)
+  (match server_hello_kex sh with
+   | Some (| g, k |) ->
+     g == server_selected_kex_group selection /\
+     Seq.equal k (server_kex_public selection g)
    | None -> False) /\
   H.is_supported_cipher_suite selection.server_selected_cipher_suite /\
   Sem.serverHello_cipher_suite sh == Some selection.server_selected_cipher_suite /\
@@ -1707,22 +1721,19 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     (match hs.hs_server_selection with
      | Some selection ->
        server_selection_key_share_consistent selection /\
-       (* Still X25519-specific.  Making this dispatch on
-          [server_selected_kex_group selection] -- the mirror of the client's arm
-          above -- also forces the whole server_x25519_*_projection invariant
-          family in TLS13.Spec.StateMachine.Correspondence and
-          TLS13.ConnectionState.Lemmas to be restated over [server_kex_public],
-          because neither direction of those proofs can recover "the selected
-          group is X25519" from the spec-level config.  That is stage S4/S5 work
-          in docs/server-p256-plan.md; the vocabulary it needs
-          ([server_kex_private], [server_kex_public],
-          [server_selected_kex_group]) is in place above. *)
-       (match selection.server_key_share_private with
-       | Some sk ->
-         (match client_hello_key_share selection.server_selected_client_hello with
-          | Some k -> C.x25519_shared sk k == Some shared
-          | None -> False)
-       | None -> False)
+       (* Dispatch on the group the server selected.  The server generated a
+          keypair for every group it supports (see [server_handshake_selection]),
+          so [server_selected_group] -- and not a share's length -- decides which
+          private key the ECDH runs with.  This is the exact mirror of the
+          client's arm above; the difference is only where the group comes from,
+          the selection here rather than the received ServerHello there. *)
+       (let g = server_selected_kex_group selection in
+        match server_kex_private selection g with
+        | Some sk ->
+          (match client_hello_kex selection.server_selected_client_hello g with
+           | Some k -> C.kex_shared g sk k == Some shared
+           | None -> False)
+        | None -> False)
      | None -> False)
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
     model.model_config.config_role == ClientEndpoint /\

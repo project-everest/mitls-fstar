@@ -1097,8 +1097,13 @@ fn read
               kind
               (Ghost.reveal 'payload_bytes))
     {
-      match kind {
-        ST.LocalDeriveSharedSecret -> {
+      // An `if` rather than a `match` with a catch-all: Pulse's catch-all arm
+      // carries no disequality, and the second arm needs `kind` to differ from
+      // LocalDeriveSharedSecret to discharge local_event_success_correct
+      // vacuously.  That used to fall out of CS.legal_event's derive arm, which
+      // named x25519_shared directly; the arm is group-indexed now, so the
+      // vacuity has to be honest.
+      if (kind = ST.LocalDeriveSharedSecret) {
           assert (pure (ST.server_local_event_input_ready_with_credentials
             'st0
             kind
@@ -1135,7 +1140,7 @@ fn read
             (Ghost.reveal 'payload_bytes)));
           resp
         }
-        _ -> {
+        else {
           let resp =
             S.process_local_event_with_credentials
               s
@@ -1157,6 +1162,9 @@ fn read
               pts_to payload 'payload_bytes **
               pts_to network_out network_out_bytes **
               pts_to app_out app_out_bytes);
+          // Everything but LocalDeriveSharedSecret, so
+          // local_event_success_correct is vacuously true.
+          assert (pure (~(kind == ST.LocalDeriveSharedSecret)));
           assert (pure (local_event_success_correct
             'st0
             st1
@@ -1165,7 +1173,6 @@ fn read
             (Ghost.reveal 'payload_bytes)));
           resp
         }
-      }
     }
 
     fn process_local_event

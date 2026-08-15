@@ -35,6 +35,7 @@ module TLS13.ConnectionState.HandshakeAgreementNonReady
 module R = TLS13.Record.Spec
 module C = TLS13.Crypto.Spec
 module Seq = FStar.Seq
+module Sem = TLS13.Wire.Semantics
 module SHSL = TLS13.ConnectionState.ServerHelloSelectionLink
 
 open TLS13.Spec.StateMachine
@@ -86,31 +87,33 @@ let lemma_paired_x25519_key_shares_nonready
   with
   | Some start, Some client_ch, Some client_sh, Some client_shared,
     Some selection, Some server_ch, Some server_sh, Some server_shared ->
-    (match
-       start.start_client_key_share_private,
-       selection.server_key_share_private
-     with
-     | Some client_sk, Some server_sk ->
-       assert (client_hello_key_share client_ch ==
-         client_hello_key_share server_ch);
-       assert (server_hello_key_share client_sh ==
-         server_hello_key_share server_sh);
-       (match
-          client_hello_key_share server_ch,
-          server_hello_key_share client_sh
-        with
-        | Some ch_ks, Some sh_ks ->
-          assert (ch_ks == start.start_client_key_share_public);
-          assert (sh_ks == selection.server_key_share_public);
-          assert (C.x25519_public_from_private client_sk ==
-            start.start_client_key_share_public);
-          assert (C.x25519_public_from_private server_sk ==
-            selection.server_key_share_public);
-          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
-          assert (negotiated_aead_alg client_hs == negotiated_aead_alg server_hs)
-        | _, _ -> assert False)
-     | _, _ -> assert False)
+    (assert (client_hello_key_share client_ch ==
+       client_hello_key_share server_ch);
+     // The goal and both projections are group-indexed, all three reading the
+     // group off a ServerHello.  Peering pins the whole key-share extension, so
+     // the client's stored ServerHello names the same group as the server's,
+     // and the server's projection ties that group to the selection.
+     assert (Sem.serverHello_kex_share client_sh == Sem.serverHello_kex_share server_sh);
+     assert (server_hello_kex client_sh == server_hello_kex server_sh);
+     (match server_hello_kex client_sh with
+      | Some (| g, sh_ks |) ->
+        (match
+           start_kex_private start g,
+           server_kex_private selection g,
+           client_hello_kex server_ch g
+         with
+         | Some client_sk, Some server_sk, Some ch_ks ->
+           assert (g == server_selected_kex_group selection);
+           assert (client_hello_kex client_ch g == client_hello_kex server_ch g);
+           assert (ch_ks == start_kex_public start g);
+           assert (sh_ks == server_kex_public selection g);
+           assert (C.kex_public_from_private g client_sk == start_kex_public start g);
+           assert (C.kex_public_from_private g server_sk == server_kex_public selection g);
+           assert (C.kex_shared g client_sk sh_ks == Some client_shared);
+           assert (C.kex_shared g server_sk ch_ks == Some server_shared);
+           assert (negotiated_aead_alg client_hs == negotiated_aead_alg server_hs)
+         | _, _, _ -> assert False)
+      | None -> assert False))
   | _, _, _, _, _, _, _, _ -> assert False
 
 #pop-options
@@ -168,31 +171,33 @@ let lemma_paired_x25519_key_shares_nonready_cf
   with
   | Some start, Some client_ch, Some client_sh, Some client_shared,
     Some selection, Some server_ch, Some server_sh, Some server_shared ->
-    (match
-       start.start_client_key_share_private,
-       selection.server_key_share_private
-     with
-     | Some client_sk, Some server_sk ->
-       assert (client_hello_key_share client_ch ==
-         client_hello_key_share server_ch);
-       assert (server_hello_key_share client_sh ==
-         server_hello_key_share server_sh);
-       (match
-          client_hello_key_share server_ch,
-          server_hello_key_share client_sh
-        with
-        | Some ch_ks, Some sh_ks ->
-          assert (ch_ks == start.start_client_key_share_public);
-          assert (sh_ks == selection.server_key_share_public);
-          assert (C.x25519_public_from_private client_sk ==
-            start.start_client_key_share_public);
-          assert (C.x25519_public_from_private server_sk ==
-            selection.server_key_share_public);
-          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
-          assert (negotiated_aead_alg client_hs == negotiated_aead_alg server_hs)
-        | _, _ -> assert False)
-     | _, _ -> assert False)
+    (assert (client_hello_key_share client_ch ==
+       client_hello_key_share server_ch);
+     // The goal and both projections are group-indexed, all three reading the
+     // group off a ServerHello.  Peering pins the whole key-share extension, so
+     // the client's stored ServerHello names the same group as the server's,
+     // and the server's projection ties that group to the selection.
+     assert (Sem.serverHello_kex_share client_sh == Sem.serverHello_kex_share server_sh);
+     assert (server_hello_kex client_sh == server_hello_kex server_sh);
+     (match server_hello_kex client_sh with
+      | Some (| g, sh_ks |) ->
+        (match
+           start_kex_private start g,
+           server_kex_private selection g,
+           client_hello_kex server_ch g
+         with
+         | Some client_sk, Some server_sk, Some ch_ks ->
+           assert (g == server_selected_kex_group selection);
+           assert (client_hello_kex client_ch g == client_hello_kex server_ch g);
+           assert (ch_ks == start_kex_public start g);
+           assert (sh_ks == server_kex_public selection g);
+           assert (C.kex_public_from_private g client_sk == start_kex_public start g);
+           assert (C.kex_public_from_private g server_sk == server_kex_public selection g);
+           assert (C.kex_shared g client_sk sh_ks == Some client_shared);
+           assert (C.kex_shared g server_sk ch_ks == Some server_shared);
+           assert (negotiated_aead_alg client_hs == negotiated_aead_alg server_hs)
+         | _, _, _ -> assert False)
+      | None -> assert False))
   | _, _, _, _, _, _, _, _ -> assert False
 #pop-options
 

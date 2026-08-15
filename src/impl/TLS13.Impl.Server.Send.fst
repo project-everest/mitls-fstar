@@ -476,7 +476,7 @@ let lemma_can_send_server_hello_witness_of_selection
 (* the large Endpoint deferred-action Pulse function (whose whole-function    *)
 (* query is otherwise destabilised by the added obligations).                *)
 (* ----------------------------------------------------------------------- *)
-#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200 --split_queries always"
 let lemma_input_ready_server_hello_of_selection
   (st: CS.connection_state)
   (selection: CS.server_handshake_selection)
@@ -509,6 +509,11 @@ let lemma_input_ready_server_hello_of_selection
       // for, not only on X25519.  [material] only carries the X25519 pair, so
       // the secp256r1 half has to be assumed rather than reconstructed here.
       CS.server_selection_key_share_consistent selection /\
+      Some? selection.CS.server_p256_private /\
+      // CM.valid_selection (and through it CS.server_hello_matches_selection,
+      // which is group-indexed) only holds for a selection this X25519-only
+      // ServerHello writer could have produced.
+      CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
       Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
       selection.CS.server_selected_cipher_suite == CM.server_selected_suite st)
     (ensures

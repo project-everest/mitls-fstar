@@ -21,6 +21,7 @@ module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module ST = TLS13.Impl.Server.Types
+module Sem = TLS13.Wire.Semantics
 module W = TLS13.Wire.Spec
 module WFL = TLS13.Spec.WireFormatLemmas
 module WStep = TLS13.System.WireStep
@@ -264,6 +265,31 @@ let lemma_paired_handshake_message_states_paired_handshake_events
 =
   ()
 
+(* [paired_handshake_events] is exactly the six transcript checkpoints.  They are
+   proven in their own lemma so that their queries do not also carry the twelve
+   message-correspondence assertions of
+   [lemma_paired_handshake_event_trace_paired_handshake_message_states]: since
+   G2 stage S4/S5 those correspondences carry key-share conjuncts, and the
+   combined context was large enough that Z3 lost the last three checkpoints. *)
+let lemma_transcript_checkpoints_of_event_trace
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires paired_handshake_event_trace client server)
+      (ensures TLS13.Spec.StateMachine.Correspondence.paired_handshake_events client server)
+=
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CH client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SH client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_CV client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_SF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SF client server);
+  assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CF client server)
+
+(* The ServerHello and ClientHello correspondences gained key-share conjuncts in
+   G2 stage S4/S5, which enlarges the context of this long assert chain enough
+   that Z3 loses the last transcript checkpoint.  Splitting the query keeps each
+   assert's context at its previous size. *)
+#push-options "--split_queries always"
 let lemma_paired_handshake_event_trace_paired_handshake_message_states
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -323,15 +349,10 @@ let lemma_paired_handshake_event_trace_paired_handshake_message_states
     assert (TLS13.Spec.StateMachine.Correspondence.certificate_verify_corresponds client_cv server_cv);
     assert (client_sf == server_sf);
     assert (client_cf == server_cf);
-    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CH client server);
-    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SH client server);
-    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_CV client server);
-    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_before_SF client server);
-    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_SF client server);
-    assert (TLS13.Spec.StateMachine.Correspondence.same_transcript_checkpoint TLS13.Spec.StateMachine.KeyIdentifiers.TH_CF client server);
-    assert (TLS13.Spec.StateMachine.Correspondence.paired_handshake_events client server)
+    lemma_transcript_checkpoints_of_event_trace client server
   | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
     assert False
+#pop-options
 
 let lemma_paired_handshake_event_trace_paired_handshake_events
   (client:CS.connection_state)
@@ -412,6 +433,7 @@ let lemma_paired_handshake_events_application_derivation_projection_inputs
     client
     server
 
+#push-options "--z3rlimit 20"
 let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -440,38 +462,54 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
   with
   | Some start, Some client_ch, Some client_sh, Some client_shared,
     Some selection, Some server_ch, Some server_sh, Some server_shared ->
-    (match
-      start.CS.start_client_key_share_private,
-      selection.CS.server_key_share_private
-     with
-     | Some client_sk, Some server_sk ->
-       assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
-         (M.ClientHello client_ch) (M.ClientHello server_ch));
-       assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
-         (M.ServerHello client_sh) (M.ServerHello server_sh));
-       assert (CS.client_hello_key_share client_ch ==
-         CS.client_hello_key_share server_ch);
-       assert (CS.server_hello_key_share client_sh ==
-         CS.server_hello_key_share server_sh);
-       (match
-          CS.client_hello_key_share server_ch,
-          CS.server_hello_key_share client_sh
-        with
-        | Some ch_ks, Some sh_ks ->
-          assert (ch_ks == start.CS.start_client_key_share_public);
-          assert (sh_ks == selection.CS.server_key_share_public);
-          assert (C.x25519_public_from_private client_sk ==
-            start.CS.start_client_key_share_public);
-          assert (C.x25519_public_from_private server_sk ==
-            selection.CS.server_key_share_public);
-          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
-          // The ServerHello correspondence above pins the cipher suite, hence
-          // the negotiated AEAD algorithm, on both sides.
-          assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
-        | _, _ -> assert False)
-     | _, _ ->
-       assert False)
+    (assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
+       (M.ClientHello client_ch) (M.ClientHello server_ch));
+     assert (TLS13.Spec.StateMachine.Correspondence.handshake_msg_corresponds
+       (M.ServerHello client_sh) (M.ServerHello server_sh));
+     assert (CS.client_hello_key_share client_ch ==
+       CS.client_hello_key_share server_ch);
+     // ServerHello correspondence pins the whole key-share extension, so the
+     // group the client read off its stored ServerHello is the group the server
+     // put there, which its own projection ties to the selection.
+     assert (Sem.serverHello_kex_share client_sh == Sem.serverHello_kex_share server_sh);
+     assert (CS.server_hello_kex client_sh == CS.server_hello_kex server_sh);
+     // The same correspondence pins the cipher suite, hence the negotiated AEAD
+     // algorithm, on both sides.  Discharged here, outside the group-indexed
+     // case analysis below, so that its VC does not also carry the key-share
+     // chain.
+     assert (client_hs.CS.hs_server_hello == Some client_sh);
+     assert (server_hs.CS.hs_server_hello == Some server_sh);
+     assert (Sem.serverHello_cipher_suite client_sh ==
+       Sem.serverHello_cipher_suite server_sh);
+     assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs);
+     (match CS.server_hello_kex client_sh with
+      | Some (| g, sh_ks |) ->
+        // Naming, at the group [g] read off the ServerHello, the three
+        // presence facts the two projections give.  Without them the dependent
+        // pair hides [g] from the case analysis below and the impossible
+        // branches cannot be discharged.
+        assert (CS.server_hello_kex server_sh == Some (| g, sh_ks |));
+        assert (Some? (CS.start_kex_private start g));
+        assert (Some? (CS.server_kex_private selection g));
+        assert (Some? (CS.client_hello_kex server_ch g));
+        (match
+          CS.start_kex_private start g,
+          CS.server_kex_private selection g,
+          CS.client_hello_kex server_ch g
+         with
+         | Some client_sk, Some server_sk, Some ch_ks ->
+           assert (g == CS.server_selected_kex_group selection);
+           assert (ch_ks == CS.start_kex_public start g);
+           assert (sh_ks == CS.server_kex_public selection g);
+           assert (C.kex_public_from_private g client_sk == CS.start_kex_public start g);
+           assert (C.kex_public_from_private g server_sk == CS.server_kex_public selection g);
+           assert (C.kex_shared g client_sk sh_ks == Some client_shared);
+           assert (C.kex_shared g server_sk ch_ks == Some server_shared);
+           // Re-stated here so that the branch ends on the goal's own last
+           // conjunct; it was already discharged above, outside this VC.
+           assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
+         | _, _, _ -> assert False)
+      | None -> assert False))
   | _, _, _, _, _, _, _, _ ->
     assert False
 
@@ -503,49 +541,56 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
   with
   | Some start, Some client_ch, Some client_sh, Some client_shared,
     Some selection, Some server_ch, Some server_sh, Some server_shared ->
-    (match
-     start.CS.start_client_key_share_private,
-     selection.CS.server_key_share_private
-     with
-     | Some client_sk, Some server_sk ->
-      assert (WFL.paired_cleartext_hello_key_shares client server);
-      assert (CS.client_hello_key_share client_ch ==
-        CS.client_hello_key_share server_ch);
-      assert (CS.server_hello_key_share client_sh ==
-        CS.server_hello_key_share server_sh);
-      (match
-         CS.client_hello_key_share server_ch,
-         CS.server_hello_key_share client_sh
-       with
-       | Some ch_ks, Some sh_ks ->
-         (* ATLAS's own server role only ever selects X25519, and the paired
-            ServerHello correspondence carries that choice to the client, so the
-            client's group-agile projection collapses to its X25519 instance. *)
-         CS.lemma_server_hello_kex_of_share client_sh;
-         assert (CS.server_hello_kex client_sh ==
-           Some (| C.KexX25519, (sh_ks <: C.kex_public C.KexX25519) |));
-         assert (CS.start_kex_private start C.KexX25519 ==
-           start.CS.start_client_key_share_private);
-         assert (CS.start_kex_public start C.KexX25519 ==
-           start.CS.start_client_key_share_public);
-         assert (CS.client_hello_kex client_ch C.KexX25519 ==
-           CS.client_hello_key_share client_ch);
-         assert (ch_ks == start.CS.start_client_key_share_public);
-         assert (sh_ks == selection.CS.server_key_share_public);
-         assert (C.x25519_public_from_private client_sk ==
-           start.CS.start_client_key_share_public);
-         assert (C.x25519_public_from_private server_sk ==
-           selection.CS.server_key_share_public);
-         assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-         assert (C.x25519_shared server_sk ch_ks == Some server_shared);
-         // The ServerHello correspondence above pins the cipher suite, hence
-         // the negotiated AEAD algorithm, on both sides.
-         assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
-       | _, _ -> assert False)
-     | _, _ ->
-      assert False)
+    (assert (WFL.paired_cleartext_hello_key_shares client server);
+     assert (CS.client_hello_key_share client_ch ==
+       CS.client_hello_key_share server_ch);
+     // The group travels with the share through the ServerHello
+     // correspondence, so the client's group-agile projection and the server's
+     // are instantiated at the same group -- the one the selection names.
+     assert (Sem.serverHello_kex_share client_sh == Sem.serverHello_kex_share server_sh);
+     assert (CS.server_hello_kex client_sh == CS.server_hello_kex server_sh);
+     // The same correspondence pins the cipher suite, hence the negotiated AEAD
+     // algorithm, on both sides.  Discharged here, outside the group-indexed
+     // case analysis below, so that its VC does not also carry the key-share
+     // chain.
+     assert (client_hs.CS.hs_server_hello == Some client_sh);
+     assert (server_hs.CS.hs_server_hello == Some server_sh);
+     assert (Sem.serverHello_cipher_suite client_sh ==
+       Sem.serverHello_cipher_suite server_sh);
+     assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs);
+     (match CS.server_hello_kex client_sh with
+      | Some (| g, sh_ks |) ->
+        // Naming, at the group [g] read off the ServerHello, the three
+        // presence facts the two projections give.  Without them the dependent
+        // pair hides [g] from the case analysis below and the impossible
+        // branches cannot be discharged.
+        assert (CS.server_hello_kex server_sh == Some (| g, sh_ks |));
+        assert (Some? (CS.start_kex_private start g));
+        assert (Some? (CS.server_kex_private selection g));
+        assert (Some? (CS.client_hello_kex server_ch g));
+        (match
+          CS.start_kex_private start g,
+          CS.server_kex_private selection g,
+          CS.client_hello_kex server_ch g
+         with
+         | Some client_sk, Some server_sk, Some ch_ks ->
+           assert (g == CS.server_selected_kex_group selection);
+           assert (CS.client_hello_kex client_ch g == CS.client_hello_kex server_ch g);
+           assert (ch_ks == CS.start_kex_public start g);
+           assert (sh_ks == CS.server_kex_public selection g);
+           assert (C.kex_public_from_private g client_sk == CS.start_kex_public start g);
+           assert (C.kex_public_from_private g server_sk == CS.server_kex_public selection g);
+           assert (C.kex_shared g client_sk sh_ks == Some client_shared);
+           assert (C.kex_shared g server_sk ch_ks == Some server_shared);
+           // Re-stated here so that the branch ends on the goal's own last
+           // conjunct; it was already discharged above, outside this VC.
+           assert (CS.negotiated_aead_alg client_hs == CS.negotiated_aead_alg server_hs)
+         | _, _, _ -> assert False)
+      | None -> assert False))
   | _, _, _, _, _, _, _, _ ->
     assert False
+
+#pop-options
 
 #push-options "--split_queries always"
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection_inputs

@@ -328,6 +328,9 @@ fn process_select_server_parameters
                   B.length 'old_app_out == SZ.v app_out_len /\
                   ST.server_end_to_end_invariant 'st0 /\
                   CM.can_select_server_parameters 'st0 selection /\
+                  // The runtime stores no group tag; CR.server_selection_group_pinned
+                  // records the choice in the representation.  Removed by G2 stage S6.
+                  CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                   CR.server_selection_absent
                     'st0.CS.cs_model.CS.model_handshake /\
                   CR.server_selection_private_absent selection)
@@ -1583,6 +1586,10 @@ fn process_derive_shared_secret_from_private_array
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
+                    (* See TLS13.Impl.Server.Types.server_local_event_input_ready:
+                       the ECDH is group-indexed in the specification but this
+                       implementation still runs it at X25519 only. *)
+                    CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                     'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\

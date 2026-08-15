@@ -327,18 +327,21 @@ let lemma_server_x25519_key_share_projection_of_hello_present (server:connection
          hs.hs_server_hello, hs.hs_keys.ks_shared_secret
        with
        | Some selection, Some ch, Some sh, Some shared ->
-         (match selection.server_key_share_private with
-          | Some server_sk ->
-            // from the link shape (hello Some, selection Some)
-            assert (server_hello_matches_selection selection sh);
-            assert (server_hello_key_share sh ==
-              Some selection.server_key_share_public);
-            // from the pre-projection
-            (match client_hello_key_share ch with
-             | Some ch_ks ->
-               assert (C.x25519_public_from_private server_sk ==
-                 selection.server_key_share_public);
-               assert (C.x25519_shared server_sk ch_ks == Some shared)
+         // from the link shape (hello Some, selection Some): the ServerHello
+         // names the selected group and carries that group's share
+         assert (server_hello_matches_selection selection sh);
+         (match server_hello_kex sh with
+          | Some (| g, sh_ks |) ->
+            assert (g == server_selected_kex_group selection);
+            (match server_kex_private selection g with
+             | Some server_sk ->
+               // from the pre-projection
+               (match client_hello_kex ch g with
+                | Some ch_ks ->
+                  assert (C.kex_public_from_private g server_sk ==
+                    server_kex_public selection g);
+                  assert (C.kex_shared g server_sk ch_ks == Some shared)
+                | None -> assert False)
              | None -> assert False)
           | None -> assert False)
        | _, _, _, _ -> assert False);

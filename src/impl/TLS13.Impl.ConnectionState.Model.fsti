@@ -502,9 +502,21 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
 // valid-selection predicate: the selection random differs from the HRR sentinel
 // and the selected cipher suite is the single supported one, so the clamp in
 // server_hello_of_selection is an identity and the record matches the selection.
+//
+// The third conjunct is where this implementation's remaining X25519-only-ness
+// lives.  CS.server_hello_matches_selection is group-indexed: it demands that
+// the ServerHello name CS.server_selected_kex_group and carry that group's
+// share.  server_hello_of_selection below still builds an X25519 KeyShareEntry
+// with the 32-byte CS.server_key_share_public, so it only realises selections
+// at X25519.  Naming that as a hypothesis -- rather than baking X25519 into the
+// specification, as the invariants used to -- is what keeps every ServerHello
+// length in this file the concrete 90 + |sid|.  Removing it, and making
+// server_hello_of_selection build at CS.server_selected_kex_group, is stage S6
+// of docs/server-p256-plan.md.
 let valid_selection (sel:CS.server_handshake_selection) : prop =
   (sel.CS.server_random <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-  H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite
+  H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite /\
+  CS.server_selected_kex_group sel == CryptoSpec.KexX25519
 
 // clamp: a 32-byte server random differing from the HRR sentinel (identity under
 // valid_selection).  The all-zero fallback differs from serverHello_body_cst at
