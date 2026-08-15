@@ -78,6 +78,33 @@ and now says so through a single named predicate,
 `server_selection_group_pinned`, whose deletion is the switch that turns the
 feature on in the final stage.
 
+Four more capability-neutral halves have landed since.  The parser reads a
+secp256r1 key share, as a *second pass* over the ClientHello's extensions rather
+than a wider `scan_ch_extensions` -- the existing scan carries an eight-tuple
+loop invariant over nine mutable references, and the specification defines
+`clientHello_key_share_secp256r1` as an independent walk anyway, so the second
+pass mirrors the specification's own structure.  The ServerHello writer now
+builds its group tag and its share from the selection rather than from the
+constants `X25519` and the 32-byte X25519 public.  The negotiated group became
+observable at run time: it is genuinely *not* recoverable from what the server
+already stores -- the mirror's group tag describes a ServerHello, which does not
+exist yet, and an all-zero X25519 share is a legal share -- so it joins the
+ClientHello metadata as a box, alongside the session-id width, carrying a
+deterministic policy (prefer X25519 when offered, else secp256r1) that is a
+function of the stored ClientHello alone.  And the peer's secp256r1 offer is now
+observable end-to-end: the mirror's invariant states the stored bytes, an offer
+at a length other than 65 is simply no offer rather than a parse failure
+(RFC 8446 4.2.8), and the client's own mirror caught up with the fact that its
+canonical ClientHello has always offered two key shares.
+
+What is left is one indivisible commit, and the reason is precise: the
+acceptance gate is exactly what makes the negotiated group a constant.  The
+moment a ClientHello without an X25519 share is accepted, the ECDH, the
+selection policy, the ServerHello length arithmetic and the configured group
+list all face a group they cannot yet handle, with no runtime rejection path to
+fall back on -- so they must move together.  `docs/server-p256-plan.md` §7
+carries the file-and-line breakdown.
+
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries
 the id as a zero-padded 32-byte buffer plus an explicit width, and the

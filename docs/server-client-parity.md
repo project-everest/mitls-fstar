@@ -56,7 +56,7 @@ insist on:
 | `TLS_CHACHA20_POLY1305_SHA256` | yes | yes | -- |
 | `TLS_AES_128_GCM_SHA256` | yes | yes (G1 closed) | -- |
 | X25519 key exchange | yes | yes | -- |
-| `secp256r1` key exchange | yes | **no** | `TLS13.Spec.StateMachine:1626` (server `LocalDeriveSharedSecret`) |
+| `secp256r1` key exchange | yes | **in progress** (G2, S1-S6.5 landed) | `TLS13.Wire.Spec.clientHello_representable:472` (the acceptance gate) |
 | cross-record handshake reassembly | yes | **no** | `TLS13.Spec.StateMachine.legal_protected_handshake_step:1986` |
 | HelloRetryRequest | n/a (rejects) | **no** | `TLS13.Impl.Serializer.Handshake.fst:1704` |
 | short/empty `legacy_session_id` echo | n/a | yes (G4 closed) | -- |
@@ -178,6 +178,22 @@ ChaCha-preferring cells are unchanged -- server preference still wins when both
 are offered.
 
 ### G2. The server has no `secp256r1` key exchange, and no HelloRetryRequest
+
+> **Status: in progress, stages S1-S6.5 landed.**  The gap analysis below is the
+> original one and still describes the *capability*: the server will not yet
+> negotiate secp256r1, and `p256-only` is still `refused` in the ledger.  What
+> has changed is everything underneath.  The specification is now fully
+> group-parametric, the parser reads a secp256r1 offer, the mirror stores it,
+> the ServerHello writer builds at the selected group, the server derives a
+> secp256r1 keypair, and a `client_hello_kex_group` metadata box carries the
+> negotiated group at runtime.  What remains is one atomic commit — gate, ECDH
+> dispatch, selection policy, ServerHello lengths, `server_supported_groups`,
+> ledger — because widening the acceptance gate is what makes the group
+> non-constant, and nothing downstream can handle a non-constant group until it
+> all moves together.  See `docs/server-p256-plan.md` §7, "S6 as re-measured".
+>
+> HelloRetryRequest remains out of scope, so the `p256-first-x25519-listed` cell
+> stays `refused` even after G2 closes.
 
 Two independent blockers, both fatal on their own.
 

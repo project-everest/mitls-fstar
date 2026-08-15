@@ -629,16 +629,25 @@ which is a separate flight in the server state machine and is out of scope here.
 **There is no partial credit in S6.**  A `p256-only` ClientHello is blocked at
 five independent points, and *all five* must move before any cell flips:
 
-| # | blocker | site |
-| --- | --- | --- |
-| 1 | the parse gate demands an X25519 share | `Wire.Spec.clientHello_representable:472` and its Parser mirror |
-| 2 | the concrete mirror's invariant demands one too | `Impl.Messages.is_valid_client_hello:542` (`\| None -> False`) |
-| 3 | the configured groups are X25519-only | `Impl.ConnectionState.Repr.fsti` `server_supported_groups` |
-| 4 | the ServerHello writer emits `GNG.X25519` and a 32-byte share | `Impl.ConnectionState.Model.fsti` `server_hello_of_selection` |
-| 5 | the ECDH is `x25519_shared` | `Impl.ConnectionState.LocalHandshake.fst` |
+| # | blocker | site | status |
+| --- | --- | --- | --- |
+| 1 | the parse gate demands an X25519 share | `Wire.Spec.clientHello_representable:472` and its Parser mirror | open |
+| 2 | the concrete mirror's invariant demands one too | `Impl.Messages.is_valid_client_hello:542` (`\| None -> False`) | open |
+| 3 | the configured groups are X25519-only | `Impl.ConnectionState.Repr.fsti` `server_supported_groups` | open |
+| 4 | the ServerHello writer emits `GNG.X25519` and a 32-byte share | `Impl.ConnectionState.Model.fsti` `server_hello_of_selection` | **closed by S6.3** |
+| 5 | the ECDH is `x25519_shared` | `Impl.ConnectionState.LocalHandshake.fst` | open |
 
 So S6 cannot be staged capability-neutrally the way S1-S5 were.  It is one
 commit, and the order below is the dependency order.
+
+> **Superseded in part.**  The paragraph above is correct about the *capability*
+> but too pessimistic about the *work*: see "S6 as landed, part 1" below.  Four
+> capability-neutral halves (S6.1-S6.5) landed as separate verified commits, one
+> of them closing blocker 4 outright, and they also revealed a **sixth** blocker
+> the table missed — the negotiated group is not recoverable at runtime at all
+> and needed its own metadata box.  The ordering given immediately below (gate
+> first) is *not* the order that was executed; it breaks every downstream proof
+> at once.  The executed order generalises first and gates last.
 
 **S6.1 — the secp256r1 finder's reveal lemmas.**
 `Sem.kse_list_find_secp256r1` / `ch_find_key_share_secp256r1` /
@@ -741,6 +750,108 @@ at `Impl.ConnectionState.LocalHandshake.fst:4801`, padding with
 
 ---
 
+### S6 as landed, part 1 — stages S6.1 to S6.5 (commits `5ee056664`,
+### `b578465f0`, `0bd78b985`, `613e12980`)
+
+The "no partial credit" reading above is right about the *capability* but wrong
+about the *work*.  Four of the five blockers turned out to have a
+capability-neutral half that can land, verified, before anything flips.  All
+four landed green with the ledger unmoved.
+
+**S6.1 + S6.2 — read the offer (`5ee056664`).**  Five reveal lemmas
+(`lemma_reveal_kse_list_find_secp256r1_{nil,cons}`,
+`lemma_reveal_ch_find_key_share_secp256r1_{nil,cons_ks,cons_other}`), and a
+*second parser pass* rather than a wider `scan_ch_extensions`:
+`probe_copy_p256_key`, `scan_kse_list_p256`, `scan_ch_p256_key_share`.  The
+scan stays at four components, so the 169 `ch_extensions` occurrences S2
+measured are untouched.  `Sem.clientHello_key_share_secp256r1` is *specified*
+as an independent walk, so the second pass mirrors the specification's own
+structure and reduces the obligation to a single extension arm.
+
+**S6.3 — the writer builds at the selected group (`b578465f0`).**
+`server_hello_of_selection` now takes its tag from `sho_named_group sel` and its
+share from `sho_key_share sel = CS.server_kex_public sel (server_selected_kex_group sel)`.
+`CM.valid_selection` keeps its X25519 conjunct, so every length in the tree is
+still provably `90 + |sid|` and **none of the 35 numeric sites moved**.  Two
+ghost bridges to the X25519-only `mk_server_hello_witness` gained
+`requires server_selected_kex_group sel == KexX25519`; nothing had to be
+threaded to supply it, because S4/S5 already put that conjunct into
+`server_local_event_input_ready`/`LocalSendServerHello`.
+
+**S6.4 — a runtime tag for the group (`0bd78b985`).**  This is the piece the
+"five blockers" table missed.  The group is *not recoverable* at runtime:
+
+  - `kex_share_storage.group` is the group the peer named in a **ServerHello**,
+    so it is a client-side tag, and on the server `hs_server_hello` is still
+    `None` when the shared secret is derived;
+  - the stored ClientHello's bytes cannot answer it either, because an all-zero
+    32-byte X25519 slot is a legal share.
+
+So the group joins the ClientHello metadata, exactly as the session-id width did
+for G4: `CM.client_hello_kex_group_for m` (the policy: prefer X25519 when
+offered, else secp256r1) plus a `client_hello_kex_group : box kex_group` in
+`handshake_message_storage`, threaded through 33 argument lists in 6 files and
+written by the store path.
+
+*Pulse note:* `with` binds a **prefix** of an slprop's existentials, and several
+sites bind only four of `client_hello_metadata_exactly`'s five.  Appending the
+new existential last is what kept every one of those binders valid unchanged.
+
+**S6.5 — the offer becomes observable end-to-end (`613e12980`).**
+`IM.is_valid_client_hello`'s secp256r1 clause became an iff; a secp256r1 entry
+at a length other than 65 is no offer rather than a parse failure (RFC 8446
+4.2.8).  `client_hello_slot_exactly` now constrains the stored secp256r1 bytes,
+and the server's store path copies them.  The *client's* own mirror had to catch
+up: the canonical ClientHello offers two `KeyShareEntry` values, so
+`serialize_client_hello_from_start` now owns `l.client_hello_p256_key_share` and
+fills it from `start_p256_key_share` (the scratch allocation and its free are
+gone).  `SerH.lemma_ch_p256_key_share` proves by `= ()`.
+
+### S6 as re-measured — what is left is one atomic commit
+
+With S6.1-S6.5 landed, the remaining work is genuinely indivisible, and the
+reason is sharper than "five blockers".  It is this:
+
+> The acceptance gate is what makes `client_hello_kex_group_for` constant.
+> Widening the gate is therefore not a step that can be taken on its own: the
+> moment a ClientHello without an X25519 share is accepted, the ECDH, the
+> selection policy, the ServerHello length and `server_supported_groups` all
+> face a group they cannot yet handle, and there is no runtime rejection path
+> to fall back on.
+
+Concretely the single commit must carry, together:
+
+1. **Gate.**  `Wire.Spec.clientHello_representable:472` becomes
+   `(Some? key_share || ch_offers_p256_share b)`; the Parser's accept
+   computation mirrors it; `IM.is_valid_client_hello`'s X25519 clause
+   (`| None -> False`) and `client_hello_slot_exactly`'s become the same
+   disjunction.
+2. **ECDH.**  A new `KEX.kex_shared_split_runtime g sk pk32 pk65 out` (the peer's
+   two shares are held in their natural widths in the mirror, not padded to 65),
+   and `try_derive_server_shared_secret_from_private_array` dispatches on the
+   S6.4 box.  Its `ensures` becomes `CryptoSpec.kex_shared g ...`, which
+   propagates the `x25519_shared` postcondition clause through
+   `Server.Keys` -> `Server` -> `Driver.BufferedHandshake` /
+   `Driver.BufferedNetwork` (6 files; the clause is extra information, not
+   consumed for correctness).  A new precondition
+   `Some? (CS.client_hello_kex ch (client_hello_kex_group_for ch))` is what
+   makes the secp256r1 branch genuinely proved rather than vacuous -- until the
+   gate widens, that branch is discharged by contradiction, which is precisely
+   why the ECDH cannot land first.
+3. **Policy.**  `Setup.fst`'s seven selection builders set
+   `server_selected_group` from the stored ClientHello (the runtime value is now
+   available: it is the S6.4 box).
+4. **Lengths.**  The 35 numeric sites enumerated below become runtime lengths
+   `58 + kex_public_len g + |sid|`, once `valid_selection` drops its third
+   conjunct.
+5. **Groups and pins.**  `server_supported_groups = [T.X25519; T.Secp256r1]`;
+   delete `CR.server_selection_group_pinned` and every conjunct mentioning it,
+   plus the three hypotheses S6.3 introduced.
+6. **Ledger.**  `p256-only` and `ecdsa-credential-p256-only` to `OK` with
+   `expect_group "P-256"`, and the two new crossed cells.
+
+---
+
 ## 8. Risk register
 
 | # | risk | mitigation |
@@ -751,7 +862,9 @@ at `Impl.ConnectionState.LocalHandshake.fst:4801`, padding with
 | R4 | Z3 stops unfolding `server_kex_private/public` at the ~40 legacy sites | ship `lemma_server_kex_x25519_is_legacy` with an `SMTPat` in S1 |
 | R6 | *(observed in S1)* A spec-level obligation "the selected group is X25519" is unprovable, because the spec's `server_supported_groups` is an arbitrary list | keep `legal_event`'s server derive arm X25519-shaped until S4/S5 generalise the `server_x25519_*_projection` family in the same commit |
 | R7 | *(observed in S2)* Growing a widely-used slprop (here `is_valid_client_hello` / `client_hello_slot_exactly`) enlarges the SMT context of every proof that mentions it and breaks *distant, unrelated* queries | do **not** reach for `--z3rlimit` or `--z3seed`.  Name the failing projection as a lemma, or discharge a guarded hypothesis in explicit `assert (pure ...)` steps before the call that needs it.  Two such repairs were needed in S2 (`ChannelImplementation:409`, `Server:2910`); budget one or two per structural slprop change |
-| R8 | *(observed in S2)* A `bool` field of a struct that the slot invariant owns cannot be constrained by that invariant — the struct is allocated once and its scalars are never rewritten | keep meaning in `is_valid_client_hello` (fresh structs) and move any flag the slot must know about into a metadata `Box`, as the session-id width already is |
+| R8 | *(observed in S2)* A `bool` field of a struct that the slot invariant owns cannot be constrained by that invariant — the struct is allocated once and its scalars are never rewritten | keep meaning in `is_valid_client_hello` (fresh structs) and move any flag the slot must know about into a metadata `Box`, as the session-id width already is.  **Resolved in S6.4/S6.5**: the slot states the secp256r1 bytes as a property of the *spec message* (no flag at all), and the one genuinely non-recoverable datum — the negotiated group — became the `client_hello_kex_group` box |
+| R9 | *(observed in S6.3)* Adding a `requires` to a `.fst` `let` but not to the `.fsti` `val` reports **"Assertion failed" spanning the whole lemma body**, because F\* checks the body against the interface's precondition | the tell is the *range*: a whole-body range with "Assertion failed" is a signature mismatch, not a proof failure.  `--split_queries always` does not narrow it |
+| R10 | *(observed in S6.4)* A mechanical multi-file edit to an slprop's argument list can silently mis-target, because a `#push-options` string or an argument name may occur more than once | assert an exact occurrence count for every whole-block replacement, and prefer appending to an existential list over inserting into one (Pulse `with` binds a prefix) |
 | R5 | Verify cycles are 10-24 min, so blind iteration is expensive | iterate per-module with `fstar.exe` first; `make` dies at the `.depend` stage (`Makefile:315`) on any syntax error, so never run `make` on unparsed code |
 
 ## 9. Exit criteria
