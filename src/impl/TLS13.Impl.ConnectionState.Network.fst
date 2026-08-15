@@ -103,6 +103,7 @@ ghost fn reframe_client_hello_metadata
              messages.client_hello_cipher_suites_len
              messages.client_hello_signature_schemes_len
              messages.client_hello_session_id_len
+             messages.client_hello_kex_group
              (Ghost.reveal old_hs).CS.hs_client_hello **
            pure (
              (Ghost.reveal old_hs).CS.hs_client_hello ==
@@ -113,6 +114,7 @@ ghost fn reframe_client_hello_metadata
             messages.client_hello_cipher_suites_len
             messages.client_hello_signature_schemes_len
             messages.client_hello_session_id_len
+            messages.client_hello_kex_group
             (Ghost.reveal new_hs).CS.hs_client_hello
 {
   rewrite
@@ -122,6 +124,7 @@ ghost fn reframe_client_hello_metadata
       messages.client_hello_cipher_suites_len
       messages.client_hello_signature_schemes_len
       messages.client_hello_session_id_len
+      messages.client_hello_kex_group
       (Ghost.reveal old_hs).CS.hs_client_hello)
     as
     (client_hello_metadata_exactly
@@ -130,6 +133,7 @@ ghost fn reframe_client_hello_metadata
       messages.client_hello_cipher_suites_len
       messages.client_hello_signature_schemes_len
       messages.client_hello_session_id_len
+      messages.client_hello_kex_group
       (Ghost.reveal new_hs).CS.hs_client_hello)
 }
 
@@ -828,6 +832,7 @@ fn mark_received_client_hello
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with old_ch_has_server_name old_ch_server_name_len
        old_ch_cipher_suites_len old_ch_signature_schemes_len
@@ -916,6 +921,22 @@ fn mark_received_client_hello
   // fields cannot be rewritten, hence the dedicated metadata box.
   c.handshake.messages.client_hello_session_id_len :=
     lch.IM.client_hello_session_id_len;
+  // The negotiated key-exchange group, as CM.client_hello_kex_group_for decides
+  // it from the offered ClientHello.  Same reason for the dedicated box as the
+  // session-id width, and one more besides: unlike every other metadatum this
+  // one is not recoverable from the stored bytes, since an all-zero 32-byte
+  // X25519 slot is a legal share.
+  //
+  // The acceptance gate still demands an X25519 share (is_valid_client_hello's
+  // key-share clause is `| None -> False`), so the policy's secp256r1 fallback
+  // arm is unreachable here and the written value is provably KexX25519.  What
+  // the write buys is that the tag is *read* from a box rather than assumed, so
+  // widening the gate is a change to the policy alone -- see stage S6 of
+  // docs/server-p256-plan.md.
+  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch))));
+  c.handshake.messages.client_hello_kex_group := CryptoSpec.KexX25519;
+  assert (pure (client_hello_kex_group_for (Ghost.reveal ch) ==
+                CryptoSpec.KexX25519));
   lemma_bounded_u16_sizet_of_sizet
     (Seq.length (Sem.clientHello_session_id (Ghost.reveal ch)))
     lch.IM.client_hello_session_id_len;
@@ -970,6 +991,7 @@ fn mark_received_client_hello
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     (Some (Ghost.reveal ch)));
 
   unfold (handshake_buffers_exactly
@@ -4504,6 +4526,7 @@ fn mark_received_key_update
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
     (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
@@ -4511,6 +4534,7 @@ fn mark_received_key_update
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
       c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages
@@ -4787,6 +4811,7 @@ fn mark_server_received_key_update
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
     (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
@@ -4794,6 +4819,7 @@ fn mark_server_received_key_update
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
       c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       (server_received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages

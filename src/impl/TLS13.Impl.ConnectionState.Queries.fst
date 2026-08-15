@@ -2101,6 +2101,7 @@ fn select_supported_server_parameters_runtime
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with ch_has_server_name ch_server_name_len
        ch_cipher_suites_len ch_signature_schemes_len. _;
@@ -2322,6 +2323,7 @@ fn select_supported_server_parameters_runtime
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
       c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
@@ -2348,6 +2350,7 @@ fn select_supported_server_parameters_runtime
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
       c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
@@ -6893,6 +6896,7 @@ fn read_negotiated_server_suite
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with ch_has_server_name ch_server_name_len
        ch_cipher_suites_len ch_signature_schemes_len. _;
@@ -6935,6 +6939,7 @@ fn read_negotiated_server_suite
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (client_hello_slot_exactly
     c.handshake.messages.client_hello_present
@@ -7003,6 +7008,7 @@ fn read_client_hello_session_id
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   let sid_len = !c.handshake.messages.client_hello_session_id_len;
   fold (client_hello_metadata_exactly
@@ -7011,6 +7017,7 @@ fn read_client_hello_session_id
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
     c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
 
   fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);

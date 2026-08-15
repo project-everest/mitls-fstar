@@ -132,6 +132,29 @@ noextract
 let client_hello_session_id_len_for (m:GCH.clientHello) : SZ.t =
   bounded_u16_sizet (Seq.length (Sem.clientHello_session_id m))
 
+(* The server's key-exchange group *policy*, as a total function of the offered
+   ClientHello: prefer X25519 whenever the peer offered a share at it, and fall
+   back to secp256r1 otherwise.  This is the group the ServerHello names, the
+   group the ECDH runs at, and -- through CryptoSpec.kex_public_len -- what
+   decides the serialized ServerHello's length.
+
+   It is a function of the message, exactly like the cipher-suite policy
+   (server_selected_suite) and the session-id width
+   (client_hello_session_id_len_for), so the runtime does not need to remember a
+   negotiation decision: it recomputes it from the stored ClientHello.  The
+   runtime counterpart is the client_hello_kex_group metadata box, which cannot
+   be recomputed from the stored bytes (an all-zero 32-byte slot is a legal
+   X25519 share) and so is written at parse time.
+
+   Under the current acceptance gate every accepted ClientHello offers X25519,
+   so this is constantly KexX25519; the fallback arm becomes reachable when the
+   gate widens (stage S6 of docs/server-p256-plan.md). *)
+noextract
+let client_hello_kex_group_for (m:GCH.clientHello) : CryptoSpec.kex_group =
+  if Some? (Sem.clientHello_key_share_x25519 m)
+  then CryptoSpec.KexX25519
+  else CryptoSpec.KexP256
+
 (* Whether the ClientHello actually carried a server_name (SNI) extension.  The
    extension is optional in RFC 6066 and absent whenever a client connects to a
    bare IP literal, so this is genuinely a property of the message rather than a

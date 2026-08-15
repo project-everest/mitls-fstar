@@ -175,6 +175,13 @@ type handshake_message_storage = {
      mirror's [IM.client_hello] struct is allocated once and its own length
      fields cannot be rewritten when a ClientHello arrives. *)
   client_hello_session_id_len: box SZ.t;
+  (* The negotiated key-exchange group, as decided by [CM.client_hello_kex_group_for]
+     from the offered ClientHello.  Mutable metadata for the same reason as the
+     session-id width: the mirror's [IM.client_hello] struct is allocated once
+     and its scalars cannot be rewritten.  Unlike the other metadata this one is
+     not recoverable from the stored bytes at all -- an all-zero 32-byte X25519
+     slot is a legal share -- so the parse path writes it. *)
+  client_hello_kex_group: box CryptoSpec.kex_group;
   server_hello: box (option IM.server_hello);
   encrypted_extensions: box (option IM.encrypted_extensions);
   certificate: box (option IM.certificate_msg);
@@ -971,28 +978,32 @@ let client_hello_metadata_exactly
   (cipher_suites_len_box:box SZ.t)
   (signature_schemes_len_box:box SZ.t)
   (session_id_len_box:box SZ.t)
+  (kex_group_box:box CryptoSpec.kex_group)
   (spec:option GCH.clientHello)
   : slprop =
   exists* has_server_name server_name_len cipher_suites_len signature_schemes_len
-          session_id_len.
+          session_id_len kex_group.
     Box.pts_to has_server_name_box has_server_name **
     Box.pts_to server_name_len_box server_name_len **
     Box.pts_to cipher_suites_len_box cipher_suites_len **
     Box.pts_to signature_schemes_len_box signature_schemes_len **
     Box.pts_to session_id_len_box session_id_len **
+    Box.pts_to kex_group_box kex_group **
     pure (match spec with
       | Some m ->
         has_server_name == client_hello_has_sni m /\
         server_name_len == client_hello_server_name_len_for m /\
         cipher_suites_len == client_hello_cipher_suites_len_for m /\
         signature_schemes_len == client_hello_signature_schemes_len_for m /\
-        session_id_len == client_hello_session_id_len_for m
+        session_id_len == client_hello_session_id_len_for m /\
+        kex_group == client_hello_kex_group_for m
       | None ->
         has_server_name == false /\
         server_name_len == 0sz /\
         cipher_suites_len == 0sz /\
         signature_schemes_len == 0sz /\
-        session_id_len == 0sz)
+        session_id_len == 0sz /\
+        kex_group == CryptoSpec.KexX25519)
 
 let server_hello_slot_exactly
   ([@@@mkey] slot:box (option IM.server_hello))
@@ -1070,6 +1081,7 @@ let handshake_messages_exactly
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
     msgs.client_hello_session_id_len
+    msgs.client_hello_kex_group
     hs.CS.hs_client_hello **
   server_hello_slot_exactly msgs.server_hello hs.CS.hs_server_hello **
   encrypted_extensions_slot_exactly msgs.encrypted_extensions hs.CS.hs_encrypted_extensions **
