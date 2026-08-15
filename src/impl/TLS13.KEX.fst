@@ -94,3 +94,47 @@ fn kex_shared_runtime
     }
   }
 }
+
+fn kex_shared_split_runtime
+  (g: C.kex_group)
+  (sk: array U8.t)
+  (pk32: array U8.t)
+  (pk65: array U8.t)
+  (out: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to pk32 'x25519_bytes **
+           pts_to pk65 'p256_bytes **
+           pts_to out 'old **
+           pure (B.length 'sk_bytes == 32 /\
+                 B.length 'x25519_bytes == 32 /\
+                 B.length 'p256_bytes == 65 /\
+                 B.length 'old == 32)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to pk32 'x25519_bytes **
+          pts_to pk65 'p256_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                kex_shared_call g 'sk_bytes
+                  (kex_split_share g 'x25519_bytes 'p256_bytes)
+                  out_bytes ok)
+{
+  pts_to_len out;
+  pts_to_len pk32;
+  pts_to_len pk65;
+  match g {
+    C.KexX25519 -> {
+      let ok = Crypto.x25519_shared_runtime sk pk32 out;
+      with out_bytes. assert (pts_to out out_bytes);
+      pts_to_len out;
+      ok
+    }
+    C.KexP256 -> {
+      let ok = Crypto.p256_shared_runtime sk pk65 out;
+      with out_bytes. assert (pts_to out out_bytes);
+      pts_to_len out;
+      ok
+    }
+  }
+}

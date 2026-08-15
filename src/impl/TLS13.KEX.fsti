@@ -67,6 +67,12 @@ val lemma_kex_shared_call_success
 (** ECDH against a peer share held in the uniform 65-byte buffer.  The logical
     share is the group's [kex_public_len]-byte prefix, recovered through the
     explicit group tag. *)
+(** The share a peer offering *both* groups contributes to the ECDH at [g]. *)
+let kex_split_share (g:C.kex_group) (x25519_bytes p256_bytes:B.bytes) : B.bytes =
+  match g with
+  | C.KexX25519 -> x25519_bytes
+  | C.KexP256 -> p256_bytes
+
 fn kex_shared_runtime
   (g: C.kex_group)
   (sk: array U8.t)
@@ -86,4 +92,42 @@ fn kex_shared_runtime
           pure (B.length out_bytes == 32 /\
                 kex_shared_call g 'sk_bytes
                   (C.unpad_share_65 'pk_bytes (C.kex_public_len g))
+                  out_bytes ok)
+
+(** ECDH against a peer whose two possible shares are held **in their natural
+    widths** rather than padded to a uniform 65 bytes.
+
+    [kex_shared_runtime] above suits the client, whose mirror stores whichever
+    single share the *server* named in its ServerHello, in the uniform
+    [kex_share_storage] buffer.  A server's mirror is different: it stores the
+    ClientHello's *offer*, which may carry an X25519 share and a secp256r1 share
+    at the same time, so it keeps a 32-byte slot and a 65-byte slot side by side.
+    Padding the 32-byte one only to have [unpad_share_65] undo it would cost a
+    copy and a pair of extensional-equality lemmas at every call.
+
+    Both arms therefore go straight to the raw binding, which already takes
+    exactly the width its group requires. *)
+fn kex_shared_split_runtime
+  (g: C.kex_group)
+  (sk: array U8.t)
+  (pk32: array U8.t)
+  (pk65: array U8.t)
+  (out: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to pk32 'x25519_bytes **
+           pts_to pk65 'p256_bytes **
+           pts_to out 'old **
+           pure (B.length 'sk_bytes == 32 /\
+                 B.length 'x25519_bytes == 32 /\
+                 B.length 'p256_bytes == 65 /\
+                 B.length 'old == 32)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to pk32 'x25519_bytes **
+          pts_to pk65 'p256_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                kex_shared_call g 'sk_bytes
+                  (kex_split_share g 'x25519_bytes 'p256_bytes)
                   out_bytes ok)

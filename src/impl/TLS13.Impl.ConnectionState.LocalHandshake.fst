@@ -5155,6 +5155,46 @@ fn try_derive_shared_secret
   }
 }
 
+(* The peer's contribution to the ECDH, when the mirror holds *both* of the
+   ClientHello's possible offers, each in its natural width.
+
+   The case analysis lives here, as a pure lemma, rather than inside the Pulse
+   function below: a [match] on the runtime group there would have to duplicate
+   the entire fold/unfold discipline -- eight slot existentials, six metadata
+   boxes and five nested slprops -- in both arms.  The Pulse function reads the
+   group, calls one group-dispatching [fn], and cites this lemma once.
+
+   Both hypotheses are *conditional*, so the lemma survives the widening of the
+   acceptance gate: today [client_hello_slot_exactly] happens to guarantee an
+   X25519 share outright, but nothing here depends on that. *)
+let lemma_client_hello_kex_split_share
+  (m:GCH.clientHello)
+  (x25519_bytes p256_bytes:B.bytes)
+  : Lemma
+    (requires
+      Some? (CS.client_hello_kex m (client_hello_kex_group_for m)) /\
+      (match Sem.clientHello_key_share_x25519 m with
+       | Some k -> Seq.equal x25519_bytes k
+       | None -> True) /\
+      (match Sem.clientHello_key_share_secp256r1 m with
+       | Some k -> B.length k == 65 ==> Seq.equal p256_bytes k
+       | None -> True))
+    (ensures
+      CS.client_hello_kex m (client_hello_kex_group_for m) ==
+        Some (KEX.kex_split_share
+                (client_hello_kex_group_for m)
+                x25519_bytes
+                p256_bytes))
+  = match client_hello_kex_group_for m with
+    | CryptoSpec.KexX25519 ->
+      assert (Some? (Sem.clientHello_key_share_x25519 m));
+      Seq.lemma_eq_elim x25519_bytes (Some?.v (Sem.clientHello_key_share_x25519 m))
+    | CryptoSpec.KexP256 ->
+      assert (Some? (CS.client_hello_p256_key_share m));
+      assert (Some? (Sem.clientHello_key_share_secp256r1 m));
+      assert (B.length (Some?.v (Sem.clientHello_key_share_secp256r1 m)) == 65);
+      Seq.lemma_eq_elim p256_bytes (Some?.v (Sem.clientHello_key_share_secp256r1 m))
+
 fn try_derive_server_shared_secret_from_private_array
   (c:connection_state)
   (server_private_key:array U8.t)
@@ -5172,14 +5212,19 @@ fn try_derive_server_shared_secret_from_private_array
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
-                    (* CS.legal_event's LocalDeriveSharedSecret arm is now
-                       group-indexed: it runs the ECDH at
-                       CS.server_selected_kex_group.  This routine still calls
-                       the raw Crypto.x25519_shared_runtime on the mirror's
-                       32-byte X25519 slot, so it only realises that arm at
-                       X25519, and says so.  Making it dispatch through
-                       KEX.kex_shared_runtime is stage S6 of
-                       docs/server-p256-plan.md. *)
+                    (* The ECDH itself is group-parametric: it reads the
+                       negotiated group off the client_hello_kex_group metadata
+                       box and dispatches through KEX.kex_shared_split_runtime,
+                       so the secp256r1 arm is compiled and reachable.  What is
+                       still pinned is the *specification*: this precondition,
+                       and hence the postcondition below, name X25519 because
+                       generalising them would have to be threaded up through
+                       Server.Keys, Server, the two drivers and finally the
+                       canonical-protocol lemmas that discharge
+                       server_local_event_input_ready.  That thread is part of
+                       the single flip in stage S6.8 of
+                       docs/server-p256-plan.md; until then the body proves the
+                       group-indexed CS.legal_event arm and then specialises. *)
                     CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
                     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
@@ -5230,6 +5275,14 @@ fn try_derive_server_shared_secret_from_private_array
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share ch_cipher_suites ch_signature_schemes. _;
+  unfold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
 
   let ch = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
@@ -5240,7 +5293,23 @@ fn try_derive_server_shared_secret_from_private_array
   Seq.lemma_eq_elim ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)));
   assert (pure (CS.client_hello_key_share (Ghost.reveal ch) == Some ch_key_share));
   assert (pure (B.length ch_key_share == 32));
+  assert (pure (B.length ch_p256_key_share == 65));
   assert (pure (B.length (Ghost.reveal 'server_private_key_bytes) == 32));
+
+  (* The negotiated group, read off the metadata box rather than assumed. *)
+  let kex_group = !c.handshake.messages.client_hello_kex_group;
+  assert (pure (kex_group == client_hello_kex_group_for (Ghost.reveal ch)));
+  (* ...and the acceptance gate (TLS13.Wire.Spec.clientHello_representable)
+     still requires an X25519 share, so the box reads KexX25519 and agrees with
+     the caller's pinned selection.  These two facts are what let the dispatch
+     below be *called* group-parametrically while the signature stays specific;
+     widening the gate deletes them and moves them into the precondition. *)
+  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch))));
+  assert (pure (client_hello_kex_group_for (Ghost.reveal ch) == CryptoSpec.KexX25519));
+  assert (pure (kex_group == CryptoSpec.KexX25519));
+  assert (pure (Some? (CS.client_hello_kex
+    (Ghost.reveal ch)
+    (client_hello_kex_group_for (Ghost.reveal ch)))));
 
   assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
   lemma_option_some_v st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection;
@@ -5258,53 +5327,79 @@ fn try_derive_server_shared_secret_from_private_array
   assert (pure ((Ghost.reveal selection).CS.server_key_share_private ==
     Some (Ghost.reveal 'server_private_key_bytes)));
 
+  let peer_share =
+    Ghost.hide (KEX.kex_split_share kex_group ch_key_share ch_p256_key_share);
+  lemma_client_hello_kex_split_share (Ghost.reveal ch) ch_key_share ch_p256_key_share;
+  assert (pure (CS.client_hello_kex (Ghost.reveal ch) kex_group ==
+    Some (Ghost.reveal peer_share)));
+
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
   let mut shared_out = [| 0uy; 32sz |];
   let crypto_ok =
-    Crypto.x25519_shared_runtime
+    KEX.kex_shared_split_runtime
+      kex_group
       server_private_key
       (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_key_share)
+      (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_p256_key_share)
       shared_out;
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
 
   if crypto_ok {
     with shared. assert (ArrPts.pts_to shared_out shared);
     ArrPts.pts_to_len shared_out;
     assert (pure (B.length shared == 32));
-    assert (pure (Crypto.x25519_shared_call
+    assert (pure (KEX.kex_shared_call
+      kex_group
       (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share
+      (Ghost.reveal peer_share)
       shared
       crypto_ok));
-    Crypto.lemma_x25519_shared_call_success
+    KEX.lemma_kex_shared_call_success
+      kex_group
       (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share
+      (Ghost.reveal peer_share)
       shared
       crypto_ok;
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
+    assert (pure (CryptoSpec.kex_shared
+      kex_group
       (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share == Some shared));
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
-      (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share == Some shared));
+      (Ghost.reveal peer_share) == Some shared));
     let shared_secret =
-      Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared
+      Ghost.hide (Some?.v (CryptoSpec.kex_shared
+        kex_group
         (Ghost.reveal 'server_private_key_bytes)
-        ch_key_share));
+        (Ghost.reveal peer_share)));
     assert (pure (Ghost.reveal shared_secret == shared));
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
-      (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share == Some (Ghost.reveal shared_secret)));
-    assert (pure (CS.client_hello_key_share (Ghost.reveal selection).CS.server_selected_client_hello == Some ch_key_share));
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
+    assert (pure (CS.client_hello_kex
+      (Ghost.reveal selection).CS.server_selected_client_hello
+      (CS.server_selected_kex_group (Ghost.reveal selection)) ==
+      Some (Ghost.reveal peer_share)));
+    assert (pure (CryptoSpec.kex_shared
+      (CS.server_selected_kex_group (Ghost.reveal selection))
       (Some?.v (Ghost.reveal selection).CS.server_key_share_private)
-      ch_key_share ==
+      (Ghost.reveal peer_share) ==
       Some (Ghost.reveal shared_secret)));
     assert (pure (CS.legal_event
       st0.CS.cs_model
       (CS.ConnLocalEvent
         (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
+    (* Specialise back to the pinned postcondition. *)
+    assert (pure (Ghost.reveal peer_share == ch_key_share));
+    assert (pure (TLS13.Crypto.Spec.x25519_shared
+      (Ghost.reveal 'server_private_key_bytes)
+      ch_key_share == Some (Ghost.reveal shared_secret)));
+    assert (pure (CS.client_hello_key_share (Ghost.reveal ch) == Some ch_key_share));
 
+    fold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello
@@ -5327,6 +5422,14 @@ fn try_derive_server_shared_secret_from_private_array
     true
   } else {
     with shared_old. assert (ArrPts.pts_to shared_out shared_old);
+    fold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello

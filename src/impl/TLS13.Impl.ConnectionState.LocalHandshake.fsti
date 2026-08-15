@@ -839,13 +839,19 @@ fn try_derive_server_shared_secret_from_private_array
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
-                    (* CS.legal_event's LocalDeriveSharedSecret arm is group-indexed:
-                       it runs the ECDH at CS.server_selected_kex_group.  This
-                       routine still calls the raw Crypto.x25519_shared_runtime on
-                       the mirror's 32-byte X25519 slot, so it only realises that
-                       arm at X25519, and says so.  Dispatching through
-                       KEX.kex_shared_runtime is stage S6 of
-                       docs/server-p256-plan.md. *)
+                    (* The ECDH itself is group-parametric: it reads the
+                       negotiated group off the client_hello_kex_group metadata
+                       box and dispatches through KEX.kex_shared_split_runtime,
+                       so the secp256r1 arm is compiled and reachable.  What is
+                       still pinned is the *specification*: this precondition,
+                       and hence the postcondition below, name X25519 because
+                       generalising them would have to be threaded up through
+                       Server.Keys, Server, the two drivers and finally the
+                       canonical-protocol lemmas that discharge
+                       server_local_event_input_ready.  That thread is part of
+                       the single flip in stage S6.8 of
+                       docs/server-p256-plan.md; until then the body proves the
+                       group-indexed CS.legal_event arm and then specialises. *)
                     CS.server_selected_kex_group selection == TLS13.Crypto.Spec.KexX25519 /\
                     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
