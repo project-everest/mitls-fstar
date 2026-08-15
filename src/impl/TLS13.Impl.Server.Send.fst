@@ -317,6 +317,7 @@ let lemma_mk_server_hello_witness_eq_poc
 let lemma_server_hello_of_selection_eq_witness
   (sel: CS.server_handshake_selection)
   : Lemma
+    (requires CS.server_selected_kex_group sel == CryptoSpec.KexX25519)
     (ensures
       CM.server_hello_of_selection sel ==
       mk_server_hello_witness
@@ -408,6 +409,13 @@ let lemma_can_send_server_hello_witness_of_selection
       Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
                 (server_private_key <: Seq.seq U8.t) /\
       CS.server_selection_key_share_consistent selection /\
+      // The send-path witness [mk_server_hello_witness] builds a 32-byte X25519
+      // KeyShareEntry, while [CM.server_hello_of_selection] now builds at
+      // [CS.server_selected_kex_group].  The two coincide exactly at X25519, so
+      // the bridge names the group.  This is the same hypothesis
+      // [server_local_event_input_ready]/LocalSendServerHello already carries,
+      // and removing it is stage S6 of docs/server-p256-plan.md.
+      CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
       // RFC 8446 4.1.3: the send path echoes the *stored* ClientHello's
       // legacy_session_id while the Model builder names the selection's copy.
       // The echo is now width-carrying, so the two must be the same message.

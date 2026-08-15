@@ -604,15 +604,37 @@ let sho_session_id (sel:CS.server_handshake_selection)
   : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b <= 32 })
   = Sem.clientHello_session_id sel.CS.server_selected_client_hello
 
+(* The wire tag for the group the selection names.  [CS.server_selected_kex_group]
+   is [kex_group_of_named_group] of the selection's [server_selected_group], so a
+   selection naming any group ATLAS does not implement clamps to X25519 -- the
+   same shape as [sho_cipher_suite]'s clamp, and an identity for the two groups
+   the server actually offers. *)
+noextract
+let sho_named_group (sel:CS.server_handshake_selection) : GNG.namedGroup
+  = match CS.server_selected_kex_group sel with
+    | CryptoSpec.KexX25519 -> GNG.X25519
+    | CryptoSpec.KexP256 -> GNG.Secp256r1
+
+(* The share the ServerHello carries: the public value of the selection's
+   keypair *at the selected group*.  Its length is [CryptoSpec.kex_public_len]
+   of that group -- 32 for X25519, 65 for secp256r1 -- which is what makes the
+   serialized ServerHello length a function of the group. *)
+noextract
+let sho_key_share (sel:CS.server_handshake_selection)
+  : (k:B.bytes { B.length k ==
+                 CryptoSpec.kex_public_len (CS.server_selected_kex_group sel) })
+  = CS.server_kex_public sel (CS.server_selected_kex_group sel)
+
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
 let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
   = let rnd : Seq.lseq U8.t 32 = sho_random sel in
-    let ks : B.bytes = sel.CS.server_key_share_public in
+    let ng : GNG.namedGroup = sho_named_group sel in
+    let ks : B.bytes = sho_key_share sel in
     let cs : GCS.cipherSuite = sho_cipher_suite sel in
     let ke : GKSE.keyShareEntry_key_exchange = ks in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    let kse : GKSE.keyShareEntry = { GKSE.group = ng; GKSE.key_exchange = ke } in
+    GNG.namedGroup_bytesize_eq ng;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
     let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in

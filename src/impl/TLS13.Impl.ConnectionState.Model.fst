@@ -521,6 +521,10 @@ let lemma_server_hello_of_selection_bytesize
   GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
   GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
   GCS.cipherSuite_bytesize_eq (sho_cipher_suite sel);
+  // Under valid_selection the group clamp is X25519, so the generalised
+  // writer's share is the legacy 32-byte field and the length is 90 + |sid|.
+  assert (sho_named_group sel == GNG.X25519);
+  assert (sho_key_share sel == sel.CS.server_key_share_public);
   GNG.namedGroup_bytesize_eq GNG.X25519;
   GKSE.keyShareEntry_key_exchange_bytesize_eqn
     (sel.CS.server_key_share_public <: GKSE.keyShareEntry_key_exchange);
