@@ -749,6 +749,13 @@ week's work.
    extra flight in the server state machine -- is a separate and later step
    again.
 
+   The map has since been turned into a staged, file-and-line-level
+   implementation plan in **`docs/server-p256-plan.md`**: six stages, of which
+   the first five are capability-neutral by construction (the configured
+   `server_supported_groups` stays `[T.X25519]` until the last one), so the work
+   can be abandoned at any stage with the gate still green and no theorem
+   weakened.  That file also carries the same treatment of G3.
+
 Until they are done, `clienthello-across-two-records`,
 `aes128-clienthello-across-two-records`, `p256-only`,
 `ecdsa-credential-p256-only` and `p256-first-x25519-listed` stay recorded as
