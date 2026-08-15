@@ -97,13 +97,27 @@ at a length other than 65 is simply no offer rather than a parse failure
 (RFC 8446 4.2.8), and the client's own mirror caught up with the fact that its
 canonical ClientHello has always offered two key shares.
 
+The elliptic-curve arithmetic itself is now group-parametric on the server:
+it reads the negotiated group off that box and dispatches through `TLS13.KEX`,
+so the secp256r1 arm is compiled, linked and reachable.  The server's mirror
+needed its own entry point, because it stores the ClientHello's *offer* -- which
+may carry both groups at once, in a 32-byte slot and a 65-byte slot side by side
+-- rather than the single share the client's mirror keeps padded to a uniform
+width.  Only the *specification* of that routine is still X25519-shaped, and it
+stays so because generalising it has to be threaded up through five layers to
+the canonical-protocol lemmas.
+
 What is left is one indivisible commit, and the reason is precise: the
 acceptance gate is exactly what makes the negotiated group a constant.  The
 moment a ClientHello without an X25519 share is accepted, the ECDH, the
 selection policy, the ServerHello length arithmetic and the configured group
 list all face a group they cannot yet handle, with no runtime rejection path to
-fall back on -- so they must move together.  `docs/server-p256-plan.md` §7
-carries the file-and-line breakdown.
+fall back on -- so they must move together.  The ServerHello's length arithmetic
+is the part that resisted every attempt to pre-stage it: the transparent
+canonical builder the whole write path is defined against pins the group tag and
+the thirty-two-byte share width in the same declaration, and the two are not
+separable -- parameterising the tag alone would build a message no peer would
+accept.  `docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
 
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries

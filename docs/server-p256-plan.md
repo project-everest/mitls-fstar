@@ -807,6 +807,29 @@ up: the canonical ClientHello offers two `KeyShareEntry` values, so
 fills it from `start_p256_key_share` (the scratch allocation and its free are
 gone).  `SerH.lemma_ch_p256_key_share` proves by `= ()`.
 
+**S6.6 — the ECDH dispatches on the group (`c360e2165`).**  This closes the
+*implementation* half of blocker 5.  `TLS13.KEX` gains
+`kex_shared_split_runtime`, a second entry point beside `kex_shared_runtime`:
+the existing one suits the client, whose mirror stores whichever single share
+the server named, padded to a uniform 65 bytes, whereas a server's mirror holds
+the ClientHello's *offer*, which may carry both groups at once in a 32-byte slot
+and a 65-byte slot side by side.  Padding the 32-byte one only to have
+`unpad_share_65` undo it would cost a copy and two extensional-equality lemmas
+per call, so both arms go straight to the raw binding.
+`lemma_client_hello_kex_split_share` does the case analysis as a pure F* lemma —
+inside the Pulse function it would mean duplicating the whole fold/unfold
+discipline (eight slot existentials, six metadata boxes, five nested slprops) in
+both arms — and both of its hypotheses are conditional, so it survives the gate
+widening untouched.
+
+The *signature* stays pinned.  The general form was written and verified (the
+body proves the group-indexed `CS.legal_event` arm and then specialises back),
+but it would have to be threaded up through `Server.Keys` -> `Server` -> both
+drivers -> the canonical-protocol lemmas that discharge
+`server_local_event_input_ready`, and that thread belongs to the flip.  The body
+therefore derives the two facts it needs from the slot invariant, in three named
+asserts the flip will delete.
+
 ### S6 as re-measured — what is left is one atomic commit
 
 With S6.1-S6.5 landed, the remaining work is genuinely indivisible, and the
@@ -826,24 +849,33 @@ Concretely the single commit must carry, together:
    computation mirrors it; `IM.is_valid_client_hello`'s X25519 clause
    (`| None -> False`) and `client_hello_slot_exactly`'s become the same
    disjunction.
-2. **ECDH.**  A new `KEX.kex_shared_split_runtime g sk pk32 pk65 out` (the peer's
-   two shares are held in their natural widths in the mirror, not padded to 65),
-   and `try_derive_server_shared_secret_from_private_array` dispatches on the
-   S6.4 box.  Its `ensures` becomes `CryptoSpec.kex_shared g ...`, which
-   propagates the `x25519_shared` postcondition clause through
+2. **ECDH specification.**  The dispatch itself landed in S6.6; what remains is
+   its signature.  `try_derive_server_shared_secret_from_private_array`'s
+   precondition becomes
+   `server_selected_kex_group selection == client_hello_kex_group_for ch` plus
+   `Some? (CS.client_hello_kex ch (client_hello_kex_group_for ch))`, and its
+   `ensures` becomes `CryptoSpec.kex_shared g ...`.  Both propagate through
    `Server.Keys` -> `Server` -> `Driver.BufferedHandshake` /
-   `Driver.BufferedNetwork` (6 files; the clause is extra information, not
-   consumed for correctness).  A new precondition
-   `Some? (CS.client_hello_kex ch (client_hello_kex_group_for ch))` is what
-   makes the secp256r1 branch genuinely proved rather than vacuous -- until the
-   gate widens, that branch is discharged by contradiction, which is precisely
-   why the ECDH cannot land first.
+   `Driver.BufferedNetwork` and bottom out at
+   `ST.server_local_event_input_ready`, which is discharged by
+   `Impl.Server.CanonicalQueries` / `CanonicalProtocol` — those are where the
+   two new conjuncts must actually be proved, from the canonical ClientHello.
+   Delete the three specialisation asserts S6.6 left in the body.
 3. **Policy.**  `Setup.fst`'s seven selection builders set
    `server_selected_group` from the stored ClientHello (the runtime value is now
    available: it is the S6.4 box).
 4. **Lengths.**  The 35 numeric sites enumerated below become runtime lengths
    `58 + kex_public_len g + |sid|`, once `valid_selection` drops its third
-   conjunct.
+   conjunct.  *This is the part that cannot be pre-staged, and the reason is
+   `SerH.poc_canonical_sh` (`Serializer.Handshake.fsti:71`), the transparent
+   canonical builder the whole write path is defined against.  It pins **two**
+   things at once — `GKSE.group = GNG.X25519` and `requires Seq.length ks == 32`
+   — and they are not separable: parameterising the tag while keeping the length
+   at 32 builds a message no peer would accept, and relaxing the length is
+   exactly the 35-site change.  29 occurrences across 9 files move together.*
+   One thing is already right: the concrete mirror's
+   `IM.server_hello_key_share` is **already** a 65-byte vec
+   (`Impl.Messages.fst:587`), so no storage widens.
 5. **Groups and pins.**  `server_supported_groups = [T.X25519; T.Secp256r1]`;
    delete `CR.server_selection_group_pinned` and every conjunct mentioning it,
    plus the three hypotheses S6.3 introduced.
