@@ -144,6 +144,39 @@ val lemma_reveal_kse_list_find_x25519_cons (e:GKSE.keyShareEntry) (tl:list GKSE.
             then Some (e.GKSE.key_exchange <: Seq.seq U8.t)
             else TLS13.Wire.Semantics.kse_list_find_x25519 tl))
 
+(* Reveal lemmas for the Semantics secp256r1 finders, used by the standalone
+   second pass [Impl.Parser.scan_ch_p256_key_share].  Unlike the X25519 share,
+   the secp256r1 offer is *not* threaded through the commit-first
+   [ch_extensions] scan: [Sem.clientHello_key_share_secp256r1] is specified as
+   an independent walk, so the implementation mirrors that structure. *)
+val lemma_reveal_kse_list_find_secp256r1_nil (_:unit)
+  : Lemma (TLS13.Wire.Semantics.kse_list_find_secp256r1 [] == None)
+
+val lemma_reveal_kse_list_find_secp256r1_cons
+  (e:GKSE.keyShareEntry)
+  (tl:list GKSE.keyShareEntry)
+  : Lemma (TLS13.Wire.Semantics.kse_list_find_secp256r1 (e :: tl) ==
+           (if GNG.Secp256r1? e.GKSE.group
+            then Some (e.GKSE.key_exchange <: Seq.seq U8.t)
+            else TLS13.Wire.Semantics.kse_list_find_secp256r1 tl))
+
+val lemma_reveal_ch_find_key_share_secp256r1_nil (_:unit)
+  : Lemma (TLS13.Wire.Semantics.ch_find_key_share_secp256r1 [] == None)
+
+val lemma_reveal_ch_find_key_share_secp256r1_cons_ks
+  (ks:GECH.extensionClientHello_extension_data_key_share)
+  (tl:list GECH.extensionClientHello)
+  : Lemma (TLS13.Wire.Semantics.ch_find_key_share_secp256r1
+             (GECH.Extension_data_key_share ks :: tl) ==
+           TLS13.Wire.Semantics.kse_list_find_secp256r1 (ks <: list GKSE.keyShareEntry))
+
+val lemma_reveal_ch_find_key_share_secp256r1_cons_other
+  (e:GECH.extensionClientHello)
+  (tl:list GECH.extensionClientHello)
+  : Lemma (requires ~(GECH.Extension_data_key_share? e))
+          (ensures TLS13.Wire.Semantics.ch_find_key_share_secp256r1 (e :: tl) ==
+                   TLS13.Wire.Semantics.ch_find_key_share_secp256r1 tl)
+
 val lemma_reveal_ch_extensions_nil
   (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions [] sn ks sv ss == (if sv then Some (sn, ks, sv, ss) else None))
