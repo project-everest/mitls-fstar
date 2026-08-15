@@ -807,6 +807,51 @@ week's work.
    `assert (pure ...)` steps discharging a guarded hypothesis in the other), not
    by raising an rlimit or changing a `z3seed`.
 
+   **Stage S3 has landed** (`b97d28f3b`), and one finding collapsed it.
+   `C.x25519_private` and `C.p256_private` are *both* `B.bytes_of_len 32`, and a
+   server transmits exactly one key share and runs exactly one ECDH -- the one
+   named by `server_selected_group`.  So a single 32-byte secret derives both
+   publics, with no cross-group exposure and no way for the peer to observe the
+   unused one.  There is therefore no second random, no extra array parameter
+   and no change to the driver's payload width: the selection literals simply
+   gained `server_p256_private = Some <the same bytes>` and
+   `server_p256_public = p256_public_from_private <the same bytes>`.  S3
+   verified with **zero** proof repair.
+
+   **Stages S4 and S5 have landed as one commit** (`c02ab1b13`), rescoped.  The
+   plan had them make the *implementation* agile; measurement said defer.
+   Making the ServerHello writer group-parametric means making its length
+   arithmetic parametric (`90 + |sid|` becomes `58 + |ks| + |sid|`), which
+   touches around forty numeric sites plus the assert-dense EverParse chain in
+   `Impl.Serializer.Handshake.fst:453-880` -- and buys no capability while every
+   selection literal still says `T.X25519`.  What landed instead is that the
+   **specification** became fully group-parametric: `server_hello_matches_-`
+   `selection`, `legal_event`'s server `LocalDeriveSharedSecret` arm, both
+   `server_x25519_*_projection`s and `paired_x25519_key_shares` all now read a
+   group and use the S1 accessors.
+
+   The crux was where the group comes from, and the answer is the one the client
+   already uses: where a ServerHello exists, recover it from the *message*
+   (`server_hello_kex sh`); before one exists, from the selection
+   (`server_selected_kex_group selection`).  Inside the implementation the
+   answer is *nowhere* -- `connection_state` stores thirty-two private bytes and
+   a presence flag, never a group tag -- so the restriction cannot be recovered
+   from the representation and has to be asserted by it.  That is
+   `CR.server_selection_group_pinned`, one named predicate carried as a `pure`
+   conjunct of `server_selection_presence_exactly`; deleting it is the S6
+   off-switch.
+
+   S4/S5 also confirmed R7 at spec scale.  Generalising the projections forced
+   the same generalisation through every consumer that *concluded* X25519-shaped
+   facts from them -- `paired_x25519_key_shares`, the three `*_corresponds`
+   predicates, the `HandshakeAgreementNonReady` helpers, both
+   `Impl.Driver.Pairing` producers and `ConnectionState.Lemmas`' shared-secret
+   agreement -- and there was no cheaper cut.  Two Pulse/F* gotchas cost real
+   time: a Pulse `match` on an enum does **not** refine the scrutinee in a `_`
+   catch-all (use a boolean `if`), and an `.fsti` `val`'s `requires` must imply
+   the `.fst` `let`'s, or the error surfaces confusingly at the *body*.  No cell
+   moved.
+
 Until they are done, `clienthello-across-two-records`,
 `aes128-clienthello-across-two-records`, `p256-only`,
 `ecdsa-credential-p256-only` and `p256-first-x25519-listed` stay recorded as

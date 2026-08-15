@@ -413,6 +413,24 @@ X25519 for now — S5 makes it a function of the ClientHello.
 
 **Gate S3.** Still no P-256 handshake reachable.
 
+### S3 as landed (commit `b97d28f3b`)
+
+**One finding collapsed the whole stage.**  `C.x25519_private` and
+`C.p256_private` are *both* `B.bytes_of_len 32`.  A server transmits exactly one
+key share and runs exactly one ECDH — the one named by `server_selected_group` —
+so a single 32-byte secret derives both publics, with no cross-group exposure
+and no way for the peer to observe the unused one.
+
+So the plan above over-built.  There is no second random, no extra 65-byte array
+parameter, and no change to the driver's payload width: the existing
+`LocalPayloadServerPrivateKey` / `LocalPayloadServerRandomAndPrivateKey` carriers
+already deliver everything both groups need.  `Setup.fst`'s selection literals
+gained `server_p256_private = Some <the same bytes>` and
+`server_p256_public = CryptoSpec.p256_public_from_private <the same bytes>`,
+which is exactly the shape `server_selection_key_share_consistent` wants.
+
+S3 verified with **zero** proof repair — the only stage so far that did.
+
 ---
 
 ## 5. Stage S4 — server ECDH through `TLS13.KEX` (no capability)
@@ -494,6 +512,88 @@ handles *both* groups for the `supported_groups` list, so the bytesize lemmas fo
 > caller pass the real group.
 
 **Gate S5.** Still 34/34.
+
+### S4/S5 as landed (commit `c02ab1b13`) — rescoped
+
+> **S4 and S5 are one commit, and they are a specification change.**
+
+**Why they cannot be separated.**  `server_x25519_key_share_projection` is
+*derived from* `connection_state_consistent`, which is derived from
+`legal_event`.  The moment `legal_event`'s server `LocalDeriveSharedSecret` arm
+mentions a group variable, the only projection still derivable is the
+group-indexed one, and every consumer has to move with it in the same commit.
+This is risk R6 coming due.
+
+**Why the implementation stays at X25519.**  Making the ServerHello *writer*
+group-parametric means making its length arithmetic parametric (`90 + |sid|` →
+`58 + |ks| + |sid|`, `95 + |sid|` → `63 + |ks| + |sid|`), which touches ~40
+numeric sites plus the assert-dense EverParse chain in
+`Impl.Serializer.Handshake.fst:453-880`.  While every selection literal still
+says `T.X25519` that buys **no capability**, so it is deferred to S6, where it
+is paid for by the acceptance-gate widening and the ledger flip.
+
+So the rescope is: **S4/S5 = the specification becomes fully group-parametric;
+the implementation says "X25519" out loud in named places.**
+
+**Where the group comes from.**  At the spec level `server_supported_groups` is
+an arbitrary list, so no configuration fact fixes the choice (the S1 finding).
+Two answers, both already used by the client:
+
+| situation | source of the group |
+| --- | --- |
+| a ServerHello exists | the *message*: `server_hello_kex sh` |
+| before the ServerHello | the selection: `server_selected_kex_group selection` |
+| inside the implementation | **nowhere** — see below |
+
+**The runtime stores no group tag.**  `connection_state` keeps thirty-two
+private bytes and a presence flag, nothing else, so no implementation-side proof
+can learn its own selection's group from the representation.  It has to be
+*asserted* by it.  Hence **`CR.server_selection_group_pinned`** in
+`TLS13.Impl.ConnectionState.Repr.fsti`, a single named predicate carried as a
+`pure` conjunct of `server_selection_presence_exactly` and surfaced through the
+query postconditions.  Deleting it, and the conjuncts that reference it, is the
+S6 off-switch.
+
+**The propagation cascade** (unavoidable, discovered the hard way):
+
+```
+server_x25519_*_projection
+  -> paired_x25519_key_shares
+    -> server_hello_corresponds / client_hello_corresponds
+       / paired_cleartext_hello_key_shares
+      -> HandshakeAgreementNonReady helpers
+      -> Impl.Driver.Pairing producers
+      -> ConnectionState.Lemmas' shared-secret agreement
+```
+
+Two correspondence predicates had to grow: `client_hello_corresponds` now also
+equates `Sem.clientHello_key_share_secp256r1`, and `server_hello_corresponds`
+now also equates `Sem.serverHello_kex_share`.  With a group variable in play,
+agreeing on the legacy X25519 field is no longer enough to conclude that the two
+endpoints are talking about the same share.
+`server_selection_key_share_consistent` gains a third conjunct,
+`Some? server_key_share_private <==> Some? server_p256_private`, so that "the
+selection has a private key" is a group-independent fact.
+
+**Proof-engineering findings** (see also R7):
+
+* A Pulse `match` on an enum does **not** refine the scrutinee in a `_`
+  catch-all.  `Server.Driver.BufferedNetwork`'s dispatch had to become a boolean
+  `if`, whose `else` branch does give the disequality.
+* An `.fsti` `val`'s `requires` must imply the `.fst` `let`'s `requires`.
+  Growing `Impl.Server.Send.fst`'s precondition without syncing the `.fsti`
+  produced an "Assertion failed" at the *body* and cost several rounds to find.
+* What worked against context growth: naming intermediate conclusions with
+  explicit `assert (pure ...)` before the consumer, and factoring long assert
+  chains into their own lemma (`lemma_transcript_checkpoints_of_event_trace`).
+  Raising **fuel** made two proofs strictly worse.
+* `Impl.Driver.Pairing`'s producers additionally needed the three *presence*
+  facts named at the group read off the ServerHello: the dependent pair
+  `(| g, sh_ks |)` otherwise hides `g` from the case analysis and the impossible
+  branches cannot be discharged.
+
+**Gate S4/S5.** `make verify` 0 errors, `make check-admits` 0 admits,
+`make test` 34/34 — capability-neutral, no cell moved.
 
 ---
 

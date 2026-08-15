@@ -66,7 +66,17 @@ alongside the X25519 one, so the remaining stages can fill it without further
 structural churn.  Accepting a P-256-only ClientHello (widening the parser's
 acceptance gate) was measured to be 169 `ch_extensions` occurrences of work
 that buys no capability while the configured groups are X25519-only, so it was
-deferred to the stage that actually turns the feature on.
+deferred to the stage that actually turns the feature on.  The third has landed:
+because an X25519 private key and a P-256 private key are both thirty-two bytes,
+and a server runs exactly one ECDH, a single secret derives both publics -- so
+the selection now carries a real secp256r1 keypair with no extra randomness and
+no change to the driver's payload width.  The fourth and fifth landed together:
+the *specification* is now fully group-parametric, recovering the group from the
+ServerHello where one exists and from the selection where it does not, exactly
+as the client already does.  The implementation still only ever selects X25519,
+and now says so through a single named predicate,
+`server_selection_group_pinned`, whose deletion is the switch that turns the
+feature on in the final stage.
 
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries
