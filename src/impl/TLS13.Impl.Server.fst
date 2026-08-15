@@ -511,8 +511,9 @@ fn process_select_default_server_parameters_with_private_from_arrays
                     CS.server_key_share_private =
                       Some (Ghost.reveal 'server_private_key_bytes);
                     CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
-                    CS.server_p256_private = None;
-                    CS.server_p256_public = CS.server_p256_absent;
+                    CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                    CS.server_p256_public =
+                      CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                     CS.server_selected_credential =
                       cfg.CS.server_credential_identity;
                   } in
@@ -545,8 +546,9 @@ fn process_select_default_server_parameters_with_private_from_arrays
                       CS.server_key_share_private =
                         Some (Ghost.reveal 'server_private_key_bytes);
                       CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
-                      CS.server_p256_private = None;
-                      CS.server_p256_public = CS.server_p256_absent;
+                      CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                      CS.server_p256_public =
+                        CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                       CS.server_selected_credential =
                         cfg.CS.server_credential_identity;
                     } in
@@ -622,8 +624,9 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                    CS.server_key_share_public =
                      CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes);
-                   CS.server_p256_private = None;
-                   CS.server_p256_public = CS.server_p256_absent;
+                   CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                   CS.server_p256_public =
+                     CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                    CS.server_selected_credential =
                      cfg.CS.server_credential_identity;
                   } in
@@ -656,8 +659,9 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                      CS.server_key_share_public =
                        CryptoSpec.x25519_public_from_private
                          (Ghost.reveal 'server_private_key_bytes);
-                     CS.server_p256_private = None;
-                     CS.server_p256_public = CS.server_p256_absent;
+                     CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                     CS.server_p256_public =
+                       CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                      CS.server_selected_credential =
                        cfg.CS.server_credential_identity;
                    } in

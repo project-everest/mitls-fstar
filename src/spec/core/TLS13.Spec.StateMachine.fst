@@ -194,7 +194,16 @@ type server_handshake_selection = {
      not a share's length -- decides which one the ECDH runs with.  Keeping the
      X25519 pair in its own fields rather than indexing one pair by the selected
      group is deliberate: it is what lets every proof that predates secp256r1
-     support keep its current statement. *)
+     support keep its current statement.
+
+     Both private keys are 32 bytes ([C.x25519_private] and [C.p256_private] are
+     both [B.bytes_of_len 32]), and the implementation derives both publics from
+     the *same* 32 secret bytes rather than drawing a second random value.  That
+     is not key reuse: the server transmits exactly one share and runs exactly
+     one ECDH, the one named by [server_selected_group], so the scalar is only
+     ever used in a single group.  Drawing one random value instead of two also
+     keeps the whole feature off the driver's payload width, which is what makes
+     secp256r1 support additive rather than a re-plumbing of the send path. *)
   server_p256_private: option C.p256_private;
   server_p256_public: C.p256_public;
   server_selected_credential: server_credential_identity;
@@ -215,6 +224,7 @@ let server_selection_key_share_consistent
     [server_selected_group] never names secp256r1 while the configured
     [server_supported_groups] does not offer it. **)
 let server_p256_absent : C.p256_public = B.zeros 65
+
 type handshake_state = {
   hs_start: option handshake_start;
   hs_server_selection: option server_handshake_selection;
