@@ -1135,6 +1135,7 @@ fn process_send_server_hello_serialized
       #server_random_bytes
       #server_key_share_bytes
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
+      #(Ghost.hide (GNG.X25519 <: GNG.namedGroup))
       #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
       sid_len
@@ -1164,6 +1165,7 @@ fn process_send_server_hello_serialized
       #server_random_bytes
       #server_key_share_bytes
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
+      #(Ghost.hide (GNG.X25519 <: GNG.namedGroup))
       #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
       (V.vec_to_array fragment_vec)

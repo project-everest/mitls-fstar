@@ -52,6 +52,7 @@ module L = TLS13.Impl.Messages
 module LL = FStar.List.Tot
 module M = TLS13.Messages
 module V = Pulse.Lib.Vec
+module CryptoSpec = TLS13.Crypto.Spec
 module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -261,6 +262,7 @@ fn serialize_server_hello_handshake_poc
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
   (#sid: erased B.bytes)
+  (#g: erased GNG.namedGroup)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: A.array U8.t)
@@ -268,12 +270,14 @@ fn serialize_server_hello_handshake_poc
   (#old: erased B.bytes)
   requires L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out (reveal old) **
            pure (B.length (reveal old) == SZ.v out_len /\
-                 SZ.v out_len == 90 + Seq.length (reveal sid) /\
+                 SZ.v out_len == 58 + Seq.length (reveal ks) + Seq.length (reveal sid) /\
                  Seq.length (reveal rnd) == 32 /\
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-                 Seq.length (reveal ks) == 32 /\
+                 (reveal g == GNG.X25519 \/ reveal g == GNG.Secp256r1) /\
+                 Seq.length (reveal ks) ==
+                   CryptoSpec.kex_public_len (Sem.kex_group_of_named_group (reveal g)) /\
                  Seq.length (reveal sid) <= 32 /\
-                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) GNG.X25519 (reveal cs))
+                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal g) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **

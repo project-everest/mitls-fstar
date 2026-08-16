@@ -28,6 +28,7 @@ fn serialize_server_hello_from_selection
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
   (#sid: erased B.bytes)
+  (#g: erased TLS13.Wire.Generated.NamedGroup.namedGroup)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: array U8.t)
@@ -36,13 +37,17 @@ fn serialize_server_hello_from_selection
   requires L.is_valid_server_hello lsh (Ghost.reveal sh) **
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
-                 SZ.v out_len == 90 + Seq.length (Ghost.reveal sid) /\
+                 SZ.v out_len == 58 + Seq.length (Ghost.reveal ks) + Seq.length (Ghost.reveal sid) /\
                  Seq.length (Ghost.reveal rnd) == 32 /\
                  (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-                 Seq.length (Ghost.reveal ks) == 32 /\
+                 (Ghost.reveal g == TLS13.Wire.Generated.NamedGroup.X25519 \/
+                  Ghost.reveal g == TLS13.Wire.Generated.NamedGroup.Secp256r1) /\
+                 Seq.length (Ghost.reveal ks) ==
+                   TLS13.Crypto.Spec.kex_public_len
+                     (TLS13.Wire.Semantics.kex_group_of_named_group (Ghost.reveal g)) /\
                  Seq.length (Ghost.reveal sid) <= 32 /\
                  Ghost.reveal sh ==
-                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) TLS13.Wire.Generated.NamedGroup.X25519 (Ghost.reveal cs))
+                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal g) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
@@ -52,7 +57,7 @@ fn serialize_server_hello_from_selection
                 Seq.equal out_bytes
                   (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 {
-  SerH.serialize_server_hello_handshake_poc #sh #rnd #ks #sid #cs lsh out out_len #old_bytes
+  SerH.serialize_server_hello_handshake_poc #sh #rnd #ks #sid #g #cs lsh out out_len #old_bytes
 }
 
 (* (b) Build-direction ServerHello record: serialize the handshake fragment,
@@ -62,6 +67,7 @@ fn serialize_server_hello_record_from_selection
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
   (#sid: erased B.bytes)
+  (#g: erased TLS13.Wire.Generated.NamedGroup.namedGroup)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (sid_len: SZ.t)
@@ -72,13 +78,17 @@ fn serialize_server_hello_record_from_selection
            pts_to out (Ghost.reveal old_bytes) **
            pure (B.length (Ghost.reveal old_bytes) == SZ.v out_len /\
                  SZ.v sid_len == Seq.length (Ghost.reveal sid) /\
-                 SZ.v out_len == 95 + Seq.length (Ghost.reveal sid) /\
+                 SZ.v out_len == 63 + Seq.length (Ghost.reveal ks) + Seq.length (Ghost.reveal sid) /\
                  Seq.length (Ghost.reveal rnd) == 32 /\
                  (Ghost.reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-                 Seq.length (Ghost.reveal ks) == 32 /\
+                 (Ghost.reveal g == TLS13.Wire.Generated.NamedGroup.X25519 \/
+                  Ghost.reveal g == TLS13.Wire.Generated.NamedGroup.Secp256r1) /\
+                 Seq.length (Ghost.reveal ks) ==
+                   TLS13.Crypto.Spec.kex_public_len
+                     (TLS13.Wire.Semantics.kex_group_of_named_group (Ghost.reveal g)) /\
                  Seq.length (Ghost.reveal sid) <= 32 /\
                  Ghost.reveal sh ==
-                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) TLS13.Wire.Generated.NamedGroup.X25519 (Ghost.reveal cs))
+                   SerH.poc_canonical_sh (Ghost.reveal rnd) (Ghost.reveal ks) (Ghost.reveal sid) (Ghost.reveal g) (Ghost.reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (Ghost.reveal sh) **
@@ -96,14 +106,16 @@ fn serialize_server_hello_record_from_selection
                      SZ.v out_len) /\
                 CS.raw_records_exactly out_bytes T.Handshake 1)
 {
-  (* RFC 8446 4.1.3: the message is 90 bytes plus the echoed
-     legacy_session_id, so the fragment buffer must be sized at run time.
-     Pulse stack arrays need a constant extent, hence the heap vec. *)
-  let fragment_len = 90sz `SZ.add` sid_len;
+  (* RFC 8446 4.1.3: the message is 58 bytes plus the key-share and the
+     echoed legacy_session_id, so the fragment buffer must be sized at run
+     time.  The record adds a 5-byte header, so the fragment is exactly
+     [out_len - 5].  Pulse stack arrays need a constant extent, hence the
+     heap vec. *)
+  let fragment_len = out_len `SZ.sub` 5sz;
   let fragment_vec = V.alloc 0uy fragment_len;
   V.to_array_pts_to fragment_vec;
   let fragment_written =
-    serialize_server_hello_from_selection #sh #rnd #ks #sid #cs lsh
+    serialize_server_hello_from_selection #sh #rnd #ks #sid #g #cs lsh
       (V.vec_to_array fragment_vec) fragment_len;
   with fragment_bytes. assert (pts_to (V.vec_to_array fragment_vec) fragment_bytes);
   assert (pure (B.length fragment_bytes == SZ.v fragment_len));
