@@ -485,6 +485,23 @@ Two design decisions carry the value:
    `x25519-and-p256` cell would still pass if the server had picked P-256, and
    `aes-first-chacha-last` would still pass if it had picked AES -- which are
    exactly the outcomes the cells exist to distinguish.
+3. **What the key-share axis covers was measured, not assumed.**  The cells
+   whose group list is `X25519:P-256` configure the client's *supported_groups*;
+   they do **not** make it send two `KeyShareEntry` values.  OpenSSL 3.0 emits
+   exactly one key share, for the first group in the list -- `X25519:P-256`
+   produces a single 32-byte `0x001d` entry and `P-256:X25519` a single 65-byte
+   `0x0017` entry.  (The `*` prefix that would ask for two is an OpenSSL 3.2
+   feature.)  So those cells exercise *"one share offered, a second group merely
+   listed"*, which is precisely the shape that makes `p256-first-x25519-listed`
+   require a HelloRetryRequest, and they are labelled that way.
+
+   The genuinely multi-`KeyShareEntry` ClientHello is covered by
+   `test_atlas_loopback`: the verified **client's** canonical ClientHello
+   carries two entries, `[kse; pkse]` at
+   `TLS13.Impl.ConnectionState.Model.client_hello_of_start`.  That is the path
+   the server's group-tagged acceptance scan (stage S6.7c) and its 65-byte
+   secp256r1 mirror slot (stage S2) actually sit on, so the matrix and the
+   loopback are complementary and neither subsumes the other.
 
 The framing axis is served by an in-process TCP proxy that re-frames the
 client->server stream at the record layer.  It re-frames only *cleartext*
@@ -531,13 +548,13 @@ ecdsa-credential-aes128              ecdsa  ok        G5+G1
 ecdsa-credential-no-middlebox-compat ecdsa  ok        G5+G4
 ecdsa-credential-dribble             ecdsa  ok        G5: ECDSA through the retry loop
 ecdsa-credential-openssl-defaults    ecdsa  ok        G5: stock OpenSSL vs an EC server
-ecdsa-credential-x25519-and-p256     ecdsa  ok        G5 with two key shares on offer
+ecdsa-credential-x25519-and-p256     ecdsa  ok        G5 with a two-group supported_groups
 ecdsa-credential-aes-first-chacha-last ecdsa ok       G5 with the server's suite preference
 ecdsa-credential-aes128-no-middlebox-dribble ecdsa ok G5+G1+G4 and the retry loop at once
 no-middlebox-compat                  rsa    ok        G4: empty session id echoed verbatim
 no-middlebox-compat-aes128           rsa    ok        G4+G1: empty id and the fallback arm
 no-middlebox-compat-dribble          rsa    ok        G4: empty id through the retry loop
-no-middlebox-compat-x25519-and-p256  rsa    ok        G4: empty id with two key shares
+no-middlebox-compat-x25519-and-p256  rsa    ok        G4: empty id, two-group groups list
 tcp-dribble                          rsa    ok        retained-buffer retry loop
 clienthello-across-two-records       rsa    refused   G3
 aes128-clienthello-across-two-records rsa   refused   G3 is independent of the suite axis

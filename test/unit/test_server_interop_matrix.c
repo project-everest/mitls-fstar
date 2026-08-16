@@ -53,6 +53,25 @@
  * client->server byte stream at the record layer.  It only ever re-frames
  * CLEARTEXT handshake records: a protected record is a single AEAD-sealed
  * unit, so splitting its ciphertext would test nothing but the AEAD tag.
+ *
+ * WHAT THE KEY-SHARE AXIS DOES AND DOES NOT COVER.  The cells whose group list
+ * is "X25519:P-256" configure the client's *supported_groups*, not the number
+ * of KeyShareEntry values it sends.  This was measured rather than assumed:
+ * OpenSSL 3.0 emits exactly ONE key_share, for the first group in the list, in
+ * every configuration above (X25519:P-256 -> one 32-byte 0x001d entry;
+ * P-256:X25519 -> one 65-byte 0x0017 entry).  The "*" key-share prefix that
+ * would ask for two is an OpenSSL 3.2 feature.  So those cells exercise "one
+ * share offered, a second group merely listed", which is the shape that makes
+ * p256-first-x25519-listed need a HelloRetryRequest -- and they are labelled
+ * accordingly.
+ *
+ * The genuinely multi-KeyShareEntry ClientHello is exercised by
+ * test_atlas_loopback, because the verified CLIENT's canonical ClientHello
+ * carries two entries -- [kse; pkse], X25519 and secp256r1, at
+ * TLS13.Impl.ConnectionState.Model.client_hello_of_start.  That is the path
+ * the server's group-tagged acceptance scan and its 65-byte secp256r1 mirror
+ * slot are on, so the two tests are complementary and neither subsumes the
+ * other.
  */
 
 #include "tls13_server_driver.h"
@@ -205,14 +224,14 @@ static const struct case_spec k_cases[] = {
     {"x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256", "X25519:P-256",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "two key shares offered; the server takes the X25519 one", TLS13_ONLY},
-    /* Both agile axes at once: AES-128-GCM selected while two key shares are
-       on offer.  Guards against a regression where the suite fallback is only
-       reachable on the single-key-share path. */
+     "X25519 share offered with P-256 also in supported_groups", TLS13_ONLY},
+    /* Both agile axes at once: AES-128-GCM selected while a second group is
+       also on offer.  Guards against a regression where the suite fallback is
+       reachable only when supported_groups names one group. */
     {"aes128-x25519-and-p256", "TLS_AES_128_GCM_SHA256", "X25519:P-256",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_AES_128_GCM_SHA256", "X25519",
-     "suite fallback and key-share choice exercised together", TLS13_ONLY},
+     "suite fallback and a two-group supported_groups together", TLS13_ONLY},
     /* P-256 listed first makes OpenSSL send its key_share for P-256 only and
        list X25519 in supported_groups, which a server without
        HelloRetryRequest cannot use. */
@@ -292,7 +311,7 @@ static const struct case_spec k_cases[] = {
     {"ecdsa-credential-x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256",
      "X25519:P-256", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true,
      FRAMING_NORMAL, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "ECDSA credential while two key shares are on offer", TLS13_ONLY},
+     "ECDSA credential with a two-group supported_groups", TLS13_ONLY},
     {"ecdsa-credential-aes-first-chacha-last",
      "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256",
      "X25519", "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL,
@@ -337,7 +356,7 @@ static const struct case_spec k_cases[] = {
     {"no-middlebox-compat-x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256",
      "X25519:P-256", "rsa_pss_rsae_sha256", CRED_RSA, false, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "empty session id with two key shares on offer", TLS13_ONLY},
+     "empty session id with a two-group supported_groups", TLS13_ONLY},
 
     /* --- Framing axis. --------------------------------------------------- */
     {"tcp-dribble", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
