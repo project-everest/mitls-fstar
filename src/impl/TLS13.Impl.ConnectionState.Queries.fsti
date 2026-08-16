@@ -1225,6 +1225,26 @@ fn read_negotiated_server_suite
                 IM.cipher_suite_of_u16 suite ==
                   server_selected_suite (Ghost.reveal st0))
 
+/// Read the key-exchange group the server's policy picks for the stored
+/// ClientHello, out of the mirror's [client_hello_kex_group] metadata box.
+///
+/// Like the cipher-suite and session-id-width policies, the *answer* is a
+/// function of the stored ClientHello alone, so no negotiation decision has to
+/// be remembered.  Unlike them, it cannot be recomputed from the stored bytes:
+/// an all-zero 32-byte X25519 slot is a legal share, so "did the peer offer
+/// X25519?" is genuinely extra information, written at parse time.
+///
+/// Total: when no ClientHello is stored the box still holds its initial
+/// [KexX25519], which is what [Model.stored_client_hello_kex_group] reports for
+/// such a state.
+fn read_client_hello_kex_group
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns g: CryptoSpec.kex_group
+  ensures connection_exactly c st0 **
+          pure (g == stored_client_hello_kex_group (Ghost.reveal st0))
+
 /// Read the offered legacy_session_id of the stored ClientHello into [out],
 /// zero-padded to the mirror's fixed 32-byte width, and return its true wire
 /// length.  RFC 8446 4.1.3 obliges the server to echo the id *verbatim*, so

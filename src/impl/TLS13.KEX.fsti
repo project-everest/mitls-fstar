@@ -131,3 +131,30 @@ fn kex_shared_split_runtime
                 kex_shared_call g 'sk_bytes
                   (kex_split_share g 'x25519_bytes 'p256_bytes)
                   out_bytes ok)
+
+(** The server's own public share at the negotiated group, written into the
+    uniform 65-byte buffer the send path carries, together with the share's true
+    wire width.
+
+    This is the build-direction counterpart of [kex_shared_runtime]: the same
+    "one buffer, one explicit group tag, never a length test" discipline, but
+    for the value the server puts on the wire rather than the one it reads off
+    it.  The X25519 arm writes 32 bytes and leaves the remaining 33 as it found
+    them, so the logical share is the [kex_public_len g]-byte prefix -- exactly
+    [C.unpad_share_65], as on the read side. *)
+fn kex_public_from_private_runtime
+  (g: C.kex_group)
+  (sk: array U8.t)
+  (out65: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to out65 'old **
+           pure (B.length 'sk_bytes == 32 /\ B.length 'old == 65)
+  returns n: SZ.t
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to out65 out_bytes **
+          pure (B.length out_bytes == 65 /\
+                SZ.v n == C.kex_public_len g /\
+                Seq.equal
+                  (C.unpad_share_65 out_bytes (C.kex_public_len g))
+                  (C.kex_public_from_private g 'sk_bytes))

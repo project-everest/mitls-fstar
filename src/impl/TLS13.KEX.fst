@@ -138,3 +138,44 @@ fn kex_shared_split_runtime
     }
   }
 }
+
+fn kex_public_from_private_runtime
+  (g: C.kex_group)
+  (sk: array U8.t)
+  (out65: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to out65 'old **
+           pure (B.length 'sk_bytes == 32 /\ B.length 'old == 65)
+  returns n: SZ.t
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to out65 out_bytes **
+          pure (B.length out_bytes == 65 /\
+                SZ.v n == C.kex_public_len g /\
+                Seq.equal
+                  (C.unpad_share_65 out_bytes (C.kex_public_len g))
+                  (C.kex_public_from_private g 'sk_bytes))
+{
+  pts_to_len sk;
+  pts_to_len out65;
+  match g {
+    C.KexX25519 -> {
+      let mut pub32 = [| 0uy; 32sz |];
+      Crypto.x25519_public_from_private sk pub32;
+      AC.copy_prefix 32sz pub32 32sz out65 65sz;
+      with out_bytes. assert (pts_to out65 out_bytes);
+      pts_to_len out65;
+      Seq.lemma_eq_elim
+        (C.unpad_share_65 out_bytes (C.kex_public_len C.KexX25519))
+        (C.x25519_public_from_private 'sk_bytes);
+      32sz
+    }
+    C.KexP256 -> {
+      Crypto.p256_public_from_private sk out65;
+      with out_bytes. assert (pts_to out65 out_bytes);
+      pts_to_len out65;
+      lemma_unpad_share_p256 out_bytes;
+      65sz
+    }
+  }
+}

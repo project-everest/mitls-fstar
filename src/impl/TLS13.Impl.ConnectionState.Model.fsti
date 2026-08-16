@@ -620,6 +620,21 @@ let stored_client_hello_session_id (st:CS.connection_state)
     | Some ch -> Sem.clientHello_session_id ch
     | None -> Seq.empty
 
+(* The key-exchange group the server's policy picks for the ClientHello
+   currently stored in the connection state -- i.e. exactly the group the
+   ServerHello must name, and whose [kex_public_len] fixes the ServerHello's
+   wire length.  Ghost-only: the runtime value is read out of the stored
+   ClientHello mirror's [client_hello_kex_group] box (it cannot be recomputed
+   from the stored bytes, since an all-zero 32-byte slot is a legal X25519
+   share).  Defined for every state; the X25519 default for a state with no
+   stored ClientHello is exactly what
+   [Repr.client_hello_metadata_exactly] holds in that case. *)
+noextract
+let stored_client_hello_kex_group (st:CS.connection_state) : CryptoSpec.kex_group
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch -> client_hello_kex_group_for ch
+    | None -> CryptoSpec.KexX25519
+
 (* clamp: the echoed legacy_session_id is the offered one, verbatim (identity
    under valid_selection; see the echo note above). *)
 noextract
