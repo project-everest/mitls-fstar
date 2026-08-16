@@ -864,11 +864,14 @@ fn try_derive_server_shared_secret_from_private_array
              exists* shared.
                connection_exactly c (derived_shared_secret_state st0 shared) **
                ArrPts.pts_to server_private_key 'server_private_key_bytes **
-               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
-                      | Some ch ->
-                        (match CS.client_hello_key_share ch with
+               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                      | Some selection ->
+                        (match CS.client_hello_kex
+                                 selection.CS.server_selected_client_hello
+                                 (CS.server_selected_kex_group selection) with
                          | Some k ->
-                           TLS13.Crypto.Spec.x25519_shared
+                           TLS13.Crypto.Spec.kex_shared
+                             (CS.server_selected_kex_group selection)
                              (Ghost.reveal 'server_private_key_bytes)
                              k == Some shared
                          | None -> False)
