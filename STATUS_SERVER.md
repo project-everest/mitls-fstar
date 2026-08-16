@@ -103,9 +103,12 @@ so the secp256r1 arm is compiled, linked and reachable.  The server's mirror
 needed its own entry point, because it stores the ClientHello's *offer* -- which
 may carry both groups at once, in a 32-byte slot and a 65-byte slot side by side
 -- rather than the single share the client's mirror keeps padded to a uniform
-width.  Only the *specification* of that routine is still X25519-shaped, and it
-stays so because generalising it has to be threaded up through five layers to
-the canonical-protocol lemmas.
+width.  Its *specification* has since caught up: what that routine derives is
+now stated as the group-indexed ECDH at whichever group the selection names,
+rather than as X25519's.  That cost nothing, because the body had been proving
+the general statement all along and then specialising it back down; the
+specialisation is simply gone.  Its *precondition* still pins X25519, and has to
+(see below).
 
 What is left is one indivisible commit, and the reason is precise: the
 acceptance gate is exactly what makes the negotiated group a constant.  The
@@ -146,8 +149,32 @@ reject an unrecognised group outright, so it is stated for the two groups ATLAS
 offers and proved by cases.
 
 What is left for the final commit is the acceptance gate, the selection policy,
-the configured group list, the ECDH's specification, and the send path's own
+the configured group list, the ECDH's precondition, and the send path's own
 `90`/`95` constants, which are pinned by the selection witness and move with it.
+
+Two of those five have since shrunk sharply.  The acceptance gate had been
+measured at a hundred and sixty-nine occurrences of work; it is now one
+expression.  The scan that decides whether a ClientHello is representable kept
+its key-share accumulator at the type "thirty-two bytes", which is the only
+X25519-specific thing about it and which forced every statement made over the
+scan to be X25519-specific too.  The obvious fix -- keep the bare share and
+recover the group from its length -- is exactly what this codebase's own design
+law forbids, so the accumulator instead became a *tagged* pair, the same shape
+the ServerHello side already uses.  The body still calls the X25519 finder, so
+acceptance is bit-identical and no cell moved; but the finder is now a single
+replaceable expression rather than a type woven through five files.
+
+The ECDH's precondition, by contrast, was tried and is genuinely part of the
+flip.  Replacing its X25519 pin with the honest statement -- that the selected
+group is the one the server's policy picks for this ClientHello -- verifies
+cleanly through all five layers above it, including the canonical queries and
+the scheduler.  It fails in exactly one place: the routines that *build* a
+selection cannot prove the policy picks X25519, because that needs the fact that
+the stored ClientHello offered an X25519 share, and that fact lives only in the
+runtime mirror, not in any specification-level invariant.  Surfacing it needs a
+new ghost query over the connection's representation predicate -- which is the
+first thing the final commit should build, since both the selection builders and
+the precondition's removal wait on it.
 `docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
 
 Cross-record reassembly -- one ClientHello arriving as two TLS records -- is

@@ -958,6 +958,111 @@ After S6.7b (landed) the flip reduces to: the acceptance gate (the 169
 specification, `Setup.fst`'s seven selection builders, the configured group list
 and the three named pins, and the ledger.
 
+### S6.7c — as landed (`e4594e008`): the acceptance scan becomes group-tagged
+
+The "169 `ch_extensions` occurrences" item above was measured and found to be
+confined to five files — `Impl.Parser.fst` (66), `Wire.Spec.Reveal.Handshake.fsti`
+(34), `Wire.Spec.fst` (29), `Wire.Spec.fsti` (27), `Reveal.Handshake.fst` (18) —
+and, more importantly, to be almost entirely *type* churn rather than proof
+churn.  The commit-on-first scan `WS.ch_extensions` carried its key-share
+accumulator at type `option (B.bytes_of_len 32)`: the 32 is the only thing that
+is X25519-specific about it, and it forces every statement made over the scan to
+be X25519-specific too.
+
+The obvious alternative — keep a bare `option offered_share` and recover the
+group from the share's length — is explicitly ruled out by the codebase's own
+design law at `Crypto.Spec.fsti:176`: *the group is carried as an explicit tag
+and is never recovered from a share's length.*  So the accumulator becomes a
+tagged pair, the same shape `Sem.sh_find_kex_share` already returns on the
+ServerHello side:
+
+```fstar
+let ch_key_share_offer = (GNG.namedGroup & Sem.offered_share)
+```
+
+(`Sem.offered_share = C.kex_public_any`, a byte string of length 32 or 65.)
+
+The scan body still calls `Sem.kse_list_find_x25519` and stores
+`(GNG.X25519, raw)`, so **acceptance is bit-identical** and the ledger did not
+move.  The X25519-specific `key_exchange_to_key32` / `ch_find_key_share` pair was
+deliberately left at 32 bytes: it is the *finder*, not the accumulator, and it is
+precisely the one expression S6.8 replaces.
+
+Fallout was three `k` -> `snd k` projections in the connect lemmas' conclusions
+(no X25519 pin was needed — `Sem.ch_find_key_share` is itself the X25519 finder
+and carries the width in its own result type) and four sites in
+`Impl.Parser.fst`.  `module Sem = TLS13.Wire.Semantics` had to be added to
+`Wire.Spec.fsti` and `Reveal.Handshake.fsti`; there is no cycle, as
+`Wire.Spec.fsti` already referred to `TLS13.Wire.Semantics` fully qualified.
+
+Diff: 4 files, +61/-39.  Gate: verify 154 modules 0 errors, admits 0, 34/34.
+
+**Consequence for S6.8: the acceptance gate is no longer a 169-site item.**  It
+is now one expression — the finder in the `key_share` arm of `ch_extensions`
+(`Wire.Spec.fst:~299`, mirrored in `Wire.Spec.fsti:~270`,
+`Reveal.Handshake.fsti:~215` and `Impl.Parser.fst:~774`) — plus the
+`| None -> False` clause in `IM.is_valid_client_hello`.
+
+### S6.7d — as landed (`1cac89cab`): the ECDH specification becomes group-indexed
+
+Item 2 of the atomic flip below ("ECDH specification") is in two halves: the
+*postcondition*, which says what the derived secret is, and the *precondition*,
+which says which groups may reach the function.  Only the first can be
+pre-staged, and S6.7d does it.
+
+The postconditions of `try_derive_server_shared_secret_from_private_array`
+(`LocalHandshake`), `process_derive_shared_secret_from_private_array`
+(`Server.Keys`) and its `Impl.Server` wrapper no longer mention
+`Crypto.Spec.x25519_shared`.  They now read
+
+```fstar
+match CS.client_hello_kex selection.CS.server_selected_client_hello
+                          (CS.server_selected_kex_group selection) with
+| Some k -> TLS13.Crypto.Spec.kex_shared
+              (CS.server_selected_kex_group selection)
+              (reveal 'server_private_key_bytes) k == Some shared
+| None   -> False
+```
+
+This is zero-fallout because `LocalHandshake`'s body **already proved exactly
+this** (S6.6 left the group-parametric assertion in place and then specialised it
+back down); that specialisation block is now deleted.  Every precondition is
+untouched — `server_selected_kex_group selection == KexX25519` still pins the
+chain — so no caller, query, input gate or selection builder moves.
+
+Diff: 6 files, +46/-30.  Gate: verify 0 errors, admits 0, 34/34.
+
+#### Negative result: the precondition half cannot be pre-staged
+
+For the record, because it costs an hour to rediscover.  Replacing the
+precondition pin with the *policy-agreement* clause
+
+```fstar
+CS.server_selected_kex_group selection
+  == CM.client_hello_kex_group_for selection.CS.server_selected_client_hello
+```
+
+verifies all the way up: `LocalHandshake` -> `Server.Keys` -> `Impl.Server` ->
+`Impl.Server.Types.server_local_event_input_ready` (both `LocalDeriveSharedSecret`
+arms) -> `CR.server_selection_group_pinned` ->
+`Queries.can_schedule_derive_shared_secret_runtime` -> `Schedule`.  It then dies
+at `Setup.fst`'s seven selection builders.
+
+`CM.client_hello_kex_group_for m` is
+`if Some? (Sem.clientHello_key_share_x25519 m) then KexX25519 else KexP256`
+(`Model.fsti:153`), so a builder proving it equals `KexX25519` needs
+`Some? (Sem.clientHello_key_share_x25519 ch)` — and that fact exists **only in
+the runtime mirror** (`IM.is_valid_client_hello`'s `| None -> False`), not in any
+spec-level invariant.  Checked and ruled out as sources: `server_selection_-
+acceptable` (constrains the *config*'s groups, not the ClientHello's),
+`legal_event`'s `LocalSelectServerParameters` arm, `server_end_to_end_invariant`,
+and `client_hello_matches_start` (which does carry it, but is client-side).
+Surfacing it needs a new ghost Pulse query unfolding `connection_exactly` /
+`client_hello_slot_exactly` — which is real work and belongs to S6.8, where the
+selection policy actually changes.  **That query is therefore the recommended
+first move of S6.8**: both the selection builders and the ECDH precondition
+removal depend on it.
+
 ### S6 as re-measured — what is left is one atomic commit
 
 With S6.1-S6.5 landed, the remaining work is genuinely indivisible, and the
@@ -972,23 +1077,28 @@ reason is sharper than "five blockers".  It is this:
 
 Concretely the single commit must carry, together:
 
-1. **Gate.**  `Wire.Spec.clientHello_representable:472` becomes
-   `(Some? key_share || ch_offers_p256_share b)`; the Parser's accept
-   computation mirrors it; `IM.is_valid_client_hello`'s X25519 clause
-   (`| None -> False`) and `client_hello_slot_exactly`'s become the same
-   disjunction.
-2. **ECDH specification.**  The dispatch itself landed in S6.6; what remains is
-   its signature.  `try_derive_server_shared_secret_from_private_array`'s
-   precondition becomes
-   `server_selected_kex_group selection == client_hello_kex_group_for ch` plus
-   `Some? (CS.client_hello_kex ch (client_hello_kex_group_for ch))`, and its
-   `ensures` becomes `CryptoSpec.kex_shared g ...`.  Both propagate through
-   `Server.Keys` -> `Server` -> `Driver.BufferedHandshake` /
-   `Driver.BufferedNetwork` and bottom out at
-   `ST.server_local_event_input_ready`, which is discharged by
+1. **Gate.**  ~~`Wire.Spec.clientHello_representable:472` becomes ...~~
+   **Reduced by S6.7c.**  The scan's accumulator is already group-tagged, so the
+   gate is now: replace the finder in the `key_share` arm of `ch_extensions`
+   (`Wire.Spec.fst:~299`, mirrored in `Wire.Spec.fsti:~270`,
+   `Reveal.Handshake.fsti:~215`, `Impl.Parser.fst:~774`) with one that also
+   accepts a secp256r1 entry, and turn `IM.is_valid_client_hello`'s X25519 clause
+   (`| None -> False`) — and `client_hello_slot_exactly`'s — into the two-group
+   disjunction.  The P-256 clauses on both are already iffs.
+2. **ECDH specification.**  The dispatch itself landed in S6.6; the
+   *postcondition* landed in S6.7d, and the specialisation asserts are already
+   deleted.  What remains is the *precondition*:
+   `try_derive_server_shared_secret_from_private_array`'s
+   `server_selected_kex_group selection == KexX25519` becomes
+   `== client_hello_kex_group_for ch` plus
+   `Some? (CS.client_hello_kex ch (client_hello_kex_group_for ch))`.  It
+   propagates through `Server.Keys` -> `Server` -> `Driver.BufferedHandshake` /
+   `Driver.BufferedNetwork` and bottoms out at
+   `ST.server_local_event_input_ready`, discharged by
    `Impl.Server.CanonicalQueries` / `CanonicalProtocol` — those are where the
    two new conjuncts must actually be proved, from the canonical ClientHello.
-   Delete the three specialisation asserts S6.6 left in the body.
+   S6.7d verified this whole propagation; the only unmet obligation is at
+   `Setup.fst` (see the negative result above), which the ghost query fixes.
 3. **Policy.**  `Setup.fst`'s seven selection builders set
    `server_selected_group` from the stored ClientHello (the runtime value is now
    available: it is the S6.4 box).
