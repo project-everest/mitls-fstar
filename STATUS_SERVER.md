@@ -127,12 +127,28 @@ which is the familiar `90 + |sid|` at X25519's thirty-two-byte share and
 `123 + |sid|` at secp256r1's sixty-five-byte one.  Nothing about that proof was
 X25519-specific once it was written down properly: a `namedGroup` is a two-byte
 enum at *every* group, which its parser kind already says, so the group tag
-contributes a constant and drops out of the arithmetic entirely.  What is left
-for the final commit is the acceptance gate, the selection policy, the
-configured group list, the ECDH's specification, and one runtime expression --
-`fragment_len = 90sz + sid_len` in `TLS13.Impl.Server.Send` -- which becomes
-`58sz + ks_len + sid_len`.  `docs/server-p256-plan.md` §7 carries the
-file-and-line breakdown.
+contributes a constant and drops out of the arithmetic entirely.
+
+The Pulse write chain above that arithmetic has since been pre-staged too, and
+it turned out to cost less than the plan predicted.  The plan assumed the writer
+would need the share width threaded down to it as a new runtime argument from
+the send path.  It does not: the concrete ServerHello mirror the writer already
+holds has always recorded the negotiated group, beside a sixty-five-byte padded
+share slot, so the writer recovers both the wire tag and the width from data in
+its own hand.  All four levels of the chain therefore gained only an *erased*
+group; not one concrete parameter list changed.  A second small win came with
+it -- the record writer had been sizing its handshake-fragment buffer as
+`90 + |sid|`, and now sizes it as `record_length - 5`, which is exact at any
+share width and needs no lookup at all.  The one new obligation is that the
+canonical ServerHello's key share round-trips through the wire semantics at a
+variable group; as first written that claim was false, because the semantics
+reject an unrecognised group outright, so it is stated for the two groups ATLAS
+offers and proved by cases.
+
+What is left for the final commit is the acceptance gate, the selection policy,
+the configured group list, the ECDH's specification, and the send path's own
+`90`/`95` constants, which are pinned by the selection witness and move with it.
+`docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
 
 Cross-record reassembly -- one ClientHello arriving as two TLS records -- is
 still refused, and the obstacle has now been located precisely rather than

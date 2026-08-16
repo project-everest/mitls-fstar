@@ -863,7 +863,55 @@ state a *size*.
 Files touched: `Impl.Serializer.Handshake.fsti/.fst`, `Impl.Serializer.fsti/.fst`,
 `Impl.Serializer.ServerHello.fsti/.fst`, `Impl.Server.Send.fst`.
 
-### S6.7b — the next capability-neutral stage, specified at line level
+### S6.7b — as landed (`2537d001c`)
+
+S6.7 generalised the *spec-level* size arithmetic.  S6.7b carries it through the
+Pulse write chain above it, so that at the flip nothing in the serializer has to
+move — only the selection policy does.  Capability-neutral: every caller still
+passes X25519 and a 32-byte share, the wire output is byte-identical, and the
+34-cell ledger did not move.
+
+**One prediction below was wrong, in ATLAS's favour.**  The plan assumed level 2
+would need a new concrete `(ks_len: SZ.t)` parameter threaded from level 5 down.
+It does not.  `IM.is_valid_server_hello` (`Impl.Messages.fst:573`) has *always*
+been group-parametric — it matches `Sem.serverHello_kex_share m` for
+`Some (g, k)` and stores the group in `l.server_hello_kex_group` beside a
+65-byte padded share — so the writer recovers both the wire tag and the share
+width from the mirror it already holds:
+
+```
+let ks_len = sh_share_len_sz lsh.L.server_hello_kex_group;
+let ng     = sh_named_group_of_kex lsh.L.server_hello_kex_group;
+```
+
+`sh_named_group_of_kex` and `sh_share_len_sz` are new `inline_for_extraction`
+helpers, with `lemma_sh_named_group_of_kex_inv` inverting
+`Sem.kex_group_of_named_group` on the two offered groups (it is `Secp256r1 ->
+KexP256 | _ -> KexX25519`, hence not injective in general).  So levels 3-5 gained
+only a *ghost* `#g`, and the concrete parameter list of every function in the
+chain is unchanged.
+
+The second useful surprise is at level 4: the record writer's fragment buffer
+had been sized `90sz + sid_len`.  It is now `out_len - 5sz`, which is exact for
+any share width and needs no access to the mirror at all.
+
+The one genuinely new lemma is `lemma_canonical_kex_share`, connecting the
+canonical ServerHello to `Sem.serverHello_kex_share` at a variable group.  As
+first written it was *false*: `Sem.sh_find_kex_share` has a `| _ -> None` arm and
+checks a group-specific width, so the lemma requires
+`(g == X25519 \/ g == Secp256r1)` and is proved by an explicit two-arm match.
+`lemma_canonical_key_share` (the X25519-specific one, going through
+`Sem.serverHello_key_share_x25519`) was left alone; it still has other consumers
+and moves at the flip.
+
+Level 5 (`Impl.Server.Send`) keeps its `90`/`95` constants and simply passes
+`#(Ghost.hide GNG.X25519)` at both call sites.  Those constants are pinned by
+`mk_server_hello_witness` and `CM.valid_selection`, which are part of the S6.8
+atomic flip and cannot move before it.
+
+Diff: 7 files, +189/-89.  Gate: verify 0 errors, admits 0, 34/34 cells.
+
+#### The stage as originally specified, for the record
 
 S6.7 generalised the *spec-level* size arithmetic.  The Pulse write chain above
 it is still pinned, and it can be pre-staged the same way: give it a runtime
@@ -905,10 +953,10 @@ the real content of the stage:
   which already exist, `Wire.Semantics.fst:239,247`) at the flip, when its
   consumers move too.
 
-After S6.7b the flip reduces to: the acceptance gate (the 169 `ch_extensions`
-occurrences, which is then the only large item left), the ECDH's specification,
-`Setup.fst`'s seven selection builders, the configured group list and the three
-named pins, and the ledger.
+After S6.7b (landed) the flip reduces to: the acceptance gate (the 169
+`ch_extensions` occurrences, now the only large item left), the ECDH's
+specification, `Setup.fst`'s seven selection builders, the configured group list
+and the three named pins, and the ledger.
 
 ### S6 as re-measured — what is left is one atomic commit
 
