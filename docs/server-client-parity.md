@@ -897,6 +897,42 @@ week's work.
    the `.fst` `let`'s, or the error surfaces confusingly at the *body*.  No cell
    moved.
 
+   **Stages S6.1 through S6.8b have landed** (`5ee056664`, `b578465f0`,
+   `0bd78b985`, `613e12980`, `c360e2165`, `cab78ad8d`, `2537d001c`,
+   `e4594e008`, `1cac89cab`, `c40d2e1cc`, `b80502853`), all capability-neutral,
+   all with the ledger unmoved.  Between them they have taken every part of the
+   feature *except the behaviour* off the final commit's critical path: the
+   parser reads a secp256r1 share, the ClientHello mirror stores it, the
+   negotiated group is observable at run time, the ECDH itself dispatches on it,
+   the ServerHello's specification, size arithmetic, Pulse write chain and
+   abstract witness are all group-parametric, the ECDH's *postcondition* speaks
+   of `kex_shared g`, the acceptance scan's key-share accumulator is
+   group-tagged, and the two runtime facilities the flip needs -- a group-agile
+   derivation of the server's own share, and a query for the negotiated group --
+   both exist and are verified.
+
+   Two measurements from that work are worth carrying forward.  First, the
+   "169 `ch_extensions` occurrences" that twice caused the acceptance gate to be
+   deferred were almost entirely *type* churn: the scan's key-share accumulator
+   was typed "thirty-two bytes".  Retyping it as an explicit `(group, share)`
+   pair -- following the codebase's own law that a group is a tag and never a
+   length -- reduced the gate to one replaceable expression.  Second, the ECDH's
+   X25519 *precondition* cannot be pre-staged: replacing it with the honest
+   policy-agreement clause verifies through all five layers above it but cannot
+   be discharged by a selection *builder* that still names `T.X25519` literally.
+   The resolution is not a new ghost query but the flip itself -- a builder that
+   takes the group *from* the policy proves the agreement by definition.
+
+   What is left, in one commit: widen the gate, have the seven selection
+   builders take the group from the policy and the share from
+   `KEX.kex_public_from_private_runtime`, replace the ServerHello's `90`/`95`
+   with `58`/`63 + kex_public_len g`, drop the ECDH's X25519 precondition and
+   `CR.server_selection_group_pinned`, add `T.Secp256r1` to
+   `server_supported_groups`, and flip `p256-only` and
+   `ecdsa-credential-p256-only`.  Every item is a deletion or a substitution of
+   an expression that already exists.  `docs/server-p256-plan.md` §7 "S6.8c"
+   carries it at file-and-line level.
+
 Until they are done, `clienthello-across-two-records`,
 `aes128-clienthello-across-two-records`, `p256-only`,
 `ecdsa-credential-p256-only` and `p256-first-x25519-listed` stay recorded as

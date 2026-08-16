@@ -171,10 +171,28 @@ cleanly through all five layers above it, including the canonical queries and
 the scheduler.  It fails in exactly one place: the routines that *build* a
 selection cannot prove the policy picks X25519, because that needs the fact that
 the stored ClientHello offered an X25519 share, and that fact lives only in the
-runtime mirror, not in any specification-level invariant.  Surfacing it needs a
-new ghost query over the connection's representation predicate -- which is the
-first thing the final commit should build, since both the selection builders and
-the precondition's removal wait on it.
+runtime mirror, not in any specification-level invariant.  The resolution is not
+to surface the fact but to stop needing it: once a builder sets the selected
+group *from* the policy instead of to the literal X25519, the agreement holds by
+definition.  That is a behaviour change, so it belongs to the flip.
+
+Two further capability-neutral halves have landed.  The abstract ServerHello the
+whole send path is stated against -- the last thing in the write chain that was
+still X25519-shaped -- now takes the group as an argument and accepts a share of
+any offered width, and its size lemma reads `58 + |share| + |echo|`, the same
+`90 + |echo|` as before whenever the share is X25519's thirty-two bytes.  And
+the two runtime facilities the flip needs now exist: a group-agile derivation of
+the server's *own* share, which is the build-direction mirror of the agile ECDH
+and branches on the same explicit tag rather than on a length; and a query that
+reads the negotiated group out of the ClientHello mirror.
+
+What remains is behavioural, and it is one commit: widen the acceptance gate,
+have the selection builders take the group from the policy and the share from
+the new derivation, replace the ServerHello's `90`/`95` with
+`58`/`63 + |share|`, drop the ECDH's X25519 precondition and the named pin that
+records it, offer secp256r1 in the configured group list, and flip the two
+ledger cells.  Every one of those is now a *deletion* or a substitution of an
+expression that already exists; none of them is a restatement.
 `docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
 
 Cross-record reassembly -- one ClientHello arriving as two TLS records -- is

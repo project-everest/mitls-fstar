@@ -1063,6 +1063,97 @@ selection policy actually changes.  **That query is therefore the recommended
 first move of S6.8**: both the selection builders and the ECDH precondition
 removal depend on it.
 
+### S6.8a — as landed (`c40d2e1cc`): the send-path witness becomes group-parametric
+
+Item 4 below ("Lengths") had one piece left after S6.7b: `mk_server_hello_witness`,
+the *abstract* ServerHello the whole server send path is stated against, still
+built an X25519 `KeyShareEntry` over a 32-byte share.  It now takes the wire
+`NamedGroup` as its first argument and accepts any share of 32..65 bytes —
+the same shape as `SerH.poc_canonical_sh`, which S6.7 had already generalised
+and which this witness is proved equal to.  With it:
+
+* `lemma_mk_server_hello_witness_bytesize` concludes
+  `58 + |key_share| + |session_id|` instead of `90 + |session_id|`.  At X25519's
+  32-byte share those are the same number, which is why every consumer still
+  derives its `90 + |sid|` unchanged — the generalisation is free.
+* `lemma_mk_server_hello_witness_eq_poc` drops its X25519 pin.
+* `lemma_server_hello_of_selection_eq_witness` drops its X25519 **requires**
+  entirely and is stated at `CM.sho_named_group sel` / `CM.sho_key_share sel`,
+  which is literally what `CM.server_hello_of_selection` builds with.
+
+The witness's accessor refinement keeps its `serverHello_key_share_x25519`
+clause, now guarded by `g == GNG.X25519`, so no consumer of that clause moved.
+About fifty call sites gained a leading `GNG.X25519`.
+
+Diff: 6 files, +101/-72.  Gate: verify 0 errors, admits 0, 34/34.
+
+### S6.8b — as landed (`b80502853`): the two runtime prerequisites
+
+Purely additive; two new declarations, nothing existing restated.
+
+1. **`TLS13.KEX.kex_public_from_private_runtime`** — the build-direction
+   counterpart of `kex_shared_runtime`.  Given the negotiated group and the
+   server's 32 secret bytes it writes the server's own share into the uniform
+   65-byte send buffer and returns its true wire width.  It branches on the
+   explicit group tag, never on a length, so the C stubs still do no dispatch.
+2. **`Queries.read_client_hello_kex_group`**, with its ghost counterpart
+   `Model.stored_client_hello_kex_group` — reads the `client_hello_kex_group`
+   metadata box S6.4 added and returns the group the policy picks for the
+   stored ClientHello.
+
+These are exactly what the flip was blocked on: with them the send path can
+size its ServerHello as `63 + kex_public_len g + |session_id|` and fill its
+share at the negotiated group, instead of the constants `90`/`95` and a
+32-byte X25519 public.
+
+### S6.8c — the remaining flip, as measured after S6.7b/c/d and S6.8a/b
+
+Everything above was capability-neutral.  What is left is genuinely one
+indivisible commit, and it is now *only* the parts that change behaviour:
+
+1. **Acceptance gate** (one expression, thanks to S6.7c): the finder in the
+   `key_share` arm of `WS.ch_extensions` (`Wire.Spec.fst:~299`, mirrored in
+   `Wire.Spec.fsti:~270`, `Reveal.Handshake.fsti:~215`, `Impl.Parser.fst:~774`),
+   plus `IM.is_valid_client_hello`'s `| None -> False` and
+   `CR.client_hello_slot_exactly`'s matching clause, which become the two-group
+   disjunction.  (Both P-256 clauses are already iffs.)
+2. **Selection policy**: `Setup.fst`'s seven builders (`:484,514,544,625,659,
+   691,757,791,831`) set `CS.server_selected_group` from
+   `CM.stored_client_hello_kex_group` rather than the literal `T.X25519`, and
+   the concrete share they hand on comes from
+   `KEX.kex_public_from_private_runtime` at that group.
+3. **`CM.valid_selection`** (`Model.fsti:539`) drops its third conjunct, and
+   `lemma_server_hello_of_selection_bytesize` (`Model.fsti:~864`, `.fst:~511`)
+   concludes `58 + kex_public_len (server_selected_kex_group sel) + |sid|`.
+4. **Lengths**: the ~20 occurrences of `95 + |stored session id|`
+   (`Server.fsti:551,613,675,1914,1995`, `Server.fst:798,880,961,2677,2910,
+   2918,3221`, `Send.fsti:267,391,453,515`, `Driver.BufferedHandshake.fst:701,
+   702`) and the ~8 of `90 + |sid|` become
+   `63 + kex_public_len (stored_client_hello_kex_group st) + |sid|` and
+   `58 + kex_public_len ... + |sid|`; the runtime sizes read the group with
+   `read_client_hello_kex_group`.  `Send.fst:~1158`'s `fragment_len` follows.
+5. **ECDH precondition**: drop `server_selected_kex_group selection ==
+   KexX25519` at `LocalHandshake.fsti:122,149` / `.fst:537,685`,
+   `Server.Keys.fsti/.fst`, `Server.fsti:185,1168` / `.fst:333,1592`,
+   `Server.Types.fst:110,124,426,533`, `Queries.fsti:540,563` /
+   `.fst:2481,2563,2637,2733`, `Send.fsti:160,228` / `.fst:418,524`,
+   `Setup.fsti:82,125` / `.fst:173,320`, `Schedule.fst:199,220`, replacing it
+   with the policy-agreement clause.  S6.7d verified that this propagates; the
+   only obligation it leaves is at the selection builders, which item 2 above
+   discharges by *construction* — the builder no longer claims X25519, it
+   claims the policy's answer, which is true definitionally.
+6. **Pins**: delete `CR.server_selection_group_pinned` (`Repr.fsti:1178`) and
+   every conjunct mentioning it.
+7. **Config and ledger**: `server_supported_groups = [T.X25519; T.Secp256r1]`;
+   `p256-only` and `ecdsa-credential-p256-only` flip to `ok` with
+   `expect_group "P-256"`.
+
+Note that item 5's negative result from S6.7d is *resolved* by item 2 and not
+by a new ghost query: once the builder sets the group from the policy rather
+than to a literal, `server_selected_kex_group sel == client_hello_kex_group_for
+ch` holds by definition.  The ghost query is needed only if one insists on
+keeping the builders at a literal `T.X25519`.
+
 ### S6 as re-measured — what is left is one atomic commit
 
 With S6.1-S6.5 landed, the remaining work is genuinely indivisible, and the
