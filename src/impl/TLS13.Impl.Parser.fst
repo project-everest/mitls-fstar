@@ -771,7 +771,9 @@ let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
              (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
              (if Some? ks then WS.ch_extensions tl sn ks sv ss
               else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-                    | Some raw -> if B.length raw = 32 then WS.ch_extensions tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else None
+                    | Some raw -> if B.length raw = 32
+                                  then WS.ch_extensions tl sn (Some (GNG.X25519, (raw <: Sem.offered_share))) sv ss
+                                  else None
                     | None -> None)))
   = WS.lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
 
@@ -4881,7 +4883,7 @@ fn scan_ch_extensions
                  | Some (server_name, Some key_share, _, sig_schemes) ->
                    L.optional_byte_prefix_matches
                      (Mktuple8?._3 res) sn_bytes (Mktuple8?._2 res) server_name /\
-                   Seq.equal kbytes (Ghost.reveal key_share <: Seq.seq U8.t) /\
+                   Seq.equal kbytes (snd (Ghost.reveal key_share) <: Seq.seq U8.t) /\
                    SZ.v (Mktuple8?._7 res) == FStar.List.Tot.length sig_schemes /\
                    L.signature_schemes_match sig_bytes (SZ.v (Mktuple8?._7 res)) sig_schemes
                  | _ -> False))))
@@ -4931,7 +4933,7 @@ fn scan_ch_extensions
       let mut sig_len = 0sz;
       let mut sig_too_long = false;
       let sn_ref = GR.alloc (None #T.hostname);
-      let key_ref = GR.alloc (None #(B.bytes_of_len 32));
+      let key_ref = GR.alloc (None #WS.ch_key_share_offer);
       let sig_ref = GR.alloc (Nil #T.signature_scheme);
       RV.lemma_list_drop_zero (Ghost.reveal cext);
       assert (pure (RV.reveal_ch_extensions (Ghost.reveal cext) None None false [] ==
@@ -4981,7 +4983,7 @@ fn scan_ch_extensions
             L.byte_prefix_matches sn_bytes sl (Ghost.reveal (Some?.v sn_acc))) /\
           ((not fl /\ not hsn) ==> SZ.v sl == 0) /\
           ((not fl /\ Some? key_acc) ==>
-            Seq.equal kbytes (Ghost.reveal (Some?.v key_acc) <: Seq.seq U8.t)) /\
+            Seq.equal kbytes (snd (Ghost.reveal (Some?.v key_acc)) <: Seq.seq U8.t)) /\
           ((not fl /\ not sigtl) ==>
             SZ.v slg == FStar.List.Tot.length (Ghost.reveal sig_acc) /\
             L.signature_schemes_match sig_bytes (SZ.v slg) (Ghost.reveal sig_acc)) /\
@@ -5193,7 +5195,8 @@ fn scan_ch_extensions
                                      (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv))
                                      <: list GKSE.keyShareEntry) with
                            | Some raw -> (if Seq.length raw = 32
-                                          then Some (raw <: B.bytes_of_len 32) else None)
+                                          then Some (GNG.X25519, (raw <: Sem.offered_share))
+                                          else None)
                            | None -> None));
             has_key := true;
             intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
@@ -6448,7 +6451,7 @@ fn parse_handshake_message
                  | Some (server_name, Some key_share, _, sig_schemes) ->
                    L.optional_byte_prefix_matches
                      (Mktuple8?._3 ext_res) snbytes (Mktuple8?._2 ext_res) server_name /\
-                   Seq.equal kbytes (Ghost.reveal key_share <: Seq.seq U8.t) /\
+                   Seq.equal kbytes (snd (Ghost.reveal key_share) <: Seq.seq U8.t) /\
                    SZ.v (Mktuple8?._7 ext_res) == FStar.List.Tot.length sig_schemes /\
                    L.signature_schemes_match sigbytes (SZ.v (Mktuple8?._7 ext_res)) sig_schemes
                  | _ -> False))));

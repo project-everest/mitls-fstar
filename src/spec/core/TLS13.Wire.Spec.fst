@@ -268,10 +268,10 @@ let lemma_ch_server_name_host h tl = ()
 let rec ch_extensions
   (l:list GECH.extensionClientHello)
   (server_name:option T.hostname)
-  (key_share:option (B.bytes_of_len 32))
+  (key_share:option ch_key_share_offer)
   (saw_supported_versions:bool)
   (signature_schemes:list T.signature_scheme)
-  : GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
+  : GTot (option (option T.hostname & option ch_key_share_offer & bool & list T.signature_scheme))
        (decreases l)
   =
   match l with
@@ -298,7 +298,7 @@ let rec ch_extensions
        else (match Sem.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
              | Some raw ->
                if B.length raw = 32
-               then ch_extensions tl server_name (Some (raw <: B.bytes_of_len 32)) saw_supported_versions signature_schemes
+               then ch_extensions tl server_name (Some (GNG.X25519, (raw <: Sem.offered_share))) saw_supported_versions signature_schemes
                else None
              | None -> None)
      | GECH.Extension_data_supported_versions svl ->
@@ -356,7 +356,7 @@ let lemma_sem_sa_cons (e:GECH.extensionClientHello) (tl:list GECH.extensionClien
 
 let rec lemma_connect_sn
   (l:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (ensures
       (match ch_extensions l sn ks sv ss with
        | Some (sn', _, _, _) ->
@@ -378,7 +378,9 @@ let rec lemma_connect_sn
      | GECH.Extension_data_key_share kscl ->
        if Some? ks then lemma_connect_sn tl sn ks sv ss
        else (match Sem.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-             | Some raw -> if B.length raw = 32 then lemma_connect_sn tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
+             | Some raw -> if B.length raw = 32
+                           then lemma_connect_sn tl sn (Some (GNG.X25519, (raw <: Sem.offered_share))) sv ss
+                           else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
        if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_sn tl sn ks true ss else ()
@@ -387,13 +389,13 @@ let rec lemma_connect_sn
 #push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
 let rec lemma_connect_ks
   (l:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (ensures
       (match ch_extensions l sn ks sv ss with
        | Some (_, ks', _, _) ->
          (if Some? ks then ks' == ks
           else (match ks' with
-                | Some k -> Sem.ch_find_key_share l == Some ((k <: B.bytes) <: Seq.seq U8.t)
+                | Some k -> Sem.ch_find_key_share l == Some ((snd k <: B.bytes) <: Seq.seq U8.t)
                 | None -> Sem.ch_find_key_share l == None))
        | None -> True))
       (decreases l) =
@@ -412,7 +414,9 @@ let rec lemma_connect_ks
      | GECH.Extension_data_key_share kscl ->
        if Some? ks then lemma_connect_ks tl sn ks sv ss
        else (match Sem.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-             | Some raw -> if B.length raw = 32 then lemma_connect_ks tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
+             | Some raw -> if B.length raw = 32
+                           then lemma_connect_ks tl sn (Some (GNG.X25519, (raw <: Sem.offered_share))) sv ss
+                           else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
        if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_ks tl sn ks true ss else ()
@@ -422,7 +426,7 @@ let rec lemma_connect_ks
 
 let rec lemma_connect_sa
   (l:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (ensures
       (match ch_extensions l sn ks sv ss with
        | Some (_, _, _, ss') ->
@@ -447,7 +451,9 @@ let rec lemma_connect_sa
      | GECH.Extension_data_key_share kscl ->
        if Some? ks then lemma_connect_sa tl sn ks sv ss
        else (match Sem.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-             | Some raw -> if B.length raw = 32 then lemma_connect_sa tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else ()
+             | Some raw -> if B.length raw = 32
+                           then lemma_connect_sa tl sn (Some (GNG.X25519, (raw <: Sem.offered_share))) sv ss
+                           else ()
              | None -> ())
      | GECH.Extension_data_supported_versions svl ->
        if List.Tot.mem GOV.Offered_TLS_1p3 svl then lemma_connect_sa tl sn ks true ss else ()
