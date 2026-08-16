@@ -22,6 +22,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module GNG = TLS13.Wire.Generated.NamedGroup
 
 type server_flight_result =
   | ServerFlightOk
@@ -108,7 +109,7 @@ let server_hello_from_payload_correct
   : prop =
   B.length payload == 64 /\
   (let sh =
-     SS.mk_server_hello_witness
+     SS.mk_server_hello_witness GNG.X25519
        (CL.raw_slice payload 0 32)
        (CryptoSpec.x25519_public_from_private
          (CL.raw_slice payload 32 64))
@@ -271,7 +272,7 @@ fn send_server_hello_from_payload_once
        (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness
+         SS.mk_server_hello_witness GNG.X25519
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
@@ -309,7 +310,7 @@ fn send_server_hello_from_payload_once
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake
               (M.ServerHello
-                (SS.mk_server_hello_witness
+                (SS.mk_server_hello_witness GNG.X25519
                   (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                   (CryptoSpec.x25519_public_from_private
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
@@ -413,7 +414,7 @@ fn select_derive_send_server_hello_from_payload_once
           32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness
+         SS.mk_server_hello_witness GNG.X25519
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))

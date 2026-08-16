@@ -61,6 +61,7 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
+module GNG = TLS13.Wire.Generated.NamedGroup
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -804,7 +805,7 @@ fn process_send_server_hello_serialized
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
                  Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
                  Ghost.reveal sh ==
-                   SS.mk_server_hello_witness
+                   SS.mk_server_hello_witness GNG.X25519
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
                      (CM.stored_client_hello_session_id 'st0)
@@ -885,7 +886,7 @@ fn process_send_server_hello_from_arrays
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -902,7 +903,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -966,7 +967,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                  CM.can_send_server_hello
                    'st0
@@ -984,7 +985,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
-                 (let sh = SS.mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
                         (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                   Seq.equal
                     network_out_bytes
@@ -2679,7 +2680,7 @@ fn process_local_event
                    let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                    (Seq.length server_random_bytes == 32 ==>
                     (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                   (let sh = SS.mk_server_hello_witness server_random_bytes
+                   (let sh = SS.mk_server_hello_witness GNG.X25519 server_random_bytes
                       (CryptoSpec.x25519_public_from_private server_private_key_bytes)
                       (CM.stored_client_hello_session_id 'st0)
                       (CM.server_selected_suite 'st0) in
@@ -2921,7 +2922,7 @@ fn process_local_event
           let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
           (Seq.length server_random_bytes == 32 ==>
            (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-          (let sh = SS.mk_server_hello_witness server_random_bytes
+          (let sh = SS.mk_server_hello_witness GNG.X25519 server_random_bytes
              (CryptoSpec.x25519_public_from_private server_private_key_bytes)
              (CM.stored_client_hello_session_id 'st0)
              (CM.server_selected_suite 'st0) in
@@ -3223,7 +3224,7 @@ fn process_local_event_with_credentials
                  let server_private_key_bytes = CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 in
                  (Seq.length server_random_bytes == 32 ==>
                   (server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = SS.mk_server_hello_witness server_random_bytes
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 server_random_bytes
                     (CryptoSpec.x25519_public_from_private server_private_key_bytes)
                     (CM.stored_client_hello_session_id 'st0)
                     (CM.server_selected_suite 'st0) in

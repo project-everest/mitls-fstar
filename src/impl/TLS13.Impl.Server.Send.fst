@@ -180,6 +180,7 @@ let lemma_serialize_handshake_finished_len (fin: GFin.finished)
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 let mk_server_hello_witness
+  (g: GNG.namedGroup)
   (random: B.bytes)
   (key_share: B.bytes)
   (session_id: B.bytes)
@@ -188,21 +189,22 @@ let mk_server_hello_witness
       (Seq.length random == 32 /\
        (Seq.length random == 32 ==> (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
        Seq.length session_id <= 32 /\
-       Seq.length key_share == 32) ==>
+       32 <= Seq.length key_share /\ Seq.length key_share <= 65) ==>
       ((match Sem.serverHello_random sh with Some r -> Seq.equal r random | None -> False) /\
        Sem.serverHello_cipher_suite sh == Some cs /\
        Seq.equal (Sem.serverHello_session_id_echo sh) session_id /\
-       (match Sem.serverHello_key_share_x25519 sh with
-        | Some k -> Seq.equal k key_share
-        | None -> False)) })
+       (g == GNG.X25519 /\ Seq.length key_share == 32 ==>
+        (match Sem.serverHello_key_share_x25519 sh with
+         | Some k -> Seq.equal k key_share
+         | None -> False))) })
 =
-  let safe_ks : (k:Seq.seq U8.t{Seq.length k == 32}) =
-    if Seq.length key_share = 32 then key_share else Seq.create 32 0uy in
+  let safe_ks : (k:Seq.seq U8.t{32 <= Seq.length k /\ Seq.length k <= 65}) =
+    if 32 <= Seq.length key_share && Seq.length key_share <= 65
+    then key_share else Seq.create 32 0uy in
   let ke : GKE.keyShareEntry_key_exchange = safe_ks in
-  let kse : GKE.keyShareEntry = { GKE.group = GNG.X25519; GKE.key_exchange = ke } in
-  GNG.namedGroup_bytesize_eq GNG.X25519;
+  let kse : GKE.keyShareEntry = { GKE.group = g; GKE.key_exchange = ke } in
+  GNG.namedGroup_bytesize_eq g;
   GKE.keyShareEntry_key_exchange_bytesize_eqn ke;
-  assert (GKE.keyShareEntry_key_exchange_bytesize ke == 34);
   let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
   let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
   // RFC 8446: a TLS 1.3 ServerHello MUST carry the supported_versions extension
@@ -247,13 +249,18 @@ let mk_server_hello_witness
 #pop-options
 
 (* The canonical ServerHello produced by [mk_server_hello_witness] (key_share +
-   supported_versions extensions) serializes to exactly 90 + |session_id|
-   bytes on the wire (RFC 8446 4.1.3 makes the echo verbatim): 122 for a
-   middlebox-compatibility peer, 90 for one with compatibility mode off.
-   This discharges the [|serialize_handshake (M.ServerHello sh)|]
-   preconditions threaded through the server send path. *)
+   supported_versions extensions) serializes to exactly
+   [58 + |key_share| + |session_id|] bytes on the wire (RFC 8446 4.1.3 makes
+   the echo verbatim): the familiar 90 + |session_id| at X25519's 32-byte
+   share -- 122 for a middlebox-compatibility peer, 90 for one with
+   compatibility mode off -- and 123 + |session_id| at secp256r1's 65-byte one.
+   A [namedGroup] is a two-byte enum at every group, so the tag contributes a
+   constant and drops out of the arithmetic.  This discharges the
+   [|serialize_handshake (M.ServerHello sh)|] preconditions threaded through
+   the server send path. *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_mk_server_hello_witness_bytesize
+  (g: GNG.namedGroup)
   (random: B.bytes)
   (key_share: B.bytes)
   (session_id: B.bytes)
@@ -262,18 +269,18 @@ let lemma_mk_server_hello_witness_bytesize
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
               Seq.length session_id <= 32 /\
-              Seq.length key_share == 32)
+              32 <= Seq.length key_share /\ Seq.length key_share <= 65)
     (ensures
       B.length (W.serialize_handshake
-        (M.ServerHello (mk_server_hello_witness random key_share session_id cs)))
-        == 90 + Seq.length session_id)
-  = let sh = mk_server_hello_witness random key_share session_id cs in
+        (M.ServerHello (mk_server_hello_witness g random key_share session_id cs)))
+        == 58 + Seq.length key_share + Seq.length session_id)
+  = let sh = mk_server_hello_witness g random key_share session_id cs in
     Rev.lemma_serialize_handshake_server_hello sh;
     GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     GCS.cipherSuite_bytesize_eq cs;
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GNG.namedGroup_bytesize_eq g;
     GKE.keyShareEntry_key_exchange_bytesize_eqn (key_share <: GKE.keyShareEntry_key_exchange);
     GSHB.serverHelloBody_extensions_list_bytesize_nil;
     ()
@@ -290,6 +297,7 @@ let lemma_mk_server_hello_witness_bytesize
    [sh == SerH.poc_canonical_sh rnd ks sid g cs] precondition. *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
 let lemma_mk_server_hello_witness_eq_poc
+  (g: GNG.namedGroup)
   (random: B.bytes)
   (key_share: B.bytes)
   (session_id: B.bytes)
@@ -298,10 +306,10 @@ let lemma_mk_server_hello_witness_eq_poc
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
               Seq.length session_id <= 32 /\
-              Seq.length key_share == 32)
+              32 <= Seq.length key_share /\ Seq.length key_share <= 65)
     (ensures
-      mk_server_hello_witness random key_share session_id cs ==
-      SerH.poc_canonical_sh random key_share session_id GNG.X25519 cs)
+      mk_server_hello_witness g random key_share session_id cs ==
+      SerH.poc_canonical_sh random key_share session_id g cs)
   = ()
 #pop-options
 
@@ -317,12 +325,12 @@ let lemma_mk_server_hello_witness_eq_poc
 let lemma_server_hello_of_selection_eq_witness
   (sel: CS.server_handshake_selection)
   : Lemma
-    (requires CS.server_selected_kex_group sel == CryptoSpec.KexX25519)
     (ensures
       CM.server_hello_of_selection sel ==
       mk_server_hello_witness
+        (CM.sho_named_group sel)
         (CM.sho_random sel)
-        sel.CS.server_key_share_public
+        (CM.sho_key_share sel)
         (CM.sho_session_id sel)
         (CM.sho_cipher_suite sel))
   = ()
@@ -360,18 +368,18 @@ let lemma_can_send_server_hello_session_id_irrelevant
       // transcript bound DOES see -- is fixed by the echo's width alone.
       Seq.length sid1 == Seq.length sid2 /\
       (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-      (let sh1 = mk_server_hello_witness random key_share sid1 (CM.server_selected_suite st) in
+      (let sh1 = mk_server_hello_witness GNG.X25519 random key_share sid1 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh1
          (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh1)))))
     (ensures
-      (let sh2 = mk_server_hello_witness random key_share sid2 (CM.server_selected_suite st) in
+      (let sh2 = mk_server_hello_witness GNG.X25519 random key_share sid2 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh2
          (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh2)))))
   =
-  let sh1 = mk_server_hello_witness random key_share sid1 (CM.server_selected_suite st) in
-  let sh2 = mk_server_hello_witness random key_share sid2 (CM.server_selected_suite st) in
-  lemma_mk_server_hello_witness_bytesize random key_share sid1 (CM.server_selected_suite st);
-  lemma_mk_server_hello_witness_bytesize random key_share sid2 (CM.server_selected_suite st);
+  let sh1 = mk_server_hello_witness GNG.X25519 random key_share sid1 (CM.server_selected_suite st) in
+  let sh2 = mk_server_hello_witness GNG.X25519 random key_share sid2 (CM.server_selected_suite st) in
+  lemma_mk_server_hello_witness_bytesize GNG.X25519 random key_share sid1 (CM.server_selected_suite st);
+  lemma_mk_server_hello_witness_bytesize GNG.X25519 random key_share sid2 (CM.server_selected_suite st);
   ()
 #pop-options
 
@@ -427,7 +435,7 @@ let lemma_can_send_server_hello_witness_of_selection
           (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
     (ensures
       ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-      (let sh = mk_server_hello_witness server_random
+      (let sh = mk_server_hello_witness GNG.X25519 server_random
                   (CryptoSpec.x25519_public_from_private server_private_key)
                   (CM.stored_client_hello_session_id st)
                   (CM.server_selected_suite st) in
@@ -459,7 +467,7 @@ let lemma_can_send_server_hello_witness_of_selection
   // 4. the canonical builders coincide; congruence with (2)/(3) gives the
   //    witness equality, and can_send_server_hello transfers.
   lemma_server_hello_of_selection_eq_witness selection;
-  assert (sh0 == mk_server_hello_witness server_random
+  assert (sh0 == mk_server_hello_witness GNG.X25519 server_random
                    (CryptoSpec.x25519_public_from_private server_private_key)
                    (CM.sho_session_id selection)
                    (CM.server_selected_suite st));
@@ -619,7 +627,7 @@ let lemma_server_process_local_obligations
        (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
-       (let sh = mk_server_hello_witness
+       (let sh = mk_server_hello_witness GNG.X25519
                    (CL.raw_slice payload 0 32)
                    (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
@@ -661,7 +669,7 @@ let lemma_server_process_local_obligations
       ((Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
-       (let sh = mk_server_hello_witness
+       (let sh = mk_server_hello_witness GNG.X25519
                    (CL.raw_slice payload 0 32)
                    (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
@@ -1089,7 +1097,7 @@ fn process_send_server_hello_serialized
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
                  Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
                  Ghost.reveal sh ==
-                   mk_server_hello_witness
+                   mk_server_hello_witness GNG.X25519
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
                      (CM.stored_client_hello_session_id 'st0)
@@ -1124,7 +1132,7 @@ fn process_send_server_hello_serialized
                   network_out_bytes
                   app_out_bytes)
 {
-  lemma_mk_server_hello_witness_eq_poc
+  lemma_mk_server_hello_witness_eq_poc GNG.X25519
     (Ghost.reveal server_random_bytes)
     (Ghost.reveal server_key_share_bytes)
     (CM.stored_client_hello_session_id 'st0)
@@ -1351,7 +1359,7 @@ fn build_server_hello_from_arrays
                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
                 (cipher_suite == 0x1303us \/ cipher_suite == 0x1301us) /\
-                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal sid) (IM.cipher_suite_of_u16 cipher_suite)))
+                Ghost.reveal sh == (mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal sid) (IM.cipher_suite_of_u16 cipher_suite)))
   returns lsh:IM.server_hello
   ensures pts_to server_random 'server_random_bytes **
           pts_to server_key_share 'server_key_share_bytes **
@@ -1424,7 +1432,7 @@ fn process_send_server_hello_from_arrays
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
+                 (let sh = mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1441,7 +1449,7 @@ fn process_send_server_hello_from_arrays
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
+                 (let sh = mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -1460,7 +1468,7 @@ fn process_send_server_hello_from_arrays
                   network_out_bytes
                   app_out_bytes)
 {
-  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) <: GSH.serverHello);
+  let sh = Ghost.hide (mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) <: GSH.serverHello);
   let mut session_id = [| 0uy; 32sz |];
   rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
   let session_id_len = CQ.read_client_hello_session_id s session_id;
@@ -1523,7 +1531,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                 (let sh = mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
                      (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                  CM.can_send_server_hello
                    'st0
@@ -1541,7 +1549,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
+                 (let sh = mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                   Seq.equal
                     network_out_bytes
@@ -1567,7 +1575,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
   assert (pure (server_key_share_bytes ==
     CryptoSpec.x25519_public_from_private (Ghost.reveal 'server_private_key_bytes)));
   assert (pure (B.length server_key_share_bytes == 32));
-  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)));
+  let sh = Ghost.hide (mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)));
   assert (pure (CM.can_send_server_hello
     'st0
     (Ghost.reveal sh)

@@ -28,6 +28,7 @@ module W = TLS13.Wire.Spec
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module U16 = FStar.UInt16
+module GNG = TLS13.Wire.Generated.NamedGroup
 
 fn control_snapshot
   (d:DS.buffered_driver)
@@ -338,7 +339,7 @@ fn rec drive_handshake
               let differs =
                 SS.server_random_differs_from_cst material_payload;
               if differs {
-                SS.lemma_mk_server_hello_witness_bytesize
+                SS.lemma_mk_server_hello_witness_bytesize GNG.X25519
                   (TLS13.ConnectionLog.raw_slice material_bytes 0 32)
                   (CryptoSpec.x25519_public_from_private
                     (TLS13.ConnectionLog.raw_slice material_bytes 32 64))

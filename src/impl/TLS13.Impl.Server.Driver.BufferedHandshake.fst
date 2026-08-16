@@ -34,6 +34,7 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module GNG = TLS13.Wire.Generated.NamedGroup
 
 ghost
 fn tcp_history_note_write
@@ -626,7 +627,7 @@ fn send_server_hello_from_payload_once
        (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32) <>
          TLS13.Wire.Generated.ServerHello_body.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness
+         SS.mk_server_hello_witness GNG.X25519
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
@@ -664,7 +665,7 @@ fn send_server_hello_from_payload_once
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake
               (M.ServerHello
-                (SS.mk_server_hello_witness
+                (SS.mk_server_hello_witness GNG.X25519
                   (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
                   (CryptoSpec.x25519_public_from_private
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
@@ -734,7 +735,7 @@ fn send_server_hello_from_payload_once
       pts_to app_out app_out_bytes);
   let sh =
     Ghost.hide
-      (SS.mk_server_hello_witness
+      (SS.mk_server_hello_witness GNG.X25519
         server_random_bytes
         (CryptoSpec.x25519_public_from_private server_private_key_bytes)
         (CM.stored_client_hello_session_id 'st0)
@@ -1300,7 +1301,7 @@ let lemma_assemble_can_send_server_hello
          (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
            GSHbody.serverHello_body_cst) /\
         (let sh =
-           SS.mk_server_hello_witness
+           SS.mk_server_hello_witness GNG.X25519
              (CL.raw_slice payload 0 32)
              (CryptoSpec.x25519_public_from_private
                (CL.raw_slice payload 32 64))
@@ -1310,7 +1311,7 @@ let lemma_assemble_can_send_server_hello
            90 + Seq.length (CM.stored_client_hello_session_id st)))
       (ensures
         (let sh =
-           SS.mk_server_hello_witness
+           SS.mk_server_hello_witness GNG.X25519
              (CL.raw_slice payload 0 32)
              (CryptoSpec.x25519_public_from_private
                (CL.raw_slice payload 32 64))
@@ -1327,7 +1328,7 @@ let lemma_assemble_can_send_server_hello
   let key_share =
     CryptoSpec.x25519_public_from_private server_private_key in
   let sh =
-    SS.mk_server_hello_witness
+    SS.mk_server_hello_witness GNG.X25519
       server_random
       key_share
       (CM.stored_client_hello_session_id st)
@@ -1399,7 +1400,7 @@ fn select_derive_send_server_hello_from_payload_once
           32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness
+         SS.mk_server_hello_witness GNG.X25519
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
            (CryptoSpec.x25519_public_from_private
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
