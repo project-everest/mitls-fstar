@@ -866,7 +866,7 @@ val lemma_client_hello_of_start_matches
 
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
-// exactly 90 + |session_id| bytes (legacy_version TLS_1p2 + 32-byte random +
+// exactly 58 + |key_share| + |session_id| bytes (legacy_version TLS_1p2 + 32-byte random +
 // 1-byte session-id-echo length + the echo itself + cipher suite + null
 // compression + [X25519 key_share; supported_versions]).  The echo is the
 // client's, verbatim, so this is 122 for a middlebox-compatibility-mode peer
@@ -874,13 +874,23 @@ val lemma_client_hello_of_start_matches
 // off (|session_id| == 0).  Reveals serialize_handshake to the generated
 // serializer and computes the bytesize; used to discharge the transcript-length
 // obligation inside can_send_server_hello for the server build direction.
+// The share width is the selected group's, so the conclusion is stated as
+// [58 + kex_public_len g + |sid|] rather than the X25519-specific [90 + |sid|].
+// At X25519 -- which [valid_selection]'s third conjunct still forces --
+// [kex_public_len KexX25519] reduces to 32 definitionally, so every consumer
+// that states [90 + |sid|] keeps deriving it with no extra step.  Generalising
+// the conclusion ahead of dropping that conjunct is what lets the arithmetic
+// move before the policy does (stage S6.8c of docs/server-p256-plan.md); the
+// reverse order is not possible, because the moment the selection's group stops
+// being a literal the [90] is underivable.
 val lemma_server_hello_of_selection_bytesize
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
               (M.ServerHello (server_hello_of_selection sel))) ==
-            90 + Seq.length (sho_session_id sel))
+            58 + CryptoSpec.kex_public_len (CS.server_selected_kex_group sel)
+               + Seq.length (sho_session_id sel))
 
 // Server mirror: under valid_selection, the canonical server_hello_of_selection
 // satisfies the spec's server_hello_matches_selection: every

@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -501,11 +502,11 @@ let lemma_client_hello_of_start_matches
 // Server mirror of the client record-size reasoning inside
 // lemma_client_hello_of_start_matches: reveal serialize_handshake to the
 // generated serializer and compute the exact bytesize of the canonical
-// ServerHello.  It equals 90 + |session_id| (legacy_version TLS_1p2 + 32-byte
-// random + 1-byte session-id-echo length + the echo + cipher suite + null
-// compression + [key_share(X25519, 32 bytes); supported_versions(TLS_1p3)]),
-// i.e. 122 for a middlebox-compatibility-mode peer and 90 for one with
-// compatibility mode off.  Structurally identical to
+// ServerHello.  It equals 58 + |key_share| + |session_id| (legacy_version
+// TLS_1p2 + 32-byte random + 1-byte session-id-echo length + the echo + cipher
+// suite + null compression + [key_share(g); supported_versions(TLS_1p3)]),
+// i.e. at X25519's 32-byte share 122 for a middlebox-compatibility-mode peer
+// and 90 for one with compatibility mode off.  Structurally identical to
 // TLS13.Impl.Server.Send.lemma_mk_server_hello_witness_bytesize.
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_server_hello_of_selection_bytesize
@@ -514,20 +515,21 @@ let lemma_server_hello_of_selection_bytesize
           (ensures
             B.length (W.serialize_handshake
               (M.ServerHello (server_hello_of_selection sel))) ==
-            90 + Seq.length (sho_session_id sel))
+            58 + CryptoSpec.kex_public_len (CS.server_selected_kex_group sel)
+               + Seq.length (sho_session_id sel))
 = let sh = server_hello_of_selection sel in
   Rev.lemma_serialize_handshake_server_hello sh;
   GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
   GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
   GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
   GCS.cipherSuite_bytesize_eq (sho_cipher_suite sel);
-  // Under valid_selection the group clamp is X25519, so the generalised
-  // writer's share is the legacy 32-byte field and the length is 90 + |sid|.
-  assert (sho_named_group sel == GNG.X25519);
-  assert (sho_key_share sel == sel.CS.server_key_share_public);
-  GNG.namedGroup_bytesize_eq GNG.X25519;
+  // The group tag and the share are taken from the selection rather than pinned
+  // to X25519: [sho_named_group] is the wire tag of
+  // [CS.server_selected_kex_group] and [sho_key_share]'s refinement already
+  // gives its length as that group's [kex_public_len].
+  GNG.namedGroup_bytesize_eq (sho_named_group sel);
   GKSE.keyShareEntry_key_exchange_bytesize_eqn
-    (sel.CS.server_key_share_public <: GKSE.keyShareEntry_key_exchange);
+    (sho_key_share sel <: GKSE.keyShareEntry_key_exchange);
   GSHBody.serverHelloBody_legacy_session_id_echo_bytesize_eqn (sho_session_id sel);
   GSHBody.serverHelloBody_extensions_list_bytesize_nil;
   ()
