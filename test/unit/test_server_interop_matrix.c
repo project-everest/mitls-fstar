@@ -41,13 +41,30 @@
  *                         guards that loop against regression.
  *
  *   FRAMING_RECORD_SPLIT  one handshake message delivered as two TLS records.
- *                         This is the server-side mirror of the cross-record
- *                         handshake reassembly the client gained for the top-100
- *                         sweep (`protected_handshake_buffering`), which is a
- *                         client-only mechanism: `legal_protected_handshake_step`
- *                         requires `config_role == ClientEndpoint`, and the
- *                         server's cleartext path requires a whole ClientHello
- *                         in one record's fragment.
+ *                         Refused today (gap G3).  It is tempting to call this
+ *                         "the server-side mirror of the reassembly the client
+ *                         gained for the top-100 sweep", but that overstates
+ *                         what the client has.  `protected_handshake_buffering`
+ *                         is confined to the PROTECTED path and to stages after
+ *                         ServerHello (`protected_handshake_buffering_stage` =
+ *                         HsServerHelloReceived, HsEncryptedExtensionsReceived,
+ *                         HsCertificateValidated, HsCertificateVerifyVerified),
+ *                         so a ServerHello split across two records would be
+ *                         refused by the CLIENT just as a ClientHello is by the
+ *                         server.  There is no cleartext reassembly in the tree
+ *                         for either role.
+ *
+ *                         The reason the client's step cannot simply be reused
+ *                         is structural, not just the `config_role ==
+ *                         ClientEndpoint` guard on
+ *                         `legal_protected_handshake_step`: the protected event
+ *                         `ConnProtectedHandshake` carries bytes (fragment,
+ *                         offset, consumed), whereas the cleartext event
+ *                         `ConnNetworkEvent` carries an already-PARSED
+ *                         tls_message, and `parse_tls_message` requires
+ *                         consumed == length fragment.  A cleartext record IS
+ *                         exactly one whole message, so there is nowhere to put
+ *                         a partial one.  See docs/server-client-parity.md, G3.
  *
  * The split is performed by an in-process TCP proxy that re-frames the
  * client->server byte stream at the record layer.  It only ever re-frames

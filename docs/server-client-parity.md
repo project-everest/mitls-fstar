@@ -602,7 +602,74 @@ The two that remain are **not** incremental, and this section is deliberate
 about that rather than leaving them on a roadmap that implies they are next
 week's work.
 
-4. **G3 (cross-record ClientHello reassembly).**  The blocking site is
+4. **G3 (cross-record ClientHello reassembly).**
+
+   **First, a correction to the intuition that this is a port of client work.**
+   It is natural to say "the client already does cross-record reassembly, so
+   copy it", and the rest of this entry used to open that way.  Measured against
+   the source, that is false in the way that matters.  The client's mechanism
+   lives on the **protected** path and is gated to
+   `protected_handshake_buffering_stage` = {`HsServerHelloReceived`,
+   `HsEncryptedExtensionsReceived`, `HsCertificateValidated`,
+   `HsCertificateVerifyVerified`} -- every one of them *after* ServerHello.  A
+   ServerHello itself split across two records would fail on the **client**
+   exactly as a ClientHello does on the server.  Grepping the tree for cleartext
+   buffering of any kind returns **zero** hits.  So nobody has done cleartext
+   reassembly in this codebase, for either role; G3 is not behind the client, it
+   is a problem the client also has and has never had to face, because in
+   practice no server splits a ServerHello.
+
+   The structural reason the two paths are not interchangeable is the shape of
+   the event, and it is visible in three lines of
+   `TLS13.Spec.StateMachine.fst:516-519`:
+
+   ```
+   type conn_event =
+     (* a PARSED message -- no bytes, no offset, no consumed count *)
+     | ConnNetworkEvent of directed_message M.tls_message
+     (* bytes + offset + consumed + head + buffering *)
+     | ConnProtectedHandshake of protected_handshake_step
+     | ConnLocalEvent of local_event
+   ```
+
+   `protected_handshake_step` is a record of
+   `{message; fragment: B.bytes; offset: nat; consumed: nat; head: bool;
+   buffering: bool}`.  It was *born* describing "a record's plaintext, of which
+   a sub-slice is the message" -- the one-record-one-message equation was
+   already broken there by construction, and the segmentation lemmas were
+   written to track a running buffer.  Adding client reassembly was therefore
+   adding **one `bool` field** to a type that already had the byte-level
+   vocabulary to say what a partial delivery is.
+
+   `ConnNetworkEvent` carries a **fully parsed `tls_message`** and nothing else.
+   There is no fragment, no offset, no consumed count -- the cleartext event has
+   no vocabulary for "bytes that are not yet a message", and
+   `WS.parse_tls_message` closes the loop by requiring `consumed == B.length
+   fragment` on the Handshake arm: a cleartext record **is** exactly one whole
+   message.  To buffer on this path you must first introduce bytes into the
+   cleartext event.  That is a new constructor, because changing
+   `ConnNetworkEvent`'s payload would touch its 1927 occurrences across 104
+   modules.
+
+   And a new constructor is precisely what the server's own proofs are stated
+   against the *absence* of: `ServerCanonicalShape.fst:280` reads
+   `| CS.ConnProtectedHandshake _ -> False`, i.e. the server's canonical-shape
+   theorem asserts the server never takes a buffering step at all.  The client's
+   step is additionally gated `config_role == ClientEndpoint`
+   (`legal_protected_handshake_step`), so it cannot simply be un-gated and
+   reused -- the server would then be able to take protected-handshake steps,
+   which is a different and much larger change than cleartext reassembly.
+
+   Finally the threat models differ, which is why the cap is not a detail.  The
+   client buffers only *after* handshake keys are installed, so every byte it
+   accumulates has already been AEAD-authenticated: only the genuine peer can
+   grow that buffer.  A server buffering a ClientHello is accumulating bytes
+   from an **unauthenticated** attacker before any key exists, so
+   `max_pending_cleartext_handshake` is load-bearing for resource safety, not
+   merely for the liveness/record-counting argument that motivates the client's
+   `max_pending_protected_handshake`.
+
+   With that said, here is the measured cost.  The blocking site is
    `CS.received_cleartext_tls_message_raw`'s ClientHello arm
    (`TLS13.Spec.StateMachine.fst:2105`), which forces the message to arrive in
    exactly one `T.Handshake` record.
@@ -650,16 +717,18 @@ week's work.
    `network_message_raw_delta_legal`, so the cleartext ClientHello path never
    reaches it.)
 
-   The way through is the one the client already uses, and it is worth copying
-   rather than inventing: `legal_protected_handshake_step` gives the client a
-   **buffering step** that takes delivery of a record and sets its plaintext
-   aside without interpreting it, so one record is still one step and the
-   message is emitted only when the reassembly buffer holds a whole one.  It is
-   explicitly gated `config_role == ClientEndpoint` and lives on the protected
-   path.  G3 is that mechanism built again for the server on the *cleartext*
-   path: a buffering event in the connection model, its reassembly buffer in
-   `hs_buffers`, and the exhaustive matches over `conn_event` in the state
-   machine and the `TLS13.System.*` pairing layer extended to carry it.
+   The way through is the client's *idea*, though -- as established above --
+   not its code: `legal_protected_handshake_step` gives the client a **buffering
+   step** that takes delivery of a record and sets its plaintext aside without
+   interpreting it, so one record is still one step and the message is emitted
+   only when the reassembly buffer holds a whole one.  That shape is the right
+   one.  What cannot be reused is the step itself: it is gated
+   `config_role == ClientEndpoint`, it lives on the protected path, and it rides
+   on an event that already carries bytes.  G3 is that mechanism **re-built**
+   for the server on the *cleartext* path: a buffering event in the connection
+   model, its reassembly buffer in `hs_buffers`, and the exhaustive matches over
+   `conn_event` in the state machine and the `TLS13.System.*` pairing layer
+   extended to carry it.
 
    Only then does the implementation work matter -- and it is real too:
    `TLS13.Impl.Parser.fst`'s buffer decoder decides
@@ -672,8 +741,9 @@ week's work.
    So the original "this is a re-proof, not a patch" verdict stands, but for a
    sharper reason than the mention-count that first suggested it: not because
    the predicate is load-bearing in 18 modules, but because one-record-per-step
-   is an invariant of the System layer, and relaxing it means giving the server
-   the buffering event the client has.
+   is an invariant of the System layer on the cleartext path, and relaxing it
+   means giving the server a cleartext analogue of the buffering event the
+   client has on the protected path.
 
    **The buffering-event design was then built and measured end to end.**  A
    `ConnCleartextHandshake` constructor was added to `conn_event`, with
