@@ -1106,6 +1106,72 @@ size its ServerHello as `63 + kex_public_len g + |session_id|` and fill its
 share at the negotiated group, instead of the constants `90`/`95` and a
 32-byte X25519 public.
 
+### S6.8c-1 as landed — the model's ServerHello bytesize is group-parametric
+
+`CM.lemma_server_hello_of_selection_bytesize` concluded the X25519-specific
+`90 + |session_id|`; it now concludes
+
+```
+58 + CryptoSpec.kex_public_len (CS.server_selected_kex_group sel) + |session_id|
+```
+
+This is the S6.8a treatment of `mk_server_hello_witness` applied one layer down.
+The body needed **no new reasoning** — only the deletion of two specialisation
+steps.  It already went through `sho_named_group` / `sho_key_share` (which S6.7
+made fully group-parametric) and then asserted them equal to `GNG.X25519` and to
+the legacy 32-byte `server_key_share_public`; the bytesize equations are now
+applied at `sho_named_group sel` and `sho_key_share sel` directly, and
+`sho_key_share`'s refinement already gives its length as that group's
+`kex_public_len`.
+
+`valid_selection` is **unchanged** — its third conjunct still pins the group —
+so the commit is capability-neutral.  `kex_public_len` is a total match on a
+two-constructor datatype, so at `KexX25519` it reduces to `32` definitionally,
+and the lemma has exactly **two** consumers in the whole tree
+(`Send.fst:555`, `Driver.BufferedHandshake.fst:1248`), both of which keep
+deriving `90 + |sid|` untouched.  Verify 0 errors, admits 0, matrix 34/34.
+
+**The ordering rule this confirms**, and it is what makes the rest tractable:
+the length arithmetic must generalise *before* the selection policy.  The moment
+`valid_selection` stops forcing a literal group the `90` is underivable at every
+site that states it, so a commit that flipped the policy first would be
+repairing arithmetic under a broken tree.
+
+### S6.8c — a measured correction to the remaining scope
+
+The entry below says the concrete share widening must be "threaded through
+`Send.fst` -> `Driver.BufferedHandshake` -> `Server.fst/.fsti`".  **The driver is
+not on that path.**  `Driver.BufferedHandshake.fst:721` calls
+`process_send_server_hello_with_derived_public_from_private_array`, which takes
+the **private** key — and `CryptoSpec.kex_private = bytes_of_len 32` for *both*
+groups, so nothing about that signature changes when P-256 is selected.  The
+65-byte public buffer is a stack-local `let mut server_key_share = [| 0uy; 32sz |]`
+inside that function's body (`Send.fst:1572`), handed to
+`process_send_server_hello_from_arrays`.
+
+So the widening touches only:
+
+* `Send.fst:1572`'s stack-local (32sz -> 65sz, with
+  `KEX.kex_public_from_private_runtime` in place of
+  `Crypto.x25519_public_from_private` — the S6.8b primitive, which exists for
+  exactly this), and
+* `process_send_server_hello_from_arrays`' signature in `Send.fsti` / `Send.fst`
+  and its re-export in `Server.fsti:596` / `Server.fst:863,926`.
+
+`Driver.BufferedHandshake`, `Driver.BufferedWorkflow` and every other module are
+untouched by the widening.  That is a materially smaller job than the entry
+below assumed, and it is why the widening is *not* what makes the rest
+indivisible.
+
+**What genuinely is indivisible** is the length statements.  The ~24 sites
+stating `95 + |stored session id|` are keyed on the connection state `'st0`, so
+their group is `CM.stored_client_hello_kex_group 'st0` — and that is
+`client_hello_kex_group_for m`, which is only *provably* `KexX25519` from the
+acceptance gate's X25519 clause inside `IM.is_valid_client_hello`, not from the
+pure part of a postcondition.  Generalising those statements therefore changes
+what every caller must prove, and it cannot be done capability-neutrally the way
+the selection-keyed arithmetic just was.  That, not the buffer, is the wall.
+
 ### S6.8c — the remaining flip, as measured after S6.7b/c/d and S6.8a/b
 
 Everything above was capability-neutral.  What is left is genuinely one

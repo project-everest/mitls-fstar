@@ -984,9 +984,10 @@ week's work.
    the `.fst` `let`'s, or the error surfaces confusingly at the *body*.  No cell
    moved.
 
-   **Stages S6.1 through S6.8b have landed** (`5ee056664`, `b578465f0`,
+   **Stages S6.1 through S6.8c-1 have landed** (`5ee056664`, `b578465f0`,
    `0bd78b985`, `613e12980`, `c360e2165`, `cab78ad8d`, `2537d001c`,
-   `e4594e008`, `1cac89cab`, `c40d2e1cc`, `b80502853`), all capability-neutral,
+   `e4594e008`, `1cac89cab`, `c40d2e1cc`, `b80502853`, `b7c8aa36b`),
+   all capability-neutral,
    all with the ledger unmoved.  Between them they have taken every part of the
    feature *except the behaviour* off the final commit's critical path: the
    parser reads a secp256r1 share, the ClientHello mirror stores it, the
@@ -1009,6 +1010,26 @@ week's work.
    be discharged by a selection *builder* that still names `T.X25519` literally.
    The resolution is not a new ghost query but the flip itself -- a builder that
    takes the group *from* the policy proves the agreement by definition.
+
+   Two further measurements from S6.8c-1 sharpen what "one commit" actually
+   covers.  (a) The model's ServerHello **size arithmetic generalises for free**,
+   exactly as the witness's did: `lemma_server_hello_of_selection_bytesize` now
+   concludes `58 + kex_public_len g + |sid|`, `valid_selection` is untouched, and
+   both of its consumers keep deriving `90 + |sid|` because `kex_public_len`
+   reduces definitionally at `KexX25519`.  (b) The concrete-share widening is
+   **much smaller than it looked**: the driver calls the entry point that takes
+   the server's *private* key, and `kex_private` is 32 bytes for both groups, so
+   `Driver.BufferedHandshake` is not on that path at all.  Only a stack-local in
+   `Send.fst:1572` and `process_send_server_hello_from_arrays`' signature (plus
+   its re-export in `Server.fsti/.fst`) widen to 65 bytes.
+
+   So the buffer is not what makes the rest indivisible.  The wall is the ~24
+   statements of `95 + |stored session id|`, which are keyed on the connection
+   *state*: their group is `CM.stored_client_hello_kex_group 'st0`, provably
+   `KexX25519` only from the acceptance gate's clause inside
+   `IM.is_valid_client_hello` and not from the pure part of any postcondition.
+   Generalising them changes what every caller must prove, so unlike the
+   selection-keyed arithmetic it cannot be staged capability-neutrally.
 
    What is left, in one commit: widen the gate, have the seven selection
    builders take the group from the policy and the share from
