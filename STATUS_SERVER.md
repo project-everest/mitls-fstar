@@ -186,14 +186,44 @@ the server's *own* share, which is the build-direction mirror of the agile ECDH
 and branches on the same explicit tag rather than on a length; and a query that
 reads the negotiated group out of the ClientHello mirror.
 
-What remains is behavioural, and it is one commit: widen the acceptance gate,
-have the selection builders take the group from the policy and the share from
-the new derivation, replace the ServerHello's `90`/`95` with
-`58`/`63 + |share|`, drop the ECDH's X25519 precondition and the named pin that
-records it, offer secp256r1 in the configured group list, and flip the two
-ledger cells.  Every one of those is now a *deletion* or a substitution of an
-expression that already exists; none of them is a restatement.
-`docs/server-p256-plan.md` §7 carries the file-and-line breakdown.
+The model-level size arithmetic has since followed the witness: the canonical
+ServerHello's bytesize lemma now reads `58 + kex_public_len g + |sid|` too, and
+that generalisation was *free* -- the proof already went through the
+group-parametric accessors and merely asserted them back down to X25519
+afterwards, so two lines were deleted and nothing was added.  Because
+`kex_public_len` is a total match on a two-constructor type it still reduces to
+thirty-two definitionally, and the lemma's two consumers in the whole tree kept
+deriving `90 + |sid|` untouched.
+
+That fixes the order the rest has to go in, which is worth stating because the
+reverse is tempting and does not work: the length arithmetic must generalise
+**before** the selection policy does.  The moment the selection stops naming a
+literal group, the `90` is underivable at every site that states it, so a commit
+that flipped the policy first would be repairing arithmetic under a broken tree.
+
+Two further measurements then re-partitioned what is left, and both make it
+smaller and better understood.  The first is that the concrete share buffer is
+barely a concern: the driver calls the entry point that takes the server's
+*private* key, and a private key is thirty-two bytes at both groups, so no
+driver module is on that path at all -- only a stack-local in the send path and
+one signature widen to sixty-five bytes.  The second is the corollary: the
+buffer was never what made the rest indivisible.  The real coupling is the two
+dozen statements of `95 + |session id|`, which are keyed on the *connection
+state* rather than on the selection.  Their group is a function of the stored
+ClientHello, and that is provably X25519 only from the acceptance gate's own
+clause -- not from the pure part of any postcondition.  So unlike the
+selection-keyed arithmetic just moved, they cannot be staged capability-neutrally
+and have to travel with the gate.
+
+What remains is therefore one more capability-neutral step -- widen that buffer
+-- and then one behavioural commit: widen the acceptance gate, have the
+selection builders take the group from the policy and the share from the new
+derivation, generalise the state-keyed lengths, drop the ECDH's X25519
+precondition and the named pin that records it, offer secp256r1 in the
+configured group list, and flip the two ledger cells.  Every one of those is a
+*deletion* or a substitution of an expression that already exists; none is a
+restatement.  `docs/server-p256-plan.md` §7 carries the file-and-line
+breakdown.
 
 Cross-record reassembly -- one ClientHello arriving as two TLS records -- is
 still refused, and the obstacle has now been located precisely rather than
@@ -212,14 +242,33 @@ is therefore the invariant that has to give.
 Widening the state machine's ClientHello arm to admit a split -- as a
 disjunction, so that only proofs which *invert* the predicate can break -- was
 built and put through a full verify: two failures, one benign and one at exactly
-that boundary.  That measurement makes the choice of design clear.  The route
-worth taking is the one the client already uses on its protected path: a
-*buffering step* that takes delivery of one record and sets its bytes aside
-without interpreting them, so that one step is still one record and the message
-is emitted only once the buffer holds a whole one.  It is the larger diff and
-the smaller blast radius, because the wire class, the canonical protocol
-refinement and the cross-endpoint pairing theorems all keep their present shape.
-`docs/server-p256-plan.md` carries both routes with their costs.
+that boundary.  That measurement makes the choice of design clear.  The right
+shape is the one the client uses on its protected path: a *buffering step* that
+takes delivery of one record and sets its bytes aside without interpreting them,
+so that one step is still one record and the message is emitted only once the
+buffer holds a whole one.  It is the larger diff and the smaller blast radius,
+because the wire class, the canonical protocol refinement and the cross-endpoint
+pairing theorems all keep their present shape.
+
+It is worth being exact about what "the client already does this" means, because
+the obvious reading is wrong and it makes the work look like plumbing.  The
+client's buffering is confined to the **protected** path and to the stages after
+ServerHello; a ServerHello split across two records would be refused by the
+*client* exactly as a ClientHello is by the server, and there is no cleartext
+buffering anywhere in the tree for either role.  The reason the client's step
+cannot simply be re-pointed is structural rather than a matter of its
+role guard: the protected event carries *bytes* -- a fragment with an offset and
+a consumed count -- so one-record-one-message was already broken there by
+construction and reassembly cost a single extra field.  The cleartext event
+carries an already-*parsed* message, and the message parser requires the record
+to be consumed exactly, so a cleartext record simply *is* one whole message and
+there is nowhere to put a partial one.  Giving the server reassembly means
+introducing bytes into that event, which is a new event shape rather than a new
+field.  There is also a security difference that the cap has to carry: the client
+only ever buffers plaintext that has already been authenticated under the
+handshake keys, whereas a server buffering a ClientHello is accumulating bytes
+from an unauthenticated peer.  `docs/server-client-parity.md` carries the full
+argument and both routes with their costs.
 
 The server also echoes the offered `legacy_session_id` **verbatim**, as
 RFC 8446 4.1.3 requires, rather than padding it to 32 bytes: the mirror carries
