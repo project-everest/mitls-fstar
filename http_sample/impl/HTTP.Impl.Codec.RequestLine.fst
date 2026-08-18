@@ -100,7 +100,7 @@ let lemma_req_ver_byte (k:SZ.t{SZ.v k < 10})
    `inp == meth ++ (SP :: inp[mp+1..])` for the first split and
    `inp[mp+1..] == target ++ (SP :: inp[sp+1..])` for the second, so `split_sp`
    cuts at each first space, then match the version token.                     *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
 let lemma_parse_request_line_m_ok (inp:Seq.seq U8.t) (mp sp:nat)
   : Lemma
     (requires
@@ -156,7 +156,7 @@ let lemma_parse_request_line_m_ok (inp:Seq.seq U8.t) (mp sp:nat)
 (* Bridge the pure round-trip lemma (stated over a whole seq) to the buffer
    prefix `inp[0..n)` the Pulse leaf constrains, converting `slice (slice i 0 n)`
    back to `slice i`.                                                          *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let lemma_finalize (i:Seq.seq U8.t) (n mp sp:nat)
   : Lemma
     (requires
@@ -281,7 +281,7 @@ fn check_ver (inp: array U8.t) (n: SZ.t) (sp: SZ.t)
    Parse a real client's request line at offset 0.  On `ok` the outputs identify
    method = inp[0..mlen) and target = inp[toff..toff+tlen) and are tied to
    `parse_request_line_m (inp[0..n))`.                                          *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 fn http_parse_request_line
   (inp: array U8.t) (n: SZ.t)
   (pok: R.ref bool)

@@ -230,6 +230,7 @@ let cl_pre_list : list U8.t =
   [0x20uy;0x0Duy;0x0Auy;0x43uy;0x6Fuy;0x6Euy;0x74uy;0x65uy;0x6Euy;0x74uy;
    0x2Duy;0x4Cuy;0x65uy;0x6Euy;0x67uy;0x74uy;0x68uy;0x3Auy;0x20uy]
 
+#push-options "--z3rlimit 200"
 let lemma_cl_pre_byte (k:SZ.t{SZ.v k < 19})
   : Lemma (requires Seq.length cl_tail_pre == 19)
           (ensures cl_pre_byte k == Seq.index cl_tail_pre (SZ.v k))
@@ -257,6 +258,7 @@ let lemma_cl_pre_byte (k:SZ.t{SZ.v k < 19})
   assert_norm (List.Tot.index cl_pre_list 18 == 0x20uy)
 
 (* Runtime k-th byte of cl_tail_post "\r\n\r\n". *)
+#pop-options
 inline_for_extraction
 let cl_post_byte (k:SZ.t{SZ.v k < 4}) : U8.t =
   if      SZ.eq k 0sz then 0x0Duy else if SZ.eq k 1sz then 0x0Auy
@@ -295,7 +297,7 @@ let lemma_respbytes_reveal
    The five append segments give the literal facts (SMT-patterned index-append
    lemmas fire on the revealed ser_response), and enc_dec3 / enc_dec8 index
    lemmas turn the two digit runs into explicit W.dig terms. *)
-#push-options "--z3rlimit 60 --fuel 4 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 2"
 let lemma_respbytes_index
       (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
       (len:U32.t{U32.v len < W.max_len8})
@@ -321,7 +323,7 @@ let lemma_respbytes_index
        (forall (k:nat). k < 4  ==> Seq.index s (39 + k) == Seq.index cl_tail_post k)))
 = reveal_opaque (`%respbytes) (respbytes code len);
   assert_norm (Seq.length resp_prefix == 9);
-  assert_norm (Seq.length cl_tail_pre == 19);
+  assert (Seq.length cl_tail_pre == 19);
   assert_norm (Seq.length cl_tail_post == 4);
   lemma_enc_dec3_index (U16.v code);
   lemma_enc_dec8_index (U32.v len)
@@ -336,7 +338,7 @@ let lemma_respbytes_len
   : Lemma (Seq.length (respbytes code len) == 43)
 = lemma_respbytes_reveal code len;
   assert_norm (Seq.length resp_prefix == 9);
-  assert_norm (Seq.length cl_tail_pre == 19);
+  assert (Seq.length cl_tail_pre == 19);
   assert_norm (Seq.length cl_tail_post == 4)
 
 (* rem-by-10 bridge for U32. *)
@@ -562,7 +564,7 @@ let lemma_srv_reveal (code:U16.t{100 <= U16.v code /\ U16.v code < 1000}) (len:U
    five append segments (prefix, 3 status digits, cl-pre, D decimal digits,
    cl-post) resolve via the SMT-patterned index-append lemmas on the revealed
    ser_response_var; the digit run stays abstract as `Seq.index ee (m-31)`. *)
-#push-options "--z3rlimit 100 --fuel 4 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 100 --fuel 4 --ifuel 2"
 let lemma_srv_index (code:U16.t{100 <= U16.v code /\ U16.v code < 1000}) (len:U32.t)
   : Lemma
     (ensures (
@@ -583,7 +585,7 @@ let lemma_srv_index (code:U16.t{100 <= U16.v code /\ U16.v code < 1000}) (len:U3
        (forall (k:nat{k < 4}).  Seq.index s (31 + d + k) == Seq.index cl_tail_post k)))
 = reveal_opaque (`%srv_bytes) (srv_bytes code len);
   assert_norm (Seq.length resp_prefix == 9);
-  assert_norm (Seq.length cl_tail_pre == 19);
+  assert (Seq.length cl_tail_pre == 19);
   assert_norm (Seq.length cl_tail_post == 4)
 #pop-options
 
@@ -662,14 +664,14 @@ let head_pre (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
   else cl_pre_byte (SZ.sub k 12sz)
 
 (* head_pre agrees with `srv_bytes code len` at every prefix position (k<31). *)
-#push-options "--z3rlimit 100 --fuel 4 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 100 --fuel 4 --ifuel 2"
 let lemma_head_pre (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
                    (len:U32.t) (k:SZ.t{SZ.v k < 31})
   : Lemma (Seq.length (srv_bytes code len) == 35 + Seq.length (W.enc_dec_var (U32.v len)) /\
            head_pre code k == Seq.index (srv_bytes code len) (SZ.v k))
 = lemma_srv_index code len;
   assert_norm (Seq.length resp_prefix == 9);
-  assert_norm (Seq.length cl_tail_pre == 19);
+  assert (Seq.length cl_tail_pre == 19);
   assert_norm (U16.v 100us == 100);
   assert_norm (U16.v 10us == 10);
   if SZ.lt k 9sz then lemma_resp_prefix_byte k
@@ -924,7 +926,7 @@ let head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
 (* head_byte agrees with `respbytes code len` at every position.  All the
    digit arithmetic (UInt.mod -> % bridges) lives here; the caller loop stays
    trivial.  Split up front so each range/case is a small, cheap query. *)
-#push-options "--z3rlimit 300 --fuel 4 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 300 --fuel 4 --ifuel 2"
 let lemma_head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
                     (len:U32.t{U32.v len < W.max_len8})
                     (k:SZ.t{SZ.v k < 43})
@@ -932,7 +934,7 @@ let lemma_head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
            head_byte code len k == Seq.index (respbytes code len) (SZ.v k))
 = lemma_respbytes_index code len;
   assert_norm (Seq.length resp_prefix == 9);
-  assert_norm (Seq.length cl_tail_pre == 19);
+  assert (Seq.length cl_tail_pre == 19);
   assert_norm (Seq.length cl_tail_post == 4);
   assert_norm (U16.v 100us == 100);
   assert_norm (U16.v 10us == 10);

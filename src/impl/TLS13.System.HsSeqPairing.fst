@@ -430,7 +430,7 @@ let cw_shape (model:CS.connection_model) : prop =
     model.CS.model_record.CS.record_write.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_cw_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires cw_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -606,7 +606,7 @@ let sr_shape (model:CS.connection_model) : prop =
     model.CS.model_record.CS.record_read.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_sr_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sr_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -680,7 +680,7 @@ let sw_shape (model:CS.connection_model) : prop =
     model.CS.model_record.CS.record_write.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_sw_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sw_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -769,7 +769,7 @@ let ss_shape (model:CS.connection_model) : prop =
   (R.Handshake? model.CS.model_record.CS.record_read.R.epoch ==>
      Some? model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200"
 let lemma_step_ss_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires ss_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -913,7 +913,7 @@ let cr_ctrl_shape (model:CS.connection_model) : prop =
      | CS.ControlHandshaking st -> client_read_hs_control st
      | _ -> False)
 
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60"
 let lemma_step_cr_ctrl_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires cr_ctrl_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -1088,7 +1088,7 @@ let lemma_pread_ok_initial (cfg:CS.connection_config)
     `SeqCountBase` model-fact core plus the append law.  The ClientHello premise
     of the core is vacuous for a server: a `Sent` ClientHello is legal only at
     `HsStarted`, which `server_ctrl_ok` excludes. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_server_sent_pwrite
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (msg:M.tls_message) (msgs:list CW.wire_message)
@@ -1127,7 +1127,7 @@ let lemma_server_sent_pwrite
 #pop-options
 
 (** Per-step WRITE-side counting preservation for a reachable server. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_server_step_pwrite
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.server_local_event)
@@ -1328,7 +1328,7 @@ let lemma_client_step_single_step
     and append one ApplicationData record; cleartext receives (ServerHello / HRR /
     ChangeCipherSpec / ClientHello) append a non-ApplicationData record (count 0).
     Mirror of `lemma_server_sent_pwrite`. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_client_recv_pread
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (msg:M.tls_message) (msgs:list CW.wire_message)
@@ -1371,7 +1371,7 @@ let lemma_client_recv_pread
     `R.Application` for `Finished`).  So +0 records matches +0 seq.  THIS is why the
     coalesced flight does not break the read-side counting invariant: the model
     charges a seq bump exactly on the steps that consume a record. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 200"
 let lemma_protected_read_model_facts
   (m:CS.connection_model) (step:CS.protected_handshake_step) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -1398,7 +1398,7 @@ let lemma_protected_read_model_facts
 #pop-options
 
 (** READ-side counting preserved by a CLIENT protected-handshake step. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 100"
 let lemma_client_protected_pread
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (step:CS.protected_handshake_step) (msgs:list CW.wire_message)
@@ -1438,7 +1438,7 @@ let lemma_client_protected_pread
 #pop-options
 
 (** Per-step READ-side counting preservation for a reachable client. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_client_step_pread
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.client_local_event)
@@ -1712,7 +1712,7 @@ let lemma_hsp_raw_records_exactly_decompose
     ApplicationData records has appdata-count `n`.  (The gated chain only needed
     the `n == 1` special case `WStep.lemma_protected_raw_count_one`.)  Structural
     recursion on `n`, peeling one record per step. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let rec lemma_raw_records_exactly_appdata_count (raw:B.bytes) (n:nat)
   : Lemma
       (requires CS.raw_records_exactly raw T.Application_data n)
@@ -1758,7 +1758,7 @@ let rec lemma_raw_records_exactly_appdata_count (raw:B.bytes) (n:nat)
     epoch).  In all cases the seq rise is bounded by the sent-delta appdata count,
     and any move INTO the Handshake epoch (there are none on a Sent event) would
     reset the seq to 0. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_write_seq_step_bound_sent
   (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -1798,7 +1798,7 @@ let lemma_write_seq_step_bound_sent
     `record_write` untouched or installs it at seq 0; a received event never
     touches `record_write`; a sent event is handled by
     `lemma_write_seq_step_bound_sent`. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_write_seq_step_bound
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -1980,7 +1980,7 @@ let lemma_server_reachable_writehs_seq_le_count (st:CS.connection_state)
     (handshake flight, application data, post-handshake, close alert) advances the
     read seq by one against exactly one appdata record; cleartext receives leave
     `record_read` untouched. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_read_seq_step_bound_recv
   (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -2020,7 +2020,7 @@ let lemma_read_seq_step_bound_recv
     `record_read` untouched or installs it at seq 0; a sent event never touches
     `record_read`; a received event is handled by
     `lemma_read_seq_step_bound_recv`. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_read_seq_step_bound
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -2525,7 +2525,7 @@ let lemma_sc_zero_from_counts (c s:CS.connection_state)
     slot untouched).  The client APPLICATION WRITE install is a no-op on the
     record, folded into the "unchanged" disjunct.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_client_local_record_effect
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -2622,7 +2622,7 @@ let lemma_hrseq_zero_of_bound (st:CS.connection_state)
     record-unchanged local step.  STRUCTURAL: no reachability or record-epoch
     hypothesis (unlike a positive `ControlHandshaking?` monotonicity, which fails
     at the `ControlNew -> HsStarted` entry). **)
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60"
 let lemma_step_terminal_control_absorbing
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -2644,7 +2644,7 @@ let lemma_step_terminal_control_absorbing
     `appdata_write_coupling`'s conjunct 2 (AppSeqPairing.fst), which keeps
     the working `Closing`/`Closed` branches that the coarser `not terminal_control`
     gate would have thrown away. **)
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60"
 let lemma_step_control_failed_absorbing
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -2740,7 +2740,7 @@ let lemma_hsp_quiet_both_zero (c s:CS.connection_state)
     leaves this control).  `R.install_keys` sets the target direction's seq to
     `0` UNCONDITIONALLY, redundant install or not — precisely the fact used to
     make the `sc` inequality trivial in that case. **)
-#push-options "--fuel 3 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 3 --ifuel 4 --z3rlimit 60"
 let lemma_client_local_read_change_resets_seq
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -2842,7 +2842,7 @@ let lemma_hsp_client_local (a b:SY.tls_system_state)
     `Handshake`; read slot untouched), or APPLICATION READ install at
     `HsClientFinishedReceived` (read epoch leaves `Handshake`; write untouched).
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_server_local_record_effect
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -2987,7 +2987,7 @@ let lemma_recv_preserves_wr_full (m m':CS.connection_model) (msg:M.tls_message)
     `lemma_sent_preserves_rd_full` (a `Sent` step leaves `record_read` whole, so its
     epoch and seq transfer), and the pre-state Quiet `cs` clause carries it.
     ═══════════════════════════════════════════════════════════════════════════ **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hsp_server_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -3018,7 +3018,7 @@ let lemma_hsp_server_send (a b:SY.tls_system_state)
     `cs` clause supplies it under the post gate), and the `sc` arm (client is the
     READER) freezes via `lemma_sent_preserves_rd_full`.
     ═══════════════════════════════════════════════════════════════════════════ **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hsp_client_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -3145,7 +3145,7 @@ module SMKM  = TLS13.Spec.StateMachine.KeyMaterial
 module RF    = TLS13.Spec.StateMachine.RecordFraming
 
 (* STEP 2b: roundtrip dispatcher for endpoint-emittable, gate-surviving sends. *)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_send_roundtrip (model:CS.connection_model) (sent:M.tls_message)
   : Lemma
       (requires
@@ -3208,7 +3208,7 @@ let cinit_shape (model:CS.connection_model) : prop =
      model.CS.model_record.CS.record_write.R.epoch == R.Initial
    | _ -> True)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200"
 let lemma_step_cinit_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires cinit_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -3227,7 +3227,7 @@ let sinit_shape (model:CS.connection_model) : prop =
      model.CS.model_record.CS.record_write.R.epoch == R.Initial
    | _ -> True)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_sinit_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sinit_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -3400,7 +3400,7 @@ let lemma_rre_nonempty (raw:B.bytes)
 
 (* ---- gate exclusions: under a Handshake write epoch, a legal non-CCS Sent
         message is protected (not cleartext) and is not a KeyUpdate. ---- *)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_client_gate_excludes (st0:CS.connection_state) (sent:M.tls_message)
   : Lemma
       (requires
@@ -3420,7 +3420,7 @@ let lemma_client_gate_excludes (st0:CS.connection_state) (sent:M.tls_message)
      | _ -> ())
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_server_gate_excludes (st0:CS.connection_state) (sent:M.tls_message)
   : Lemma
       (requires
@@ -3441,7 +3441,7 @@ let lemma_server_gate_excludes (st0:CS.connection_state) (sent:M.tls_message)
 #pop-options
 
 (* ---- send-time seal + roundtrip extraction (client) ---- *)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_client_send_seal_rt
   (st0 c':CS.connection_state) (local:CTy.client_local_event)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
@@ -3482,7 +3482,7 @@ let lemma_client_send_seal_rt
 #pop-options
 
 (* ---- send-time seal + roundtrip extraction (server) ---- *)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_server_send_seal_rt
   (st0 s':CS.connection_state) (local:CTy.server_local_event)
   (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
@@ -3529,7 +3529,7 @@ let lemma_server_send_seal_rt
     leave ControlHandshaking (excluded by POST control gate); appdata/keyupdate need
     App read (excluded by PRE Handshake gate).  Only EE/Cert/CV survive: each +1.
     NO seal, NO key/iv material, NO faithful decode. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_hs_recv_plus_one
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -3562,7 +3562,7 @@ let lemma_hs_recv_plus_one
     `ControlHandshaking?` conclusion — so the model-level (no-consistency) version is
     genuinely false at an unreachable state, and consistency (available at every
     delivery, `a.server`/`a.client` are reachable) is the right guard. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 40"
 let lemma_hs_recv_plus_one_gated
   (st st':CS.connection_state) (msg:M.tls_message)
   : Lemma
@@ -3603,7 +3603,7 @@ let lemma_hs_recv_plus_one_gated
     control is terminal).  Unlike `lemma_hs_recv_plus_one_gated`'s EXACT `+1`, this
     bound does not need to exclude the alert/terminal case, so it needs neither a
     consistency hypothesis nor a `~terminal` gate. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_hs_recv_read_seq_le_plus_one
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -3653,7 +3653,7 @@ let ctrl_not_hscfv_m (m:CS.connection_model) : prop =
 let ctrl_not_hscfv (st:CS.connection_state) : prop =
   ctrl_not_hscfv_m st.CS.cs_model
 
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_step_handshake_not_hscfv
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -3666,7 +3666,7 @@ let lemma_step_handshake_not_hscfv
     other `step_tls_message` arm sets the control to `ControlApplicationData` /
     `ControlClosing` / `ControlClosed` / `ControlFailed` or leaves the model
     unchanged (CCS), none of which is `HsClientFinishedVerified`. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_tls_not_hscfv
   (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -3677,7 +3677,7 @@ let lemma_step_tls_not_hscfv
     | _ -> ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_step_local_not_hscfv
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -3774,7 +3774,7 @@ let lemma_consistent_not_hscfv (st:CS.connection_state)
     `server_recv_prior == 0`, and the trace-potential telescoping upper-bounds the
     received count by 0.  Mirrors `WStep.lemma_server_finished_sent_recv_eq0`.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_server_hs_read_recv_count_zero
   (cfg:CS.connection_config) (server:CS.connection_state)
   : Lemma
@@ -3831,7 +3831,7 @@ let lemma_server_hs_read_recv_count_zero
     install (which lands on `Application`, excluded by the POST Handshake-write
     premise).  Every other `Sent` arm does `next_seq` (epoch-preserving) or leaves the
     record untouched.  So a POST Handshake write forces a PRE Handshake write. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_hs_send_preserves_hs_write
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -3849,7 +3849,7 @@ let lemma_hs_send_preserves_hs_write
     handshake at `ControlApplicationData` are Application-read at a CONSISTENT state
     (excluded); SH/HRR/CCS/ClientHello are cleartext (excluded).  Mirrors the
     enumeration of `lemma_hs_recv_plus_one_gated`. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 40"
 let lemma_hs_recv_is_ee_cert_cv
   (st st':CS.connection_state) (msg:M.tls_message)
   : Lemma
@@ -3879,7 +3879,7 @@ let lemma_hs_recv_is_ee_cert_cv
     the write seq by EXACTLY 1 (`record_write = next_seq`) and preserves the Handshake
     epoch.  The send arm for each fires at a unique control (HsServerHelloSent /
     HsServerEncryptedFlightSent), so step-success pins it. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_hs_send_plus_one
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -3911,7 +3911,7 @@ let lemma_hs_send_plus_one
     excluded HRR via its `fail_model` step; the raw-type contradiction is stronger
     and survives a terminal receiver, which is what the terminal-`c'` delivery arm
     needs). **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 50 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 50"
 let lemma_hsp_client_recv_not_cleartext
   (client:CS.connection_state) (msg:M.tls_message) (m':CS.connection_model) (raw:B.bytes)
   : Lemma
@@ -3960,7 +3960,7 @@ let lemma_hsp_client_recv_not_cleartext
     (ClientHello / ServerHello / CCS) pins `raw` to a non-`Application_data` record
     (a Handshake record for the hellos, a Change_cipher_spec record for CCS), so
     `parse_record_wire raw` is never `Application_data` (or empty, if oversize). **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 50 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 50"
 let lemma_cleartext_sent_raw_not_appdata
   (sent:M.tls_message) (raw:B.bytes)
   : Lemma
@@ -4046,7 +4046,7 @@ let lemma_recv_preserves_read_epoch_handshake
     `HsCertificateValidated`/`HsCertificateVerifyVerified` and the server arm at
     `HsServerFinishedSent` set `record_read` to an `Application` epoch).  So a
     Finished receive is INCOMPATIBLE with a POST Handshake read epoch. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 40"
 let lemma_hs_recv_finished_installs_app_read
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -4079,7 +4079,7 @@ let lemma_ee_cert_cv_recv_not_cleartext
     NOT proven here — at the model level an inconsistent state could pair a
     handshaking control with a non-Handshake read epoch — they are supplied by the
     caller from the coupling's gate + `lemma_recv_preserves_read_epoch_handshake`. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_hs_recv_ee_cert_cv_lands_hs
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -4135,7 +4135,7 @@ let lemma_consistent_post_app_epochs (st:CS.connection_state)
     where `lemma_consistent_post_app_epochs` forces an Application epoch and the
     Handshake gate excludes them; every remaining constructor leaves both handshake
     projections unchanged (0 == 0). **)
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 100"
 let lemma_hs_send_recv_seq_couple
   (snap:CS.connection_model)
   (sender' rcv rcv':CS.connection_state)
@@ -4184,7 +4184,7 @@ let lemma_hs_send_recv_seq_couple
         lemma_consistent_post_app_epochs sender'; lemma_consistent_post_app_epochs rcv'
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hsp_deliver_to_server
   (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -4343,7 +4343,7 @@ let lemma_hsp_deliver_to_server
     touches `record_write`, and `CS.set_pending_protected_handshake` writes only the
     `hb_*` handshake buffers, so a protected-handshake step leaves the WRITE slot
     whole -- the exact analogue of `lemma_recv_preserves_wr_full`. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_protected_preserves_wr_full
   (m m':CS.connection_model) (step:CS.protected_handshake_step)
   : Lemma
@@ -4360,7 +4360,7 @@ let lemma_protected_preserves_wr_full
     `Finished` installs the `R.Application` read epoch -- excluded here by the POST
     Handshake-read gate.  (`head` matters: a TAIL step RESTORES `record_read`, which
     is the `+0` half and is not what this delivery arm needs.) **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_protected_head_read_plus_one
   (m m':CS.connection_model) (step:CS.protected_handshake_step)
   : Lemma
@@ -4388,7 +4388,7 @@ let lemma_protected_head_read_plus_one
     can advance the write seq by other than 1 -- a `TlsApplicationData` send, which
     uses `advance_direction_records` by `RF.application_data_record_count`; it is
     supplied at the call site by `ASP.inflight_single_record`. **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 60"
 let lemma_hs_send_plus_one_protected
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -4404,7 +4404,7 @@ let lemma_hs_send_plus_one_protected
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 120 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 120"
 let lemma_hsp_deliver_to_client
   (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -4714,7 +4714,7 @@ let lemma_hscs_deliver_to_client
     has a Handshake READ epoch and is non-terminal (hence non-failed); `cr_ctrl_shape`
     pins its control to one of the six client handshake-flight controls, each of
     which lower-bounds both hellos in `client_stage_ok`. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_client_read_hs_hellos (st:CS.connection_state)
   : Lemma
       (requires
@@ -4773,7 +4773,7 @@ let client_read_hellos_shape (st:CS.connection_state) : prop =
      R.Handshake? st.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
     ==> hellos_present st.CS.cs_model )
 
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60"
 let lemma_step_client_ctrl_hellos_lb
   (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
@@ -4783,7 +4783,7 @@ let lemma_step_client_ctrl_hellos_lb
   = ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_failed_preserves_hs_record
   (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
@@ -4794,7 +4794,7 @@ let lemma_step_failed_preserves_hs_record
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_delta_client_read_hellos_shape (st0 st1:CS.connection_state)
   : Lemma
       (requires client_read_hellos_shape st0 /\ SMR.connection_state_single_step st0 st1)
@@ -4848,7 +4848,7 @@ let lemma_initial_client_read_hellos_shape (cfg:CS.connection_config)
   : Lemma (ensures client_read_hellos_shape (CS.initial cfg))
   = lemma_initial_cr_ctrl_shape cfg
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_client_hs_read_hellos_cf (st:CS.connection_state)
   : Lemma
       (requires
@@ -4897,7 +4897,7 @@ let server_hellos_shape (model:CS.connection_model) : prop =
      Some? model.CS.model_handshake.CS.hs_server_hello
    | _ -> True)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_server_hellos_shape
   (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
@@ -4965,7 +4965,7 @@ let lemma_consistent_server_hellos_shape (st:CS.connection_state)
     every remaining control — the handshake-flight controls through
     `ControlApplicationData` (via `server_stage_ok`) and the closing region (via
     `server_hellos_shape`) — both hellos are present. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_server_hs_send_hellos (st:CS.connection_state)
   : Lemma
       (requires
@@ -5026,7 +5026,7 @@ let lemma_hscs_checkpoint (s:SY.tls_system_state)
     key_schedule_for_role` inputs (and, as a by-product, the presence of the two
     `ks_server_handshake_traffic` slots), and `HANR`'s ControlFailed-aware
     server-traffic slot-agreement producer supplies the slot-level agreement. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hscs_bridge_material (client server:CS.connection_state)
   : Lemma
       (requires
@@ -5149,7 +5149,7 @@ let lemma_consistent_client_ctrl_hellos_lb (st:CS.connection_state)
     server-only controls.  The remaining controls split into the client
     handshake-flight controls through `ControlApplicationData` (via
     `client_stage_ok`) and the closing region (via `client_ctrl_hellos_lb`). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_client_hs_send_hellos (st:CS.connection_state)
   : Lemma
       (requires
@@ -5188,7 +5188,7 @@ let sr_ctrl_shape (model:CS.connection_model) : prop =
      | CS.ControlHandshaking st -> server_read_hs_control st
      | _ -> False)
 
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 60"
 let lemma_step_sr_ctrl_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sr_ctrl_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
@@ -5257,7 +5257,7 @@ let server_read_hellos_shape (st:CS.connection_state) : prop =
      R.Handshake? st.CS.cs_model.CS.model_record.CS.record_read.R.epoch)
     ==> hellos_present st.CS.cs_model )
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_delta_server_read_hellos_shape (st0 st1:CS.connection_state)
   : Lemma
       (requires server_read_hellos_shape st0 /\ SMR.connection_state_single_step st0 st1)
@@ -5311,7 +5311,7 @@ let lemma_initial_server_read_hellos_shape (cfg:CS.connection_config)
   = lemma_initial_sr_ctrl_shape cfg;
     lemma_initial_server_hellos_shape cfg
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_server_hs_read_hellos_cf (st:CS.connection_state)
   : Lemma
       (requires
@@ -5344,7 +5344,7 @@ let lemma_server_hs_read_hellos_cf (st:CS.connection_state)
     The SENDER (client) link uses the plain consistency producer (`~ControlFailed`
     holds at a send); the RECEIVER (server) link uses the PERSISTENCE producer, so
     it survives a failed server. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hscs_bridge_material_cs (client server:CS.connection_state)
   : Lemma
       (requires
@@ -5394,7 +5394,7 @@ let lemma_hscs_bridge_material_cs (client server:CS.connection_state)
     write epoch and the client's read epoch are `Handshake` and the client is
     non-terminal; the bridge (key/iv agreement + single-record seal + roundtrip)
     is assembled from `tls_system_inv a`. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hscs_server_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -5457,7 +5457,7 @@ let lemma_hscs_server_send (a b:SY.tls_system_state)
     `lemma_server_hs_read_slot_link_persist` supplies its record<->slot READ link
     regardless, exactly as the client-side persistence lemma does on the ToClient
     arm. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_hscs_client_send (a b:SY.tls_system_state)
   : Lemma
       (requires

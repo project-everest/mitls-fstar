@@ -224,7 +224,7 @@ let rec lemma_advance_direction_records_epoch (st:R.direction_state) (n:nat)
       (decreases n)
   = if n = 0 then () else lemma_advance_direction_records_epoch st (n - 1)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 (** The `Sent` handshake sub-case of the send delta.  With write epoch
     =!= Application, every arm keeps the epoch-collapsing write projection at 0
     (next_seq preserves the non-Application epoch; the client-Finished install
@@ -239,7 +239,7 @@ let lemma_sent_handshake_wseq
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 let lemma_sent_wseq_delta (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
       (requires
@@ -270,7 +270,7 @@ let lemma_sent_wseq_delta (m m':CS.connection_model) (msg:M.tls_message)
 (** RECEIVE DELTA.  A legal `Received` model step advances the epoch-collapsing
     READ projection by `m_radv m msg` (when the reader is at the `Application`
     epoch) and leaves the WRITE projection unchanged.  Same guard rationale. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 (** The `Received` handshake sub-case of the receive delta. **)
 let lemma_recv_handshake_rseq
   (m m':CS.connection_model) (hm:M.handshake_msg)
@@ -282,7 +282,7 @@ let lemma_recv_handshake_rseq
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 let lemma_recv_rseq_delta (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
       (requires
@@ -715,7 +715,7 @@ let channel_seal_ok (s:SY.tls_system_state) : prop =
     `HsServerFinishedVerified` (→ `ControlApplicationData`).  Legality at the
     former requires `config_role == ServerEndpoint`; with `ClientEndpoint` only the
     latter is legal, and it sets the control unconditionally. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 30"
 let lemma_client_finished_send_lands_appdata
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -814,7 +814,7 @@ let lemma_server_send_pins_model
     form the send/local families consume: if the POST-state left the closing region
     then the PRE-state was already out of it.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_preserves_closing (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
       (requires CS.step_model m ce == Some m')
@@ -958,7 +958,7 @@ let lemma_asp_server_send (a b:SY.tls_system_state)
     projections, GIVEN the handshaking-seq-zero facts (needed only when the
     pre-state is at `ControlHandshaking`, where a key install can reset an
     already-advanced seq). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_step_local_event_preserves_app_seq
   (m m':CS.connection_model) (lev:CS.local_event)
   : Lemma
@@ -976,7 +976,7 @@ let lemma_step_local_event_preserves_app_seq
     leaves `model_record` UNCHANGED, at ANY control (no `pre_appdata` gate: an
     empty protected raw is refuted uniformly because `protected_record_count` is
     always ≥ 1). **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_network_empty_delta_record_unchanged_ungated
   (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -1919,7 +1919,7 @@ let lemma_asp_server_send_inflight (a b:SY.tls_system_state)
     lemma are cited for symmetry with the server route and to keep the proof
     robust to the exact shape of the client-Finished epoch lemma.)
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
 let lemma_asp_client_send_snap_handshake_write (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -1964,7 +1964,7 @@ let lemma_asp_client_send_snap_handshake_write (a b:SY.tls_system_state)
     `Handshake?` write epoch.  ServerHello is cleartext (guard false); no Sent HRR
     arm exists (the step would be `None`, contradicting `Some s'`).
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
 let lemma_asp_server_send_snap_handshake_write (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -2004,7 +2004,7 @@ let lemma_asp_server_send_snap_handshake_write (a b:SY.tls_system_state)
     )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_asp_deliver_to_server
   (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -2197,7 +2197,7 @@ let lemma_client_recv_msg_not_cleartext
     so the projection is again 0.  (On a TAIL step the non-`Finished` cases
     additionally RESTORE `record_read` from the pre-state, which only makes the
     conclusion easier.) **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 100"
 let lemma_protected_step_seq
   (m m':CS.connection_model) (step:CS.protected_handshake_step)
   : Lemma
@@ -2214,7 +2214,7 @@ let lemma_protected_step_seq
     `HsServerFinishedVerified` or `HsClientFinishedReceived` -- so
     `CSL.lemma_handshaking_nonfinal_read_not_application` applies and the client's
     READ epoch is NOT `Application`. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 100"
 let lemma_protected_step_read_not_application
   (st:CS.connection_state) (step:CS.protected_handshake_step)
   : Lemma
@@ -2269,7 +2269,7 @@ let lemma_protected_step_read_not_application
     `server_ctrl_ok`, absent for a client that legitimately receives them).  It uses
     the client helper above instead, which excludes SH/HRR by read-epoch placement.
     ═══════════════════════════════════════════════════════════════════════════ **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_asp_deliver_to_client
   (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -2511,7 +2511,7 @@ let lemma_rwc_client_send (a b:SY.tls_system_state)
     role Server.  (Note: the KeyUpdate-receive install is excluded by ~KeyUpdate.)
     Legality is available at the delivery from `legal_connection_delta`, so this is
     cheaper than pinning the control to the receive region and enumerating it. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80"
 let lemma_server_recv_installs_app_read_pins
   (m m':CS.connection_model) (msg:M.tls_message)
   : Lemma
@@ -2540,7 +2540,7 @@ let lemma_server_recv_installs_app_read_pins
     so this is exactly the stability the congruence transfer needs — which is why
     a server receive (advancing only `rd.seq`) and `fail_model` (preserving
     `model_record`) are both harmless to agreement. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80"
 let lemma_recv_app_preserves_record_material
   (st st':CS.connection_state) (msg:M.tls_message)
   : Lemma
@@ -2573,7 +2573,7 @@ let lemma_recv_app_preserves_record_material
     sibling KeyUpdate-send installer is excluded by ~KeyUpdate, and every other
     `Sent` arm leaves the write epoch unchanged.  Role- and consistency-free: no
     competing arm exists (unlike the receive side's two Finished arms). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80"
 let lemma_client_send_installs_app_write_pins
   (snap client':CS.connection_model) (sent:M.tls_message)
   : Lemma
@@ -2608,7 +2608,7 @@ let lemma_client_send_installs_app_write_pins
     establishment via `CSL.lemma_connection_appdata_keys_installed_for_role`
     (through `SY.lemma_appdata_implies_{client,server}_ready`). **)
 #restart-solver
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 600"
 let lemma_ama_deliver_to_server
   (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)

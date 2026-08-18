@@ -1688,7 +1688,7 @@ val lemma_wire_facts_deliver_to_client (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b)
           (ensures ch_wire_equiv b /\ sh_wire_equiv b /\ hello_key_shares_ok b /\
                    hello_coupling b)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
 let lemma_wire_facts_deliver_to_client a b =
   lemma_deliver_to_client_shape a b;
   eliminate exists (wire:CW.wire_message) (c':CS.connection_state)
@@ -1916,7 +1916,7 @@ let lemma_client_step_e2e
     and config immutability transports the validity guard.  Because the guard is on
     the immutable config, the real work only fires when the pre-state is already
     valid; otherwise the post-guard is false and the obligation is vacuous. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 #restart-solver
 let lemma_server_step_e2e
   (st0 st1:CS.connection_state)
@@ -2507,7 +2507,7 @@ let lemma_server_recv_into_appdata_shape
 (** SERVER step-level: a wire RECEIVE that enters application data was either
     already at application data, or at `HsServerFinishedSent` (the atomic
     recv-Finished verify instant). **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
 let lemma_server_wire_recv_into_appdata_shape
   (st0:CS.connection_state) (wire:CW.wire_message)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -2540,7 +2540,7 @@ let lemma_server_wire_recv_into_appdata_shape
 #pop-options
 
 (** SERVER step-level: a SEND (nonempty wire output) never enters application data. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
 #restart-solver
 let lemma_server_send_not_into_appdata
   (st0:CS.connection_state) (local:CTy.server_local_event)
@@ -2591,7 +2591,7 @@ let lemma_server_local_event_not_received
 
 (** SERVER step-level: the shape of a no-output LOCAL step that enters application
     data — pre-control `HsClientFinishedReceived` with the record keys installed. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
 let lemma_server_local_into_appdata_shape
   (st0:CS.connection_state) (local:CTy.server_local_event)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -2625,7 +2625,7 @@ let lemma_server_local_into_appdata_shape
 
 (** CLIENT step-level: the shape of a SEND ([w]) that enters application data —
     the pre-control is `HsServerFinishedVerified`. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 60"
 let lemma_client_into_appdata_shape
   (st0:CS.connection_state) (local:CTy.client_local_event)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -2792,7 +2792,7 @@ let lemma_no_buffering_steps_prefix (l1 l2:list CS.conn_event)
 #pop-options
 
 (** ROUTE A — a CLIENT-changing step whose client is at application data. **)
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
 let lemma_pw_pres_client_appdata_route_a
   (a b:tls_system_state)
   (e:SM.event CW.wire_message CTy.client_local_event)
@@ -2832,7 +2832,7 @@ let lemma_pw_pres_client_appdata_route_a
 #pop-options
 
 (** ROUTE A — a SERVER-changing step whose server is at application data. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 30"
 let lemma_pw_pres_server_appdata_route_a
   (a b:tls_system_state)
   (e:SM.event CW.wire_message CTy.server_local_event)
@@ -2879,7 +2879,7 @@ let lemma_pw_pres_server_appdata_route_a
 
 (** client LOCAL — a no-output local never enters application data, so a ready
     post-state forces a ready pre-state (ROUTE A). **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 30"
 let lemma_pw_pres_client_local
   (a b:tls_system_state)
   (local:CTy.client_local_event) (c':CS.connection_state)
@@ -2905,7 +2905,7 @@ let lemma_pw_pres_client_local
 #pop-options
 
 (** deliver TO CLIENT — a receive never enters application data (ROUTE A). **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 30"
 let lemma_pw_pres_deliver_to_client
   (a b:tls_system_state)
   (wire:CW.wire_message) (c':CS.connection_state)
@@ -2929,7 +2929,7 @@ let lemma_pw_pres_deliver_to_client
 #pop-options
 
 (** server SEND — a nonempty-output send never enters application data (ROUTE A). **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 30"
 let lemma_pw_pres_server_send
   (a b:tls_system_state)
   (local:CTy.server_local_event) (s':CS.connection_state)
@@ -2980,7 +2980,7 @@ let lemma_client_appdata_hellos_some (st:CS.connection_state)
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 80"
 let lemma_pw_pres_deliver_to_server
   (a b:tls_system_state)
   (wire:CW.wire_message) (s':CS.connection_state)
@@ -3038,7 +3038,7 @@ let lemma_pw_pres_deliver_to_server
     At the verify the server has just entered application data and the client is
     unchanged (and already ready), so the both-ready boundary holds at `b` and the
     counting-free `lemma_pw_establish` supplies the witnesses. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 30"
 let lemma_pw_pres_server_local
   (a b:tls_system_state)
   (local:CTy.server_local_event) (s':CS.connection_state)
@@ -3095,7 +3095,7 @@ let lemma_pw_pres_server_local
     record yet), yet `server_ready a` forces the server to have RECEIVED the
     client Finished (an ApplicationData record); the quiescent byte-pairing then
     forces the client to have SENT it — a contradiction, so the case is vacuous. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 30"
 let lemma_pw_pres_client_send
   (a b:tls_system_state)
   (local:CTy.client_local_event) (c':CS.connection_state)
@@ -3163,7 +3163,7 @@ let lemma_pw_pres_client_send
     newly-required field and carries the lower ones.  A split on the event's top
     constructor keeps the query small. **)
 #restart-solver
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 100"
 let lemma_client_step_preserves_stage_ok
   (st0 st1:CS.connection_state)
   (e:SM.event CW.wire_message CTy.client_local_event)
@@ -3289,7 +3289,7 @@ let lemma_ready_couple_post_cf (s:tls_system_state)
       s.server.CS.cs_model.CS.model_config s.server
 #pop-options
 
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_deliver_to_server (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_server a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)
@@ -3319,7 +3319,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        with (assert (client_byte_reachable b); lemma_ready_couple_post_cf b))
 #pop-options
 
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_deliver_to_client (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ tls_step_deliver_to_client a b /\ tls_no_rekeying b)
           (ensures tls_system_inv b)

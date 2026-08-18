@@ -15,7 +15,7 @@ open TLS13.Spec.StateMachine.KeyMaterial
 open TLS13.Spec.StateMachine.Log
 open TLS13.Spec.StateMachine.Replay
 
-#push-options "--split_queries always"
+#push-options ""
 
 let lemma_step_handshake_message_client_certificate_verify_reachability
   (model:connection_model)

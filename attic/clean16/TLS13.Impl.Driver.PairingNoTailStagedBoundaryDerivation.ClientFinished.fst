@@ -63,7 +63,7 @@ open TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.Replay
 module ServerFlight = TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.ServerFlight
 open TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.ServerFlight
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 noextract
 let iaw (cawm:CS.traffic_key_material) : CS.conn_event =
@@ -262,7 +262,7 @@ let lemma_two_app_install_events_are_local
   )
 #pop-options
 
-#push-options "--z3rlimit 10 --fuel 4 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 4 --ifuel 2"
 noextract
 let lemma_cover_to_self_install_replay
   (model12:CS.connection_model)
@@ -371,7 +371,7 @@ let lemma_cover_to_self_install_replay
 // ===== end HOLE-4 reconstruction machinery =====
 
 // ===== HOLE-4 packaging: compact exact-slice + reconstruction + client wire record =====
-#push-options "--z3rlimit 10 --fuel 16 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 16 --ifuel 2"
 noextract
 let lemma_h4_client_exact_recon (client server:CS.connection_state)
   : Lemma
@@ -673,7 +673,7 @@ let lemma_h4_client_exact_recon (client server:CS.connection_state)
 // ============================================================
 // HOLE 3 helpers (client-write/server-read alignment) — ported
 // ============================================================
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_client_write_install_normalize
   (m m':CS.connection_model) (ev:CS.conn_event)
@@ -741,7 +741,7 @@ let lemma_client_read_install_preserves_record_write
   PCPS.lemma_client_no_tail_handshake_read_install_event_cases ev
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always"
+#push-options "--z3rlimit 10"
 noextract
 let lemma_client_identity_determinism
   (initial model4_c client_after_installs_c c_after3 model12_ex:CS.connection_model)
@@ -785,7 +785,7 @@ let lemma_client_identity_determinism
   )
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_server_read_install_normalize
   (m m':CS.connection_model) (ev:CS.conn_event)
@@ -829,7 +829,7 @@ let lemma_server_write_install_preserves_record_read
 = ()
 #pop-options
 
-#push-options "--z3rlimit 10 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_hole3_alignment_covers
   (model5_r server_after_e5_r server_rr:CS.connection_model)
@@ -998,7 +998,7 @@ let lemma_hole3_alignment_covers
   )
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 10 --fuel 2 --ifuel 2"
 noextract
 let lemma_server_prefix_slots_received
   (m0:CS.connection_model)
@@ -1039,7 +1039,7 @@ let lemma_server_prefix_slots_received
   assert (m5.CS.model_handshake.CS.hs_server_hello == Some sh)
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 10 --fuel 2 --ifuel 2"
 noextract
 let lemma_server_prefix_secret_transcript_received
   (m0:CS.connection_model)
@@ -1084,7 +1084,7 @@ let lemma_server_prefix_secret_transcript_received
   assert (Seq.equal m2.CS.model_handshake.CS.hs_transcript (W.serialize_handshake (M.ClientHello ch)))
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_cf_client_walk
   (client_after_installs_c receiver final:CS.connection_model)
@@ -1133,7 +1133,7 @@ let lemma_cf_client_walk
   peel_nil_received m6 final
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_cf_server_walk
   (sender server_rr final:CS.connection_model)
@@ -1191,7 +1191,7 @@ let cf_six (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (peer:X.peer_id
 
 // End-to-end combiner: tie _x/_c witnesses via two log-eqs, then determinism
 
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_extract_client_two_six
   (model4_c client_after_e4_c client_after_installs_c c_after3 finalm:CS.connection_model)
@@ -1275,7 +1275,7 @@ let lemma_extract_client_two_six
   )
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_extract_server_covers_flight
   (model5_r server_rr' server_rr after_server_flight_r:CS.connection_model)
@@ -1323,7 +1323,7 @@ let lemma_extract_server_covers_flight
 #pop-options
 
 // server final slots via received-decode _cr chain (two-segment)
-#push-options "--z3rlimit 10 --split_queries always --ifuel 2 --fuel 16"
+#push-options "--z3rlimit 10 --ifuel 2 --fuel 16"
 noextract
 let lemma_server_final_slots_received
   (server:CS.connection_state)
@@ -1403,7 +1403,7 @@ let lemma_server_final_slots_received
 // ============================================================
 // HOLE 3 bundle: shared-secret (received), alignment core, client identity
 // ============================================================
-#push-options "--z3rlimit 10 --fuel 16 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 16 --ifuel 2"
 noextract
 let lemma_shared_secret_eq_received
   (client server:CS.connection_state)
@@ -1540,7 +1540,7 @@ let lemma_client_suffix_append_form
   ()
 #pop-options
 
-#push-options "--z3rlimit 10 --fuel 16 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 16 --ifuel 2"
 noextract
 let lemma_pack_cf_align_core
   (client server:CS.connection_state)
@@ -1732,7 +1732,7 @@ let lemma_client_prefix_append_form
 = ()
 #pop-options
 
-#push-options "--z3rlimit 10 --fuel 16 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 16 --ifuel 2"
 noextract
 let lemma_cf_client_identity
   (client:CS.connection_state)

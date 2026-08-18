@@ -290,7 +290,7 @@ let is_server_canonical_event (ev:CS.conn_event) : prop =
      | CS.LocalFail _ -> True
      | _ -> False)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_semantic_canonical (sem:ES.local_event) (conn_ev:CS.conn_event)
   : Lemma (requires ES.server_local_event_matches sem conn_ev)
           (ensures is_server_canonical_event conn_ev)
@@ -446,8 +446,8 @@ let has_read_snoc_mono (region:list CS.conn_event) (x:CS.conn_event)
 (* Per-control single-step preservation helpers                        *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
-#push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 40"
 #restart-solver
 let lemma_chr_log
   (m:CS.connection_model) (log:list CS.conn_event)
@@ -750,7 +750,7 @@ let step_from_appdata (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
     | _ -> ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 40"
 let lemma_step_preserves_shape (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma (requires step_pre st0 s' conn_ev)
           (ensures server_canonical_shape s')
@@ -1061,7 +1061,7 @@ let hellos_inv (m:CS.connection_model) : prop =
    canonically-unreachable [HsClientFinishedReceived] control (whose
    [log_shape] is [False]); every other case is field monotonicity plus the
    install-stage constraint from [legal_event]. *)
-#push-options "--fuel 4 --ifuel 6 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 40"
 let lemma_step_preserves_hellos (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma (requires step_pre st0 s' conn_ev /\ hellos_inv st0.CS.cs_model)
           (ensures hellos_inv s'.CS.cs_model)

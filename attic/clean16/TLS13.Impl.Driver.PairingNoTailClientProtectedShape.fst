@@ -131,7 +131,7 @@ let lemma_client_after_certificate_progress_rank
   | _ ->
     assert False
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_encrypted_extensions_step_model_shape
   (model6 model7:CS.connection_model)
   (ee:GEE.encryptedExtensions)
@@ -176,7 +176,7 @@ let lemma_client_encrypted_extensions_step_model_shape
   assert (model7.CS.model_config == model6.CS.model_config)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_certificate_step_model_shape
   (model7 model8:CS.connection_model)
   (cert:GCert.certificate)
@@ -228,7 +228,7 @@ let lemma_client_certificate_step_model_shape
   assert (model8.CS.model_config == model7.CS.model_config)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_two_install_local_install_progress_rank
   (model model1:CS.connection_model)
   (ev:CS.conn_event)
@@ -360,7 +360,7 @@ let lemma_client_after_two_install_local_install_progress_rank
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_two_install_local_derive_progress_rank
   (model model1:CS.connection_model)
   (shared:C.x25519_shared_secret)
@@ -384,7 +384,7 @@ let lemma_client_after_two_install_local_derive_progress_rank
   lemma_client_after_two_install_progress_rank model1
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_two_installs_next_event_encrypted_extensions
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -520,7 +520,7 @@ let lemma_client_after_two_installs_next_event_encrypted_extensions
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
   (client:CS.connection_state)
   : Lemma
@@ -699,7 +699,7 @@ let lemma_client_no_tail_seventh_event_encrypted_extensions_clean
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model6_witness
   (client:CS.connection_state)
   : Lemma
@@ -887,7 +887,7 @@ let lemma_client_no_tail_model6_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_encrypted_extensions_next_event_certificate
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -1003,7 +1003,7 @@ let lemma_client_after_encrypted_extensions_next_event_certificate
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_certificate_next_event_validate_certificate
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -1111,7 +1111,7 @@ let lemma_client_after_certificate_next_event_validate_certificate
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_eighth_event_certificate_clean
   (client:CS.connection_state)
   : Lemma
@@ -1242,7 +1242,7 @@ let lemma_client_no_tail_eighth_event_certificate_clean
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model8_witness
   (client:CS.connection_state)
   : Lemma
@@ -1439,7 +1439,7 @@ let lemma_client_no_tail_model8_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_ninth_event_validate_certificate_clean
   (client:CS.connection_state)
   : Lemma

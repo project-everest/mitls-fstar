@@ -84,7 +84,7 @@ let lemma_server_traffic_peer_record_material_agrees_and_seq_write_read_aligned
     assert False
 
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_step_received_network_event_preserves_record_write
   (model:connection_model)
   (msg:M.tls_message)

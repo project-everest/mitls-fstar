@@ -2481,6 +2481,7 @@ fn process_direct_record
   buffer_resp
 }
 
+#push-options "--z3rlimit 100"
 fn process_coalesced_network_bytes
   (c:client)
   (raw:array U8.t)
@@ -2893,6 +2894,7 @@ fn process_coalesced_network_bytes
   }
 }
 
+#pop-options
 fn process_pending_protected_handshake
   (c:client)
   (empty:array U8.t)

@@ -77,7 +77,7 @@ let client_recv_floor (m:CS.connection_model) : nat =
     statement about where the flag-setting transitions LAND, not about how many
     records were received to get there.  Conjunct (c) is the record-side fact the
     floor telescoping actually consumes. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 let lemma_client_flag_facts
   (m:CS.connection_model) (conn_ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -99,7 +99,7 @@ let lemma_client_flag_facts
 
 (** Client-step RECV floor fact, lifted to `client_step`: the wire-input appdata
     count plus the pre-step floor is at least the post-step floor. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_client_step_recv_floor
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.client_local_event)

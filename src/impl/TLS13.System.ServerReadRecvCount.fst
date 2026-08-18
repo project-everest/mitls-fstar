@@ -62,7 +62,7 @@ let server_recv_pot (m:CS.connection_model) : nat =
     `server_cf_region_prior` half; the `app_read_ind` half needs the installer
     enumeration (only a protected receive or a local install at
     `HsClientFinishedReceived` raises the read epoch). **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_server_recv_pot_step
   (m:CS.connection_model) (conn_ev:CS.conn_event)
   (m':CS.connection_model) (raw_sent raw_received:B.bytes)
@@ -82,7 +82,7 @@ let lemma_server_recv_pot_step
 (** STEP-LEVEL (server_step): lifts the per-step bound over a `server_step`,
     extracting the underlying `conn_ev`/raw delta.  Mirrors
     `WStep.lemma_server_step_cf_region_lower`. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
 let lemma_server_step_recv_pot_lower
   (st0:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.server_local_event)

@@ -61,9 +61,9 @@ open TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.Foundation
 module Replay = TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.Replay
 open TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.Replay
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
-#push-options "--z3rlimit 10 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --ifuel 2"
 noextract
 let lemma_hole1_alignment
   (model5_s server_after_write_s server_after_read_s:CS.connection_model)
@@ -161,7 +161,7 @@ let lemma_hole1_alignment
 #pop-options
 
 // K: server-suffix all_not_hello (fully concrete, high fuel)
-#push-options "--z3rlimit 10 --fuel 16 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 16 --ifuel 2"
 noextract
 let lemma_server_suffix_all_not_hello
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv:GCV.certificateVerify)
@@ -207,7 +207,7 @@ let lemma_server_suffix_all_not_hello
 
 
 // ===== HOLE 1 bundled: single-ensures alignment (keeps caller context clean) =====
-#push-options "--z3rlimit 10 --fuel 16 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 10 --fuel 16 --ifuel 2"
 noextract
 let lemma_pack_server_flight_align_real
   (client server:CS.connection_state)
@@ -711,7 +711,7 @@ let peel_received_bp
 #pop-options
 
 // SH serialize equality from the cleartext final-hello milestone + slot identification
-#push-options "--z3rlimit 10 --split_queries always"
+#push-options "--z3rlimit 10"
 noextract
 let lemma_sh_serialize_eq_from_milestone
   (client server:CS.connection_state)
@@ -805,7 +805,7 @@ let lemma_two_install_events_are_local
 
 
 // ===== HOLE 2 bundled: server-sent / client-received suffix byte equality =====
-#push-options "--z3rlimit 10 --split_queries always"
+#push-options "--z3rlimit 10"
 noextract
 let lemma_pack_server_bytes_real
   (client server:CS.connection_state)
@@ -967,7 +967,7 @@ let lemma_slice_prefix_append_h4 (p r:B.bytes)
   Seq.lemma_eq_intro (Seq.slice (B.append p r) 0 (B.length p)) p
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always"
+#push-options "--z3rlimit 10"
 noextract
 let lemma_parse_record_wire_stable_append_h4
   (p x:B.bytes) (ct:T.content_type) (frag:B.bytes)
@@ -982,7 +982,7 @@ let lemma_parse_record_wire_stable_append_h4
   WRD.lemma_parse_record_wire_from_prefix s ct frag (B.length p)
 #pop-options
 
-#push-options "--z3rlimit 10 --split_queries always"
+#push-options "--z3rlimit 10"
 noextract
 let lemma_first_wire_record_unique_split_h4
   (s p1 r1 p2 r2:B.bytes) (o1 o2:T.content_type) (f1 f2:B.bytes)

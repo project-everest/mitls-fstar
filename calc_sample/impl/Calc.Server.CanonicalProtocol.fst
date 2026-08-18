@@ -860,6 +860,7 @@ ensures
   fold (canonical_server_exactly srv current_received current_sent current_log)
 }
 
+#push-options "--z3rlimit 200"
 fn calc_process_network
   (srv:canonical_server)
   (frame:calc_network_frame)
@@ -1101,6 +1102,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
   }
 }
 
+#pop-options
 fn calc_process_local
   (srv:canonical_server)
   (ev:CalcP.calc_frame_local_event)

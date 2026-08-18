@@ -711,6 +711,7 @@ let lemma_server_local_ready_selection_facts
   | _ ->
     ()
 
+#push-options "--z3rlimit 100"
 let lemma_server_driver_local_write_correct_preserves_supported_profile_selection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -870,6 +871,7 @@ let lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
     assert (server_driver_selection_present_when_required st1);
   assert (server_driver_supported_profile_selection st1 credential_identity)
 
+#pop-options
 fn process_local_event_and_write_once
   (d:server_driver)
   (kind:ST.local_event_kind)
@@ -2116,6 +2118,7 @@ fn process_send_certificate_verify_exact_and_write_once
 // positive length yields 1 <= |chain|.  The None (buffer-too-small) case is
 // impossible for a well-configured server (|chain| <= max_server_certificate_
 // chain_len == 16610 < 32768) but is handled soundly by reporting ok = false.
+#push-options "--z3rlimit 150"
 fn check_certificate_chain_nonempty
   (d:server_driver)
   requires server_driver_connected
@@ -2177,6 +2180,7 @@ fn check_certificate_chain_nonempty
   }
 }
 
+#pop-options
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected

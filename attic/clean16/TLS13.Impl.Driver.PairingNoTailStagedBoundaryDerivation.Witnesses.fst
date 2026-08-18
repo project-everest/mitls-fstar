@@ -68,9 +68,9 @@ open TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.ClientFinished
 
 module WitnessPack = TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.WitnessPack
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
-#push-options "--z3rlimit 10 --split_queries always"
+#push-options "--z3rlimit 10"
 noextract
 let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_hello_key_shares
   (client:CS.connection_state)

@@ -42,7 +42,7 @@ let ctrl_not_cfr (st:CS.connection_state) : prop =
     hypothesis is unused, since even a step FROM that control leaves it). **)
 (** The big `step_handshake_message` dispatch, isolated so its enumeration is a
     small self-contained query. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100"
 let lemma_step_handshake_not_cfr
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -52,7 +52,7 @@ let lemma_step_handshake_not_cfr
 #pop-options
 
 (** `step_tls_message` dispatch. **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_tls_not_cfr
   (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -62,7 +62,7 @@ let lemma_step_tls_not_cfr
 #pop-options
 
 (** `step_local_event` dispatch. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100"
 let lemma_step_local_not_cfr
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -183,7 +183,7 @@ let srv_not_hsfv (st:CS.connection_state) : prop =
     its `legal_handshake_message` (StateMachine.fst:1372) pins `config_role ==
     ClientEndpoint`; every arm preserves `config_role`.  So a *legal* SERVER
     handshake step never produces HSFV. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150"
 let lemma_step_handshake_not_shsfv
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -196,7 +196,7 @@ let lemma_step_handshake_not_shsfv
 
 (** `step_tls_message`: the only HSFV producer is the `TlsHandshake` arm, gated to
     a client by `legal_handshake_message`. **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_tls_not_shsfv
   (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -212,7 +212,7 @@ let lemma_step_tls_not_shsfv
 (** `step_local_event`: `LocalVerifyFinished` is the ONLY arm producing HSFV, and its
     `legal_local_event` pins `config_role == ClientEndpoint`, contradicting the
     server hypothesis. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150"
 let lemma_step_local_not_shsfv
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -335,7 +335,7 @@ let ctrl_not_cfv_m (m:CS.connection_model) : prop =
 let ctrl_not_cfv (st:CS.connection_state) : prop =
   ctrl_not_cfv_m st.CS.cs_model
 
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100"
 let lemma_step_handshake_not_cfv
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -344,7 +344,7 @@ let lemma_step_handshake_not_cfv
   = ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_tls_not_cfv
   (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -355,7 +355,7 @@ let lemma_step_tls_not_cfv
     | _ -> ()
 #pop-options
 
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150"
 let lemma_step_local_not_cfv
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma

@@ -88,7 +88,7 @@ let rd (st:CS.connection_state) : R.direction_state =
 
 (** A SENT handshake message never touches `record_read` (the read-installing arms —
     the client/server atomic Finished receives — are `CL.Received`). **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_sent_handshake_preserves_read
   (m:CS.connection_model) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -100,7 +100,7 @@ let lemma_sent_handshake_preserves_read
 
 (** A SENT tls message preserves the READ epoch (app-data/alert Sent advance WRITE;
     handshake Sent delegates to the lemma above). **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_sent_preserves_read_epoch
   (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -114,7 +114,7 @@ let lemma_sent_preserves_read_epoch
 
 (** A RECEIVED handshake message never installs `record_write` (the atomic Finished
     receives install app-READ; no receive arm writes `record_write`). **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_recv_handshake_preserves_write
   (m:CS.connection_model) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -125,7 +125,7 @@ let lemma_recv_handshake_preserves_write
 #pop-options
 
 (** A RECEIVED tls message preserves the WRITE epoch. **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_recv_preserves_write_epoch
   (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -142,7 +142,7 @@ let lemma_recv_preserves_write_epoch
     LEGAL client local pins `install_role == config_role == ClientEndpoint`, so that
     arm never fires; every other install writes at most the Handshake epoch, and
     `install_record_keys (App, Write)` is a no-op. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 200"
 let lemma_client_local_event_preserves_write_epoch
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -160,7 +160,7 @@ let lemma_client_local_event_preserves_write_epoch
     app-READ install, `LocalInstallTrafficKeysForRole(Server, App, Read)`, is legal
     solely at `HsClientFinishedReceived` (`traffic_install_allowed_at_stage_for_role`),
     excluded by hypothesis; other installs set at most the Handshake read epoch. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 300 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 300"
 let lemma_server_local_event_preserves_read_epoch
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -240,7 +240,7 @@ let lemma_server_local_preserves_read_epoch
     `cf_delivered b` lifts to `cf_delivered a`; `agreement a` then supplies both-App
     at the server and `lemma_server_step_appboth_preserves_record_material` carries
     the material across. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200"
 let lemma_ama_server_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -283,7 +283,7 @@ let lemma_ama_server_send (a b:SY.tls_system_state)
     so `cf_delivered b` lifts to `cf_delivered a`; the material carries across either
     by record-unchanged (empty-delta network) or by the client congruence engine
     (a genuine local event, where `~KeyUpdate` is immediate). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_ama_client_local (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -371,7 +371,7 @@ let lemma_ama_client_local (a b:SY.tls_system_state)
 (** SERVER LOCAL — congruence.  Mirror of the client local, with `read` epoch
     preserved OFF `HsClientFinishedReceived` (the CFR-gated app-read install excluded
     by `lemma_consistent_not_cfr`); the congruence engine is the server one. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 400"
 let lemma_ama_server_local (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -420,7 +420,7 @@ let lemma_ama_server_local (a b:SY.tls_system_state)
     client congruence engine carries the material across.  Unlike
     `deliver_to_server`, there is NO establishment case: a receive cannot raise the
     client's WRITE epoch, so this family is pure congruence. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_ama_deliver_to_client
   (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -524,7 +524,7 @@ let lemma_ama_deliver_to_client
         `0 == >= 1` is a contradiction, so B2 is VACUOUS.  Epoch-keyed on the
         server side (the bridge is valid at every control), control-pinned on the
         client side via the into-appdata send-Finished shape. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 150"
 let lemma_ama_client_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -610,7 +610,7 @@ let match_cw (client:CS.connection_state) : prop =
 
 (** A step whose RESULT lands at [ControlFailed] preserves [model_record] and the
     key schedule (fail is a pure control/failure-field update). **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_failed_result_preserves_record_keys
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma

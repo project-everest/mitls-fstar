@@ -145,7 +145,7 @@ let lemma_value_facts (s:Seq.seq U8.t) (voff ei n:nat)
    `cj`, all-`name_char` name, maximal OWS run ending at `voff`, first CR at
    `ei`, terminating LF at `ei+1`), `parse_field` of the suffix `s[start..n)`
    yields exactly `Some (name, value, consumed)`.                              *)
-#push-options "--z3rlimit 400 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
 let lemma_parse_field_tie
   (s:Seq.seq U8.t) (start n cj voff ei:nat)
   : Lemma
@@ -372,7 +372,7 @@ fn check_lf (inp: array U8.t) (n: SZ.t) (ei: SZ.t)
 (* ── The deliverable ─────────────────────────────────────────────────────────
    Parse one header field-line at `start`.  On `ok /\ not is_end` the outputs
    are tied to `H.parse_field` of the suffix `'i[start..n)`.                    *)
-#push-options "--z3rlimit 60 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 fn http_parse_header_field
   (inp: array U8.t) (n: SZ.t) (start: SZ.t)
   (pis_end: R.ref bool) (pok: R.ref bool)

@@ -288,7 +288,7 @@ let drive_delivered_len (result:BN.completed_drive) : GTot nat =
       .ST.response.ST.app_out_len
   | _ -> 0
 
-#push-options "--split_queries always"
+#push-options "--z3rlimit 100"
 let lemma_drive_application_log
   (st0 st1:CS.connection_state)
   (old_output output:B.bytes)
@@ -346,7 +346,7 @@ let lemma_drive_application_log
   | BS.DriveBufferFull _ _ -> assert False
 #pop-options
 
-#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --z3seed 17"
 fn rec receive_loop
   (d:DS.top_server_driver)
   (out:array U8.t)
@@ -460,7 +460,7 @@ fn rec receive_loop
 }
 #pop-options
 
-#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --z3seed 17"
 fn rec await_peer_close_with_buffer
   (d:DS.top_server_driver)
   (out:array U8.t)

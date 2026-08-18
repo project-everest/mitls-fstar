@@ -17,7 +17,7 @@ open TLS13.Spec.StateMachine.KeyMaterial
 open TLS13.Spec.StateMachine.Log
 open TLS13.Spec.StateMachine.Replay
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 noextract
 let rec contains_sent_certificate_verify

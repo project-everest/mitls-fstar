@@ -182,7 +182,7 @@ let lemma_vl_tail_head_not_ows (vl rest:TCP.bytes)
 
 (* ── Round-trip ───────────────────────────────────────────────────────────── *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 let lemma_parse_ser_field (nm vl rest:TCP.bytes)
   : Lemma (requires wf_field nm vl)
           (ensures parse_field (Seq.append (ser_field nm vl) rest)

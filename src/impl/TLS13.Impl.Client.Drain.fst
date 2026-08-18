@@ -527,7 +527,7 @@ let lemma_coalesced_implies_drained_network
 /// only the four [protected_handshake_message_supported] messages, which
 /// excludes it.  [set_pending_protected_handshake] touches only the handshake
 /// buffers.  So a protected-handshake step never introduces a failure.
-#push-options "--fuel 1 --ifuel 2 --split_queries always --z3rlimit 30"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 30"
 let lemma_step_protected_handshake_not_failed
       (model:CS.connection_model)
       (step:CS.protected_handshake_step)

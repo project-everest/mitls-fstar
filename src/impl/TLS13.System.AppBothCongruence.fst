@@ -59,7 +59,7 @@ unfold let ctrl_settled (m:CS.connection_model) : prop =
 
 (** `step_handshake_message` returns `None` at a settled control (no handshake arm
     fires), so this preservation is vacuous. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100"
 let lemma_hs_preserves_mat
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg) (m':CS.connection_model)
   : Lemma
@@ -82,7 +82,7 @@ let rec lemma_adv_preserves_mat (st:R.direction_state) (n:nat)
 (** `step_tls_message` at a settled control: app-data (seq advance), alert
     (`fail_model` preserves record), ignored-post-handshake (read seq advance).
     `KeyUpdate` (the only re-installer) excluded by hypothesis. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150"
 let lemma_tls_preserves_mat
   (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -100,7 +100,7 @@ let lemma_tls_preserves_mat
 
 (** `step_local_event` at a settled control: `LocalDeliverApplicationData`
     (touches only `app_log`) or `LocalFail` (`fail_model` preserves record). **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100"
 let lemma_local_preserves_mat
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -131,7 +131,7 @@ let lemma_settled_step_preserves_mat
     HSFV (nonfinal-read + CFR-exclusion), and a consistent client at HSFV has
     write ≠ App (`lemma_client_finished_verified_write_epoch_not_application`),
     contradicting App(wr); so control is settled (appdata/closure). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_client_step_appboth_preserves_record_material
   (st st':CS.connection_state) (ev:CS.conn_event)
   : Lemma
@@ -163,7 +163,7 @@ let lemma_client_step_appboth_preserves_record_material
     since the only HSFV producers, the client atomic Finished-receive and
     `LocalVerifyFinished`, are both role-gated to a client).  So a consistent server
     with `App(rd)` is settled, and the settled-arm enumeration preserves both triples. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_server_step_appboth_preserves_record_material
   (st st':CS.connection_state) (ev:CS.conn_event)
   : Lemma

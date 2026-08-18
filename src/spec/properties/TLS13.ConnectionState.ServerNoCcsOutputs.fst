@@ -178,7 +178,7 @@ let lemma_outputs_no_ccs_from_empty
 (* Per-step CCS-freeness of the server's wire outputs.                 *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_server_step_outputs_no_ccs
   (st0 st1:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.server_local_event)

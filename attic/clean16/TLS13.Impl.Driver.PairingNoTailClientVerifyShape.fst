@@ -130,7 +130,7 @@ let lemma_client_after_certificate_verify_model_facts
 =
   ()
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_validate_certificate_step_model_shape
   (model8 model9:CS.connection_model)
   (peer:X.peer_identity)
@@ -157,7 +157,7 @@ let lemma_client_validate_certificate_step_model_shape
   assert (model9.CS.model_config == model8.CS.model_config)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_certificate_verify_step_model_shape
   (model9 model10:CS.connection_model)
   (cv:GCV.certificateVerify)
@@ -214,7 +214,7 @@ let lemma_client_certificate_verify_step_model_shape
   assert (model10.CS.model_handshake.CS.hs_certificate_verify == Some cv)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model9_witness
   (client:CS.connection_state)
   : Lemma
@@ -406,7 +406,7 @@ let lemma_client_no_tail_model9_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_certificate_validated_next_event_certificate_verify
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -522,7 +522,7 @@ let lemma_client_after_certificate_validated_next_event_certificate_verify
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_tenth_event_certificate_verify_clean
   (client:CS.connection_state)
   : Lemma
@@ -630,7 +630,7 @@ let lemma_client_no_tail_tenth_event_certificate_verify_clean
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model10_witness
   (client:CS.connection_state)
   : Lemma
@@ -846,7 +846,7 @@ let lemma_client_no_tail_model10_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_certificate_verify_next_event_verify_signature
   (model:CS.connection_model)
   (stored_cv:GCV.certificateVerify)
@@ -952,7 +952,7 @@ let lemma_client_after_certificate_verify_next_event_verify_signature
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_eleventh_event_verify_certificate_signature_clean
   (client:CS.connection_state)
   : Lemma

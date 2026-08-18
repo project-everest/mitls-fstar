@@ -58,7 +58,7 @@ fn write_error_response (resp_buf: Vec.vec U8.t)
   Vec.op_Array_Assignment resp_buf 4sz 0uy
 }
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --z3cliopt smt.arith.nl=false"
 fn process_mul
   (srv: server_state)
   (req_buf: Vec.vec U8.t)

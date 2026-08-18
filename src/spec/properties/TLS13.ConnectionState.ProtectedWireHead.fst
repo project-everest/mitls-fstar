@@ -648,7 +648,7 @@ let lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
         receiver_tail_received
       and () ) )
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_sent_event_nonempty_seal_projection_protected
   (model:connection_model)
   (msg:M.tls_message)
@@ -767,7 +767,7 @@ let lemma_received_event_nonempty_decode_projection_protected
       delta_received)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_single_message_sender_normalizes_received_handshake_head
   (sender:connection_model)
   (receiver:connection_model)
@@ -1051,7 +1051,7 @@ let lemma_single_message_sender_normalizes_received_handshake_head
           end ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_from_aligned_heads
   (sender:connection_model)
   (receiver:connection_model)
@@ -1119,7 +1119,7 @@ let lemma_protected_handshake_event_projection_pair_from_aligned_heads
   assert (Seq.equal sender_delta receiver_delta)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
   (sender:connection_model)
   (receiver:connection_model)
@@ -1250,7 +1250,7 @@ let lemma_protected_handshake_event_projection_pair_from_equal_stream_heads
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
   (sender:connection_model)
   (receiver:connection_model)
@@ -1361,7 +1361,7 @@ let lemma_protected_handshake_event_tails_equal_from_equal_stream_heads
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_from_head_replays
   (sender:connection_model)
   (receiver:connection_model)
@@ -1532,7 +1532,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 #restart-solver
 let lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
   (sender:connection_model)
@@ -1766,7 +1766,7 @@ let lemma_protected_handshake_event_projection_pair_from_head_replays_with_tails
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_from_head_replays_with_next_alignment
   (sender:connection_model)
   (receiver:connection_model)

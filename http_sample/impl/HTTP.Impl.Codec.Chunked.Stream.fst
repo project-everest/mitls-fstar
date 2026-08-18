@@ -136,7 +136,7 @@ let lemma_prefix_extend (oldv newv:Seq.seq U8.t) (off n:nat)
 (* The verified decoder.                                                      *)
 (* ------------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 600 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 600"
 fn http_decode_chunks
     (inp: array U8.t) (inlen: SZ.t)
     (out: array U8.t) (outcap: SZ.t)
@@ -570,7 +570,7 @@ fn copy_payload (inp: array U8.t) (out: array U8.t)
 }
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
 fn http_decode_chunks_var
     (inp: array U8.t) (inlen: SZ.t)
     (out: array U8.t) (outcap: SZ.t)

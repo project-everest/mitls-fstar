@@ -11,7 +11,7 @@ module PWS = TLS13.ConnectionState.ProtectedWireStaged
 module Tac = FStar.Tactics
 module GFin = TLS13.Wire.Generated.Finished
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_pairing_protected_projection_witnesses_from_installed_replay_inputs
   (client_state:CS.connection_state)

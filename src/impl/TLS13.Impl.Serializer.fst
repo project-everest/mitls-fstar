@@ -731,7 +731,7 @@ let lemma_cv_out_after_hash_reveal
     (cv_out_after_hash hash spaces context)
     (WS.serialize_server_certificate_verify_input hash)
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_content_type_matches_byte (wire:U8.t) (ct:T.content_type)
   : Lemma (requires L.content_type_matches wire ct)
           (ensures wire == WSR.content_type_byte ct)

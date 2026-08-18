@@ -47,6 +47,7 @@ let lemma_handshake_tag_not_nst
       LP.parser_kind_prop_equiv LP.parse_false_kind LP.parse_false
     end else ()
 
+#push-options "--z3rlimit 40"
 let lemma_ptm_handshake_nonexact_none
   (fragment:B.bytes) (v:GHS.handshake) (consumed:LP.consumed_length fragment)
   : Lemma
@@ -58,3 +59,5 @@ let lemma_ptm_handshake_nonexact_none
   LP.parser_kind_prop_equiv GHS.handshake_parser_kind GHS.handshake_parser;
   assert (consumed >= 5);
   assert (B.length fragment > 5)
+
+#pop-options

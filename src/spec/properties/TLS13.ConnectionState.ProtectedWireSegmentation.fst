@@ -23,7 +23,7 @@ open TLS13.Spec.StateMachine.KeyMaterial
 open TLS13.Spec.StateMachine.Log
 open TLS13.Spec.StateMachine.Replay
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_bytes_append_equal
   (left right left_tail right_tail:B.bytes)
   : Lemma
@@ -6023,7 +6023,7 @@ let lemma_paired_replay_suffix_views_from_full_replays_with_equal_prefixes
       and () ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_paired_protected_handshake_contiguous_replay_views_from_full_replays_with_equal_prefixes
   (server_model:connection_model)
   (client_model:connection_model)

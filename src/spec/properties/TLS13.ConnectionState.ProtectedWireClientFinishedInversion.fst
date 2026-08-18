@@ -161,7 +161,7 @@ let slice_prefix (a b:B.bytes)
 
 (* CH-direction: the server's parsed ClientHello serialize-image equals the
    client's serialized ClientHello, from the paired byte streams. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 let lemma_ch_serialize_agree
   (ch_c ch_s:GCH.clientHello)
   (cs sr:B.bytes)
@@ -543,7 +543,7 @@ let server_prefix_transcript (ch:GCH.clientHello) (sh:GSH.serverHello) : GTot B.
     (Tr.append Tr.empty (W.serialize_handshake (M.ClientHello ch)))
     (W.serialize_handshake (M.ServerHello sh))
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_server_prefix_model
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -700,7 +700,7 @@ let rec lemma_region_preserves_transcript_received
     )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_client_prefix_model
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -828,7 +828,7 @@ let app_empty_l (a b:B.bytes)
 (* H1: server prefix SENT bytes = serialize_record(H, SH).             *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80"
 let lemma_server_prefix_sent_bytes
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -932,7 +932,7 @@ let lemma_server_prefix_sent_bytes
 (* H1: server prefix RECEIVED bytes = parse-form ClientHello.          *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_server_prefix_received_bytes
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -1023,7 +1023,7 @@ let lemma_server_prefix_received_bytes
 (* H1: client prefix SENT bytes = serialize_record(H, CH).             *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_client_prefix_sent_bytes
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -1112,7 +1112,7 @@ let lemma_client_prefix_sent_bytes
 (* H1: client prefix RECEIVED bytes = serialize_record(H, SH).         *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_client_prefix_received_bytes
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -1807,7 +1807,7 @@ let lemma_prepend_redundant_sr_install_received
     m ev rest rs rr final m B.empty B.empty rs rr
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_server_prefix_model_recv
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -1889,7 +1889,7 @@ let lemma_server_prefix_model_recv
   )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_client_prefix_model_sent
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -2174,7 +2174,7 @@ let server_flight_tail
 
 (* CH-suffix alignment: from the paired byte streams, the client's post-CH
    SENT bytes equal the server's post-CH RECEIVED bytes. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 let lemma_ch_flight_align
   (ch_c ch_s:GCH.clientHello)
   (cs sr:B.bytes)
@@ -2330,7 +2330,7 @@ let lemma_forall_server_install_empty_recv (region:list CS.conn_event)
     L.for_all_mem Region.is_empty_recv_ev region
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
 let lemma_client_side_cf (s:sysp)
   : Lemma (requires client_finished_bridge_inputs s.client s.server)
           (ensures client_pkg_exists s)
@@ -2496,7 +2496,7 @@ let lemma_no_ccs_server_flight_tail
     with introduce _ ==> _ with
       ( assert (L.memP e sflight) )
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 150"
 let lemma_server_side_cf (s:sysp)
   : Lemma (requires client_finished_bridge_inputs s.client s.server)
           (ensures server_pkg_exists s)
@@ -2665,7 +2665,7 @@ let client_chain_exists
     client_flight_chain mc final_c mat_read ee cert cv_validate cv cv_verify sf client_rest
       w.cw_ci w.cw_c0 w.cw_c1 w.cw_cas w.cw_c2 w.cw_cvs w.cw_c3 w.cw_sent w.cw_recv
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 120 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 120"
 let lemma_peel_client_flight
   (mc final_c:CS.connection_model) (mat_read:CS.traffic_key_material)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
@@ -2799,7 +2799,7 @@ let server_chain_exists
     server_flight_chain ms final_s mat_write ee cert cv_local cv sf server_rest
       w.sw_si w.sw_s0 w.sw_s1 w.sw_sas w.sw_s2 w.sw_s3 w.sw_sent w.sw_recv
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 120 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 120"
 let lemma_peel_server_flight
   (ms final_s:CS.connection_model) (mat_write:CS.traffic_key_material)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
@@ -3137,7 +3137,7 @@ let lemma_mk_postflight (s:sysp)
 (* Core producer step: chains already peeled; invoke PWSFlight :1886 and
    package the output as a postflight existential.  Kept separate from the
    agreement/peel reasoning of lemma_finish_cf to keep each Z3 query small. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 150"
 let lemma_cf_producer_core (s:sysp)
   (mc ms:CS.connection_model)
   (mat_read_c mat_write_s:CS.traffic_key_material)
@@ -3226,7 +3226,7 @@ let lemma_cf_producer_core (s:sysp)
    costs an ifuel inversion, which destabilised an otherwise unchanged proof.
    A solver restart isolates this VC from the accumulated context. *)
 #restart-solver
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
 let lemma_finish_cf (s:sysp)
   (ms:CS.connection_model)
   (mat_write_s mat_read_s:CS.traffic_key_material)
@@ -3331,7 +3331,7 @@ let lemma_finish_cf (s:sysp)
   ))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 let lemma_combine_cf (s:sysp)
   : Lemma (requires client_finished_bridge_inputs s.client s.server)
           (ensures postflight_exists s)
@@ -3467,7 +3467,7 @@ let lemma_ccs_sent_delta_parses (ds:B.bytes)
 (* Server at HsServerFinishedSent (received-decode side).  A single legal
    received-decode step is either the CF itself, or fails the control, or is
    byte-neutral on the received stream and preserves record_read/control. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 let lemma_server_step_classify
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   (ds dr:B.bytes)
@@ -3510,7 +3510,7 @@ let lemma_server_step_classify
    sent-seal step is either the CF itself, or fails the control, or is
    byte-neutral on the sent stream (preserving record_write/control), or is a
    ChangeCipherSpec send whose sent delta parses as a cleartext CCS record. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 300 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 300"
 #restart-solver
 let lemma_client_step_classify
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
@@ -3568,7 +3568,7 @@ let server_cf_peeled
     SMReplay.conn_events_received_decode_replay mpre
        (recv_ev (M.Finished cf) :: tail3) rs' rr final
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 let rec lemma_peel_server_cf
   (m:CS.connection_model) (events:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
@@ -3642,7 +3642,7 @@ let client_cf_peeled
     SMReplay.conn_events_sent_seal_replay mpre
        (sent_ev (M.Finished cf) :: tail3) rs rr' final
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 250 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 250"
 let rec lemma_peel_client_cf
   (m:CS.connection_model) (events:list CS.conn_event)
   (rs rr:B.bytes) (final:CS.connection_model)
@@ -3794,7 +3794,7 @@ let lemma_server_cf_step_sets
 (* At a non-handshaking control, any legal step preserves hs_client_finished
    and stays non-handshaking (the ONLY arms setting hs_client_finished require
    a handshaking control). *)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 150"
 let lemma_step_appdata_family
   (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
@@ -3815,7 +3815,7 @@ let lemma_step_appdata_family
 #pop-options
 
 (* Monotonicity of hs_client_finished across a non-handshaking sent-seal replay. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let rec lemma_sent_replay_preserves_hs_cf
   (m:CS.connection_model) (evs:list CS.conn_event) (rs rr:B.bytes) (final:CS.connection_model)
   : Lemma
@@ -3844,7 +3844,7 @@ let rec lemma_sent_replay_preserves_hs_cf
 #pop-options
 
 (* Monotonicity of hs_client_finished across a non-handshaking received-decode replay. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let rec lemma_received_replay_preserves_hs_cf
   (m:CS.connection_model) (evs:list CS.conn_event) (rs rr:B.bytes) (final:CS.connection_model)
   : Lemma
@@ -3898,7 +3898,7 @@ let lemma_appdata_records_parse (raw:B.bytes)
 
 (* The server received stream begins with the CF's sealed Application_data record;
    hence the whole stream parses (at content-type Application_data). *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 150"
 let lemma_server_cf_appdata_stream
   (mpre:CS.connection_model) (cf:GFin.finished) (tail3:list CS.conn_event)
   (rs' str:B.bytes) (final:CS.connection_model)
@@ -3942,7 +3942,7 @@ let lemma_server_cf_appdata_stream
 
 (* Field pinning: the whole client sent-seal replay ends with the client's real
    hs_client_finished set to the CF value. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let lemma_pin_client_hs_cf
   (mpre:CS.connection_model) (cf:GFin.finished) (tail3:list CS.conn_event)
   (cts ctr':B.bytes) (final_c:CS.connection_model)
@@ -3971,7 +3971,7 @@ let lemma_pin_client_hs_cf
 
 (* Field pinning: the whole server received-decode replay ends with the server's
    real hs_client_finished set to the CF value. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let lemma_pin_server_hs_cf
   (mpre:CS.connection_model) (cf:GFin.finished) (tail3:list CS.conn_event)
   (rs' str:B.bytes) (final_s:CS.connection_model)
@@ -3998,7 +3998,7 @@ let lemma_pin_server_hs_cf
     lemma_received_replay_preserves_hs_cf model1 tail3 ts tr final_s )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 150"
 let lemma_client_finished_pair_from_replays_and_pairing client server =
   let s : sysp = { client = client; server = server } in
   lemma_combine_cf s;

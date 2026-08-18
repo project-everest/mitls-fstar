@@ -2173,7 +2173,7 @@ let lemma_client_no_tail_fourth_event_derive_shared_secret_clean
        )
      )
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model4_witness
             (client:CS.connection_state)
             : Lemma

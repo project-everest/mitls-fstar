@@ -24,7 +24,7 @@ module PWR = TLS13.ConnectionState.ProtectedWireReplay
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module Seq = FStar.Seq
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_server_client_finished_received_decode_suffix_replay_slice_from_ordered_post_server_hello
   (server:CS.connection_state)

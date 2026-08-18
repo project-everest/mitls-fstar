@@ -83,7 +83,7 @@ let lemma_parse_record_wire_serialize_record
 (* #2  supported ClientHello record-size bound                               *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_serialize_handshake_client_hello_record_bound
   (ch:GCH.clientHello)
   : Lemma
@@ -93,7 +93,7 @@ let lemma_serialize_handshake_client_hello_record_bound
   ()
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_serialize_handshake_server_hello_record_bound
   (sh:GSH.serverHello)
   : Lemma
@@ -108,7 +108,7 @@ let lemma_serialize_handshake_server_hello_record_bound
 (* parsing the same raw record are the SAME record (codec injectivity).       *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_client_hello_sent_received_eq
   (sent_ch:GCH.clientHello)
   (received_ch:GCH.clientHello)
@@ -157,7 +157,7 @@ let lemma_client_hello_sent_received_eq
 (* replaying the same raw record are the SAME record (framing + codec inj.).  *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_server_hello_sent_received_eq
   (sent_sh:GSH.serverHello)
   (received_sh:GSH.serverHello)
@@ -209,7 +209,7 @@ let lemma_server_hello_sent_received_eq
 (* External: ClientHello wire equivalence from a sent/received raw pair.      *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
   (sent_ch:GCH.clientHello)
   (received_ch:GCH.clientHello)
@@ -239,7 +239,7 @@ let lemma_client_hello_wire_equivalent_from_sent_cleartext_and_received_parse
 (* Received ClientHello raw length agrees with the canonical serialization.   *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_received_client_hello_raw_length
   (ch:GCH.clientHello)
   (raw:B.bytes)
@@ -284,7 +284,7 @@ let lemma_received_client_hello_raw_length
 (* Paired cleartext hello: wire equivalence + handshake-traffic checkpoint.   *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -354,7 +354,7 @@ let lemma_paired_cleartext_hello_handshake_checkpoint_from_cleartext_raw
 (* flight, given byte-replay of the protected handshake records.              *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -464,7 +464,7 @@ let lemma_paired_handshake_events_from_cleartext_raw_and_protected_wire
 (* side conditions -- raw replay already forces record equality.             *)
 (* ------------------------------------------------------------------------- *)
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_paired_cleartext_hello_key_shares_from_cleartext_raw_and_supported_server_hello_parse
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -561,7 +561,7 @@ let step_fields_post
     ( cfg.CS.config_role == CS.ServerEndpoint /\
       Some? hs1.CS.hs_client_hello ) )
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 40"
 let lemma_step_model_handshake_fields
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -691,7 +691,7 @@ let client_config_shape (st:CS.connection_state) : prop =
         B.length (W.serialize_handshake (M.ClientHello ch)) <= 16640
       | None -> True ) )
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_connection_delta_client_config_shape
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -770,7 +770,7 @@ let lemma_connection_state_consistent_client_config_shape
   assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves (CS.initial st.CS.cs_model.CS.model_config) st);
   assert (p st)
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_state_supported_client_hello_wire_profile_from_config
   (st:CS.connection_state)
   : Lemma

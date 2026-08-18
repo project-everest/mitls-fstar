@@ -220,6 +220,7 @@ let lemma_supported_profile_selection_started
     | None -> ()
   | _ -> assert False
 
+#push-options "--z3rlimit 100"
 fn start_server_once
   (d:DS.buffered_driver)
   (empty_payload:array U8.t)
@@ -392,6 +393,7 @@ fn start_server_once
   resp
 }
 
+#pop-options
 fn select_default_server_parameters_from_payload_once
   (d:DS.buffered_driver)
   (payload:array U8.t)

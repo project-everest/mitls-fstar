@@ -19,7 +19,7 @@ module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module ID = FStar.IndefiniteDescription
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_server_window_rank_after_two_handshake_installs_is_nine
   (model:CS.connection_model)

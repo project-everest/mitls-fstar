@@ -20,7 +20,7 @@ module PNTPH = TLS13.Impl.Driver.PairingNoTailServerPostHelloShape
 module PNTSS = TLS13.Impl.Driver.PairingNoTailServerShape
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let sent_certificate_verify_event
   (cv:GCV.certificateVerify)

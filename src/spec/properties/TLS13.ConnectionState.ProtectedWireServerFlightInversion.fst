@@ -158,7 +158,7 @@ let slice_prefix (a b:B.bytes)
 
 (* CH-direction: the server's parsed ClientHello serialize-image equals the
    client's serialized ClientHello, from the paired byte streams. *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 let lemma_ch_serialize_agree
   (ch_c ch_s:GCH.clientHello)
   (cs sr:B.bytes)
@@ -520,7 +520,7 @@ let server_prefix_transcript (ch:GCH.clientHello) (sh:GSH.serverHello) : GTot B.
     (Tr.append Tr.empty (W.serialize_handshake (M.ClientHello ch)))
     (W.serialize_handshake (M.ServerHello sh))
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_server_prefix_model
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -718,7 +718,7 @@ let rec lemma_region_preserves_protected_buffer_empty_received
     )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_client_prefix_model
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -847,7 +847,7 @@ let app_empty_l (a b:B.bytes)
 (* H1: server prefix SENT bytes = serialize_record(H, SH).             *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 80"
 let lemma_server_prefix_sent_bytes
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -951,7 +951,7 @@ let lemma_server_prefix_sent_bytes
 (* H1: server prefix RECEIVED bytes = parse-form ClientHello.          *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_server_prefix_received_bytes
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -1042,7 +1042,7 @@ let lemma_server_prefix_received_bytes
 (* H1: client prefix SENT bytes = serialize_record(H, CH).             *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_client_prefix_sent_bytes
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -1131,7 +1131,7 @@ let lemma_client_prefix_sent_bytes
 (* H1: client prefix RECEIVED bytes = serialize_record(H, SH).         *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_client_prefix_received_bytes
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -1304,7 +1304,7 @@ let server_flight_result
 (* Server flight helper.                                              *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_server_flight
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -1399,7 +1399,7 @@ let lemma_server_flight
 (* Server received-CH helper (for the CH-direction agreement).        *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_server_received_ch
   (cfg:CS.connection_config)
   (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
@@ -1531,7 +1531,7 @@ let client_flight_result
 (* Client flight helper.                                              *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 let lemma_client_flight
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -1622,7 +1622,7 @@ let lemma_client_flight
 (* Client sent-CH helper (for the CH-direction agreement).            *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_client_sent_ch
   (cfg:CS.connection_config)
   (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
@@ -1761,7 +1761,7 @@ let server_side_exists (s:sysp) : prop =
     server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let lemma_server_side (s:sysp)
   : Lemma (requires server_flight_bridge_inputs s.client s.server)
           (ensures server_side_exists s)
@@ -1913,7 +1913,7 @@ let client_side_exists (s:sysp) : prop =
       tail_c raw_flight_c
       fl_sent_c fl_recv_c ch_c sh_c rest_cs
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let lemma_client_side (s:sysp)
   : Lemma (requires server_flight_bridge_inputs s.client s.server)
           (ensures client_side_exists s)
@@ -2068,7 +2068,7 @@ let server_fields_eq (a b:CS.connection_model) : prop =
   a.CS.model_handshake.CS.hs_certificate_verify == b.CS.model_handshake.CS.hs_certificate_verify /\
   a.CS.model_handshake.CS.hs_server_finished == b.CS.model_handshake.CS.hs_server_finished
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
 let lemma_server_field_step (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
       (requires
@@ -2124,7 +2124,7 @@ let after_fin_client (m:CS.connection_model) : prop =
   m.CS.model_control == CS.ControlClosed \/
   CS.ControlFailed? m.CS.model_control
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 60"
 let lemma_client_field_step (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
       (requires
@@ -2230,7 +2230,7 @@ let rec lemma_received_replay_preserves_config
 (* ---- field-read primitives after a concrete sent step ---- *)
 
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_read_ee (m m1:CS.connection_model) (ee:GEE.encryptedExtensions)
   : Lemma (requires CS.legal_event m (sent_ev (M.EncryptedExtensions ee)) /\
                     CS.step_model m (sent_ev (M.EncryptedExtensions ee)) == Some m1)
@@ -2290,7 +2290,7 @@ let lemma_local_pres_server (m m1:CS.connection_model) (local:CS.local_event)
 
 (* ---- client-side field-read primitives after concrete recv steps ---- *)
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_read_recv_ee (m m1:CS.connection_model) (ee:GEE.encryptedExtensions)
   : Lemma (requires m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                     CS.legal_event m (recv_ev (M.EncryptedExtensions ee)) /\
@@ -2357,7 +2357,7 @@ let lemma_local_pres_client (m m1:CS.connection_model) (local:CS.local_event)
 #pop-options
 
 (* ================= server field pinning (6-head peel) ================= *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_server_fields_pinned
   (ms:CS.connection_model) (install:CS.conn_event)
   (ee:GEE.encryptedExtensions) (cert:GCert.certificate) (cv_local:CS.local_event)
@@ -2450,7 +2450,7 @@ let lemma_server_fields_pinned
 #pop-options
 
 (* ================= client field pinning (7-head peel) ================= *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 #restart-solver
 let lemma_client_fields_pinned
   (mc:CS.connection_model) (install:CS.conn_event)
@@ -2563,7 +2563,7 @@ let lemma_client_fields_pinned
 
 (* ---- non-install local preserves the whole record ---- *)
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_noninstall_local_preserves_record (m m1:CS.connection_model) (l:CS.local_event)
   : Lemma (requires CS.step_model m (CS.ConnLocalEvent l) == Some m1 /\
                     PB.local_event_does_not_install_record_keys l)
@@ -2658,7 +2658,7 @@ unfold let stageA_result
     SMReplay.conn_events_received_decode_replay client_after2
       (CS.ConnLocalEvent cv_verify :: raw_sf :: raw_tail) cts ctr final_c
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 180 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 180"
 let lemma_stageA
   (ms mc:CS.connection_model)
   (material_s material_c:CS.traffic_key_material)
@@ -2919,7 +2919,7 @@ let lemma_stageA
 
 (* ================= Stage B: SF (Finished) pair via :1138 ================= *)
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_skip_not_install_client_cv (m:CS.connection_model) (l:CS.local_event)
   : Lemma (requires m.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                     m.CS.model_control == CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
@@ -2958,7 +2958,7 @@ unfold let stageB_result
     PWHead.received_handshake_head_normal_form (M.CertificateVerify cv_c) raw_cv /\
     PWHead.received_handshake_head_normal_form (M.Finished sf_c) raw_sf
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 120 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 120"
 let lemma_stageB
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_s:GCV.certificateVerify)
   (sf_s:GFin.finished) (tail_s:list CS.conn_event)
@@ -3062,7 +3062,7 @@ let lemma_stageB
 (* Strengthened capstone: field-pinned 4-pair server-flight inversion *)
 (* ================================================================== *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 #restart-solver
 let lemma_conclude_pinned_server_flight
   (client server:CS.connection_state)
@@ -3094,7 +3094,7 @@ let lemma_conclude_pinned_server_flight
   assert (server_flight_pairs_conclusion client server)
 #pop-options
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
 (* The client's log carries the RAW flight: for a single-message record the
    implementation emits a saturating head [ConnProtectedHandshake] step rather
    than a [ConnNetworkEvent].  [client_normalized_appdata_exact_spine] records
@@ -3170,7 +3170,7 @@ let lemma_normalized_client_spine_from_raw
   )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 400 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
 let lemma_finish_strong (s:sysp)
   (ms:CS.connection_model) (material_s:CS.traffic_key_material)
   (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
@@ -3380,7 +3380,54 @@ let lemma_finish_strong (s:sysp)
   )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+(* Note: the server-side and client-side existential packages carry 14 and 15
+   witnesses respectively.  Eliminating them in a single definition makes the
+   proof obligation enormous: [eliminate exists] desugars to a chain of
+   [indefinite_descriptionK] calls whose results are destructed by dependent
+   tuples, and since F* no longer substitutes let-bound definitions into VCs
+   those destructurings survive un-reduced in the context (FStarLang/FStar#4444).
+   Nesting the two eliminations multiplied the cost: it needed [--z3rlimit 1600]
+   and drove Z3 to a 17GB resident set, which is fatal on a 16GB CI runner.
+   Splitting the two eliminations into separate definitions keeps each query
+   small.  Do not merge them back together. *)
+
+#restart-solver
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 800"
+let lemma_combine_client_side (s:sysp)
+  (ms:CS.connection_model) (material_s:CS.traffic_key_material)
+  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
+  (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (tail_s:list CS.conn_event)
+  (fl_sent_s fl_recv_s:B.bytes) (ch_s:GCH.clientHello) (sh_s:GSH.serverHello)
+  (d_ch_s rest_sr:B.bytes)
+  : Lemma (requires
+            server_flight_bridge_inputs s.client s.server /\
+            server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
+              fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr)
+          (ensures
+            server_flight_pairs_conclusion s.client s.server /\
+            client_normalized_appdata_exact_spine s.client)
+  =
+  lemma_client_side s;
+  eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
+    (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
+    (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
+    (tail_c raw_flight_c:list CS.conn_event)
+    (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
+    (rest_cs:B.bytes).
+    client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+      tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
+  with
+  (
+    lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
+      fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
+      mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+      tail_c raw_flight_c
+      fl_sent_c fl_recv_c ch_c sh_c rest_cs
+  )
+#pop-options
+
+#restart-solver
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 let lemma_combine_strong (s:sysp)
   : Lemma (requires server_flight_bridge_inputs s.client s.server)
           (ensures
@@ -3388,7 +3435,6 @@ let lemma_combine_strong (s:sysp)
             client_normalized_appdata_exact_spine s.client)
   =
   lemma_server_side s;
-  lemma_client_side s;
   eliminate exists (ms:CS.connection_model) (material_s:CS.traffic_key_material)
     (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
     (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (tail_s:list CS.conn_event)
@@ -3398,22 +3444,8 @@ let lemma_combine_strong (s:sysp)
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
   with
   (
-    eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
-      (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
-      (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-      (tail_c raw_flight_c:list CS.conn_event)
-      (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
-      (rest_cs:B.bytes).
-      client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-        tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    with
-    (
-      lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
-        fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-        mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-        tail_c raw_flight_c
-        fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    )
+    lemma_combine_client_side s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
+      fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
   )
 #pop-options
 

@@ -406,7 +406,7 @@ let lemma_non_application_local_event_deltas
   | CT.LocalSendApplicationData, _ -> assert False
   | _, _ -> ()
 
-#push-options "--split_queries always --z3rlimit 50"
+#push-options "--z3rlimit 50"
 let lemma_network_response_app_out_length
   (st0 st1:CS.connection_state)
   (buffer_resp:CT.client_buffer_response)
