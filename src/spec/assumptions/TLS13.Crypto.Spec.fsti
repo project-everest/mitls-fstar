@@ -223,6 +223,18 @@ let lemma_unpad_share_65 (k:kex_public_any)
           [SMTPat (unpad_share_65 (pad_share_65 k) (B.length k))]
   = assert (Seq.equal (Seq.slice (pad_share_65 k) 0 (B.length k)) k)
 
+(**
+  A 65-byte buffer is a *padded* share of width [share_len] when it is exactly
+  [pad_share_65] of its own [share_len]-byte prefix -- i.e. the bytes past the
+  logical share are zero.  This is the shape the ServerHello representation
+  stores, and the shape [TLS13.KEX.kex_public_from_private_runtime] produces
+  when handed a zeroed buffer.
+**)
+let padded_share_65 (share:B.bytes) (share_len:nat) : prop =
+  B.length share == 65 /\
+  (share_len == 32 \/ share_len == 65) /\
+  Seq.equal share (pad_share_65 (unpad_share_65 share share_len))
+
 let lemma_pad_share_65_injective (k1 k2:kex_public_any)
   : Lemma (requires Seq.equal (pad_share_65 k1) (pad_share_65 k2) /\
                     B.length k1 == B.length k2)

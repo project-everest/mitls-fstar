@@ -141,7 +141,13 @@ fn kex_shared_split_runtime
     for the value the server puts on the wire rather than the one it reads off
     it.  The X25519 arm writes 32 bytes and leaves the remaining 33 as it found
     them, so the logical share is the [kex_public_len g]-byte prefix -- exactly
-    [C.unpad_share_65], as on the read side. *)
+    [C.unpad_share_65], as on the read side.
+
+    Callers that hand in a zeroed buffer get the stronger conclusion that the
+    result *is* [C.pad_share_65] of the share, which is the form the ServerHello
+    representation stores; the X25519 arm needs it because it leaves the tail
+    untouched, and at P-256 the share fills the buffer so padding is the
+    identity. *)
 fn kex_public_from_private_runtime
   (g: C.kex_group)
   (sk: array U8.t)
@@ -157,4 +163,8 @@ fn kex_public_from_private_runtime
                 SZ.v n == C.kex_public_len g /\
                 Seq.equal
                   (C.unpad_share_65 out_bytes (C.kex_public_len g))
-                  (C.kex_public_from_private g 'sk_bytes))
+                  (C.kex_public_from_private g 'sk_bytes) /\
+                (Seq.equal (Ghost.reveal 'old) (Seq.create 65 0uy) ==>
+                 Seq.equal
+                   out_bytes
+                   (C.pad_share_65 (C.kex_public_from_private g 'sk_bytes))))

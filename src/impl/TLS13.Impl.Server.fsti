@@ -607,7 +607,8 @@ fn process_send_server_hello_from_arrays
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'server_random_bytes == 32 /\
-                 B.length 'server_key_share_bytes == 32 /\
+                 B.length 'server_key_share_bytes == 65 /\
+                 CryptoSpec.padded_share_65 'server_key_share_bytes 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  SZ.v network_out_len ==
@@ -619,7 +620,7 @@ fn process_send_server_hello_from_arrays
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes) 32) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -635,8 +636,8 @@ fn process_send_server_hello_from_arrays
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
-                 B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
+                 B.length (Ghost.reveal 'server_key_share_bytes) == 65 ==>
+                 (let sh = SS.mk_server_hello_witness GNG.X25519 (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes) 32) (CM.stored_client_hello_session_id 'st0) (CM.server_selected_suite 'st0) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
