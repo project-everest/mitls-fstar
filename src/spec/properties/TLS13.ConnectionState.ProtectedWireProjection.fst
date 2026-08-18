@@ -29,7 +29,7 @@ open TLS13.Spec.StateMachine.Log
 open TLS13.Spec.StateMachine.Replay
 open TLS13.ConnectionState.ProtectedWireBase
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_wire_equal_from_sent_seal_peer
   (sender:connection_model)
   (receiver:connection_model)
@@ -135,7 +135,7 @@ let lemma_protected_handshake_wire_equal_from_sent_seal_peer
             assert False ) ) ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_wire_equal_from_event_projections_peer
   (sender:connection_model)
   (receiver:connection_model)
@@ -221,7 +221,7 @@ let lemma_protected_handshake_wire_equal_from_event_projections_peer
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_single_protected_message_seal_saturates_protected_head
   (sender:connection_model)
   (receiver:connection_model)
@@ -340,7 +340,7 @@ let lemma_single_protected_message_seal_saturates_protected_head
             step.protected_handshake_consumed ) ) ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
   (sender:connection_model)
   (receiver:connection_model)
@@ -456,7 +456,7 @@ let lemma_protected_finished_not_certificate_verify_from_event_projections_peer
           assert False ) ) ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_paired_protected_handshake_wire_equivalent_from_event_projection_pairs
   (client:connection_state)
   (server:connection_state)

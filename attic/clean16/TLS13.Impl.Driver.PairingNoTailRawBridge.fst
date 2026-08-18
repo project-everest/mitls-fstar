@@ -2770,7 +2770,7 @@ let lemma_client_cleartext_prefix_step_models_from_raw_replay
     )
   )
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 
 let hello_slots_frozen_control (control:CS.connection_control_state) : Tot prop =
   match control with
@@ -3398,7 +3398,7 @@ let lemma_server_cleartext_prefix_step_models_from_raw_replay
     )
   )
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 
 let lemma_server_cleartext_prefix_final_hello_slots_from_raw_replay
   (model0:CS.connection_model)

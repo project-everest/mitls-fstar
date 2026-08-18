@@ -617,7 +617,7 @@ let lemma_step_sent_key_update_control
 =
   ()
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_local_send_key_update_control
   (st0 st1:CS.connection_state)
   (resp:ST.server_response)

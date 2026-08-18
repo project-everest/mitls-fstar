@@ -122,7 +122,7 @@ let lemma_equal_streams_skip_empty_both
   lemma_equal_streams_skip_empty_left left_stream right_stream left_tail;
   lemma_equal_streams_skip_empty_right left_tail right_stream right_tail
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_equal_stream_record_head_lengths
   (left_stream:B.bytes)
   (right_stream:B.bytes)

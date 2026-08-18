@@ -153,6 +153,7 @@ let lemma_server_driver_network_process_correct_for_app_out_intro
             (ST.response_network_out resp.ST.response network_out_bytes')))
     input
 
+#push-options "--z3rlimit 100"
 let lemma_server_driver_network_process_need_more_stutter
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -221,6 +222,7 @@ let lemma_server_driver_network_process_need_more_stutter
     (B.append sent (ST.response_network_out resp.ST.response network_out_bytes)));
   assert (Seq.equal sent' sent)
 
+#pop-options
 let lemma_server_driver_network_process_correct_preserves_config
   (st0:CS.connection_state)
   (st1:CS.connection_state)

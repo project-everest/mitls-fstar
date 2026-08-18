@@ -4386,7 +4386,7 @@ let lemma_network_bytes_consumed_input_event_projection
         app_out)
   )
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_network_bytes_protected_record_key_schedule_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4525,7 +4525,7 @@ let lemma_network_bytes_protected_record_key_schedule_projection
 #pop-options
 
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_network_bytes_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5351,7 +5351,7 @@ let lemma_decoded_message_event_response_network_out_seal_projection
       TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
   )
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_network_bytes_decoded_message_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5589,7 +5589,7 @@ let lemma_network_bytes_step_correct_sent_seal_replay_consistent
       app_out
   )
 
-#push-options "--split_queries always --z3rlimit_factor 4"
+#push-options "--z3rlimit_factor 4"
 let lemma_network_bytes_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5979,7 +5979,7 @@ let lemma_local_event_step_correct_client_end_to_end_invariant
   assert (client_state_correct st1);
   lemma_client_state_correct_raw_to_message_replay st1
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_local_event_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -6593,7 +6593,7 @@ let driver_trace_end_to_end
   driver_trace_accepted_wire_log_delta st0 st1 steps /\
   driver_trace_rejected_input_witnesses steps
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_network_bytes_end_to_end_correct_rejected_input_witness
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -7023,6 +7023,7 @@ let rec lemma_driver_trace_preserves_client_end_to_end_invariant
       st1
       rest
 
+#push-options "--z3rlimit 60"
 let rec lemma_driver_trace_accepted_wire_log_delta
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -7149,6 +7150,7 @@ let rec lemma_driver_trace_accepted_wire_log_delta
       st1.CS.cs_wire_log.CL.raw_received
       (B.append st0.CS.cs_wire_log.CL.raw_received (B.append step_received rest_received)))
 
+#pop-options
 let lemma_driver_trace_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -7192,7 +7194,7 @@ let lemma_driver_trace_from_initial_end_to_end
   therefore preserves [connection_control_not_failed].
 **)
 
-#push-options "--z3rlimit 20 --split_queries always"
+#push-options "--z3rlimit 20"
 
 (* A successful TLS application-data message step keeps control = ControlApplicationData. *)
 let lemma_step_tls_app_data_control
@@ -7432,7 +7434,7 @@ let lemma_local_send_key_update_preserves_app_log
 
 #pop-options
 
-#push-options "--z3rlimit 30 --split_queries always --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 30 --fuel 2 --ifuel 2"
 
 (* RECEIVE: a network step that produced application-data output preserves not-failed control. *)
 let lemma_network_bytes_app_out_positive_not_failed

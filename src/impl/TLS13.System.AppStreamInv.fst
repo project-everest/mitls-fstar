@@ -122,7 +122,7 @@ let m_recv (m:CS.connection_model) : GTot B.bytes =
     matching side and leaves the other side alone.  Every other arm rebuilds
     `model_application` without touching `app_log` (or does not touch
     `model_application` at all). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_step_tls_app_log
   (m m':CS.connection_model) (dir:CS.direction) (msg:M.tls_message)
   : Lemma
@@ -178,7 +178,7 @@ let lemma_step_tls_streams
     `SY.tls_system_inv` — that forces `bytes` empty, so the appended chunk
     contributes nothing to the concatenation.  (This is the unimplemented
     TLS-to-host delivery hop; see the note at `SY.app_pending_empty`.) **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200"
 let lemma_step_local_streams
   (m m':CS.connection_model) (lev:CS.local_event)
   : Lemma
@@ -198,6 +198,13 @@ let lemma_step_local_streams
           (
             // |bytes| + |pending| == |empty| == 0, so `bytes` is empty and the
             // appended chunk is invisible to the concatenation.
+            Seq.lemma_eq_elim m.CS.model_application.CS.app_pending_plaintext B.empty;
+            Seq.lemma_eq_elim m.CS.model_application.CS.app_pending_plaintext
+              (B.append bytes pending);
+            Seq.lemma_len_append bytes pending;
+            assert (Seq.length (B.append bytes pending) ==
+                    Seq.length bytes + Seq.length pending);
+            assert (Seq.length B.empty == 0);
             assert (Seq.length bytes == 0);
             Seq.lemma_eq_elim bytes B.empty;
             CL.lemma_concat_bytes_snoc_equal l.CL.app_received bytes (m_recv m);
@@ -214,7 +221,7 @@ let lemma_step_local_streams
     is the byte-stream analogue of
     `ASP.lemma_network_empty_delta_record_unchanged_ungated` and it is proved the
     same way. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_network_empty_delta_not_appdata
   (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -437,7 +444,7 @@ let lemma_appdata_send_shape (m m':CS.connection_model) (bts:B.bytes)
 
     This is a genuine slot-to-record derivation and NOT an inference from slot-level
     presence: both CSL lemmas conclude at the RECORD epoch level. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_cs_nonapp_snapshot_no_bytes (a:SY.tls_system_state) (p:SY.tls_payload)
   : Lemma
       (requires
@@ -455,7 +462,7 @@ let lemma_cs_nonapp_snapshot_no_bytes (a:SY.tls_system_state) (p:SY.tls_payload)
 #pop-options
 
 (** SERVER-side mirror. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_sc_nonapp_snapshot_no_bytes (a:SY.tls_system_state) (p:SY.tls_payload)
   : Lemma
       (requires
@@ -511,7 +518,7 @@ let lemma_recv_appdata_pins_cad (m m':CS.connection_model) (msg:M.tls_message)
         send leaves `ControlApplicationData` for `ControlClosing`), so the gate can
         only turn OFF; `ASP.lemma_step_preserves_closing` discharges the direction
         that matters. **)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_asi_client_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -557,7 +564,7 @@ let lemma_asi_client_send (a b:SY.tls_system_state)
 #pop-options
 
 (** SERVER SEND — mirror. **)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let lemma_asi_server_send (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -605,7 +612,7 @@ let lemma_asi_server_send (a b:SY.tls_system_state)
     consumes `SY.app_pending_empty` — conjunct 26 of `SY.tls_system_inv` — to kill
     the `LocalDeliverApplicationData` hop).  Only the client's control can move,
     and only deeper into the closing region. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_asi_client_local (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -639,7 +646,7 @@ let lemma_asi_client_local (a b:SY.tls_system_state)
 #pop-options
 
 (** SERVER LOCAL — mirror. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 60"
 let lemma_asi_server_local (a b:SY.tls_system_state)
   : Lemma
       (requires
@@ -708,7 +715,7 @@ let lemma_asi_server_local (a b:SY.tls_system_state)
     step itself); the conclusion lands on `b`.
     ═══════════════════════════════════════════════════════════════════════════ **)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 120 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 120"
 let lemma_asi_deliver_to_server_raw
   (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
@@ -831,7 +838,7 @@ let lemma_asi_deliver_to_server_raw
     (`ASP.lemma_client_recv_msg_not_cleartext`, which excludes SH/HRR by read-epoch
     placement) rather than the server one (which grounds the exclusion in
     `server_ctrl_ok`, a fact a client does not have). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 120 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 120"
 let lemma_asi_deliver_to_client_raw
   (a:SY.tls_system_state) (wire:CW.wire_message) (c':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)

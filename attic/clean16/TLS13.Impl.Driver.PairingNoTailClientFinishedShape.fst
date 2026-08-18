@@ -170,7 +170,7 @@ let lemma_client_after_server_finished_verified_model_facts
 =
   ()
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_signature_verify_step_model_shape
   (model10 model11:CS.connection_model)
   (cv:GCV.certificateVerify)
@@ -199,7 +199,7 @@ let lemma_client_signature_verify_step_model_shape
   assert (model11.CS.model_config == model10.CS.model_config)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_server_finished_received_step_model_shape
   (model11 model12:CS.connection_model)
   (sf:GFin.finished)
@@ -241,7 +241,7 @@ let lemma_client_server_finished_received_step_model_shape
   assert (model12.CS.model_handshake.CS.hs_server_finished == Some sf)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_verify_finished_step_model_shape
   (model12 model13:CS.connection_model)
   (sf:GFin.finished)
@@ -272,7 +272,7 @@ let lemma_client_verify_finished_step_model_shape
   assert (model13.CS.model_config == model12.CS.model_config)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_signature_verified_next_event_server_finished
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -389,7 +389,7 @@ let lemma_client_after_signature_verified_next_event_server_finished
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_server_finished_next_event_verify_finished
   (model:CS.connection_model)
   (stored_sf:GFin.finished)
@@ -495,7 +495,7 @@ let lemma_client_after_server_finished_next_event_verify_finished
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model11_witness
   (client:CS.connection_state)
   : Lemma
@@ -668,7 +668,7 @@ let lemma_client_no_tail_model11_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_twelfth_event_server_finished_clean
   (client:CS.connection_state)
   : Lemma
@@ -787,7 +787,7 @@ let lemma_client_no_tail_twelfth_event_server_finished_clean
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model12_witness
   (client:CS.connection_state)
   : Lemma
@@ -983,7 +983,7 @@ let lemma_client_no_tail_model12_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model13_witness
   (client:CS.connection_state)
   : Lemma
@@ -1178,7 +1178,7 @@ let lemma_client_no_tail_model13_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_thirteenth_event_verify_finished_clean
   (client:CS.connection_state)
   : Lemma

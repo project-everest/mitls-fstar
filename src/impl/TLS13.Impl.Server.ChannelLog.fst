@@ -34,7 +34,7 @@ module TChannel = TLS13.Impl.Channel
   appends exactly [payload] to the application *sent* log when the step
   succeeds.  On any failure path the log is untouched.
 **)
-#push-options "--split_queries always"
+#push-options ""
 let lemma_local_send_application_log
   (st0 st1:CS.connection_state)
   (resp:ST.server_response)
@@ -332,7 +332,7 @@ let lemma_received_alert_failure_application_log
   - [ConnectionFailed] steps through [CM.received_alert_failure_state];
   - [OutputBufferTooSmall] is refuted.
 **)
-#push-options "--split_queries always --z3rlimit 30"
+#push-options "--z3rlimit 30"
 let lemma_network_step_application_log
   (st0 st1:CS.connection_state)
   (resp:ST.server_buffer_response)

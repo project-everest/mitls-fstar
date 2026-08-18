@@ -32,7 +32,7 @@ module Tac = FStar.Tactics
 module T = TLS13.Types
 module X = TLS13.X509.Spec
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_application_install_event_sent_delta_empty
   (model:CS.connection_model)

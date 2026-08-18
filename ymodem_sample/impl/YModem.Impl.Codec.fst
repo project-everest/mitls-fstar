@@ -137,7 +137,7 @@ let crc_bytes_correct (hi lo: U8.t)
    per-region subgoals, so we ask for that split DETERMINISTICALLY (rather than
    relying on F*'s implicit, seed-sensitive fallback — cf. Warning 349).  The
    packaging helpers underneath then discharge trivially. *)
-#push-options "--z3rlimit 100 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
 
 (* Single heavy byte-equality lemma, shared by both leaves.  Its ONLY proof
    goal is one `Seq.lemma_eq_intro` (a 133-element pointwise forall), so the

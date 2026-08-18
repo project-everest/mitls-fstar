@@ -27,6 +27,7 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
 
+#push-options "--z3rlimit 100"
 fn certificate_chain_length
   (d:DS.buffered_driver)
   requires
@@ -82,6 +83,7 @@ fn certificate_chain_length
   copy_result
 }
 
+#pop-options
 fn process_empty_local_event_exact_once
   (d:DS.buffered_driver)
   (kind:ST.local_event_kind)

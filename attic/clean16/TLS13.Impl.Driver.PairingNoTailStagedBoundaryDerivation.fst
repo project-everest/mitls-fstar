@@ -59,7 +59,7 @@ module WRD = TLS13.Wire.Spec.RevealDecode
 
 module Witnesses = TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.Witnesses
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_clean16_no_tail_valid_byte_traces_cleartext_final_hello_slot_milestone
   (client_initial:EC.client_initial_state)
@@ -1089,7 +1089,7 @@ let lemma_client_server_application_record_material_agrees_from_clean16_no_tail_
 #pop-options
 
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_installed_protected_projection_replay_witnesses_from_milestones_and_hello_key_shares
   (client:CS.connection_state)

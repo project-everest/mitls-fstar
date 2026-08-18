@@ -347,6 +347,7 @@ let lemma_conn_events_received_decode_replay_head
     with model1 delta_sent delta_received tail_sent tail_received
     and () )
 
+#push-options "--z3rlimit 60"
 let lemma_conn_events_received_decode_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -457,6 +458,7 @@ let lemma_conn_events_received_decode_replay_cons
        conn_events_received_decode_replay model1' rest tail_sent' tail_received' final_model));
   assert (conn_events_received_decode_replay model (ev :: rest) raw_sent raw_received final_model)
 
+#pop-options
 let rec lemma_conn_events_sent_received_replays_same_events_final_model_equal
   (model:connection_model)
   (events:list conn_event)

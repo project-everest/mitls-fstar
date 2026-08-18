@@ -333,7 +333,7 @@ let lemma_late_stage_not_server_hello_received
   the six stage-specific "advancing" events need a genuine case split on
   [stage].
 **)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_late_stuck_step
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -651,7 +651,7 @@ let lemma_client_late_stuck_step
   Corollary of [lemma_client_late_stuck_step]: a [client_late_stuck] model can
   never raw-replay to [ControlApplicationData], by induction on [events].
 **)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let rec lemma_client_late_stuck_replay_not_application_ready
   (model:CS.connection_model)
   (events:list CS.conn_event)
@@ -749,7 +749,7 @@ let lemma_client_post_first_install_progress_rank
 (** If, after the second local handshake install, the model still has only one
     handshake direction installed, the remaining ten events cannot reach
     application data. *)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_second_duplicate_install_tail10_contradiction
   (model6:CS.connection_model)
   (rest2:list CS.conn_event)
@@ -800,7 +800,7 @@ let lemma_client_second_duplicate_install_tail10_contradiction
   [lemma_client_late_stuck_replay_not_application_ready] rules out the
   hypothesized application-ready continuation.
 **)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_post_first_install_next_event_handshake_traffic_install
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -1032,7 +1032,7 @@ let lemma_client_post_first_install_next_event_handshake_traffic_install
   state, pin down the key-schedule shape of the resulting [model5] without
   needing this reasoning inline inside a larger proof context.
 **)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_post_first_install_model_shape
   (model4 model5:CS.connection_model)
   (e4:CS.conn_event)
@@ -1152,7 +1152,7 @@ let lemma_client_post_first_install_model_shape
      assert False)
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_post_first_install_direction_shape
   (model4 model5:CS.connection_model)
   (e4:CS.conn_event)
@@ -1268,7 +1268,7 @@ let lemma_client_post_first_install_direction_shape
    assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_duplicate_second_install_progress_rank
   (model5 model6:CS.connection_model)
   (e5:CS.conn_event)
@@ -1386,7 +1386,7 @@ let lemma_client_duplicate_second_install_progress_rank
    assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_second_write_install_model_shape
   (model5 model6:CS.connection_model)
   (e5:CS.conn_event)
@@ -1630,7 +1630,7 @@ let lemma_client_two_handshake_install_cover_model_shape
   The order-insensitive milestone: after the mandatory prefix, [e4] and [e5]
   are both clean client handshake-traffic install events.
 **)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean
   (client:CS.connection_state)
   : Lemma
@@ -1732,7 +1732,7 @@ let lemma_client_no_tail_fifth_and_sixth_events_handshake_traffic_install_clean
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 30"
+#push-options "--z3rlimit 30"
 let lemma_client_no_tail_fifth_and_sixth_events_handshake_install_cover_clean
   (client:CS.connection_state)
   : Lemma

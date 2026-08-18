@@ -106,7 +106,7 @@ let hellos_shape (m:CS.connection_model) : prop =
   | CS.ControlClosing | CS.ControlClosed | CS.ControlFailed _ -> True
 
 (** A single legal step preserves `hellos_shape` AND the hello field values. **)
-#push-options "--fuel 1 --ifuel 4 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 1 --ifuel 4 --z3rlimit 60"
 let lemma_step_model_preserves_hellos
   (m0:CS.connection_model) (ev:CS.conn_event) (m1:CS.connection_model)
   : Lemma
@@ -463,7 +463,7 @@ let lemma_server_reachable_step
       (ensures server_reachable init st1)
   = SM.lemma_valid_state_after_step (server_sm init) st0 ev st1 out
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
 (** Reachability from `CS.initial cfg` yields the byte-level `valid_byte_trace`. **)
 let lemma_client_valid_byte_trace_of_reachable
   (cfg:CS.connection_config)
@@ -503,7 +503,7 @@ let lemma_client_valid_byte_trace_of_reachable
     )
 #pop-options
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
 (** Server-symmetric. **)
 let lemma_server_valid_byte_trace_of_reachable
   (cfg:CS.connection_config)
@@ -1184,7 +1184,7 @@ let lemma_raw_appdata_count_empty ()
     fixed positive prefix; trailing bytes pass through untouched).  Proved from
     the exported `RVD.lemma_parse_record_wire_from_prefix` — no reliance on any
     non-exported PNTWL helper. **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
 let lemma_wire_parse_append_first
   (raw after delta:B.bytes) (m:CW.wire_message)
   : Lemma
@@ -1630,7 +1630,7 @@ let lemma_client_ready_sent_has_appdata_record
 (** UNIVERSAL single-record count bridge: a raw byte log whose FIRST record
     parse consumes the WHOLE log with content type `ct` has appdata-count equal
     to `1` iff `ct` is ApplicationData, else `0`. **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 let lemma_single_full_record_count (raw:B.bytes) (ct:T.content_type)
   : Lemma
       (requires
@@ -1691,7 +1691,7 @@ let pre_appdata_ctrl (c:CS.connection_control_state) : bool =
   | CS.ControlFailed _ -> false
   | _ -> true
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 (** FORWARD-CLOSURE (model level): once out of the pre-application-data region, a
     legal step never returns to it. **)
 let lemma_step_notpreappdata_stable
@@ -1832,7 +1832,7 @@ let lemma_client_step_model_stepped
     appdata-count 0: its outer content type is Handshake or ChangeCipherSpec,
     never ApplicationData.  (These are the only cleartext records a reachable
     server sends or a reachable client receives.) **)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 30"
 let lemma_cleartext_raw_count_zero (msg:M.tls_message) (raw:B.bytes)
   : Lemma
       (requires
@@ -1860,7 +1860,7 @@ let lemma_cleartext_raw_count_zero (msg:M.tls_message) (raw:B.bytes)
 #pop-options
 
 (** A single protected ApplicationData record has appdata-count 1. **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 let lemma_protected_raw_count_one (raw:B.bytes)
   : Lemma
       (requires CS.raw_records_exactly raw T.Application_data 1)
@@ -1901,7 +1901,7 @@ let server_flight_shape (m:CS.connection_model) : prop =
   (m.CS.model_control == CS.ControlHandshaking CS.HsServerEncryptedFlightSent ==>
      hs.CS.hs_server_finished == None)
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step server SEND marker fact: within the pre-application-data region, a
     legal server step preserves the write-once shape and its appdata SENT-delta
     count is bounded by the marker increase (each protected flight send flips
@@ -1952,7 +1952,7 @@ let lemma_server_marker_step
             lemma_protected_raw_count_one raw_sent))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Server-step SEND marker fact, lifted to `server_step`: the wire-output
     appdata count of a step is bounded by the marker increase, and the write-once
     shape is preserved (within the pre-application-data region). **)
@@ -2170,7 +2170,7 @@ let lemma_cleartext_client_hello_parse_record
 
 (** A cleartext (supported-profile) ClientHello record has appdata-count 0: its
     outer content type is Handshake, never ApplicationData. **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 20 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 let lemma_cleartext_client_hello_raw_count_zero (ch:GCH.clientHello) (raw:B.bytes)
   : Lemma
       (requires
@@ -2196,7 +2196,7 @@ let lemma_step_model_preserves_client_start_shape
       (ensures client_start_shape m')
   = WSS.lemma_step_model_preserves_client_start_shape m ev m'
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** A client that STAYS pre-application-data can only have SENT a cleartext
     message (ClientHello or ChangeCipherSpec).  The only protected Sent message a
     client emits before application data is its Finished, whose send transitions
@@ -2215,7 +2215,7 @@ let lemma_client_preappdata_sent_cleartext
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step client SEND count fact: within the pre-application-data region, a
     legal client step (whose config is a supported client wire profile and whose
     start parameters match that config) preserves `client_start_shape` and emits
@@ -2276,7 +2276,7 @@ let lemma_client_marker_step
            lemma_client_preappdata_sent_cleartext m msg m')
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Client-step SEND count fact, lifted to `client_step`: the wire-output appdata
     count of a pre-application-data client step is 0, and `client_start_shape` is
     preserved. **)
@@ -2452,7 +2452,7 @@ let lemma_client_preappdata_sent_no_appdata
 let server_recv_prior (m:CS.connection_model) : nat =
   if server_post_cf_ctrl m.CS.model_control then 1 else 0
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** At a post-CF server control that is still pre-application-data
     (HsClientFinishedReceived / HsClientFinishedVerified), the ONLY legal
     RECEIVED message that keeps the server pre-application-data is a
@@ -2472,7 +2472,7 @@ let lemma_server_recv_postcf_preappdata_is_ccs
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 50 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 50"
 (** Per-step server RECV potential fact: within the pre-application-data region, a
     legal server step's appdata RECV-input count plus the pre-step post-CF
     potential is bounded by the post-step potential.  (An ApplicationData receive
@@ -2653,7 +2653,7 @@ let lemma_server_finished_sent_recv_eq0
 
 (** A received cleartext record (ServerHello / HelloRetryRequest /
     ChangeCipherSpec / ClientHello) has appdata-count 0. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 30"
 let lemma_received_cleartext_count_zero (msg:M.tls_message) (raw:B.bytes)
   : Lemma
       (requires
@@ -2714,7 +2714,7 @@ let client_recv_min_potential (m:CS.connection_model) : nat =
     | CS.ControlClosed -> 1
     | _ -> 0
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step client RECV potential fact: a legal client model step's appdata
     RECV-delta count plus the pre-step control potential is at least the post-step
     control potential.  (Each unit of potential increase corresponds to a received
@@ -2759,7 +2759,7 @@ let lemma_client_recv_potential_step
             lemma_protected_raw_count_one raw_received))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Client-step RECV potential fact, lifted to `client_step`. **)
 let lemma_client_step_recv_potential
   (st0:CS.connection_state)
@@ -2900,7 +2900,7 @@ let client_sent_potential (c:CS.connection_control_state) : nat =
   | CS.ControlClosed -> 1
   | _ -> 0
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step client SEND potential fact: a legal client model step's appdata
     SENT-delta count plus the pre-step send potential is at least the post-step
     send potential.  The only send that raises the potential is the protected
@@ -2944,7 +2944,7 @@ let lemma_client_sent_potential_step
               lemma_protected_raw_count_one raw_sent))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Client-step SEND potential fact, lifted to `client_step`. **)
 let lemma_client_step_sent_potential
   (st0:CS.connection_state)
@@ -3313,7 +3313,7 @@ let lemma_client_stay_appdata_raw_sent_first_appdata
 
 (** CLIENT-STEP level — a client SEND (single wire output) that STAYS at the
     application-data control emits ≥ 1 ApplicationData record. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_client_send_stay_appdata_count_ge1
   (st0:CS.connection_state) (local:CTy.client_local_event)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -3356,7 +3356,7 @@ let lemma_client_send_stay_appdata_count_ge1
 
 (** CLIENT-STEP level — a client RECEIVE at the application-data control consumes
     EXACTLY one ApplicationData record. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_client_recv_at_appdata_count1
   (st0:CS.connection_state) (wire:CW.wire_message)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -3416,7 +3416,7 @@ let lemma_client_empty_delta_not_into_appdata
 
 (** CLIENT-STEP level — a client LOCAL step emitting NO wire output never enters
     the application-data control. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_client_local_noout_not_into_appdata
   (st0:CS.connection_state) (local:CTy.client_local_event)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -3447,7 +3447,7 @@ let lemma_client_local_noout_not_into_appdata
 
 (** CLIENT-STEP level — a client RECEIVE never moves control INTO the
     application-data control from outside it. **)
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_client_wire_recv_not_into_appdata
   (st0:CS.connection_state) (wire:CW.wire_message)
   (st1:CS.connection_state) (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -3602,7 +3602,7 @@ let server_cf_region_prior (m:CS.connection_model) : nat =
   | CS.ControlApplicationData -> 1
   | _ -> 0
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step server CF-region LOWER fact: a legal server-role step's appdata
     RECV-delta count plus the pre-step CF-region potential is at least the
     post-step CF-region potential.  (Entering the 3-set from outside requires a
@@ -3648,7 +3648,7 @@ let lemma_server_cf_region_step
             lemma_protected_raw_count_one raw_received))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Server-step CF-region LOWER fact, lifted to `server_step`. **)
 let lemma_server_step_cf_region_lower
   (st0:CS.connection_state)
@@ -4102,7 +4102,7 @@ let client_recv_charge (m:CS.connection_model) : nat =
     (CS.max_pending_protected_handshake + 1)
   + client_recv_residual m
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 (** FORWARD-CLOSURE (model level): once out of the receiving region, a legal step
     never returns.  Every region control is reached ONLY from another region
     control (the region is a strict prefix of the client handshake), so no
@@ -4151,7 +4151,7 @@ let rec lemma_client_trace_notregion_forward
     control-potential increase at all — and `step_protected_handshake`'s
     non-buffering arm is exactly the pre-reassembly per-message transition —
     already dominates the one record this step consumes. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_client_recv_charge_head_nonbuffering
   (m:CS.connection_model) (step:CS.protected_handshake_step)
   (m':CS.connection_model)
@@ -4172,7 +4172,7 @@ let lemma_client_recv_charge_head_nonbuffering
     grows by exactly the freshly-delivered fragment's length, which legality
     (`0 < B.length step.protected_handshake_fragment`) guarantees is at least
     the one record this step consumes. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_client_recv_charge_buffering
   (m:CS.connection_model) (step:CS.protected_handshake_step)
   (m':CS.connection_model)
@@ -4209,7 +4209,7 @@ let lemma_client_recv_charge_buffering
     same per-message table the pre-buffering design used) while draining
     (at most) the CAPPED residual, so the potential's weight — chosen to
     exceed the cap — dominates whatever the residual gives up. **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_client_recv_charge_tail
   (m:CS.connection_model) (step:CS.protected_handshake_step)
   (m':CS.connection_model)
@@ -4226,7 +4226,7 @@ let lemma_client_recv_charge_tail
     lemma_client_recv_residual_le_cap m'
 #pop-options
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step client RECV UPPER charge: within the receiving region, a legal client
     step's appdata RECV-delta count plus the pre-step charge is at most the
     post-step charge.  `client_recv_charge` -- control potential weighted to
@@ -4282,7 +4282,7 @@ let lemma_client_recv_upper_step
             lemma_protected_raw_count_one raw_received))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Client-step RECV UPPER charge, lifted to `client_step`. **)
 let lemma_client_step_recv_upper
   (st0:CS.connection_state)
@@ -4511,7 +4511,7 @@ let lemma_client_hsserverhelloreceived_recv_zero
     server marker without a send.
     ═══════════════════════════════════════════════════════════════════════════ **)
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 (** Per-step server SEND marker LOWER fact: within the server-control region, a
     legal server step's post-step marker count is at most the pre-step marker count
     plus the appdata SENT-delta count (each fresh marker is backed by ≥ 1 sent
@@ -4568,7 +4568,7 @@ let lemma_server_marker_step_lower
               lemma_protected_raw_count_one raw_sent))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Server-step SEND marker LOWER fact, lifted to `server_step`. **)
 let lemma_server_step_sent_marker_lower
   (st0:CS.connection_state)
@@ -4729,7 +4729,7 @@ let lemma_server_reachable_sent_ge_marker
 let client_finished_sent_flag (m:CS.connection_model) : nat =
   if Some? m.CS.model_handshake.CS.hs_client_finished then 1 else 0
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 40"
 (** Per-step client SEND flag fact: the only client step that raises the flag is
     the protected Finished send (which emits exactly one ApplicationData record),
     so the flag delta is charged to the appdata SENT-delta count. **)
@@ -4771,7 +4771,7 @@ let lemma_client_finished_flag_step
               lemma_protected_raw_count_one raw_sent))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Client-step SEND flag fact, lifted to `client_step`. **)
 let lemma_client_step_finished_flag
   (st0:CS.connection_state)
@@ -4911,7 +4911,7 @@ let server_recv_region_ctrl (c:CS.connection_control_state) : bool =
   | CS.ControlHandshaking CS.HsServerFinishedSent -> true
   | _ -> false
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 (** FORWARD-CLOSURE (model level): once out of the receiving region, a legal step
     never returns.  Every region control is reached only from another region
     control (the region is a strict prefix of the server handshake). **)
@@ -4951,7 +4951,7 @@ let rec lemma_server_trace_notrecvregion_forward
       lemma_server_trace_notrecvregion_forward init s' st1 rest
 #pop-options
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 (** Per-step server RECV UPPER fact: within the receiving region, a legal server
     step receives NO ApplicationData record.  Local/send steps receive nothing;
     a cleartext receive (ClientHello / ChangeCipherSpec) has count 0; a protected
@@ -4996,7 +4996,7 @@ let lemma_server_recv_upper_step
            assert (~(server_recv_region_ctrl m'.CS.model_control)))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 50 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 50"
 (** Server-step RECV UPPER fact, lifted to `server_step`. **)
 let lemma_server_step_recv_upper
   (st0:CS.connection_state)

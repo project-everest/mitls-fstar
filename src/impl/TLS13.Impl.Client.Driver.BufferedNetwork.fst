@@ -297,6 +297,7 @@ fn owns_wf
     (Ghost.reveal model))
 }
 
+#push-options "--z3rlimit 100"
 fn process
   (e:endpoint)
   (st:Ghost.erased endpoint_state)
@@ -927,6 +928,7 @@ fn process
   }
 }
 
+#pop-options
 fn read
   (e:endpoint)
   (st:Ghost.erased endpoint_state)

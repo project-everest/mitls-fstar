@@ -5588,6 +5588,7 @@ let lemma_server_network_event_progress
 
 // Prove server_progress_preorder st0 st1 from server_network_common_witness.
 // Mirrors lemma_client_network_common_witness_progress.
+#push-options "--z3rlimit 100"
 let lemma_server_network_common_witness_progress
   (initial:server_initial_state)
   (received0:B.bytes)
@@ -5698,6 +5699,7 @@ let lemma_server_network_common_witness_progress
     )
   )
 
+#pop-options
 let lemma_server_local_event_progress
   (st0:CS.connection_state)
   (st1:CS.connection_state)

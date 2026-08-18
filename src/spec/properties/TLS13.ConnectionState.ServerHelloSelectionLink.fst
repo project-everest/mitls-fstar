@@ -32,7 +32,7 @@ let server_hello_selection_link_shape (st:connection_state) : prop =
    | Some sh, None -> False
    | _, _ -> True)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 
 let lemma_connection_delta_server_hello_selection_link
   (st0:connection_state)
@@ -139,7 +139,7 @@ let server_hello_none_pre_send_shape (st:connection_state) : prop =
      st.cs_model.model_handshake.hs_server_hello == None
    | _ -> True)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 
 let lemma_connection_delta_server_hello_none_pre_send
   (st0:connection_state)
@@ -293,7 +293,7 @@ let lemma_consistent_server_hello_selection_link (st:connection_state)
 
 
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 
 let lemma_server_x25519_key_share_projection_of_hello_present (server:connection_state)
   : Lemma

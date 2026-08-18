@@ -66,6 +66,7 @@ let req_host_mid_byte (k:SZ.t{SZ.v k < 17}) : U8.t =
 let req_host_mid_list : list U8.t =
   [0x20uy;0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;0x2Euy;0x31uy;0x0Duy;0x0Auy;0x48uy;0x6Fuy;0x73uy;0x74uy;0x3Auy;0x20uy]
 
+#push-options "--z3rlimit 200"
 let lemma_req_host_mid_byte (k:SZ.t{SZ.v k < 17})
   : Lemma (requires Seq.length mid17 == 17)
           (ensures req_host_mid_byte k == Seq.index mid17 (SZ.v k))
@@ -90,6 +91,7 @@ let lemma_req_host_mid_byte (k:SZ.t{SZ.v k < 17})
   assert_norm (List.Tot.index req_host_mid_list 15 == 0x3Auy);
   assert_norm (List.Tot.index req_host_mid_list 16 == 0x20uy)
 
+#pop-options
 inline_for_extraction
 let req_host_tail_byte (k:SZ.t{SZ.v k < 23}) : U8.t =
   if      SZ.eq k 0sz then 0x0Duy
@@ -173,8 +175,8 @@ let emit_request_host_serialize (target host:W.token) (s:Seq.seq U8.t)
 = let tlen = Seq.length target in
   let hlen = Seq.length host in
   assert_norm (Seq.length lit_get == 4);
-  assert_norm (Seq.length mid17 == 17);
-  assert_norm (Seq.length tail23 == 23);
+  assert (Seq.length mid17 == 17);
+  assert (Seq.length tail23 == 23);
   Seq.lemma_eq_intro (Seq.slice s 0 4) lit_get;
   Seq.lemma_eq_intro (Seq.slice s 4 (4 + tlen)) target;
   Seq.lemma_eq_intro (Seq.slice s (4 + tlen) (4 + tlen + 17)) mid17;

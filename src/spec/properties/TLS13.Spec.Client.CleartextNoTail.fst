@@ -118,7 +118,7 @@ let model_internal_pending (model:CS.connection_model) : prop =
   quiescent clauses of the temporal argument are re-established at the delivery
   step itself.
  **)
-#push-options "--fuel 1 --ifuel 1 --split_queries always --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
 let lemma_step_handshake_message_preserves_pending_buffer
   (model:CS.connection_model)
   (model1:CS.connection_model)
@@ -155,7 +155,7 @@ let lemma_step_handshake_message_preserves_pending_buffer
   | _, _, _ -> ()
 #pop-options
 
-#push-options "--fuel 1 --ifuel 1 --split_queries always --z3rlimit 40"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
 let lemma_network_event_preserves_pending_buffer
   (model:CS.connection_model)
   (model1:CS.connection_model)

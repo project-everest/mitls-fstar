@@ -473,7 +473,7 @@ let lemma_server_hello_window_rank_step
   to [ControlClosed] or [ControlFailed]; nothing but [LocalFail] is legal at
   [ControlClosed] at all).
 **)
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let rec lemma_closing_or_closed_never_returns_to_application_data
   (model:CS.connection_model)
   (events:list CS.conn_event)

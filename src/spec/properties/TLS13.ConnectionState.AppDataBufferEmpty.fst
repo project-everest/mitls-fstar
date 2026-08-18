@@ -47,7 +47,7 @@ let conn_shape (st:CS.connection_state) : prop = model_shape st.CS.cs_model
       - the only arm reaching `ControlApplicationData` with a CLIENT role is
         `CL.Sent, Finished, HsServerFinishedVerified`, whose legality guard
         contains `protected_handshake_buffer_empty model` verbatim. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 100"
 let lemma_step_handshake_buffer
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg)
   (m':CS.connection_model)
@@ -73,7 +73,7 @@ let lemma_step_handshake_buffer
     (application data, alerts, key update, CCS, ignored post-handshake) rewrite
     neither `hs_buffers` nor `model_config`, and the only one of them that can
     sit at `ControlApplicationData` starts there. **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_tls_buffer
   (m:CS.connection_model) (dir:CS.direction) (msg:M.tls_message)
   (m':CS.connection_model)
@@ -103,7 +103,7 @@ let lemma_step_tls_buffer
     reaching `ControlApplicationData` (`LocalVerifyClientFinished` at
     `HsClientFinishedReceived`) is pinned by `legal_local_event` to
     `ServerEndpoint`, so it never fires at a client. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150"
 let lemma_step_local_buffer
   (m:CS.connection_model) (lev:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -140,7 +140,7 @@ let lemma_step_local_buffer
       client is `CL.Sent, Finished, HsServerFinishedVerified`, and this step is
       `CL.Received`.  So `m'.model_control =!= ControlApplicationData` and
       `buf_at_appdata m'` is vacuous too. **)
-#push-options "--fuel 3 --ifuel 8 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 3 --ifuel 8 --z3rlimit 150"
 let lemma_step_protected_buffer
   (m:CS.connection_model) (step:CS.protected_handshake_step)
   (m':CS.connection_model)

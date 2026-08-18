@@ -97,7 +97,7 @@ let client_hs_write_seq_shape (model:connection_model) : prop =
     model.model_record.record_write.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_model_client_hs_write_seq_shape
   (model:connection_model) (ev:conn_event) (model':connection_model)
   : Lemma
@@ -189,7 +189,7 @@ let server_hs_read_seq_shape (model:connection_model) : prop =
     model.model_record.record_read.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_model_server_hs_read_seq_shape
   (model:connection_model) (ev:conn_event) (model':connection_model)
   : Lemma

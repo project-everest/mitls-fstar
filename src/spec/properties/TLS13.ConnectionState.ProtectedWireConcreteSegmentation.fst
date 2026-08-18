@@ -22,7 +22,7 @@ open TLS13.Spec.StateMachine.KeyMaterial
 open TLS13.Spec.StateMachine.Log
 open TLS13.Spec.StateMachine.Replay
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_full_replays_known_start
   (server_model0:connection_model)
   (client_model0:connection_model)
@@ -595,7 +595,7 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
       and () ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_prefix_state_logs_known_start
   (server:connection_state)
   (client:connection_state)

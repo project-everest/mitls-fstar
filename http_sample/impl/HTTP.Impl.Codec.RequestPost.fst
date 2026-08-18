@@ -141,7 +141,7 @@ let postbytes (target:W.token) (len:content_len) : Seq.seq U8.t =
   ser_request_post target len
 
 (* Per-position byte inventory of the POST head, exposed once. *)
-#push-options "--z3rlimit 100 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
 let lemma_post_index (target:W.token) (len:content_len)
   : Lemma
     (ensures (
@@ -161,14 +161,14 @@ let lemma_post_index (target:W.token) (len:content_len)
        (forall (k:nat{k < 4}).  Seq.index s (5 + tl + 27 + d + k) == Seq.index cl_tail_post k)))
 = reveal_opaque (`%postbytes) (postbytes target len);
   assert_norm (Seq.length lit_post == 5);
-  assert_norm (Seq.length mid27 == 27);
+  assert (Seq.length mid27 == 27);
   assert_norm (Seq.length cl_tail_post == 4);
   assert_norm (mid27 == req_post_mid)
 #pop-options
 
 (* Merge the prefix [0,32+tl), digit [32+tl,32+tl+d) and tail [32+tl+d,36+tl+d)
    correspondences into whole-buffer equality, then package the token existential. *)
-#push-options "--z3rlimit 100 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 100 --fuel 2 --ifuel 2"
 let lemma_post_final (tok:W.token) (len:content_len) (s:Seq.seq U8.t)
   : Lemma
     (requires

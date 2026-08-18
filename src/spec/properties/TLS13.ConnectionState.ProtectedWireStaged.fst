@@ -31,7 +31,7 @@ open TLS13.ConnectionState.ProtectedWireRecordAlignment
 open TLS13.ConnectionState.ProtectedWireServerFlight
 open TLS13.ConnectionState.ProtectedWireClientFinished
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_paired_protected_handshake_event_projection_pair_witnesses_from_staged_replays
   (client_state:connection_state)
   (server_state:connection_state)

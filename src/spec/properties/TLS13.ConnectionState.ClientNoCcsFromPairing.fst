@@ -30,7 +30,7 @@ let server_trace_t =
   list (SM.transition CS.connection_state CW.wire_message
           CTy.server_local_event EAPI.local_output)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 let lemma_no_received_ccs_from_pairing_client
   (client server : CS.connection_state)
   : Lemma
