@@ -10,6 +10,77 @@ be picked up first.
 
 ---
 
+## Where to pick up (updated 2026-08-17, HEAD `3a9b1d7aa`)
+
+The tree is **green**: `make verify` 0 errors, `make check-admits` 0 admits,
+`make -j60 test` 34/34 matrix cells plus loopback and OpenSSL interop.  Stages
+S1–S5, S6.1–S6.7, S6.7b/c/d, S6.8a, S6.8b and S6.8c-1 have landed, every one
+capability-neutral with the ledger unmoved.
+
+**Two commits remain.**  Do them in this order; the first is capability-neutral
+and lands green on its own, the second is the behaviour change.
+
+### Next: S6.8c-2 — widen the send path's concrete share buffer to 65 bytes
+
+Capability-neutral.  Measured surface: **79** mentions of
+`'server_key_share_bytes` (`Send.fsti` 9, `Send.fst` 24, `Server.fsti` 21,
+`Server.fst` 25) and 31 assertions of `B.length ... == 32`.
+
+1. `Send.fst:1572`: `let mut server_key_share = [| 0uy; 32sz |]` becomes
+   `[| 0uy; 65sz |]`, and `Crypto.x25519_public_from_private` becomes
+   `KEX.kex_public_from_private_runtime` — S6.8b built that primitive for
+   exactly this and it is already verified.
+2. `process_send_server_hello_from_arrays`' precondition
+   `B.length 'server_key_share_bytes == 32` becomes `== 65`, in `Send.fsti` and
+   `Send.fst`.
+3. Every witness use becomes
+   `CryptoSpec.unpad_share_65 'server_key_share_bytes 32`.  **The width stays
+   the literal `32`** — that literal is precisely what keeps this step
+   capability-neutral.  S6.8d turns it into `kex_public_len g`.
+4. Mirror the signature at `Server.fsti:596` and `Server.fst:863,926`.
+5. **Do not touch any driver module.**  `Driver.BufferedHandshake.fst:721` calls
+   `process_send_server_hello_with_derived_public_from_private_array`, which
+   takes the server's *private* key, and `CryptoSpec.kex_private` is
+   `bytes_of_len 32` at **both** groups — no driver signature moves.
+
+### Then: S6.8d — the behavioural flip, one commit
+
+Measured surface: **78** `KexX25519` sites in `src/impl`, **32**
+`is_valid_client_hello` sites, **12** `server_selection_group_pinned` sites to
+delete, and ~24 state-keyed `95 + |sid|` statements.  §7's "S6.8c — the
+remaining flip" lists all seven items at file and line.
+
+**Why the state-keyed lengths must be here and not earlier:** the ~24
+statements of `95 + Seq.length (CM.stored_client_hello_session_id 'st0)` are
+keyed on the connection *state*, so their group is
+`CM.stored_client_hello_kex_group 'st0` = `client_hello_kex_group_for m`, which
+is provably `KexX25519` **only** from the acceptance gate's X25519 clause inside
+`IM.is_valid_client_hello` — never from the pure part of a postcondition.
+Generalising them changes what every caller must prove, so unlike the
+selection-keyed arithmetic S6.8c-1 moved, they cannot be staged
+capability-neutrally.  They travel with the gate.
+
+**Budget one or two risk-R7 repairs.**  S6.8d grows `is_valid_client_hello` /
+`client_hello_slot_exactly`, which is exactly the shape that broke *distant,
+unrelated* queries twice during S2.  Do **not** reach for `--z3rlimit` or
+`--z3seed`; name the failing projection as a lemma, or discharge it in explicit
+`assert (pure ...)` steps before the call that needs it.  See §8, R7.
+
+### Working rules that have paid off every stage
+
+* Verify `.fsti` **first**, then `.fst` — never together.  A `.fst` does not
+  inherit its `.fsti`'s module abbreviations.
+* Iterate with `make -j8 _cache/<M>.fst.checked` (2–10 min), not a full verify
+  (25–35 min).  **`rm -rf _cache_quick` before any real `make verify`.**
+* Grep verify output for `^\* Error`.  `make -k` skips a failed module's
+  dependents, so an error count is a lower bound.  ~40 "Interface … admitted
+  without an implementation" warnings are normal.
+* For mechanical multi-file edits, assert an exact occurrence count on every
+  replacement (risk R10).
+* Rollback is always `git checkout -- src/`.
+
+---
+
 ## 0. What does not change
 
 This is the single most important input to the estimate, and it is the reason
