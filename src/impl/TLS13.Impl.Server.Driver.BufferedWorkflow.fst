@@ -117,7 +117,7 @@ fn selection_ready
            CS.server_selected_client_hello = ch;
            CS.server_selected_cipher_suite =
              CM.server_selected_suite 'st0;
-           CS.server_selected_group = T.X25519;
+           CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
            CS.server_selected_signature_scheme =
              CryptoSpec.credential_signature_scheme
                cfg.CS.server_credential_identity;
@@ -176,6 +176,11 @@ fn selection_ready
       CS.named_group_offered
         cfg.CS.server_supported_groups
         T.X25519 /\
+      (* G2: the selected group follows the peer's accepted key_share offer,
+         so the profile must offer both groups the gate can pick. *)
+      CS.named_group_offered
+        cfg.CS.server_supported_groups
+        T.Secp256r1 /\
       CS.signature_scheme_offered
         cfg.CS.server_allowed_signature_schemes
         (CryptoSpec.credential_signature_scheme
@@ -339,9 +344,9 @@ fn rec drive_handshake
               let differs =
                 SS.server_random_differs_from_cst material_payload;
               if differs {
-                SS.lemma_mk_server_hello_witness_bytesize GNG.X25519
+                SS.lemma_mk_server_hello_witness_bytesize (CM.stored_client_hello_named_group 'st0)
                   (TLS13.ConnectionLog.raw_slice material_bytes 0 32)
-                  (CryptoSpec.x25519_public_from_private
+                  (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
                     (TLS13.ConnectionLog.raw_slice material_bytes 32 64))
                   (CM.stored_client_hello_session_id 'st0)
                   (CM.server_selected_suite 'st0);

@@ -146,9 +146,10 @@ let client_hello_session_id_len_for (m:GCH.clientHello) : SZ.t =
    be recomputed from the stored bytes (an all-zero 32-byte slot is a legal
    X25519 share) and so is written at parse time.
 
-   Under the current acceptance gate every accepted ClientHello offers X25519,
-   so this is constantly KexX25519; the fallback arm becomes reachable when the
-   gate widens (stage S6 of docs/server-p256-plan.md). *)
+   Since S6.8d the acceptance gate ([WS.ch_key_share_pick]) admits a ClientHello
+   that offers only secp256r1, so the fallback arm is reachable: an accepted
+   message with no X25519 offer necessarily carried a well-formed secp256r1
+   one. *)
 noextract
 let client_hello_kex_group_for (m:GCH.clientHello) : CryptoSpec.kex_group =
   if Some? (Sem.clientHello_key_share_x25519 m)
@@ -526,20 +527,16 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
 // and the selected cipher suite is the single supported one, so the clamp in
 // server_hello_of_selection is an identity and the record matches the selection.
 //
-// The third conjunct is where this implementation's remaining X25519-only-ness
-// lives.  CS.server_hello_matches_selection is group-indexed: it demands that
-// the ServerHello name CS.server_selected_kex_group and carry that group's
-// share.  server_hello_of_selection below still builds an X25519 KeyShareEntry
-// with the 32-byte CS.server_key_share_public, so it only realises selections
-// at X25519.  Naming that as a hypothesis -- rather than baking X25519 into the
-// specification, as the invariants used to -- is what keeps every ServerHello
-// length in this file the concrete 90 + |sid|.  Removing it, and making
-// server_hello_of_selection build at CS.server_selected_kex_group, is stage S6
-// of docs/server-p256-plan.md.
+// Group-agnostic since S6.8d: [server_hello_of_selection] builds its
+// KeyShareEntry at [CS.server_selected_kex_group] and at that group's exact
+// width ([sho_named_group] / [sho_key_share]), so no group hypothesis is
+// needed for it to match [CS.server_hello_matches_selection].  What used to be
+// the third conjunct (== KexX25519) is what made every ServerHello length in
+// this file the concrete 90 + |sid|; those lengths are now
+// 58 + kex_public_len (server_selected_kex_group sel) + |sid|.
 let valid_selection (sel:CS.server_handshake_selection) : prop =
   (sel.CS.server_random <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-  H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite /\
-  CS.server_selected_kex_group sel == CryptoSpec.KexX25519
+  H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite
 
 // clamp: a 32-byte server random differing from the HRR sentinel (identity under
 // valid_selection).  The all-zero fallback differs from serverHello_body_cst at
@@ -635,6 +632,27 @@ let stored_client_hello_kex_group (st:CS.connection_state) : CryptoSpec.kex_grou
     | Some ch -> client_hello_kex_group_for ch
     | None -> CryptoSpec.KexX25519
 
+(* The wire [NamedGroup] tag of a [kex_group]: the inverse of
+   [Sem.kex_group_of_named_group] on the two groups ATLAS implements.  Following
+   the TLS13.Crypto.Spec design law the group is an explicit tag throughout, so
+   this conversion is total in both directions and never inspects a share. *)
+noextract
+let named_group_of_kex_group (g:CryptoSpec.kex_group) : GNG.namedGroup
+  = match g with
+    | CryptoSpec.KexX25519 -> GNG.X25519
+    | CryptoSpec.KexP256 -> GNG.Secp256r1
+
+let lemma_kex_group_of_named_group_inv (g:CryptoSpec.kex_group)
+  : Lemma (ensures Sem.kex_group_of_named_group (named_group_of_kex_group g) == g)
+          [SMTPat (named_group_of_kex_group g)]
+  = ()
+
+(* The wire tag the server's key-exchange policy names for a given state: the
+   group of [stored_client_hello_kex_group], as a [NamedGroup]. *)
+noextract
+let stored_client_hello_named_group (st:CS.connection_state) : GNG.namedGroup
+  = named_group_of_kex_group (stored_client_hello_kex_group st)
+
 (* clamp: the echoed legacy_session_id is the offered one, verbatim (identity
    under valid_selection; see the echo note above). *)
 noextract
@@ -649,9 +667,7 @@ let sho_session_id (sel:CS.server_handshake_selection)
    the server actually offers. *)
 noextract
 let sho_named_group (sel:CS.server_handshake_selection) : GNG.namedGroup
-  = match CS.server_selected_kex_group sel with
-    | CryptoSpec.KexX25519 -> GNG.X25519
-    | CryptoSpec.KexP256 -> GNG.Secp256r1
+  = named_group_of_kex_group (CS.server_selected_kex_group sel)
 
 (* The share the ServerHello carries: the public value of the selection's
    keypair *at the selected group*.  Its length is [CryptoSpec.kex_public_len]
@@ -876,13 +892,11 @@ val lemma_client_hello_of_start_matches
 // obligation inside can_send_server_hello for the server build direction.
 // The share width is the selected group's, so the conclusion is stated as
 // [58 + kex_public_len g + |sid|] rather than the X25519-specific [90 + |sid|].
-// At X25519 -- which [valid_selection]'s third conjunct still forces --
-// [kex_public_len KexX25519] reduces to 32 definitionally, so every consumer
-// that states [90 + |sid|] keeps deriving it with no extra step.  Generalising
-// the conclusion ahead of dropping that conjunct is what lets the arithmetic
-// move before the policy does (stage S6.8c of docs/server-p256-plan.md); the
-// reverse order is not possible, because the moment the selection's group stops
-// being a literal the [90] is underivable.
+// Generalising the conclusion ahead of dropping [valid_selection]'s group
+// conjunct is what let the arithmetic move before the policy did (stage S6.8c
+// of docs/server-p256-plan.md); the reverse order is not possible, because the
+// moment the selection's group stops being a literal the [90] is underivable.
+// Since S6.8d that conjunct is gone and the group really is a variable.
 val lemma_server_hello_of_selection_bytesize
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)

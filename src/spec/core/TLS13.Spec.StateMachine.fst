@@ -223,7 +223,16 @@ let server_selection_key_share_consistent
      recovers [Some? (server_kex_private selection g)] at the *selected* group
      conclude [Some? selection.server_key_share_private], which the runtime
      representation predicates are phrased in terms of. *)
-  (Some? selection.server_key_share_private <==> Some? selection.server_p256_private)
+  (Some? selection.server_key_share_private <==> Some? selection.server_p256_private) /\
+  (* ...and they are drawn from the *same* 32 secret bytes.  ATLAS's server
+     generates one scalar per handshake and derives both group publics from it
+     ([server_key_share_public] and [server_p256_public] above), and the whole
+     runtime carries that scalar as a single 32-byte array.  Recording it here
+     is what lets the group-parametric ECDH run
+     [C.kex_shared (server_selected_kex_group selection) sk k] with the array it
+     holds, whichever group the selection names, instead of every contract on
+     the path having to be restated over [server_kex_private]. *)
+  selection.server_key_share_private == selection.server_p256_private
 
 (** Stands in [server_p256_public] wherever the server has not generated a
     secp256r1 keypair.  [server_p256_private] is [None] alongside it, so

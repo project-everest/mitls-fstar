@@ -14,6 +14,7 @@ module CM = TLS13.Impl.ConnectionState.Model
 module CPI = Common.ProtocolImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
+module KEX = TLS13.KEX
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec
 module BN = TLS13.Impl.Server.Driver.BufferedNetwork
@@ -87,7 +88,7 @@ let lemma_select_server_parameters_ready_can_select
               Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello;
             CS.server_selected_cipher_suite =
               (CM.server_selected_suite st);
-            CS.server_selected_group = T.X25519;
+            CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
             CS.server_selected_signature_scheme =
               CryptoSpec.credential_signature_scheme
                 ((Some?.v st.CS.cs_model.CS.model_config.CS.config_server). CS.server_credential_identity);
@@ -129,7 +130,7 @@ let lemma_select_server_parameters_input_ready_intro
              CS.server_selected_client_hello = ch;
              CS.server_selected_cipher_suite =
                (CM.server_selected_suite st);
-             CS.server_selected_group = T.X25519;
+             CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
              CS.server_selected_signature_scheme =
                CryptoSpec.credential_signature_scheme
                  (cfg.CS.server_credential_identity);
@@ -180,7 +181,7 @@ let lemma_select_server_parameters_call_ready
               Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello;
             CS.server_selected_cipher_suite =
               (CM.server_selected_suite st);
-            CS.server_selected_group = T.X25519;
+            CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
             CS.server_selected_signature_scheme =
               CryptoSpec.credential_signature_scheme
                 ((Some?.v st.CS.cs_model.CS.model_config.CS.config_server). CS.server_credential_identity);
@@ -627,9 +628,9 @@ fn send_server_hello_from_payload_once
        (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32) <>
          TLS13.Wire.Generated.ServerHello_body.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness GNG.X25519
+         SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-           (CryptoSpec.x25519_public_from_private
+           (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
            (CM.server_selected_suite 'st0) in
@@ -665,9 +666,9 @@ fn send_server_hello_from_payload_once
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake
               (M.ServerHello
-                (SS.mk_server_hello_witness GNG.X25519
+                (SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
                   (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-                  (CryptoSpec.x25519_public_from_private
+                  (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
                   (CM.stored_client_hello_session_id 'st0)
                   (CM.server_selected_suite 'st0)))))
@@ -696,11 +697,15 @@ fn send_server_hello_from_payload_once
   unfold (S.connection_exactly d.buffered_driver_server 'st0);
   let driver_sid_len = CQ.read_client_hello_session_id
     d.buffered_driver_server driver_session_id;
+  let driver_kex_group = CQ.read_client_hello_kex_group d.buffered_driver_server;
   fold (S.connection_exactly d.buffered_driver_server 'st0);
-  // The ServerHello record is 95 + |legacy_session_id| bytes (gap G4): the echo
-  // is verbatim, so the output buffer must be sized at run time.
-  assert (pure (SZ.fits (95 + SZ.v driver_sid_len)));
-  let server_hello_out_len = 95sz `SZ.add` driver_sid_len;
+  // The ServerHello record is 63 + |share| + |legacy_session_id| bytes (gap G4):
+  // the echo is verbatim and (G2) the share width follows the accepted group, so
+  // the output buffer must be sized at run time.
+  let driver_share_len = KEX.kex_public_len_sz driver_kex_group;
+  assert (pure (SZ.fits (63 + SZ.v driver_share_len + SZ.v driver_sid_len)));
+  let server_hello_out_len =
+    63sz `SZ.add` driver_share_len `SZ.add` driver_sid_len;
   let server_hello_vec = V.alloc 0uy server_hello_out_len;
   V.to_array_pts_to server_hello_vec;
   with old_server_hello_out.
@@ -735,9 +740,9 @@ fn send_server_hello_from_payload_once
       pts_to app_out app_out_bytes);
   let sh =
     Ghost.hide
-      (SS.mk_server_hello_witness GNG.X25519
+      (SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
         server_random_bytes
-        (CryptoSpec.x25519_public_from_private server_private_key_bytes)
+        (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0) server_private_key_bytes)
         (CM.stored_client_hello_session_id 'st0)
         (CM.server_selected_suite 'st0));
   let serialized =
@@ -1129,7 +1134,7 @@ let lemma_select_derive_success_server_hello_ready
         Some? st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
         st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
         Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
-        B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
+        B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 155 <=
           Bounds.max_transcript_len /\
         (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
          (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
@@ -1163,9 +1168,10 @@ let lemma_select_derive_success_server_hello_ready
     st2 == CM.derived_shared_secret_state st1 shared /\
     (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
      | Some ch ->
-       (match CS.client_hello_key_share ch with
+       (let g = CM.client_hello_kex_group_for ch in
+        match CS.client_hello_kex ch g with
         | Some k ->
-          CryptoSpec.x25519_shared server_private_key k == Some shared
+          CryptoSpec.kex_shared g server_private_key k == Some shared
         | None -> False)
      | None -> False));
   let shared =
@@ -1175,9 +1181,10 @@ let lemma_select_derive_success_server_hello_ready
         st2 == CM.derived_shared_secret_state st1 shared /\
         (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
          | Some ch ->
-           (match CS.client_hello_key_share ch with
+           (let g = CM.client_hello_kex_group_for ch in
+            match CS.client_hello_kex ch g with
             | Some k ->
-              CryptoSpec.x25519_shared server_private_key k == Some shared
+              CryptoSpec.kex_shared g server_private_key k == Some shared
             | None -> False)
          | None -> False)) in
   assert (st2 == CM.derived_shared_secret_state st1 shared);
@@ -1187,7 +1194,7 @@ let lemma_select_derive_success_server_hello_ready
       let selection = {
         CS.server_selected_client_hello = ch;
         CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
-        CS.server_selected_group = T.X25519;
+        CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
         CS.server_selected_signature_scheme =
           CryptoSpec.credential_signature_scheme
             (cfg.CS.server_credential_identity);
@@ -1212,7 +1219,7 @@ let lemma_select_derive_success_server_hello_ready
   let selection = {
     CS.server_selected_client_hello = selected_ch;
     CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
-    CS.server_selected_group = T.X25519;
+    CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (selected_ch));
     CS.server_selected_signature_scheme =
       CryptoSpec.credential_signature_scheme
         (server_cfg.CS.server_credential_identity);
@@ -1250,7 +1257,7 @@ let lemma_select_derive_success_server_hello_ready
   assert (st2.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
     Some selection.CS.server_selected_client_hello);
   assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) ==
-    90 + Seq.length (CM.sho_session_id selection));
+    58 + CryptoSpec.kex_public_len (CS.server_selected_kex_group selection) + Seq.length (CM.sho_session_id selection));
   assert (CS.legal_event
     st2.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -1291,7 +1298,7 @@ let lemma_assemble_can_send_server_hello
           st.CS.cs_model.CS.model_handshake.CS.hs_server_selection).
             CS.server_selected_cipher_suite ==
           (CM.server_selected_suite st) /\
-        B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
+        B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 155 <=
           Bounds.max_transcript_len /\
         ST.server_local_event_input_ready
           st
@@ -1301,19 +1308,19 @@ let lemma_assemble_can_send_server_hello
          (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
            GSHbody.serverHello_body_cst) /\
         (let sh =
-           SS.mk_server_hello_witness GNG.X25519
+           SS.mk_server_hello_witness (CM.stored_client_hello_named_group st)
              (CL.raw_slice payload 0 32)
-             (CryptoSpec.x25519_public_from_private
+             (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st)
                (CL.raw_slice payload 32 64))
              (CM.stored_client_hello_session_id st)
              (CM.server_selected_suite st) in
          B.length (W.serialize_handshake (M.ServerHello sh)) ==
-           90 + Seq.length (CM.stored_client_hello_session_id st)))
+           58 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group st) + Seq.length (CM.stored_client_hello_session_id st)))
       (ensures
         (let sh =
-           SS.mk_server_hello_witness GNG.X25519
+           SS.mk_server_hello_witness (CM.stored_client_hello_named_group st)
              (CL.raw_slice payload 0 32)
-             (CryptoSpec.x25519_public_from_private
+             (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st)
                (CL.raw_slice payload 32 64))
              (CM.stored_client_hello_session_id st)
              (CM.server_selected_suite st) in
@@ -1325,14 +1332,6 @@ let lemma_assemble_can_send_server_hello
   let server_private_key = CL.raw_slice payload 32 64 in
   Seq.lemma_len_slice payload 0 32;
   Seq.lemma_len_slice payload 32 64;
-  let key_share =
-    CryptoSpec.x25519_public_from_private server_private_key in
-  let sh =
-    SS.mk_server_hello_witness GNG.X25519
-      server_random
-      key_share
-      (CM.stored_client_hello_session_id st)
-      (CM.server_selected_suite st) in
   let selection =
     Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
   assert (Seq.equal selection.CS.server_random server_random);
@@ -1341,26 +1340,17 @@ let lemma_assemble_can_send_server_hello
     (Some?.v selection.CS.server_key_share_private)
     server_private_key);
   assert (CS.server_selection_key_share_consistent selection);
-  assert (Seq.equal selection.CS.server_key_share_public key_share);
-  assert (CS.server_hello_matches_selection selection sh);
-  assert (CS.legal_event
-    st.CS.cs_model
-    (CS.ConnNetworkEvent {
-      CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsHandshake (M.ServerHello sh);
-    }));
-  assert (CS.event_raw_delta_legal
-    st.CS.cs_model
-    (CS.ConnNetworkEvent {
-      CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsHandshake (M.ServerHello sh);
-    })
-    (CS.serialized_cleartext_tls_message
-      (M.TlsHandshake (M.ServerHello sh)))
-    B.empty);
-  assert (CM.can_send_server_hello st sh
-    (CS.serialized_cleartext_tls_message
-      (M.TlsHandshake (M.ServerHello sh))))
+  (* G2 stage S6.8d: the witness is no longer an X25519 record whose
+     [server_hello_matches_selection] arm can be read off
+     [mk_server_hello_witness]'s refinement.  Go through the Send bridge
+     instead: it shows the witness *is* [CM.server_hello_of_selection selection]
+     (both builders reduce to the same generated record at the selection's own
+     group) and transfers the send obligation input_ready already carries. *)
+  SS.lemma_can_send_server_hello_witness_of_selection
+    st
+    selection
+    server_random
+    server_private_key
 
 fn select_derive_send_server_hello_from_payload_once
   (d:DS.buffered_driver)
@@ -1400,14 +1390,14 @@ fn select_derive_send_server_hello_from_payload_once
           32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness GNG.X25519
+         SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-           (CryptoSpec.x25519_public_from_private
+           (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
            (CM.server_selected_suite 'st0) in
        B.length (W.serialize_handshake (M.ServerHello sh)) ==
-         90 + Seq.length (CM.stored_client_hello_session_id 'st0)))
+         58 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0) + Seq.length (CM.stored_client_hello_session_id 'st0)))
   returns result:server_flight_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

@@ -948,9 +948,17 @@ let client_hello_slot_exactly
                 server_name
                 (client_hello_server_name_len_for m)
                 (Sem.clientHello_server_name m) /\
+              (* The two-group acceptance gate, mirroring
+                 [IM.is_valid_client_hello]: a stored ClientHello offered either
+                 a well-formed X25519 share (which the X25519 mirror holds) or,
+                 failing that, a well-formed secp256r1 one (which the P-256
+                 mirror holds).  [client_hello_kex_group_for] reads off which. *)
               (match Sem.clientHello_key_share_x25519 m with
                | Some k -> B.length k == 32 /\ Seq.equal key_share k
-               | None -> False) /\
+               | None ->
+                 (match Sem.clientHello_key_share_secp256r1 m with
+                  | Some k -> B.length k == 65 /\ Seq.equal p256_key_share k
+                  | None -> False)) /\
               (* The peer's secp256r1 offer, when it made a usable one.  Stated
                  as a property of the message rather than of a struct scalar, so
                  no flag has to be rewritten when a ClientHello is stored; an
@@ -1164,22 +1172,33 @@ let server_selection_private_absent
 
 (**
   The selected group is a purely ghost field of [CS.server_handshake_selection]:
-  the runtime stores the 32 private bytes and a presence flag, never a group tag,
-  because ATLAS's server role transmits exactly one share.  [CS.legal_event] and
-  [CS.server_hello_matches_selection] are group-indexed, so without this
-  representation-level pin nothing downstream -- the scheduler, the ServerHello
-  writer, the ECDH -- could learn which group its own stored selection names.
+  the runtime stores the 32 private bytes and a presence flag, never a group tag.
+  [CS.legal_event] and [CS.server_hello_matches_selection] are group-indexed, so
+  without this representation-level pin nothing downstream -- the scheduler, the
+  ServerHello writer, the ECDH -- could learn which group its own stored
+  selection names.
 
-  This is the single place the server role's X25519-only key exchange is
-  recorded; G2 stage S6 replaces it with a stored group tag and deletes the
-  matching conjuncts in [TLS13.Impl.ConnectionState.Model.valid_selection] and
-  [TLS13.Impl.Server.Types.server_local_event_input_ready].
+  G2 stage S6.8d replaced the old X25519 pin by a *policy* pin: whatever group
+  the selection names, it is the one the server's key-exchange policy
+  ([client_hello_kex_group_for]) picks for the ClientHello the selection was
+  made from.  That is what lets the runtime recover the group by reading the
+  ClientHello metadata box ([client_hello_metadata_exactly]'s kex_group field),
+  which is written at parse time and is not recoverable from the stored bytes.
+
+  Deliberately phrased over [sel.CS.server_selected_client_hello] rather than
+  over the state's [hs_client_hello]: the two coincide for every reachable
+  server state (that is [CS.legal_event] for LocalSelectServerParameters, and
+  the contracts on this file's consumers thread it), but stating it here would
+  make the slprop sensitive to the client role's ClientHello store, which
+  rewrites [hs_client_hello] under a [None] selection.
 **)
 let server_selection_group_pinned
   (selection:option CS.server_handshake_selection)
   : prop =
   match selection with
-  | Some sel -> CS.server_selected_kex_group sel == CryptoSpec.KexX25519
+  | Some sel ->
+    CS.server_selected_kex_group sel ==
+      client_hello_kex_group_for sel.CS.server_selected_client_hello
   | None -> True
 
 let server_selection_presence_exactly
@@ -1440,7 +1459,9 @@ let server_connection_config
           [CryptoSpec.credential_signature_scheme credential_identity];
         CS.server_supported_cipher_suites =
           default_connection_config.CS.config_cipher_suites;
-        CS.server_supported_groups = [T.X25519];
+        (* G2: the server negotiates whichever of the two groups the peer's
+           accepted key_share offer named, so both must be in the profile. *)
+        CS.server_supported_groups = [T.X25519; T.Secp256r1];
         CS.server_sni_policy = None;
       };
   }

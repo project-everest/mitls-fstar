@@ -219,7 +219,7 @@ fn process_derive_shared_secret_from_private_array
                     (* See TLS13.Impl.Server.Types.server_local_event_input_ready:
                        the ECDH is group-indexed in the specification but this
                        implementation still runs it at X25519 only. *)
-                    CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+                    CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
                     'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\

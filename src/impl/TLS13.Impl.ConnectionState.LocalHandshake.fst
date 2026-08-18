@@ -532,9 +532,12 @@ fn select_server_parameters
   requires connection_exactly c st0 **
            pure (can_select_server_parameters st0 selection /\
                  // The runtime stores no group tag, so the caller has to name the
-                 // selection's group; CR.server_selection_group_pinned records it
-                 // in the representation.  G2 stage S6 removes this.
-                 CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+                 // selection's group.  Since G2 stage S6.8d the group is the one
+                 // the stored ClientHello's accepted key_share offer names, and
+                 // CR.server_selection_group_pinned records that policy in the
+                 // representation; the runtime reads it back off the ClientHello
+                 // metadata box.
+                 CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  server_selection_private_absent selection)
@@ -680,9 +683,12 @@ fn select_server_parameters_with_private_from_array
            pure (B.length 'server_private_key_bytes == 32 /\
                  can_select_server_parameters st0 selection /\
                  // The runtime stores no group tag, so the caller has to name the
-                 // selection's group; CR.server_selection_group_pinned records it
-                 // in the representation.  G2 stage S6 removes this.
-                 CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+                 // selection's group.  Since G2 stage S6.8d the group is the one
+                 // the stored ClientHello's accepted key_share offer names, and
+                 // CR.server_selection_group_pinned records that policy in the
+                 // representation; the runtime reads it back off the ClientHello
+                 // metadata box.
+                 CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  Some? selection.CS.server_key_share_private /\
@@ -5212,20 +5218,18 @@ fn try_derive_server_shared_secret_from_private_array
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
-                    (* The ECDH itself is group-parametric: it reads the
+                    (* The ECDH is group-parametric in both the code and the
+                       specification (G2 stage S6.8d): the body reads the
                        negotiated group off the client_hello_kex_group metadata
                        box and dispatches through KEX.kex_shared_split_runtime,
-                       so the secp256r1 arm is compiled and reachable.  What is
-                       still pinned is the *specification*: this precondition,
-                       and hence the postcondition below, name X25519 because
-                       generalising them would have to be threaded up through
-                       Server.Keys, Server, the two drivers and finally the
+                       and this precondition -- and hence the postcondition
+                       below -- names that same group rather than X25519.  The
+                       group is pinned to the stored ClientHello's accepted
+                       key_share offer, which is what the whole thread up
+                       through Server.Keys, Server, the two drivers and the
                        canonical-protocol lemmas that discharge
-                       server_local_event_input_ready.  That thread is part of
-                       the single flip in stage S6.8 of
-                       docs/server-p256-plan.md; until then the body proves the
-                       group-indexed CS.legal_event arm and then specialises. *)
-                    CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+                       server_local_event_input_ready now carries. *)
+                    CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\
@@ -5291,10 +5295,16 @@ fn try_derive_server_shared_secret_from_private_array
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
     Some (Ghost.reveal ch)));
   assert (pure ch_present);
-  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)) /\
-    Seq.equal ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)))));
-  Seq.lemma_eq_elim ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)));
-  assert (pure (CS.client_hello_key_share (Ghost.reveal ch) == Some ch_key_share));
+  (* G2: the mirror that carries the peer's offer depends on the accepted
+     group.  Only the matching one is pinned by [client_hello_slot_exactly];
+     the other holds whatever the parser last left there, which is exactly the
+     shape [lemma_client_hello_kex_split_share] is stated at. *)
+  assert (pure (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
+                | Some k -> Seq.equal ch_key_share k
+                | None -> True));
+  assert (pure (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+                | Some k -> B.length k == 65 ==> Seq.equal ch_p256_key_share k
+                | None -> True));
   assert (pure (B.length ch_key_share == 32));
   assert (pure (B.length ch_p256_key_share == 65));
   assert (pure (B.length (Ghost.reveal 'server_private_key_bytes) == 32));
@@ -5302,14 +5312,11 @@ fn try_derive_server_shared_secret_from_private_array
   (* The negotiated group, read off the metadata box rather than assumed. *)
   let kex_group = !c.handshake.messages.client_hello_kex_group;
   assert (pure (kex_group == client_hello_kex_group_for (Ghost.reveal ch)));
-  (* ...and the acceptance gate (TLS13.Wire.Spec.clientHello_representable)
-     still requires an X25519 share, so the box reads KexX25519 and agrees with
-     the caller's pinned selection.  These two facts are what let the dispatch
-     below be *called* group-parametrically while the signature stays specific;
-     widening the gate deletes them and moves them into the precondition. *)
-  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch))));
-  assert (pure (client_hello_kex_group_for (Ghost.reveal ch) == CryptoSpec.KexX25519));
-  assert (pure (kex_group == CryptoSpec.KexX25519));
+  (* ...and the caller's pinned selection names that same group (G2 stage
+     S6.8d replaced the X25519 pin by the policy one), so the dispatch below
+     runs at the group the peer's accepted offer named. *)
+  assert (pure (kex_group == CS.server_selected_kex_group
+    (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)));
   assert (pure (Some? (CS.client_hello_kex
     (Ghost.reveal ch)
     (client_hello_kex_group_for (Ghost.reveal ch)))));
@@ -5388,10 +5395,10 @@ fn try_derive_server_shared_secret_from_private_array
       st0.CS.cs_model
       (CS.ConnLocalEvent
         (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
-    (* No specialising back: the postcondition is now stated at
+    (* No specialising back: the postcondition is stated at
        CS.server_selected_kex_group, which is exactly the form proved just
-       above.  The X25519 precondition survives only to fix which arm of the
-       dispatch runs, and stage S6.8 deletes it. *)
+       above, and (G2 stage S6.8d) the precondition now pins that group to the
+       stored ClientHello's accepted offer rather than to X25519. *)
 
     fold (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name

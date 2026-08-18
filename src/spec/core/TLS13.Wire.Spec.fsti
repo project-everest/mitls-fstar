@@ -217,6 +217,29 @@ val lemma_ch_server_name_host:
    same shape `Sem.sh_find_kex_share` already returns on the ServerHello side. *)
 let ch_key_share_offer = (GNG.namedGroup & Sem.offered_share)
 
+(* The server's wire-level key-share policy, applied to the entries of the
+   *first* key_share extension the scan meets.  X25519 wins when the peer
+   offered a well-formed share at that group; only the *absence* of an X25519
+   entry opens the secp256r1 arm.  A malformed entry at the selected group is
+   still a hard reject, exactly as it was when X25519 was the only group.
+
+   Committing at the first key_share extension -- and at whichever group this
+   picks -- is what keeps the scan in step with the [Sem] finders, which also
+   stop at the first key_share extension.  See [lemma_ch_extensions_connect]. *)
+let ch_key_share_pick (l:list GKSE.keyShareEntry) : GTot (option ch_key_share_offer) =
+  match TLS13.Wire.Semantics.kse_list_find_x25519 l with
+  | Some raw ->
+    if B.length raw = 32
+    then Some (GNG.X25519, (raw <: Sem.offered_share))
+    else None
+  | None ->
+    (match TLS13.Wire.Semantics.kse_list_find_secp256r1 l with
+     | Some raw ->
+       if B.length raw = 65
+       then Some (GNG.Secp256r1, (raw <: Sem.offered_share))
+       else None
+     | None -> None)
+
 val ch_extensions:
   l:list GECH.extensionClientHello ->
   server_name:option T.hostname ->
@@ -274,10 +297,8 @@ val lemma_ch_extensions_cons_ks:
   ss:list T.signature_scheme ->
   Lemma (ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
          (if Some? ks then ch_extensions tl sn ks sv ss
-          else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-                | Some raw -> if B.length raw = 32
-                             then ch_extensions tl sn (Some (GNG.X25519, (raw <: Sem.offered_share))) sv ss
-                             else None
+          else (match ch_key_share_pick (kscl <: list GKSE.keyShareEntry) with
+                | Some offer -> ch_extensions tl sn (Some offer) sv ss
                 | None -> None)))
 
 val lemma_ch_extensions_cons_sv:
@@ -340,7 +361,11 @@ val lemma_clientHello_representable_scan:
        (server_name, key_share, sig_schemes) equal the first-wins [Sem]
        accessors used by [is_valid_client_hello].  Under representability the
        key share is present (Some) and sig schemes non-empty (Cons?), so the
-       Some/Cons? branches below pin the Sem accessors exactly. --- *)
+       Some/Cons? branches below pin the Sem accessors exactly.  The key-share
+       clause is group-indexed: an X25519 offer pins
+       [clientHello_key_share_x25519]; a secp256r1 offer is only ever picked
+       when that accessor is None, and then pins
+       [clientHello_key_share_secp256r1] instead. --- *)
 val lemma_ch_extensions_connect:
   c:GCH.clientHello ->
   Lemma (ensures (
@@ -349,8 +374,15 @@ val lemma_ch_extensions_connect:
     | Some (sn, ks, _, ss) ->
       sn == TLS13.Wire.Semantics.clientHello_server_name c /\
       (match ks with
-       | Some k -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c
-                   == Some ((snd k <: B.bytes) <: Seq.seq U8.t)
+       | Some k ->
+         (if GNG.X25519? (fst k)
+          then B.length (snd k) == 32 /\
+               TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+               == Some ((snd k <: B.bytes) <: Seq.seq U8.t)
+          else GNG.Secp256r1? (fst k) /\ B.length (snd k) == 65 /\
+               TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None /\
+               TLS13.Wire.Semantics.clientHello_key_share_secp256r1 c
+               == Some ((snd k <: B.bytes) <: Seq.seq U8.t))
        | None -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None) /\
       (match TLS13.Wire.Semantics.clientHello_sig_algs c with
        | Some sas -> ss == synth_sig_schemes sas

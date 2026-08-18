@@ -52,7 +52,7 @@ val lemma_select_server_parameters_input_ready_intro
              CS.server_selected_client_hello = ch;
              CS.server_selected_cipher_suite =
                (CM.server_selected_suite st);
-             CS.server_selected_group = T.X25519;
+             CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
              CS.server_selected_signature_scheme =
                CryptoSpec.credential_signature_scheme
                  (cfg.CS.server_credential_identity);
@@ -85,7 +85,7 @@ let selection_from_payload_correct
      let selection = {
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
-       CS.server_selected_group = T.X25519;
+       CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
        CS.server_selected_signature_scheme =
          CryptoSpec.credential_signature_scheme
            (cfg.CS.server_credential_identity);
@@ -109,9 +109,9 @@ let server_hello_from_payload_correct
   : prop =
   B.length payload == 64 /\
   (let sh =
-     SS.mk_server_hello_witness GNG.X25519
+     SS.mk_server_hello_witness (CM.stored_client_hello_named_group st0)
        (CL.raw_slice payload 0 32)
-       (CryptoSpec.x25519_public_from_private
+       (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st0)
          (CL.raw_slice payload 32 64))
        (CM.stored_client_hello_session_id st0)
        (CM.server_selected_suite st0) in
@@ -132,11 +132,14 @@ let derive_shared_secret_from_payload_correct
   (resp.ST.status == ST.StepOk ==>
    exists shared.
      st1 == CM.derived_shared_secret_state st0 shared /\
+     (* G2 stage S6.8d: group-agile; see BN.local_event_success_correct. *)
      (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-       (match CS.client_hello_key_share ch with
+       (let g = CM.client_hello_kex_group_for ch in
+        match CS.client_hello_kex ch g with
         | Some client_public ->
-          CryptoSpec.x25519_shared
+          CryptoSpec.kex_shared
+            g
             (CL.raw_slice payload 32 64)
             client_public == Some shared
         | None -> False)
@@ -272,9 +275,9 @@ fn send_server_hello_from_payload_once
        (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness GNG.X25519
+         SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-           (CryptoSpec.x25519_public_from_private
+           (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
            (CM.server_selected_suite 'st0) in
@@ -310,9 +313,9 @@ fn send_server_hello_from_payload_once
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake
               (M.ServerHello
-                (SS.mk_server_hello_witness GNG.X25519
+                (SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
                   (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-                  (CryptoSpec.x25519_public_from_private
+                  (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
                   (CM.stored_client_hello_session_id 'st0)
                   (CM.server_selected_suite 'st0)))))
@@ -414,14 +417,14 @@ fn select_derive_send_server_hello_from_payload_once
           32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness GNG.X25519
+         SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-           (CryptoSpec.x25519_public_from_private
+           (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
            (CM.server_selected_suite 'st0) in
        B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) ==
-         90 + Seq.length (CM.stored_client_hello_session_id 'st0)))
+         58 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0) + Seq.length (CM.stored_client_hello_session_id 'st0)))
   returns result:server_flight_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

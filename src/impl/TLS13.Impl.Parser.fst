@@ -770,10 +770,8 @@ let lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
   : Lemma (ensures WS.ch_extensions
              (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
              (if Some? ks then WS.ch_extensions tl sn ks sv ss
-              else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-                    | Some raw -> if B.length raw = 32
-                                  then WS.ch_extensions tl sn (Some (GNG.X25519, (raw <: Sem.offered_share))) sv ss
-                                  else None
+              else (match WS.ch_key_share_pick (kscl <: list GKSE.keyShareEntry) with
+                    | Some offer -> WS.ch_extensions tl sn (Some offer) sv ss
                     | None -> None)))
   = WS.lemma_ch_extensions_cons_ks kscl tl sn ks sv ss
 
@@ -4295,7 +4293,7 @@ fn scan_ch_key_share
              (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
              v0 cm **
            pure (V.is_full_vec key_vec /\ V.length key_vec == 32)
-  returns found: bool
+  returns res: (bool & bool)
   ensures PPVCL.vmatch_vclist
             (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
             v0 cm **
@@ -4303,10 +4301,11 @@ fn scan_ch_key_share
             pure (V.is_full_vec key_vec /\ V.length key_vec == 32 /\
                   Seq.length kbytes == 32 /\
                   (match TLS13.Wire.Semantics.kse_list_find_x25519 (Ghost.reveal cm) with
-                   | Some raw -> (if Seq.length raw = 32
-                                  then found == true /\ Seq.equal kbytes raw
-                                  else found == false)
-                   | None -> found == false)))
+                   | Some raw -> fst res == true /\
+                                 (if Seq.length raw = 32
+                                  then snd res == true /\ Seq.equal kbytes raw
+                                  else snd res == false)
+                   | None -> fst res == false /\ snd res == false)))
 {
   V.pts_to_len key_vec;
   match v0 {
@@ -4325,7 +4324,7 @@ fn scan_ch_key_share
           as (PPVCL.vmatch_vclist
                 (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
                 v0 cm);
-      false
+      (false, false)
     }
     Some nv -> {
       unfold (PPVCL.vmatch_vclist
@@ -4435,7 +4434,7 @@ fn scan_ch_key_share
           as (PPVCL.vmatch_vclist
                 (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
                 v0 cm);
-      f
+      (d, f)
     }
   }
 }
@@ -4883,7 +4882,14 @@ fn scan_ch_extensions
                  | Some (server_name, Some key_share, _, sig_schemes) ->
                    L.optional_byte_prefix_matches
                      (Mktuple8?._3 res) sn_bytes (Mktuple8?._2 res) server_name /\
-                   Seq.equal kbytes (snd (Ghost.reveal key_share) <: Seq.seq U8.t) /\
+                   (* G2: which group the gate committed to, as a runtime bit.
+                      Nothing else in the accepted ClientHello records it -- an
+                      all-zero 32-byte X25519 slot is a legal share -- so the
+                      scan reports it and the store path parks it in the
+                      [client_hello_kex_group] metadata box. *)
+                   (Mktuple8?._5 res == GNG.X25519? (fst (Ghost.reveal key_share))) /\
+                   (GNG.X25519? (fst (Ghost.reveal key_share)) ==>
+                      Seq.equal kbytes (snd (Ghost.reveal key_share) <: Seq.seq U8.t)) /\
                    SZ.v (Mktuple8?._7 res) == FStar.List.Tot.length sig_schemes /\
                    L.signature_schemes_match sig_bytes (SZ.v (Mktuple8?._7 res)) sig_schemes
                  | _ -> False))))
@@ -4891,6 +4897,11 @@ fn scan_ch_extensions
   let sn_vec = V.alloc 0uy 255sz;
   let key_vec = V.alloc 0uy 32sz;
   let sig_vec = V.alloc 0us 32sz;
+  (* Scratch for the secp256r1 arm of the key_share gate: [scan_kse_list_p256]
+     needs somewhere to land the 65-byte share while it decides whether the
+     entry is well formed.  The bytes themselves are re-read by the separate
+     [scan_ch_p256_key_share] pass, so this vector is local and freed here. *)
+  let p256_scratch = V.alloc 0uy 65sz;
   match ext_lo {
     None -> {
       unfold (PPVCL.vmatch_vclist
@@ -4910,6 +4921,7 @@ fn scan_ch_extensions
                 (PPB.vmatch_conv GECH.extensionClientHello_vmatch
                                  GECH.extensionClientHello_conv)
                 ext_lo cext);
+      V.free p256_scratch;
       (sn_vec, 0sz, false, key_vec, false, sig_vec, 0sz, false)
     }
     Some nv -> {
@@ -4929,6 +4941,9 @@ fn scan_ch_extensions
       let mut sn_len = 0sz;
       let mut sn_too_long = false;
       let mut has_key = false;
+      (* G2: [true] once the gate has committed to an X25519 offer, [false]
+         while none is committed or the committed one is secp256r1. *)
+      let mut ks_x25519 = false;
       let mut saw_sv = false;
       let mut sig_len = 0sz;
       let mut sig_too_long = false;
@@ -4944,14 +4959,15 @@ fn scan_ch_extensions
         let iv = !i;
         (not fl) && (iv `SZ.lt` count)
       )
-      invariant exists* iv fl hsn sl stl hk sv slg sigtl
-                        sn_acc key_acc sig_acc sn_bytes kbytes sig_bytes.
+      invariant exists* iv fl hsn sl stl hk ksx sv slg sigtl
+                        sn_acc key_acc sig_acc sn_bytes kbytes sig_bytes p256_bytes.
         R.pts_to i iv **
         R.pts_to failed fl **
         R.pts_to has_sn hsn **
         R.pts_to sn_len sl **
         R.pts_to sn_too_long stl **
         R.pts_to has_key hk **
+        R.pts_to ks_x25519 ksx **
         R.pts_to saw_sv sv **
         R.pts_to sig_len slg **
         R.pts_to sig_too_long sigtl **
@@ -4964,6 +4980,7 @@ fn scan_ch_extensions
                            GECH.extensionClientHello_conv) **
         V.pts_to sn_vec sn_bytes **
         V.pts_to key_vec kbytes **
+        V.pts_to p256_scratch p256_bytes **
         V.pts_to sig_vec sig_bytes **
         pure (
           SZ.v iv <= SZ.v count /\
@@ -4972,9 +4989,13 @@ fn scan_ch_extensions
           V.is_full_vec (snd nv) /\
           V.is_full_vec sn_vec /\ V.length sn_vec == 255 /\ B.length sn_bytes == 255 /\
           V.is_full_vec key_vec /\ V.length key_vec == 32 /\ B.length kbytes == 32 /\
+          V.is_full_vec p256_scratch /\ V.length p256_scratch == 65 /\
+          B.length p256_bytes == 65 /\
           V.is_full_vec sig_vec /\ V.length sig_vec == 32 /\ Seq.length sig_bytes == 32 /\
           (hsn <==> Some? sn_acc) /\
           (hk <==> Some? key_acc) /\
+          (ksx <==> (Some? key_acc /\
+                     GNG.X25519? (fst (Ghost.reveal (Some?.v key_acc))))) /\
           (stl <==> (match sn_acc with
                      | Some name -> B.length (Ghost.reveal name) > 255
                      | None -> False)) /\
@@ -4982,7 +5003,8 @@ fn scan_ch_extensions
           ((not fl /\ Some? sn_acc /\ not stl) ==>
             L.byte_prefix_matches sn_bytes sl (Ghost.reveal (Some?.v sn_acc))) /\
           ((not fl /\ not hsn) ==> SZ.v sl == 0) /\
-          ((not fl /\ Some? key_acc) ==>
+          ((not fl /\ Some? key_acc /\
+            GNG.X25519? (fst (Ghost.reveal (Some?.v key_acc)))) ==>
             Seq.equal kbytes (snd (Ghost.reveal (Some?.v key_acc)) <: Seq.seq U8.t)) /\
           ((not fl /\ not sigtl) ==>
             SZ.v slg == FStar.List.Tot.length (Ghost.reveal sig_acc) /\
@@ -5187,18 +5209,18 @@ fn scan_ch_extensions
             (Ghost.reveal sn_acc0) (Ghost.reveal key_acc0) sv0 (Ghost.reveal sig_acc0);
           let hk0 = !has_key;
           if not hk0 {
-          let found = scan_ch_key_share key_vec v #cm_ks;
+          let ksres = scan_ch_key_share key_vec v #cm_ks;
+          let saw_x = fst ksres;
+          let found = snd ksres;
           if found {
+            (* A well-formed X25519 entry: commit to it, exactly as before. *)
             GR.write key_ref
-              (Ghost.hide (match TLS13.Wire.Semantics.kse_list_find_x25519
-                                   (GECH.Extension_data_key_share?._0
-                                     (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv))
-                                     <: list GKSE.keyShareEntry) with
-                           | Some raw -> (if Seq.length raw = 32
-                                          then Some (GNG.X25519, (raw <: Sem.offered_share))
-                                          else None)
-                           | None -> None));
+              (Ghost.hide (WS.ch_key_share_pick
+                            (GECH.Extension_data_key_share?._0
+                              (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv))
+                              <: list GKSE.keyShareEntry)));
             has_key := true;
+            ks_x25519 := true;
             intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
             rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
                        (GECH.Extension_data_key_share_low v)
@@ -5212,7 +5234,10 @@ fn scan_ch_extensions
                  (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
             SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
             i := iv `SZ.add` 1sz;
-          } else {
+          } else if saw_x {
+            (* An X25519 entry that is not 32 bytes wide is still a hard reject:
+               [ch_key_share_pick] only reaches its secp256r1 arm when the peer
+               named no X25519 group at all. *)
             intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
             rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
                        (GECH.Extension_data_key_share_low v)
@@ -5225,6 +5250,45 @@ fn scan_ch_extensions
               (SM.seq_list_match s (Ghost.reveal cext)
                  (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
             failed := true;
+          } else {
+            let p_found = scan_kse_list_p256 p256_scratch v #cm_ks;
+            if p_found {
+              (* No X25519 offer, but a well-formed secp256r1 one: commit to it.
+                 The share bytes are recovered by the separate
+                 [scan_ch_p256_key_share] pass, so [key_vec] stays untouched. *)
+              GR.write key_ref
+                (Ghost.hide (WS.ch_key_share_pick
+                            (GECH.Extension_data_key_share?._0
+                              (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv))
+                              <: list GKSE.keyShareEntry)));
+              has_key := true;
+            intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
+            rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       (GECH.Extension_data_key_share_low v)
+                       (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+                as (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)));
+            Trade.elim
+              (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                 el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+              (SM.seq_list_match s (Ghost.reveal cext)
+                 (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
+            } else {
+            intro_vmatch_extCH_ks v cm_ks #(FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv));
+            rewrite (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       (GECH.Extension_data_key_share_low v)
+                       (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+                as (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                       el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)));
+            Trade.elim
+              (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv
+                 el (FStar.List.Tot.index (Ghost.reveal cext) (SZ.v iv)))
+              (SM.seq_list_match s (Ghost.reveal cext)
+                 (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv));
+            failed := true;
+            }
           }
           } else {
             (* key_share already committed (commit-on-first): skip.  cons_ks with
@@ -5319,6 +5383,7 @@ fn scan_ch_extensions
       let sl = !sn_len;
       let stl = !sn_too_long;
       let hk = !has_key;
+      let ksx = !ks_x25519;
       let sv = !saw_sv;
       let slg = !sig_len;
       let sigtl = !sig_too_long;
@@ -5346,7 +5411,8 @@ fn scan_ch_extensions
       GR.free sn_ref;
       GR.free key_ref;
       GR.free sig_ref;
-      (sn_vec, sl, hsn, key_vec, hk, sig_vec, slg, ok)
+      V.free p256_scratch;
+      (sn_vec, sl, hsn, key_vec, ksx, sig_vec, slg, ok)
     }
   }
 }
@@ -6451,7 +6517,8 @@ fn parse_handshake_message
                  | Some (server_name, Some key_share, _, sig_schemes) ->
                    L.optional_byte_prefix_matches
                      (Mktuple8?._3 ext_res) snbytes (Mktuple8?._2 ext_res) server_name /\
-                   Seq.equal kbytes (snd (Ghost.reveal key_share) <: Seq.seq U8.t) /\
+                   (GNG.X25519? (fst (Ghost.reveal key_share)) ==>
+                     Seq.equal kbytes (snd (Ghost.reveal key_share) <: Seq.seq U8.t)) /\
                    SZ.v (Mktuple8?._7 ext_res) == FStar.List.Tot.length sig_schemes /\
                    L.signature_schemes_match sigbytes (SZ.v (Mktuple8?._7 ext_res)) sig_schemes
                  | _ -> False))));
@@ -6542,13 +6609,11 @@ fn parse_handshake_message
                           Some (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
             lemma_handshake_wire_success_fixed content_type (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
               (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
-            (* The secp256r1 slot now carries the peer's actual offer, scanned
-               above.  The slot's obligation is still one-directional -- the
-               flag promises the bytes are the peer's secp256r1 share, and does
-               not yet promise the flag is set whenever the peer made one --
-               because the accept gate ([clientHello_representable]) still
-               demands an X25519 share, so nothing can select P-256.  Turning
-               that into an iff is stage S6.3; see docs/server-p256-plan.md. *)
+            (* The secp256r1 slot carries the peer's actual offer, scanned
+               above by an independent second pass.  Since S6.8d the accept
+               gate ([clientHello_representable], via [WS.ch_key_share_pick])
+               admits a ClientHello that offers only secp256r1, and this slot
+               is then the share the server acts on. *)
             let lch = ({ L.client_hello_random = randvec;
                          L.client_hello_session_id = sidvec;
                          L.client_hello_session_id_len = sidlen;
@@ -6556,6 +6621,7 @@ fn parse_handshake_message
                          L.client_hello_server_name_len = Mktuple8?._2 ext_res;
                          L.client_hello_has_server_name = Mktuple8?._3 ext_res;
                          L.client_hello_key_share = Mktuple8?._4 ext_res;
+                         L.client_hello_has_x25519_key_share = Mktuple8?._5 ext_res;
                          L.client_hello_p256_key_share = fst p256_res;
                          L.client_hello_has_p256_key_share = snd p256_res;
                          L.client_hello_cipher_suites = Mktuple3?._1 cs_res;
@@ -6604,10 +6670,19 @@ fn parse_handshake_message
                 snbytes
                 lch.L.client_hello_server_name_len
                 (TLS13.Wire.Semantics.clientHello_server_name (Ghost.reveal mch))));
+            (* The two-group gate: an accepted ClientHello either offered a
+               well-formed X25519 share (which [kbytes] holds) or none at all,
+               in which case [ch_key_share_pick] can only have accepted it on
+               the strength of a well-formed secp256r1 offer -- which the
+               independent second pass above found, so its flag is set. *)
             assert (pure (
               match TLS13.Wire.Semantics.clientHello_key_share_x25519 (Ghost.reveal mch) with
               | Some k -> B.length k == 32 /\ Seq.equal kbytes (k <: Seq.seq U8.t)
-              | None -> False));
+              | None -> lch.L.client_hello_has_p256_key_share == true));
+            (* ...and the scan's report of which arm it took agrees with the
+               spec-level test the policy uses. *)
+            assert (pure (lch.L.client_hello_has_x25519_key_share ==
+              Some? (TLS13.Wire.Semantics.clientHello_key_share_x25519 (Ghost.reveal mch))));
             assert (pure (
               match TLS13.Wire.Semantics.clientHello_sig_algs (Ghost.reveal mch) with
               | Some sas ->

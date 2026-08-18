@@ -107,7 +107,7 @@ let next_local_action_sound
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
-         CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+         CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
          st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
            Some selection.CS.server_selected_client_hello
        | None -> False)
@@ -121,7 +121,7 @@ let next_local_action_sound
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
-         CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+         CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
          Some? selection.CS.server_key_share_private
        | None -> False)
     | LocalInstallServerHandshakeTrafficKeys ->
@@ -395,7 +395,7 @@ let server_local_event_input_ready
      let selection = {
        CS.server_selected_client_hello = ch;
        CS.server_selected_cipher_suite = CM.server_selected_suite st;
-       CS.server_selected_group = T.X25519;
+       CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
        CS.server_selected_signature_scheme = CM.server_credential_scheme cfg;
        CS.server_random = server_random;
        CS.server_key_share_private = Some server_private_key;
@@ -420,10 +420,11 @@ let server_local_event_input_ready
           (Some?.v selection.CS.server_key_share_private)
           server_private_key /\
         CS.server_selection_key_share_consistent selection /\
-        (* See the note on the LocalDeriveSharedSecret arm below: the ServerHello
-           writer still emits a 32-byte X25519 KeyShareEntry, so it only realises
-           the group-indexed CS.server_hello_matches_selection at X25519. *)
-        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+        (* The ServerHello writer builds its KeyShareEntry at the group the
+           stored ClientHello's accepted offer names, and
+           CS.server_hello_matches_selection is group-indexed, so the selection
+           has to name that same group (G2 stage S6.8d). *)
+        CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
         (* Cipher-suite agility (gap G1): the stored selection's suite is the one
            the deterministic negotiation policy computes from the stored
            ClientHello.  The select step installs exactly that value, and neither
@@ -520,17 +521,16 @@ let server_local_event_input_ready
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->
        CS.server_selection_key_share_consistent selection /\
-       (* Where this implementation's remaining X25519-only-ness lives.  Both
-          CS.legal_event's LocalDeriveSharedSecret arm and
+       (* Both CS.legal_event's LocalDeriveSharedSecret arm and
           CS.server_hello_matches_selection are group-indexed, dispatching on
-          CS.server_selected_kex_group.  The server's ECDH still calls the raw
-          Crypto.x25519_shared_runtime and its ServerHello writer still emits a
-          32-byte X25519 KeyShareEntry, so both only realise their arm at
-          X25519.  Naming it here -- once, at the input gate -- rather than
-          baking X25519 into the specification is what keeps the whole send path
-          at its concrete 90/95/122-byte lengths.  Stage S6 of
-          docs/server-p256-plan.md removes it. *)
-       CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+          CS.server_selected_kex_group.  The server's ECDH dispatches through
+          KEX.kex_shared_split_runtime and its ServerHello writer builds at the
+          group read off the ClientHello metadata box, so both arms are
+          reachable (G2 stage S6.8d); what the input gate pins is that the
+          selection names the group the stored ClientHello's accepted offer
+          names, which is what the runtime can recover.  The send path's lengths
+          follow that group: 58/63 + kex_public_len g + |session_id|. *)
+       CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
        st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
          Some selection.CS.server_selected_client_hello /\
        Some? selection.CS.server_key_share_private /\

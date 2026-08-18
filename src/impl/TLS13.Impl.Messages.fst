@@ -83,6 +83,11 @@ type client_hello = {
   client_hello_server_name_len: SZ.t;
   client_hello_has_server_name: bool;
   client_hello_key_share: V.vec U8.t;
+  (* Whether the peer named an X25519 group in its (first) key_share extension
+     at all -- equivalently, whether [client_hello_key_share] above is the share
+     the server will act on.  Not recoverable from the stored bytes, since an
+     all-zero 32-byte X25519 slot is a legal share, so the parser reports it. *)
+  client_hello_has_x25519_key_share: bool;
   (* 65 bytes: the uncompressed secp256r1 point the peer offered, when it
      offered one.  Held in its own slot rather than widening
      [client_hello_key_share], so that every proof stated over the X25519 share
@@ -539,20 +544,27 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
         server_name
         l.client_hello_server_name_len
         (Sem.clientHello_server_name m) /\
+      (* The two-group acceptance gate.  When the peer offered an X25519 share
+         it must be well formed and it is what the [client_hello_key_share]
+         slot holds; when it offered none, acceptance instead requires a
+         well-formed secp256r1 offer, whose bytes the P-256 slot below holds.
+         This mirrors [WS.ch_key_share_pick]: X25519 wins whenever it is
+         present, and a malformed X25519 entry is still a hard reject. *)
       (match Sem.clientHello_key_share_x25519 m with
        | Some k -> B.length k == 32 /\ Seq.equal key_share k
-       | None -> False) /\
+       | None -> l.client_hello_has_p256_key_share == true) /\
+      (* ...and which of the two the acceptance gate picked, as a runtime bit:
+         [TLS13.Impl.ConnectionState.Model.client_hello_kex_group_for] is
+         exactly this test, and the store path copies the answer into the
+         [client_hello_kex_group] metadata box. *)
+      l.client_hello_has_x25519_key_share ==
+        Some? (Sem.clientHello_key_share_x25519 m) /\
       (* An iff: the flag is set exactly when the peer offered a well-formed
          (65-byte, uncompressed-point) secp256r1 share, and when it is set the
          stored bytes are that share.  A secp256r1 KeyShareEntry of any other
          length is treated as no offer at all rather than as a parse failure,
          which is what the RFC 8446 4.2.8 "ignore unrecognised/unusable groups"
-         reading requires -- the peer may legitimately offer several groups.
-
-         The X25519 clause just above is still `| None -> False`, so an offer
-         recorded here is not yet an offer the server will act on; turning that
-         clause into a disjunction over the two groups is what widens the
-         accepted set -- see docs/server-p256-plan.md S6. *)
+         reading requires -- the peer may legitimately offer several groups. *)
       (match Sem.clientHello_key_share_secp256r1 m with
        | Some k ->
          l.client_hello_has_p256_key_share == (B.length k = 65) /\

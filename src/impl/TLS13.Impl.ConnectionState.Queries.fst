@@ -2025,6 +2025,11 @@ fn select_supported_server_parameters_runtime
                     CS.named_group_offered
                       cfg.CS.server_supported_groups
                       T.X25519 /\
+                    (* G2: the selected group follows the peer's accepted key_share offer,
+                       so the profile must offer both groups the gate can pick. *)
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.Secp256r1 /\
                     CS.signature_scheme_offered
                       cfg.CS.server_allowed_signature_schemes
                       (CryptoSpec.credential_signature_scheme
@@ -2054,7 +2059,7 @@ fn select_supported_server_parameters_runtime
                  CS.server_selected_client_hello = ch;
                  CS.server_selected_cipher_suite =
                    IM.cipher_suite_of_u16 suite;
-                 CS.server_selected_group = T.X25519;
+                 CS.server_selected_group = named_group_of_kex_group (client_hello_kex_group_for (ch));
                  CS.server_selected_signature_scheme =
                    CryptoSpec.credential_signature_scheme
                      cfg.CS.server_credential_identity;
@@ -2280,9 +2285,14 @@ fn select_supported_server_parameters_runtime
     assert (pure (CS.cipher_suite_offered
       (Ghost.reveal cfg).CS.server_supported_cipher_suites
       (IM.cipher_suite_of_u16 suite_wire)));
+    (* G2: the selected group follows the peer's accepted key_share offer,
+       so the profile must offer both groups the gate can pick. *)
     assert (pure (CS.named_group_offered
       (Ghost.reveal cfg).CS.server_supported_groups
-      T.X25519));
+      T.X25519 /\
+      CS.named_group_offered
+        (Ghost.reveal cfg).CS.server_supported_groups
+        T.Secp256r1));
     assert (pure (CS.signature_scheme_offered
       (Ghost.reveal cfg).CS.server_allowed_signature_schemes
       (CryptoSpec.credential_signature_scheme
@@ -2294,7 +2304,7 @@ fn select_supported_server_parameters_runtime
     let selection = Ghost.hide {
       CS.server_selected_client_hello = Ghost.reveal ch;
       CS.server_selected_cipher_suite = IM.cipher_suite_of_u16 suite_wire;
-      CS.server_selected_group = T.X25519;
+      CS.server_selected_group = named_group_of_kex_group (client_hello_kex_group_for (Ghost.reveal ch));
       CS.server_selected_signature_scheme =
         CryptoSpec.credential_signature_scheme
           (Ghost.reveal cfg).CS.server_credential_identity;
@@ -2478,7 +2488,7 @@ fn can_schedule_derive_shared_secret_runtime
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
              | Some selection ->
                CS.server_selection_key_share_consistent selection /\
-               CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+               CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                  Some selection.CS.server_selected_client_hello
              | None -> False))
@@ -2560,7 +2570,7 @@ fn can_schedule_derive_shared_secret_runtime
       match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
         CS.server_selection_key_share_consistent selection /\
-        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+        CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
         st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
           Some selection.CS.server_selected_client_hello
       | None -> False));
@@ -2634,10 +2644,10 @@ fn can_send_server_hello_runtime
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
              | Some selection ->
                CS.server_selection_key_share_consistent selection /\
-               CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+               CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 155 <=
               max_transcript_len)
 {
   unfold (connection_exactly c st0);
@@ -2680,7 +2690,7 @@ fn can_send_server_hello_runtime
   let shared_secret_present = !c.handshake.keys.shared_secret.present;
   let current_transcript_len = !c.handshake.transcript.len;
   let no_server_hello = None? server_hello;
-  let max_start = SZ.sub max_transcript_len_sz 122sz;
+  let max_start = SZ.sub max_transcript_len_sz 155sz;
   let transcript_room = sizet_lte_plain current_transcript_len max_start;
   lemma_sizet_lte_plain current_transcript_len max_start;
   let ok =
@@ -2722,7 +2732,7 @@ fn can_send_server_hello_runtime
   assert (pure (current_transcript_len == transcript_len));
   assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
   assert (pure (ok ==>
-    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 155 <=
       max_transcript_len));
   if ok {
     CSL.lemma_connection_state_consistent_server_pre_server_hello_shape st0;
@@ -2730,7 +2740,7 @@ fn can_send_server_hello_runtime
       match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
         CS.server_selection_key_share_consistent selection /\
-        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+        CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
         Some? selection.CS.server_key_share_private
       | None -> False));
     fold (optional_secret_exactly

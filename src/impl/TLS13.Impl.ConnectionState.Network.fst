@@ -936,16 +936,18 @@ fn mark_received_client_hello
   // one is not recoverable from the stored bytes, since an all-zero 32-byte
   // X25519 slot is a legal share.
   //
-  // The acceptance gate still demands an X25519 share (is_valid_client_hello's
-  // key-share clause is `| None -> False`), so the policy's secp256r1 fallback
-  // arm is unreachable here and the written value is provably KexX25519.  What
-  // the write buys is that the tag is *read* from a box rather than assumed, so
-  // widening the gate is a change to the policy alone -- see stage S6 of
-  // docs/server-p256-plan.md.
-  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch))));
-  c.handshake.messages.client_hello_kex_group := CryptoSpec.KexX25519;
-  assert (pure (client_hello_kex_group_for (Ghost.reveal ch) ==
-                CryptoSpec.KexX25519));
+  // G2 stage S6.8d: the gate admits either group, so the tag written here is
+  // the one the parser reported -- [IM.is_valid_client_hello] pins that flag to
+  // [Some? (Sem.clientHello_key_share_x25519 ch)], which is exactly the test
+  // [client_hello_kex_group_for] makes.
+  let stored_kex_group =
+    if lch.IM.client_hello_has_x25519_key_share {
+      CryptoSpec.KexX25519
+    } else {
+      CryptoSpec.KexP256
+    };
+  assert (pure (stored_kex_group == client_hello_kex_group_for (Ghost.reveal ch)));
+  c.handshake.messages.client_hello_kex_group := stored_kex_group;
   lemma_bounded_u16_sizet_of_sizet
     (Seq.length (Sem.clientHello_session_id (Ghost.reveal ch)))
     lch.IM.client_hello_session_id_len;
@@ -963,9 +965,14 @@ fn mark_received_client_hello
     stored_server_name
     (client_hello_server_name_len_for (Ghost.reveal ch))
     (Sem.clientHello_server_name (Ghost.reveal ch))));
+  (* G2 stage S6.8d: the acceptance gate is now a disjunction, so the mirror
+     that is pinned is the one for the group the offer named. *)
   assert (pure (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
     | Some k -> B.length k == 32 /\ Seq.equal stored_key_share k
-    | None -> False));
+    | None ->
+      (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+       | Some k -> B.length k == 65 /\ Seq.equal stored_p256_key_share k
+       | None -> False)));
   assert (pure (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
     | Some k -> B.length k == 65 ==> Seq.equal stored_p256_key_share k
     | None -> True));

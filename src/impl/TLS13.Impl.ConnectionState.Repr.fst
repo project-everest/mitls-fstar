@@ -1579,6 +1579,7 @@ fn alloc_client_hello_slot_empty ()
     IM.client_hello_server_name_len = 0sz;
     IM.client_hello_has_server_name = false;
     IM.client_hello_key_share;
+    IM.client_hello_has_x25519_key_share = false;
     IM.client_hello_p256_key_share;
     IM.client_hello_has_p256_key_share = false;
     IM.client_hello_cipher_suites;

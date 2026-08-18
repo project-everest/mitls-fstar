@@ -543,7 +543,8 @@ let lemma_server_hello_of_selection_bytesize
 // the accessors (fuel for the 2-extension list walk).  The ServerHello
 // wire-profile bound (serialized handshake <= 16640) in
 // server_hello_matches_selection is discharged from the exact bytesize
-// (90 + |session_id|, at most 122).
+// (58 + kex_public_len (server_selected_kex_group sel) + |session_id|, at most
+// 155).
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 120"
 let lemma_server_hello_of_selection_matches
   (sel:CS.server_handshake_selection)

@@ -230,14 +230,14 @@ static const struct case_spec k_cases[] = {
      "AES-128-GCM record layer driven through the NeedMoreInput retry loop", TLS13_ONLY},
 
     /* --- Key-exchange axis. --------------------------------------------- */
-    /* The client offers, and can complete, secp256r1 (commit db6f7fb71).  The
-       server's ECDH is X25519-only: TLS13.Spec.StateMachine's server arm of
-       LocalDeriveSharedSecret calls client_hello_key_share, which reads only
-       the X25519 entry, and TLS13.Wire.Spec.clientHello_representable rejects
-       outright any ClientHello with no X25519 key share. */
+    /* G2 closed (stage S6.8d): TLS13.Wire.Spec.ch_key_share_pick accepts a
+       ClientHello whose only key_share is a well-formed secp256r1 one, and the
+       whole server path -- ECDH, ServerHello group tag, and record length --
+       follows the group the acceptance gate picked. */
     {"p256-only", "TLS_CHACHA20_POLY1305_SHA256", "P-256",
-     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL, NULL,
-     "GAP: server has no secp256r1 ECDH and no HelloRetryRequest (client has P-256)", TLS13_ONLY},
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "prime256v1",
+     "secp256r1-only offer completed at secp256r1", TLS13_ONLY},
     {"x25519-and-p256", "TLS_CHACHA20_POLY1305_SHA256", "X25519:P-256",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
@@ -250,19 +250,21 @@ static const struct case_spec k_cases[] = {
      "TLS_AES_128_GCM_SHA256", "X25519",
      "suite fallback and a two-group supported_groups together", TLS13_ONLY},
     /* P-256 listed first makes OpenSSL send its key_share for P-256 only and
-       list X25519 in supported_groups, which a server without
-       HelloRetryRequest cannot use. */
+       list X25519 in supported_groups.  Before G2 that needed a
+       HelloRetryRequest; now the server simply takes the offered group. */
     {"p256-first-x25519-listed", "TLS_CHACHA20_POLY1305_SHA256",
-     "P-256:X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, FAIL, NULL,
-     NULL, "GAP: needs HelloRetryRequest to ask for the X25519 share", TLS13_ONLY},
-    /* The same gap under a different credential.  G2 is a key-exchange gap, so
-       it must not depend on the signature axis; recording it twice is what
-       makes a future partial fix (P-256 that only works for RSA, say) visible
+     "P-256:X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_NORMAL, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "prime256v1",
+     "only a secp256r1 key_share was sent, so secp256r1 is what gets used",
+     TLS13_ONLY},
+    /* The same case under a different credential.  G2 was a key-exchange gap,
+       so its closure must not depend on the signature axis; recording it twice
+       is what makes a partial fix (P-256 that only works for RSA, say) visible
        rather than silently accepted. */
     {"ecdsa-credential-p256-only", "TLS_CHACHA20_POLY1305_SHA256", "P-256",
-     "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, FAIL,
-     NULL, NULL,
-     "GAP (G2): the key-exchange gap is independent of the credential axis", TLS13_ONLY},
+     "ecdsa_secp256r1_sha256", CRED_ECDSA_P256, true, FRAMING_NORMAL, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "prime256v1",
+     "secp256r1 key exchange is independent of the credential axis", TLS13_ONLY},
 
     /* --- Signature-scheme axis. ----------------------------------------- */
     {"rsa-pss-only", "TLS_CHACHA20_POLY1305_SHA256", "X25519",

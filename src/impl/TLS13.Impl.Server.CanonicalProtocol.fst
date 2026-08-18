@@ -122,6 +122,11 @@ let server_supported_profile_selection
      CS.named_group_offered
        cfg.CS.server_supported_groups
        T.X25519 /\
+     (* G2: the selected group follows the peer's accepted key_share offer,
+        so the profile must offer both groups the gate can pick. *)
+     CS.named_group_offered
+       cfg.CS.server_supported_groups
+       T.Secp256r1 /\
      CS.signature_scheme_offered
        cfg.CS.server_allowed_signature_schemes
        (CryptoSpec.credential_signature_scheme credential_identity) /\

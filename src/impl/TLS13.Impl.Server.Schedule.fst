@@ -196,7 +196,7 @@ fn next_local_action
       match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
         CS.server_selection_key_share_consistent selection /\
-        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+        CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
         'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
           Some selection.CS.server_selected_client_hello
       | None -> False));
@@ -217,7 +217,7 @@ fn next_local_action
       match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
       | Some selection ->
         CS.server_selection_key_share_consistent selection /\
-        CS.server_selected_kex_group selection == CryptoSpec.KexX25519 /\
+        CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
         Some? selection.CS.server_key_share_private
       | None -> False));
     {

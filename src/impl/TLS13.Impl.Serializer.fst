@@ -2090,6 +2090,7 @@ fn serialize_client_hello_from_start
     L.client_hello_server_name_len = hostname_len;
     L.client_hello_has_server_name = true;
     L.client_hello_key_share = l.L.client_hello_key_share;
+    L.client_hello_has_x25519_key_share = true;
     L.client_hello_p256_key_share = l.L.client_hello_p256_key_share;
     L.client_hello_has_p256_key_share = true;
     L.client_hello_cipher_suites = l.L.client_hello_cipher_suites;

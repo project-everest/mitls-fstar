@@ -2068,7 +2068,13 @@ let lemma_connection_state_consistent_server_pre_server_hello_shape
         (match st.cs_model.model_handshake.hs_server_selection with
          | Some selection ->
            server_selection_key_share_consistent selection /\
-           Some? selection.server_key_share_private
+           Some? selection.server_key_share_private /\
+           (* G2 stage S6.8d: the selection was made from the stored
+              ClientHello.  Needed by the ServerHello writer, which reads the
+              negotiated group off the stored ClientHello's metadata and has to
+              match it against the group the selection names. *)
+           st.cs_model.model_handshake.hs_client_hello ==
+             Some selection.server_selected_client_hello
          | None -> False))
 =
   lemma_connection_state_consistent_server_x25519_reachable_shape st;
