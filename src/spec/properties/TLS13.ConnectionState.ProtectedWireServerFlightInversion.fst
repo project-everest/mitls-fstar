@@ -3380,7 +3380,54 @@ let lemma_finish_strong (s:sysp)
   )
 #pop-options
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 1600"
+(* Note: the server-side and client-side existential packages carry 14 and 15
+   witnesses respectively.  Eliminating them in a single definition makes the
+   proof obligation enormous: [eliminate exists] desugars to a chain of
+   [indefinite_descriptionK] calls whose results are destructed by dependent
+   tuples, and since F* no longer substitutes let-bound definitions into VCs
+   those destructurings survive un-reduced in the context (FStarLang/FStar#4444).
+   Nesting the two eliminations multiplied the cost: it needed [--z3rlimit 1600]
+   and drove Z3 to a 17GB resident set, which is fatal on a 16GB CI runner.
+   Splitting the two eliminations into separate definitions keeps each query
+   small.  Do not merge them back together. *)
+
+#restart-solver
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 800"
+let lemma_combine_client_side (s:sysp)
+  (ms:CS.connection_model) (material_s:CS.traffic_key_material)
+  (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
+  (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (tail_s:list CS.conn_event)
+  (fl_sent_s fl_recv_s:B.bytes) (ch_s:GCH.clientHello) (sh_s:GSH.serverHello)
+  (d_ch_s rest_sr:B.bytes)
+  : Lemma (requires
+            server_flight_bridge_inputs s.client s.server /\
+            server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
+              fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr)
+          (ensures
+            server_flight_pairs_conclusion s.client s.server /\
+            client_normalized_appdata_exact_spine s.client)
+  =
+  lemma_client_side s;
+  eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
+    (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
+    (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
+    (tail_c raw_flight_c:list CS.conn_event)
+    (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
+    (rest_cs:B.bytes).
+    client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+      tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
+  with
+  (
+    lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
+      fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
+      mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
+      tail_c raw_flight_c
+      fl_sent_c fl_recv_c ch_c sh_c rest_cs
+  )
+#pop-options
+
+#restart-solver
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 let lemma_combine_strong (s:sysp)
   : Lemma (requires server_flight_bridge_inputs s.client s.server)
           (ensures
@@ -3388,7 +3435,6 @@ let lemma_combine_strong (s:sysp)
             client_normalized_appdata_exact_spine s.client)
   =
   lemma_server_side s;
-  lemma_client_side s;
   eliminate exists (ms:CS.connection_model) (material_s:CS.traffic_key_material)
     (ee_s:GEE.encryptedExtensions) (cert_s:GCert.certificate) (cv_local_s:CS.local_event)
     (cv_s:GCV.certificateVerify) (sf_s:GFin.finished) (tail_s:list CS.conn_event)
@@ -3398,22 +3444,8 @@ let lemma_combine_strong (s:sysp)
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
   with
   (
-    eliminate exists (mc:CS.connection_model) (material_c:CS.traffic_key_material)
-      (ee_c:GEE.encryptedExtensions) (cert_c:GCert.certificate) (cv_validate_c:CS.local_event)
-      (cv_c:GCV.certificateVerify) (cv_verify_c:CS.local_event) (sf_c:GFin.finished)
-      (tail_c raw_flight_c:list CS.conn_event)
-      (fl_sent_c fl_recv_c:B.bytes) (ch_c:GCH.clientHello) (sh_c:GSH.serverHello)
-      (rest_cs:B.bytes).
-      client_side_package s mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-        tail_c raw_flight_c fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    with
-    (
-      lemma_finish_strong s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
-        fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
-        mc material_c ee_c cert_c cv_validate_c cv_c cv_verify_c sf_c
-        tail_c raw_flight_c
-        fl_sent_c fl_recv_c ch_c sh_c rest_cs
-    )
+    lemma_combine_client_side s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
+      fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
   )
 #pop-options
 
