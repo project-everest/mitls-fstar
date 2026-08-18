@@ -77,7 +77,7 @@ let server_flight_marker_shape (m:CS.connection_model) : prop =
    (m.CS.model_record.CS.record_write.R.epoch == R.Application ==>
       Some? hs.CS.hs_server_finished))
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 150"
 let lemma_step_server_flight_marker_shape
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -241,7 +241,7 @@ let client_finished_marker_shape (m:CS.connection_model) : prop =
    (m.CS.model_record.CS.record_write.R.epoch == R.Application ==>
       Some? hs.CS.hs_client_finished))
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 150"
 let lemma_step_client_finished_marker_shape
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma

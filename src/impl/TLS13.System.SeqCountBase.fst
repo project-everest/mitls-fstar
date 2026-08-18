@@ -126,7 +126,7 @@ let seq_count_ok_pair (client server:CS.connection_state) : prop =
     and `raw_sent` are untouched (delta sent bytes empty).  So `pwrite_ok`
     transports trivially.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_pwrite_received
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (msg:M.tls_message)
@@ -168,7 +168,7 @@ let lemma_pwrite_received
     cleanly into records — supplied by `client/server_byte_reachable`) transports
     the count across the wire-log append.  Everything else is pure arithmetic.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
 let lemma_pwrite_algebra
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (msgs:list CW.wire_message)
@@ -211,7 +211,7 @@ let lemma_pwrite_algebra
     Mirror of `lemma_pwrite_received`: a Sent event modifies only `record_write`
     and `raw_sent`; `record_read` and `raw_received` are unchanged.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_pread_sent
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (msg:M.tls_message)
@@ -236,7 +236,7 @@ let lemma_pread_sent
 (** ─────────────────────────────────────────────────────────────────────────
     COUNTING-ALGEBRA CORE (read side) — mirror of `lemma_pwrite_algebra`.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
 let lemma_pread_algebra
   (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
   (msgs:list CW.wire_message)
@@ -378,7 +378,7 @@ let rec lemma_advance_preserves_key_epoch (st:R.direction_state) (n:nat)
           [SMTPat (CS.advance_direction_records st n)]
   = if n = 0 then () else lemma_advance_preserves_key_epoch st (n - 1)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_record_key_epoch_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -472,7 +472,7 @@ let record_schedule_coupling (m:CS.connection_model) : prop =
              (CS.traffic_label_for_endpoint_direction role CS.TrafficRead)))
 
 #restart-solver
-#push-options "--fuel 4 --ifuel 6 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 6 --z3rlimit 150"
 let lemma_step_record_schedule_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -554,7 +554,7 @@ let lemma_consistent_record_schedule_coupling
     non-Initial epoch).  The two cleartext-hello count-0 facts are supplied by the
     caller from reachability (ServerHello wire bound / ClientHello wire profile).
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_sent_write_model_facts
   (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -607,7 +607,7 @@ let lemma_sent_write_model_facts
     (an open forces a read key, hence a non-Initial epoch).  The ServerHello wire
     bound is supplied by the caller from reachability.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_recv_read_model_facts
   (m:CS.connection_model) (msg:M.tls_message) (m':CS.connection_model)
   (rs rr:B.bytes)
@@ -791,7 +791,7 @@ let local_read_seq_zero
   | CS.LocalInstallTrafficKeysForRole ri -> install_read_seq_zero m ri.CS.install_payload
   | _ -> True
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_install_seq_stable_write
   (m:CS.connection_model) (install:CS.traffic_key_install) (m':CS.connection_model)
   : Lemma
@@ -822,7 +822,7 @@ let lemma_client_local_install_seq_stable_write
        | _, _ -> ())
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 (** The GATE `install_read_seq_zero` is exactly what let this hold as an
     EQUALITY: a re-install at a state where the pre-install seq is provably 0.
     Cross-record reassembly breaks the gate's discharge for a CLIENT (see
@@ -863,7 +863,7 @@ let lemma_client_local_install_seq_stable_read
        | _, _ -> ())
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_install_for_role_seq_stable_write
   (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
   (m':CS.connection_model)
@@ -894,7 +894,7 @@ let lemma_client_local_install_for_role_seq_stable_write
   = lemma_client_local_install_seq_stable_write m role_install.CS.install_payload m'
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 (** Mirror of the plain client install, dropping the same gate for the same
     reason (`_ForRole` install carries an identical `TrafficHandshake`/
     `TrafficRead` case, subject to the identical redundant-install hazard). **)
@@ -929,7 +929,7 @@ let lemma_client_local_install_for_role_seq_stable_read
 
 (** Client LOCAL record-seq stability (dispatch on the local event).  Only the two
     key-install locals touch `model_record`; everything else leaves it fixed. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_record_seq_stable_write
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -953,7 +953,7 @@ let lemma_client_local_record_seq_stable_write
     | _ -> ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_record_seq_stable_read
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -983,7 +983,7 @@ let lemma_client_local_record_seq_stable_read
     epoch to `Application` (so the `Handshake` antecedent is vacuous); the handshake
     installs are excluded from resetting a `Handshake` seq by the gate.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_install_for_role_seq_stable_write
   (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
   (m':CS.connection_model)
@@ -1022,7 +1022,7 @@ let lemma_server_local_install_for_role_seq_stable_write
        | _, _ -> ())
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_install_for_role_seq_stable_read
   (m:CS.connection_model) (role_install:CS.role_traffic_key_install)
   (m':CS.connection_model)
@@ -1064,7 +1064,7 @@ let lemma_server_local_install_for_role_seq_stable_read
 (** Server LOCAL record-seq stability (dispatch).  Only key-install locals touch
     `model_record`; the plain `LocalInstallTrafficKeys` is client-only (legality),
     so a server install is always the `_ForRole` variant. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_record_seq_stable_write
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -1086,7 +1086,7 @@ let lemma_server_local_record_seq_stable_write
     | _ -> ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_record_seq_stable_read
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -1112,7 +1112,7 @@ let lemma_server_local_record_seq_stable_read
     ChangeCipherSpec, either direction) leaves the record layer UNCHANGED: no
     `next_seq` (that is for protected records) and no key install (those are local
     events).  Hence such a step trivially preserves both record seqs. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 50 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 50"
 let lemma_cleartext_step_record_unchanged
   (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -1156,9 +1156,11 @@ let record_app_epoch_coupling (m:CS.connection_model) : prop =
 
 (* Verifies immediately under --admit_except: what defeats it in situ is the
    Z3 state accumulated over this module, enlarged by the agentic merge, not
-   the goal.  Reset the solver instead of raising fuel/rlimit. *)
+   the goal.  Reset the solver instead of raising fuel/ifuel.  The rlimit has
+   to be generous because F*'s `fly_deps` changes the declaration context this
+   query is encoded against. *)
 #restart-solver
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 30 --split_queries always"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 100"
 let lemma_step_record_app_epoch_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -1277,7 +1279,7 @@ let app_slots_none_shape (m:CS.connection_model) : prop =
      keys.CS.ks_client_application_traffic == None /\
      keys.CS.ks_server_application_traffic == None)
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 400"
 let lemma_step_app_slots_none_shape
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -1352,7 +1354,7 @@ let lemma_consistent_app_slots_none_shape
     ONLY at `ControlApplicationData` (excluded by `pre_appdata`).  Hence the
     message is cleartext, and `lemma_cleartext_step_record_unchanged` applies.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_network_empty_delta_record_unchanged
   (m:CS.connection_model) (dm:CL.directed_message M.tls_message) (m':CS.connection_model)
   : Lemma
@@ -1390,7 +1392,7 @@ let lemma_network_empty_delta_record_unchanged
     drains restore the source read-record state; Finished atomically installs
     the application read state, making all handshake/initial post-state gates
     vacuous. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_protected_empty_delta_read_facts
   (m:CS.connection_model) (step:CS.protected_handshake_step)
   (m':CS.connection_model)
@@ -1442,7 +1444,7 @@ let lemma_client_protected_empty_delta_read_facts
     read direction is the mirror.  A write/read that STAYS at `Initial` was left
     untouched (installs never yield `Initial`), so the source epoch is `Initial`.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_record_install_char
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -1477,7 +1479,7 @@ let lemma_client_local_record_install_char
     `record_app_epoch_coupling` exclude a pre-existing `Application` record, so the
     source epoch is `Initial`.  The read direction is the mirror (handshake read
     install pinned to `HsServerHelloSent`). **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_record_install_char
   (m:CS.connection_model) (local:CS.local_event) (m':CS.connection_model)
   : Lemma
@@ -1515,7 +1517,7 @@ let lemma_server_local_record_install_char
     seq to 0.  Non-install locals leave the record fixed, so the gate is vacuous.
     ───────────────────────────────────────────────────────────────────────── **)
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_discharge_client_write
   (a:CS.connection_state) (local':CS.local_event)
   : Lemma
@@ -1548,7 +1550,7 @@ let lemma_discharge_client_write
     (`R.install_keys` only ever resets it to 0), which is all `pread_ok`'s
     inequality clause on the client needs. **)
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 80"
 let lemma_discharge_server_write
   (a:CS.connection_state) (local':CS.local_event)
   : Lemma
@@ -1577,7 +1579,7 @@ let lemma_discharge_server_write
     | _ -> ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 80"
 let lemma_discharge_server_read
   (a:CS.connection_state) (local':CS.local_event)
   : Lemma
@@ -1617,7 +1619,7 @@ let lemma_discharge_server_read
     `raw_appdata_count c'.raw_sent == raw_appdata_count a.raw_sent`; when the source
     write epoch is `Initial` this is 0 by `pwrite_ok a`.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_pwrite
   (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
   : Lemma
@@ -1669,7 +1671,7 @@ let lemma_client_local_pwrite
 
 (** CLIENT LOCAL, READ side — mirror of `lemma_client_local_pwrite` on
     `record_read` / `raw_received`. **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_client_local_pread
   (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
   : Lemma
@@ -1728,7 +1730,7 @@ let lemma_client_local_pread
     server per-transition record facts and the local server reachability
     parse-witness helpers.
     ───────────────────────────────────────────────────────────────────────── **)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_pwrite
   (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
   : Lemma
@@ -1775,7 +1777,7 @@ let lemma_server_local_pwrite
     else ()
 #pop-options
 
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 let lemma_server_local_pread
   (a:CS.connection_state) (d:CS.connection_delta) (c':CS.connection_state)
   : Lemma

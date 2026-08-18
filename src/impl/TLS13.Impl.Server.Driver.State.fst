@@ -806,6 +806,7 @@ let lemma_legal_response_for_event_wire_lengths
   Seq.lemma_len_append st0.CS.cs_wire_log.CL.raw_sent raw_sent;
   Seq.lemma_len_append st0.CS.cs_wire_log.CL.raw_received raw_received
 
+#push-options "--z3rlimit 100"
 let lemma_local_event_wire_lengths
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -914,6 +915,7 @@ let lemma_local_event_wire_lengths
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
   )
 
+#pop-options
 let lemma_server_local_event_received_exact_when_nonfailed
   (st0:CS.connection_state)
   (st1:CS.connection_state)

@@ -498,7 +498,7 @@ let lemma_can_send_server_hello_witness_of_selection
 (* the large Endpoint deferred-action Pulse function (whose whole-function    *)
 (* query is otherwise destabilised by the added obligations).                *)
 (* ----------------------------------------------------------------------- *)
-#push-options "--fuel 8 --ifuel 8 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_input_ready_server_hello_of_selection
   (st: CS.connection_state)
   (selection: CS.server_handshake_selection)
@@ -793,6 +793,7 @@ let lemma_range_ext_cst (mb: B.bytes) (n:nat) (ae:bool) (mv cv: U8.t)
                     (forall (k:nat). k < n + 1 ==> Seq.index mb k == Seq.index GSHbody.serverHello_body_cst k)))
   = ()
 
+#push-options "--z3rlimit 100"
 fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased (b:B.bytes{B.length b >= 32}))
   requires pts_to material #p mb
   returns b: bool
@@ -826,6 +827,7 @@ fn server_random_differs_from_cst (material: array U8.t) (#p: perm) (#mb: erased
   not res
 }
 
+#pop-options
 noextract
 let lemma_server_handshake_write_seal_some
   (st:CS.connection_state)
@@ -1651,6 +1653,7 @@ fn process_send_server_hello_with_derived_public_from_private_array
   resp
 }
 
+#push-options "--z3rlimit 100"
 fn process_send_encrypted_extensions_serialized
   (s:server)
   (network_out:array U8.t)
@@ -1930,6 +1933,7 @@ fn process_send_encrypted_extensions_serialized
   resp
 }
 
+#pop-options
 #push-options "--fuel 3 --ifuel 2 --z3rlimit 200"
 fn build_certificate_from_credentials
   (creds:O.server_credentials)
@@ -2489,6 +2493,7 @@ fn process_send_certificate_from_credentials
   }
 }
 
+#push-options "--z3rlimit 150"
 fn process_send_certificate_verify_serialized
   (s:server)
   (lcv:IM.certificate_verify)
@@ -2770,7 +2775,9 @@ fn process_send_certificate_verify_serialized
   resp
 }
 
+#pop-options
 #restart-solver
+#push-options "--z3rlimit 400"
 fn process_send_stored_certificate_verify_serialized
   (s:server)
   (#cv:erased GCV.certificateVerify)
@@ -3052,6 +3059,7 @@ fn process_send_stored_certificate_verify_serialized
   resp
 }
 
+#pop-options
 fn process_send_server_finished_serialized
   (s:server)
   (network_out:array U8.t)

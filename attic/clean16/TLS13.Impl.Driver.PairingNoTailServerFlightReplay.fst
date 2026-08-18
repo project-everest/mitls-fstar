@@ -35,7 +35,7 @@ module Seq = FStar.Seq
 module Tac = FStar.Tactics
 module X = TLS13.X509.Spec
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let lemma_server_handshake_install_event_deltas_empty
   (model:CS.connection_model)

@@ -439,7 +439,7 @@ let lemma_client_appdata_appkeys_delta
     rules out the window `Sent`/deliver control changes whose progress step is not
     a strict +1; those are guarded by `server_advances` (unchanged), not the local
     guard, so this restriction loses nothing. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 80"
 let lemma_server_control_change_progress
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma (requires

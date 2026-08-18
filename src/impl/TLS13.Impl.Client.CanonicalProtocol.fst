@@ -4759,6 +4759,7 @@ let lemma_client_wire_event_network_error_refines_state_machine
 // decoded_message_event_projection, forces status == IllegalTransition, so it
 // can never explain a StepOk/ConnectionFailed response) — hence
 // legal_received_tls_response must hold, giving a genuine wire-parsed message.
+#push-options "--z3rlimit 100"
 let lemma_client_network_wire_event_bridge_result
   (initial:client_initial_state)
   (received0:B.bytes)
@@ -5007,6 +5008,7 @@ let lemma_client_network_wire_event_bridge_result
   [coalesced_network_bytes_end_to_end_correct], and the reason the canonical
   ProtocolImplementation can be pointed at the coalescing receive primitive.
  **)
+#pop-options
 let lemma_client_network_protected_head_bridge_result
   (initial:client_initial_state)
   (received0:B.bytes)

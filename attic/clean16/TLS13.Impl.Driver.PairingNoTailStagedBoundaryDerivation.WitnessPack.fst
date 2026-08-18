@@ -66,7 +66,7 @@ module ClientFinished = TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.
 open TLS13.Impl.Driver.PairingNoTailStagedBoundaryDerivation.ClientFinished
 
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 noextract
 let lemma_installed_witness_pack_from_extracted_slices

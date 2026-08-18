@@ -102,15 +102,6 @@ FSTAR_EXTRACT_DEBUG_FLAGS =
 KRML_DEBUG_FLAGS =
 endif
 
-# --ext fly_deps=false: F* enables `fly_deps` by default, which makes it treat
-# every .checked file of a module it is asked to check as invalid and recompute
-# dependencies on the fly.  That is fine for verification, but extraction runs
-# with cross-module inlining (--cmi, on by default whenever --codegen is set),
-# and cmi *requires* every dependency to have a loadable .checked file --
-# otherwise F* aborts with "Cross-module inlining expects all modules to be
-# checked first" (Error 317).  fly_deps also changes the dependency graph that
-# is hashed into .checked files, so it must be disabled for verification too,
-# or extraction rejects the cache with a dependence hash mismatch.
 FSTAR_FLAGS = \
   $(OTHERFLAGS) \
   --z3version $(Z3_VERSION) \
@@ -121,7 +112,6 @@ FSTAR_FLAGS = \
   --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
-  --ext fly_deps=false \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
@@ -136,7 +126,6 @@ FSTAR_EXTRACT_FLAGS = \
   --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
-  --ext fly_deps=false \
   $(INCLUDES)
 
 FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
@@ -203,6 +192,19 @@ GENERATED_MAKE_VARS = \
 # prerequisite below.  The stamp rebuilds whenever a generated source changes.
 GENERATED_SRCS  = $(wildcard $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti)
 GENERATED_STAMP = $(GENERATED_DIR)/.checked.stamp
+
+# A .checked file is specific to the F* build that produced it, and F* does not
+# check that: a cache written by a different build can segfault the typechecker
+# rather than being rejected.  Discard both cache trees when the toolchain
+# changes.  This runs at parse time -- note the `:=` -- because it must happen
+# before `.depend` is read; doing it from a recipe would delete files that make
+# has already built rules around.  See scripts/invalidate-stale-cache.sh.
+TOOLCHAIN_STAMP = .fstar-version
+STALE_CACHE_CHECK := $(shell $(CURDIR)/scripts/invalidate-stale-cache.sh \
+  "$(FSTAR_EXE)" "$(TOOLCHAIN_STAMP)" \
+  "$(CACHE_DIR)" "_cache_quick" \
+  "$(GENERATED_DIR)/cache" "$(GENERATED_DIR)/.depend" \
+  "$(GENERATED_STAMP)" $(wildcard $(GENERATED_DIR)/TLS13.Wire.Generated.*.checked))
 
 .PHONY: regen-generated
 regen-generated: | check-toolchain

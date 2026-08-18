@@ -42,9 +42,22 @@ module W   = HTTP.Wire.Common
 let lit_get      : TCP.bytes = W.lit [0x47uy;0x45uy;0x54uy;0x20uy]
 let req_tail     : TCP.bytes = W.lit [0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;0x2Euy;0x31uy;0x0Duy;0x0Auy;0x0Duy;0x0Auy]
 let resp_prefix  : TCP.bytes = W.lit [0x48uy;0x54uy;0x54uy;0x50uy;0x2Fuy;0x31uy;0x2Euy;0x31uy;0x20uy]
-let cl_tail_pre  : TCP.bytes = W.lit [0x20uy;0x0Duy;0x0Auy;0x43uy;0x6Fuy;0x6Euy;0x74uy;0x65uy;0x6Euy;0x74uy;0x2Duy;0x4Cuy;0x65uy;0x6Euy;0x67uy;0x74uy;0x68uy;0x3Auy;0x20uy]  (* " \r\nContent-Length: " *)
-let cl_tail_post : TCP.bytes = W.lit [0x0Duy;0x0Auy;0x0Duy;0x0Auy]  (* "\r\n\r\n" *)
+(* `assert (Seq.length cl_tail_pre == 19)` stalls: the normalizer cannot
+   reduce through the abstract `Seq.length`, so it leaves
+   `length (seq_of_list [..19 elements..])`, which the solver must then discharge
+   by unfolding `List.Tot.length` 19 times.  Route through the length carried by
+   `seq_of_list`'s return type instead, and keep it in `cl_tail_pre`'s own type
+   (same idiom as `mid17`/`tail23` in `HTTP.Impl.Codec.Request`). *)
+let cl_tail_pre_list0 : list U8.t =
+  [0x20uy;0x0Duy;0x0Auy;0x43uy;0x6Fuy;0x6Euy;0x74uy;0x65uy;0x6Euy;0x74uy;
+   0x2Duy;0x4Cuy;0x65uy;0x6Euy;0x67uy;0x74uy;0x68uy;0x3Auy;0x20uy]
 
+let cl_tail_pre  : (x:TCP.bytes{Seq.length x == 19}) =   (* " \r\nContent-Length: " *)
+  assert_norm (W.lit cl_tail_pre_list0 == Seq.seq_of_list cl_tail_pre_list0);
+  assert_norm (FStar.List.Tot.length cl_tail_pre_list0 == 19);
+  W.lit cl_tail_pre_list0
+
+let cl_tail_post : TCP.bytes = W.lit [0x0Duy;0x0Auy;0x0Duy;0x0Auy]  (* "\r\n\r\n" *)
 (* Literals for a *real* origin-server request line carrying a Host header (and
    Connection: close so the peer closes after the response, delimiting the body
    for a read-to-EOF client).  Layout:
@@ -209,7 +222,7 @@ let lemma_bseq_neq_first (a b:TCP.bytes)
 = W.lemma_bseq_eq a b
 
 (* ─── The round-trip law ───────────────────────────────────────────────────── *)
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
 let lemma_http_parse_serialize_exact (m:http_message)
   : Lemma
       (ensures
@@ -245,7 +258,6 @@ let lemma_http_parse_serialize_exact (m:http_message)
     SP.append_slices cl_tail_pre (Seq.append (W.enc_dec8 len) cl_tail_post);
     W.lemma_bseq_eq_refl cl_tail_pre;
     let rest2 = Seq.slice rest1 19 (Seq.length rest1) in
-    assert_norm (Seq.length cl_tail_pre == 19);
     assert (rest2 == x2);
     SP.append_slices (W.enc_dec8 len) cl_tail_post;
     W.lemma_dec8_roundtrip len;
@@ -337,7 +349,6 @@ let lemma_parse_ser_response_var (code:status_code) (len:nat)
   assert (rest1 == x1);
   SP.append_slices cl_tail_pre x2;
   W.lemma_bseq_eq_refl cl_tail_pre;
-  assert_norm (Seq.length cl_tail_pre == 19);
   let rest2 = Seq.slice rest1 19 (Seq.length rest1) in
   assert (rest2 == x2);
   W.lemma_enc_dec_var_roundtrip len;                (* all_dec (enc_dec_var len); decodes to len *)

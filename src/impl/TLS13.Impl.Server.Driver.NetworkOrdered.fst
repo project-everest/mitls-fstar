@@ -1,6 +1,6 @@
 module TLS13.Impl.Server.Driver.NetworkOrdered
 
-#set-options "--split_queries always"
+#set-options ""
 
 module B = TLS13.Bytes
 module CI = Common.ChannelImplementation

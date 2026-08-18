@@ -71,7 +71,7 @@ let client_micro_shape (m:CS.connection_model) : prop =
     isolated so that BOTH routes into it -- an ordinary received
     `ConnNetworkEvent (TlsHandshake hm)` and the protected-record
     `ConnProtectedHandshake` step -- can reuse the same enumeration. **)
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 80"
 let lemma_client_control_change_progress_handshake
   (m:CS.connection_model) (dir:CS.direction) (hm:M.handshake_msg)
   (m':CS.connection_model)
@@ -87,7 +87,7 @@ let lemma_client_control_change_progress_handshake
   = ()
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 80"
 let lemma_client_control_change_progress
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma (requires

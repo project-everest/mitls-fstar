@@ -264,7 +264,7 @@ let lemma_control_snapshot_not_failed
   | CS.ControlClosed ->
     ()
 
-#push-options "--z3rlimit 20 --split_queries always --z3seed 17"
+#push-options "--z3rlimit 20 --z3seed 17"
 fn rec receive_application_data
   (d:top_driver)
   (empty_payload:array U8.t)
@@ -894,6 +894,7 @@ fn rec receive_application_data
 }
 #pop-options
 
+#push-options "--z3rlimit 100"
 fn run
   (d:client_driver)
   (out:array U8.t)
@@ -1281,3 +1282,5 @@ fn run
   fold (client_driver_connected d st1 received1 sent1);
   result
 }
+
+#pop-options

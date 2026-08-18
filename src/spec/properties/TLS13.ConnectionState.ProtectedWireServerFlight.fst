@@ -30,7 +30,7 @@ open TLS13.ConnectionState.ProtectedWireReplay
 open TLS13.ConnectionState.ProtectedWireRecordAlignment
 open TLS13.ConnectionState.ProtectedWireHead
 
-#push-options "--split_queries always --z3rlimit 20"
+#push-options "--z3rlimit 20"
 let lemma_single_message_sender_after_server_write_client_read_install_normalizes_received_head
   (server:connection_model)
   (client:connection_model)
@@ -264,7 +264,7 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
           client_final ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 60"
+#push-options "--z3rlimit 60"
 let lemma_protected_handshake_event_projection_pair_after_server_write_client_read_install_heads_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -2642,6 +2642,7 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         and () ) )
 
 #restart-solver
+#push-options "--z3rlimit 200"
 let lemma_protected_handshake_event_projection_pairs_after_server_write_client_read_install_server_encrypted_flight_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -3073,7 +3074,9 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
           client_tail_sent3
           client_tail_received3
         and () ) )
+#pop-options
  
+#push-options "--z3rlimit 100"
 let lemma_protected_handshake_event_projection_pairs_server_encrypted_flight_after_installs_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -3453,6 +3456,7 @@ let lemma_protected_handshake_event_projection_pairs_server_encrypted_flight_aft
       and () )
   )
 
+#pop-options
 #restart-solver
 let lemma_server_encrypted_flight_preserves_client_to_server_stream_with_tails
   (server:connection_model)

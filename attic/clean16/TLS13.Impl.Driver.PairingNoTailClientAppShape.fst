@@ -422,7 +422,7 @@ let lemma_client_after_application_installs_progress_rank
   | _ ->
     assert False
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_first_application_install_step_model_shape
   (model model1:CS.connection_model)
   (ev:CS.conn_event)
@@ -537,7 +537,7 @@ let lemma_client_first_application_install_step_model_shape
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_application_install_cover_step_model_shape
   (model13 model14 model15:CS.connection_model)
   (e13 e14:CS.conn_event)
@@ -662,7 +662,7 @@ let lemma_client_application_install_cover_step_model_shape
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_duplicate_application_second_install_progress_rank
   (model model1:CS.connection_model)
   (ev:CS.conn_event)
@@ -786,7 +786,7 @@ let lemma_client_duplicate_application_second_install_progress_rank
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_application_installs_extra_install_progress_rank
   (model model1:CS.connection_model)
   (ev:CS.conn_event)
@@ -859,7 +859,7 @@ let lemma_client_after_application_installs_extra_install_progress_rank
     assert False
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_server_finished_verified_next_event_application_install
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -966,7 +966,7 @@ let lemma_client_after_server_finished_verified_next_event_application_install
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_one_application_install_next_event_application_install
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -1073,7 +1073,7 @@ let lemma_client_after_one_application_install_next_event_application_install
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_after_application_installs_next_event_client_finished
   (model:CS.connection_model)
   (ev:CS.conn_event)
@@ -1223,7 +1223,7 @@ let lemma_client_after_application_installs_next_event_client_finished
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_model15_witness
   (client:CS.connection_state)
   : Lemma
@@ -1503,7 +1503,7 @@ let lemma_client_no_tail_model15_witness
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_fourteenth_and_fifteenth_events_application_install_cover_clean
   (client:CS.connection_state)
   : Lemma
@@ -1619,7 +1619,7 @@ let lemma_client_no_tail_fourteenth_and_fifteenth_events_application_install_cov
   )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_client_no_tail_sixteenth_event_client_finished_clean
   (client:CS.connection_state)
   : Lemma

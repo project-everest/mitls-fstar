@@ -289,7 +289,7 @@ let lemma_transcript_checkpoints_of_event_trace
    G2 stage S4/S5, which enlarges the context of this long assert chain enough
    that Z3 loses the last transcript checkpoint.  Splitting the query keeps each
    assert's context at its previous size. *)
-#push-options "--split_queries always"
+#push-options ""
 let lemma_paired_handshake_event_trace_paired_handshake_message_states
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -592,7 +592,7 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_key_share_projectio
 
 #pop-options
 
-#push-options "--split_queries always"
+#push-options ""
 let lemma_client_server_driver_paired_key_derivation_checkpoints_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)

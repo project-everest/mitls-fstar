@@ -40,3 +40,6 @@ test/perf/tls13_bench-gprof
 benchmark-results/
 _run_vtls/
 _cache_quick/
+
+# Records the F* build that produced the .checked caches (see check-cache-toolchain).
+.fstar-version

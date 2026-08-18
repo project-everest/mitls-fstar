@@ -17,7 +17,7 @@ EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-fstar2}"
 # Pinned EverParse commit this project is verified against.  The branch above is
 # only used as a fetch hint; the build always checks out this exact commit so the
 # toolchain is reproducible regardless of where the branch tip has moved.
-EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-637070a2c94a950495aa86ae51d185d6c4f6fd5b}"
+EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-e40149b86348b8eedfb98671747a1c5b02162967}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Default location: tools/everparse inside the agentic-tls checkout (matches the

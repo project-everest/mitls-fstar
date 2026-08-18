@@ -5904,6 +5904,7 @@ fn scan_certificate_chain
    structure exclusively through the QuackyDucky-generated validator + copyful
    reader; ServerHello, Finished and CertificateVerify sub-arms are proven. *)
 #restart-solver
+#push-options "--z3rlimit 100"
 fn parse_handshake_message
   (content_type: U8.t)
   (input: array U8.t)
@@ -6799,6 +6800,7 @@ fn parse_handshake_message
 }
 
 
+#pop-options
 fn parse_tls_message
   (content_type: U8.t)
   (input: array U8.t)

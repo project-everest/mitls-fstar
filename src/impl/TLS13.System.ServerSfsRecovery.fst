@@ -102,7 +102,7 @@ let client_sfv_flag_shape (m:CS.connection_model) : prop =
   (m.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified ==>
      m.CS.model_handshake.CS.hs_server_finished_verified)
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 let lemma_step_client_sfv_flag_shape
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
@@ -349,7 +349,7 @@ let server_s_flag (m:CS.connection_model) : nat =
   | CS.ControlClosed -> 1
   | _ -> 0
 
-#push-options "--fuel 2 --ifuel 5 --z3rlimit 60 --split_queries always"
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 60"
 (** Per-step S-region LOWER fact: entering S from outside requires a protected
     ApplicationData receive (the client Finished); sends, local events and
     cleartext receives never raise the flag; leaving S (to ControlFailed) only
@@ -386,7 +386,7 @@ let lemma_server_s_flag_step
             WStep.lemma_protected_raw_count_one raw_received))
 #pop-options
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 (** Server-step S-region LOWER fact, lifted to `server_step`. **)
 let lemma_server_step_s_flag
   (st0:CS.connection_state)

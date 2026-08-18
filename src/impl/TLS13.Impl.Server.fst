@@ -2652,7 +2652,10 @@ fn trace_server_local_event_end (resp:ST.server_response)
     (SZ.sizet_to_uint64 resp.ST.app_out_len)
 }
 
-#push-options "--z3seed 7"
+(* The rlimit is headroom for the per-goal SMT encoding introduced by the
+   fstar2 simplified effect system: every obligation in this very large Pulse
+   function is now discharged on its own against the whole context. *)
+#push-options "--z3seed 7 --z3rlimit 60"
 fn process_local_event
   (s:server)
   (kind:ST.local_event_kind)
@@ -2929,6 +2932,14 @@ fn process_local_event
         CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0)));
       assert (pure (SZ.v dispatch_sid_len ==
         Seq.length (CM.stored_client_hello_session_id 'st0)));
+      (* [SZ.add] carries a [fits] obligation.  Both summands are bounded --
+         a key share is 32 or 65 bytes and a legacy_session_id at most 32 --
+         but under the per-goal SMT encoding the solver will not go looking for
+         those bounds inside a Pulse context this large, so state them. *)
+      assert (pure (SZ.v dispatch_share_len <= 65));
+      assert (pure (SZ.v dispatch_sid_len <= 32));
+      assert (pure (SZ.fits (63 + SZ.v dispatch_share_len)));
+      assert (pure (SZ.fits (63 + SZ.v dispatch_share_len + SZ.v dispatch_sid_len)));
       (* Let-bound so the [SZ.add] postconditions are available as equations
          below; Pulse does not carry them out of an [if] condition. *)
       let dispatch_expected_len = 63sz `SZ.add` dispatch_share_len `SZ.add` dispatch_sid_len;

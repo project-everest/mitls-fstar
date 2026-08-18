@@ -29,7 +29,7 @@ open TLS13.ConnectionState.ProtectedWireBase
 open TLS13.ConnectionState.ProtectedWireRecordAlignment
 open TLS13.ConnectionState.ProtectedWireHead
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_after_client_write_server_read_install_heads_with_tails
   (client:connection_model)
   (server:connection_model)
@@ -331,7 +331,7 @@ let lemma_protected_handshake_event_projection_pair_after_client_write_server_re
         and () ) ) )
 #pop-options
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 let lemma_protected_handshake_event_projection_pair_after_client_finished_local_skips_with_tails
   (client:connection_model)
   (server:connection_model)

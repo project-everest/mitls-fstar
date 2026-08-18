@@ -908,6 +908,7 @@ let lemma_client_hs_server_hello_received_derived_no_traffic_progress_rank
   | _ ->
     assert False
 
+#push-options "--z3rlimit 100"
 let lemma_client_application_ready_progress_rank_zero
   (client:CS.connection_state)
   : Lemma
@@ -939,6 +940,7 @@ let lemma_client_application_ready_progress_rank_zero
   | _, _, _ ->
     assert False
 
+#pop-options
 let lemma_client_progress_rank_local_install
   (model:CS.connection_model)
   (install:CS.traffic_key_install)

@@ -187,6 +187,7 @@ fn top_driver_send_application_data
   result
 }
 
+#push-options "--z3rlimit 100"
 fn run
   (d:client_driver)
   (payload:array U8.t)
@@ -537,6 +538,7 @@ fn run
       }
     }
 
+#pop-options
 let key_update_kind (request:bool) : CT.local_event_kind =
   if request then CT.LocalSendKeyUpdateRequested else CT.LocalSendKeyUpdate
 

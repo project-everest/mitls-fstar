@@ -108,7 +108,7 @@ let lemma_client_local_matches_not_received_ccs
 (* Per-step: the appended connection event is not a received CCS.      *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
 let lemma_client_step_appends_non_ccs
   (st0 st1:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.client_local_event)

@@ -132,6 +132,14 @@ jobs:
           #   3.67 ProtectedWireClientFinishedInv 2.77 System
           #   3.28 Impl.Client.Driver.Receive     2.50 ClientCanonicalShape
           #
+          # Sample the z3 children too, not just fstar.exe: z3 keeps one process
+          # per module and its heap grows monotonically across the module's
+          # queries, so a single expensive lemma at the end can dwarf the
+          # fstar.exe figure above.  When z3 is OOM-killed mid-round F* reports
+          # the remaining goals as plain "Error 19 ... Try with --query_stats",
+          # with no hint that memory was the cause -- so an OOM looks exactly
+          # like an ordinary proof failure that reproduces nowhere else.
+          #
           # Ordered by dependency-closure size so later invocations reuse the
           # earlier ones' work.  A target naming a module that no longer exists
           # fails fast with "Error 5: No file provided", which is the intended

@@ -614,7 +614,7 @@ let is_client_canonical_event (ev:CS.conn_event) : prop =
      | CS.LocalFail _ -> True
      | _ -> False)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_semantic_canonical (st:CS.connection_state) (sem:EC.local_event) (conn_ev:CS.conn_event)
   : Lemma (requires EC.client_local_event_matches st sem conn_ev)
           (ensures is_client_canonical_event conn_ev)
@@ -807,7 +807,7 @@ let region_installs_ok_key_frame
 (* Per-control single-step preservation helpers                        *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 40"
 
 let step_from_new (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
@@ -1182,6 +1182,7 @@ let step_from_cvr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         with region validate verifysig and () )
     | _ -> ()
 
+#push-options "--z3rlimit 80"
 let step_from_cvv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
       (requires hpre st0 s' conn_ev /\
@@ -1257,6 +1258,8 @@ let step_from_cvv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
            | _ -> assert False )
        | _ -> ())
     | _ -> ()
+
+#pop-options
 
 let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
@@ -1425,7 +1428,7 @@ let step_from_appdata (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
 
 #pop-options
 
-#push-options "--fuel 4 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 4 --ifuel 4 --z3rlimit 40"
 let lemma_step_preserves_shape (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma (requires step_pre st0 s' conn_ev)
           (ensures client_canonical_shape s')

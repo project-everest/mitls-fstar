@@ -27,7 +27,7 @@ module Seq = FStar.Seq
 module SD = TLS13.Impl.Server.Driver
 module ST = TLS13.Impl.Server.Types
 
-#push-options "--split_queries always"
+#push-options ""
 
 let lemma_not_conn_event_is_ccs_elim
   (ev:CS.conn_event)

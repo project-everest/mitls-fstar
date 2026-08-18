@@ -729,6 +729,7 @@ fn process_select_default_server_parameters_with_private_from_arrays
     app_out_len
 }
 
+#push-options "--z3rlimit 100"
 fn process_select_default_server_parameters_with_derived_public_from_private_array
   (s:server)
   (server_random:array U8.t)
@@ -875,3 +876,5 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
   resp
 }
+
+#pop-options

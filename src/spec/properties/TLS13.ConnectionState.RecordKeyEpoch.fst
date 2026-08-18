@@ -55,7 +55,7 @@ let helpers () : Lemma (ensures
 (* (never with an [Initial] epoch); the pattern helpers discharge each.  *)
 (* ------------------------------------------------------------------ *)
 
-#push-options "--fuel 2 --ifuel 3 --z3rlimit 150 --split_queries always"
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 150"
 let lemma_step_model_shape
   (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma (requires model_shape model /\ CS.step_model model ev == Some model')

@@ -81,7 +81,7 @@ let ks_agree (client server:CS.connection_state) : prop =
 (* traffic slot is unchanged (in BOTH directions).                     *)
 (* ================================================================== *)
 
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 300 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 300"
 let lemma_slot_frozen_offstage
   (m0 m1:CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -102,7 +102,7 @@ let lemma_slot_frozen_offstage
 (** A legal client model step preserves the "verified ⇒ recv-potential ≥ 4 or
     Failed" property (potential is non-increasing except through a fail, and a
     fresh verified-flag lands at recv-potential ≥ 4). **)
-#push-options "--fuel 2 --ifuel 6 --z3rlimit 100 --split_queries always"
+#push-options "--fuel 2 --ifuel 6 --z3rlimit 100"
 let lemma_potential_step
   (m m':CS.connection_model) (ce:CS.conn_event)
   : Lemma
@@ -196,7 +196,7 @@ let lemma_client_flag_excludes_shr
 (* cannot freshly set the verified flag.                               *)
 (* ================================================================== *)
 
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 400 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 400"
 let lemma_client_step_not_sfr
   (st0 st1:CS.connection_state)
   (ev:SM.event CW.wire_message CTy.client_local_event)
@@ -268,7 +268,7 @@ let lemma_client_reachable_not_sfr
     is exactly the entry condition of the ControlFailed-aware flip producer
     `lemma_establish_cf`.  Both call sites below discharge the new disjunct with
     that producer, so no downstream statement changes. **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 400 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 400"
 let lemma_client_localevent_flag_mono
   (st0 st1:CS.connection_state) (local:CTy.client_local_event)
   (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -289,7 +289,7 @@ let lemma_client_localevent_flag_mono
     `sent_tls_event` is a `CS.ConnNetworkEvent`.  A `ClientProcessPendingHandshake`
     would append a `CS.ConnProtectedHandshake`, so it cannot be this step, and
     plain flag monotonicity is recovered. **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 400 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 400"
 let lemma_client_sendevent_flag_mono
   (st0 st1:CS.connection_state) (local:CTy.client_local_event)
   (out:SM.step_output CW.wire_message EAPI.local_output)
@@ -694,7 +694,7 @@ let lemma_hma_deliver_to_client_nonflip (a b:SY.tls_system_state)
     `Received, Finished @ HsCertificateVerifyVerified -> HsServerFinishedVerified`
     (StateMachine.fst:740).  (The other flag-set, `LocalVerifyFinished`, is a
     LOCAL event, excluded here.) **)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 (** Model-level: the ONLY two transitions that set the verified flag from unset
     (`LocalVerifyFinished` at HsServerFinishedReceived, and the atomic
     `Received, Finished` at HsCertificateVerifyVerified — StateMachine.fst:551,740)

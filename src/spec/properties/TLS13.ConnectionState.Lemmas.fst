@@ -117,7 +117,7 @@ let lemma_step_model_from_failed_results_failed
   | _ ->
     assert False
 
-#push-options "--split_queries always"
+#push-options ""
 
 let lemma_step_model_local_event_some
   (model0:connection_model)
@@ -1273,7 +1273,7 @@ let lemma_step_model_preserves_config_for_x25519_reachable_shape
 =
   ()
 
-#push-options "--split_queries always"
+#push-options ""
 
 let client_x25519_reachable_shape
   (st:connection_state)
@@ -2652,6 +2652,7 @@ let rec lemma_advance_direction_records_preserves_key_iv
   if n = 0 then ()
   else lemma_advance_direction_records_preserves_key_iv st (n - 1)
 
+#push-options "--z3rlimit 200"
 let lemma_step_model_application_record_epoch_reachable_shape_for_role
   (role:endpoint_role)
   (model:connection_model)
@@ -3241,6 +3242,7 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
       ServerEndpoint
       model')
 
+#pop-options
 let lemma_connection_delta_application_record_epoch_reachable_shape_for_role
   (role:endpoint_role)
   (st0:connection_state)
@@ -3663,7 +3665,7 @@ let handshaking_read_epoch_shape (model:connection_model) : prop =
     model.model_record.record_read.R.epoch =!= R.Application
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_model_handshaking_read_epoch_shape
   (model:connection_model) (ev:conn_event) (model':connection_model)
   : Lemma
@@ -3795,7 +3797,7 @@ let handshaking_write_epoch_shape (model:connection_model) : prop =
     model.model_record.record_write.R.epoch =!= R.Application
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40 --split_queries always"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
 let lemma_step_model_handshaking_write_epoch_shape
   (model:connection_model) (ev:conn_event) (model':connection_model)
   : Lemma
@@ -5246,7 +5248,7 @@ let lemma_step_model_preserves_config
 =
   ()
 
-#push-options "--split_queries always --z3rlimit 10"
+#push-options "--z3rlimit 10"
 
 let state_of_model_for_first_epoch_application_material
   (model:connection_model)
@@ -5295,7 +5297,7 @@ let application_traffic_key_slot_stage_shape_for_role
    stage S4/S5, which enlarges every VC that carries [legal_event].  This proof
    is a pure case analysis over the event, so splitting the query keeps each
    case's context small rather than raising the rlimit. *)
-#push-options "--split_queries always --z3rlimit 40"
+#push-options "--z3rlimit 40"
 let lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
   (role:endpoint_role)
   (model:connection_model)
@@ -5635,6 +5637,7 @@ let lemma_initial_first_epoch_application_traffic_material_replay_invariant_for_
 =
   lemma_initial_application_record_epoch_reachable_shape_for_role role cfg
 
+#push-options "--z3rlimit 100"
 let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_role
   (role:endpoint_role)
   (model0:connection_model)
@@ -5808,6 +5811,7 @@ let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_
      | _, _, _ ->
       assert False)
 
+#pop-options
 #restart-solver
 let lemma_application_traffic_install_for_role_material_matches_expected
   (role:endpoint_role)
@@ -7039,7 +7043,7 @@ let lemma_step_shape_inv_at_counts_for_role
     role model0 ev model1
 
 #restart-solver
-#push-options "--z3rlimit 30 --split_queries always"
+#push-options "--z3rlimit 30"
 (** Phase 1 step: either the event is not a KeyUpdate, in which case the
     existing epoch-0 step lemma applies verbatim and we stay in phase 1; or it
     is, in which case we promote to phase 2 with the rotated label at epoch 1. **)
@@ -7176,6 +7180,7 @@ let lemma_key_update_count_for_label_cons
 = ()
 #pop-options
 
+#push-options "--z3rlimit 100"
 let rec lemma_conn_events_raw_replay_application_traffic_material_at_counts_for_role
   (role:endpoint_role)
   (model:connection_model)
@@ -7233,6 +7238,7 @@ let rec lemma_conn_events_raw_replay_application_traffic_material_at_counts_for_
         (nc + key_update_delta_for_label role ev ClientTraffic)
         (ns + key_update_delta_for_label role ev ServerTraffic) )
 
+#pop-options
 let lemma_initial_application_traffic_material_at_counts_for_role
   (role:endpoint_role)
   (cfg:connection_config)
@@ -7254,7 +7260,7 @@ let lemma_initial_application_traffic_material_at_counts_for_role
   replay consistency alone determines the live application traffic material, at
   the state's own epoch.
  **)
-#push-options "--z3rlimit 30 --split_queries always"
+#push-options "--z3rlimit 30"
 let lemma_connection_state_application_traffic_material_slots_match_expected_at_epoch
   (st:connection_state)
   : Lemma
@@ -7499,6 +7505,7 @@ let lemma_step_model_key_update_pending_delta
   | ConnLocalEvent _ -> ()
   | ConnProtectedHandshake _ -> ()
 
+#push-options "--z3rlimit 150"
 let lemma_step_model_record_keys_consistent
   (model0:connection_model)
   (ev:conn_event)
@@ -7795,6 +7802,7 @@ let lemma_step_model_record_keys_consistent
      | _, _ ->
       assert False)
 
+#pop-options
 let lemma_step_model_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)
@@ -9640,6 +9648,7 @@ let lemma_event_raw_delta_legal_protected_segmented
       | CL.Received ->
         lemma_network_message_raw_delta_legal_protected_segmented model msg raw_received
 
+#push-options "--z3rlimit 200"
 let lemma_conn_events_raw_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -9733,6 +9742,7 @@ let lemma_conn_events_raw_replay_cons
        conn_events_raw_replay model1' rest tail_sent' tail_received' final_model));
   assert (conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model)
 
+#pop-options
 let rec lemma_conn_events_raw_replay_snoc
   (model:connection_model)
   (events:list conn_event)
@@ -9949,6 +9959,7 @@ let rec lemma_conn_events_raw_replay_snoc
       (B.append tail_sent delta_sent)
       (B.append tail_received delta_received)
 
+#push-options "--z3rlimit 400"
 let lemma_conn_events_protected_raw_segmented_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -10099,6 +10110,7 @@ let lemma_conn_events_protected_raw_segmented_replay_cons
     raw_received
     final_model)
 
+#pop-options
 #restart-solver
 let rec lemma_conn_events_raw_replay_protected_segmented
   (model:connection_model)
@@ -10277,6 +10289,7 @@ let lemma_connection_state_protected_raw_segmented_replay
     st.cs_wire_log.CL.raw_received
     st.cs_model
 
+#push-options "--z3rlimit 200"
 let lemma_conn_events_sent_seal_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -10377,6 +10390,8 @@ let lemma_conn_events_sent_seal_replay_cons
        conn_events_sent_seal_replay model1' rest tail_sent' tail_received' final_model));
   assert (conn_events_sent_seal_replay model (ev :: rest) raw_sent raw_received final_model)
 
+#pop-options
+#push-options "--z3rlimit 200"
 let lemma_conn_events_sent_seal_key_schedule_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -10534,6 +10549,7 @@ let lemma_conn_events_sent_seal_key_schedule_replay_cons
     raw_received
     final_model)
 
+#pop-options
 let rec lemma_conn_events_sent_seal_replay_strengthen
   (model:connection_model)
   (events:list conn_event)
@@ -11011,6 +11027,7 @@ let rec lemma_conn_events_sent_seal_replay_snoc
       (B.append tail_received delta_received)
 
 #restart-solver
+#push-options "--z3rlimit 200"
 let lemma_conn_events_received_decode_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -11111,6 +11128,8 @@ let lemma_conn_events_received_decode_replay_cons
        conn_events_received_decode_replay model1' rest tail_sent' tail_received' final_model));
   assert (conn_events_received_decode_replay model (ev :: rest) raw_sent raw_received final_model)
 
+#pop-options
+#push-options "--z3rlimit 200"
 let lemma_conn_events_received_decode_key_schedule_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -11268,6 +11287,7 @@ let lemma_conn_events_received_decode_key_schedule_replay_cons
     raw_received
     final_model)
 
+#pop-options
 let rec lemma_conn_events_received_decode_replay_strengthen
   (model:connection_model)
   (events:list conn_event)
@@ -12594,9 +12614,9 @@ let handshake_traffic_key_slot_stage_shape_for_role
 
 // Localized hardening for this whole-match `()` preservation VC: the enlarged
 // application-record-epoch shape axiom shifts the module SMT context and tips this
-// pre-existing single-VC proof over its budget.  `--split_queries always` solves it
+// pre-existing single-VC proof over its budget.  `` solves it
 // per step-arm (each cheap), which is robust to context shift.
-#push-options "--split_queries always --z3rlimit 40"
+#push-options "--z3rlimit 40"
 let lemma_step_model_preserves_handshake_traffic_key_slot_stage_shape_for_role
   (role:endpoint_role)
   (model:connection_model)
@@ -12628,7 +12648,7 @@ let handshake_secret_requires_shared_secret
   Some? model.model_handshake.hs_keys.ks_handshake_secret ==>
   Some? model.model_handshake.hs_keys.ks_shared_secret
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
 let lemma_step_model_preserves_handshake_secret_requires_shared_secret
   (model:connection_model)
   (ev:conn_event)
@@ -13407,7 +13427,7 @@ let client_hs_read_link_shape (st:connection_state) : prop =
 (* A legal step whose RESULT lands at [ControlFailed] preserves           *)
 (* [model_record] and the key schedule (fail is a pure control/failure    *)
 (* field update; [fail_model] at StateMachine.fst:303).                   *)
-#push-options "--fuel 4 --ifuel 10 --z3rlimit 200 --split_queries always"
+#push-options "--fuel 4 --ifuel 10 --z3rlimit 200"
 let lemma_step_failed_result_preserves_record_keys
   (m m':connection_model) (ce:conn_event)
   : Lemma

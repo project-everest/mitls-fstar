@@ -847,6 +847,7 @@ let lemma_sent_server_hello_state_server_hello
                == Some sh)
   = ()
 
+#push-options "--z3rlimit 60"
 fn mark_sent_server_hello
   (c:connection_state)
   (raw:array U8.t)
@@ -1078,6 +1079,7 @@ fn mark_sent_server_hello
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)))
 }
 
+#pop-options
 #restart-solver
 fn mark_sent_encrypted_extensions
   (c:connection_state)
