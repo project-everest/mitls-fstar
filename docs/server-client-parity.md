@@ -996,10 +996,10 @@ week's work.
    the `.fst` `let`'s, or the error surfaces confusingly at the *body*.  No cell
    moved.
 
-   **Stages S6.1 through S6.8c-1 have landed** (`5ee056664`, `b578465f0`,
+   **Stages S6.1 through S6.8c-2 have landed** (`5ee056664`, `b578465f0`,
    `0bd78b985`, `613e12980`, `c360e2165`, `cab78ad8d`, `2537d001c`,
-   `e4594e008`, `1cac89cab`, `c40d2e1cc`, `b80502853`, `b7c8aa36b`),
-   all capability-neutral,
+   `e4594e008`, `1cac89cab`, `c40d2e1cc`, `b80502853`, `b7c8aa36b`,
+   `bf2581056`), all capability-neutral,
    all with the ledger unmoved.  Between them they have taken every part of the
    feature *except the behaviour* off the final commit's critical path: the
    parser reads a secp256r1 share, the ClientHello mirror stores it, the
@@ -1033,7 +1033,15 @@ week's work.
    the server's *private* key, and `kex_private` is 32 bytes for both groups, so
    `Driver.BufferedHandshake` is not on that path at all.  Only a stack-local in
    `Send.fst:1572` and `process_send_server_hello_from_arrays`' signature (plus
-   its re-export in `Server.fsti/.fst`) widen to 65 bytes.
+   its re-export in `Server.fsti/.fst`) widen to 65 bytes.  **S6.8c-2 has since
+   landed exactly that** (`bf2581056`): the send path's own share buffer is now
+   65 bytes wide and filled by `KEX.kex_public_from_private_runtime`, at a
+   literal `KexX25519` and with the literal width `32` in every
+   `unpad_share_65` — which is what kept it capability-neutral.  It also added
+   `CryptoSpec.padded_share_65` (the "zero-padded 65-byte buffer" predicate the
+   send path carries) and an additive postcondition on
+   `kex_public_from_private_runtime` giving `pad_share_65` of the share when the
+   buffer handed in is zeroed.
 
    So the buffer is not what makes the rest indivisible.  The wall is the ~24
    statements of `95 + |stored session id|`, which are keyed on the connection
@@ -1045,7 +1053,8 @@ week's work.
 
    What is left, in one commit: widen the gate, have the seven selection
    builders take the group from the policy and the share from
-   `KEX.kex_public_from_private_runtime`, replace the ServerHello's `90`/`95`
+   `KEX.kex_public_from_private_runtime` (the send path already calls it, at a
+   literal group), replace the ServerHello's `90`/`95`
    with `58`/`63 + kex_public_len g`, drop the ECDH's X25519 precondition and
    `CR.server_selection_group_pinned`, add `T.Secp256r1` to
    `server_supported_groups`, and flip `p256-only` and

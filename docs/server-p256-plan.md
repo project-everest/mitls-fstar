@@ -10,40 +10,56 @@ be picked up first.
 
 ---
 
-## Where to pick up (updated 2026-08-17, HEAD `3a9b1d7aa`)
+## Where to pick up (updated 2026-08-17, HEAD `bf2581056`)
 
-The tree is **green**: `make verify` 0 errors, `make check-admits` 0 admits,
-`make -j60 test` 34/34 matrix cells plus loopback and OpenSSL interop.  Stages
-S1–S5, S6.1–S6.7, S6.7b/c/d, S6.8a, S6.8b and S6.8c-1 have landed, every one
-capability-neutral with the ledger unmoved.
+The tree is **green**: `make verify` 0 errors (341 modules), `make check-admits`
+0 admits, `make -j60 test` 34/34 matrix cells plus loopback and OpenSSL interop.
+Stages S1–S5, S6.1–S6.7, S6.7b/c/d, S6.8a, S6.8b, S6.8c-1 and S6.8c-2 have
+landed, every one capability-neutral with the ledger unmoved.
 
-**Two commits remain.**  Do them in this order; the first is capability-neutral
-and lands green on its own, the second is the behaviour change.
+**One commit remains**, and it is the behaviour change.
 
-### Next: S6.8c-2 — widen the send path's concrete share buffer to 65 bytes
+### S6.8c-2 as landed — the send path's share buffer is 65 bytes wide
 
-Capability-neutral.  Measured surface: **79** mentions of
-`'server_key_share_bytes` (`Send.fsti` 9, `Send.fst` 24, `Server.fsti` 21,
-`Server.fst` 25) and 31 assertions of `B.length ... == 32`.
+The send path now carries its own share at the uniform 65-byte width the
+representation and the peer-share path already used, so the only thing between
+it and a P-256 ServerHello is the selection policy.
 
-1. `Send.fst:1572`: `let mut server_key_share = [| 0uy; 32sz |]` becomes
-   `[| 0uy; 65sz |]`, and `Crypto.x25519_public_from_private` becomes
-   `KEX.kex_public_from_private_runtime` — S6.8b built that primitive for
-   exactly this and it is already verified.
-2. `process_send_server_hello_from_arrays`' precondition
-   `B.length 'server_key_share_bytes == 32` becomes `== 65`, in `Send.fsti` and
-   `Send.fst`.
-3. Every witness use becomes
-   `CryptoSpec.unpad_share_65 'server_key_share_bytes 32`.  **The width stays
-   the literal `32`** — that literal is precisely what keeps this step
-   capability-neutral.  S6.8d turns it into `kex_public_len g`.
-4. Mirror the signature at `Server.fsti:596` and `Server.fst:863,926`.
-5. **Do not touch any driver module.**  `Driver.BufferedHandshake.fst:721` calls
-   `process_send_server_hello_with_derived_public_from_private_array`, which
-   takes the server's *private* key, and `CryptoSpec.kex_private` is
-   `bytes_of_len 32` at **both** groups — no driver signature moves.
+* `Send.fst`'s stack-local in
+  `process_send_server_hello_with_derived_public_from_private_array` is
+  `[| 0uy; 65sz |]`, filled by `KEX.kex_public_from_private_runtime` at the
+  literal `CryptoSpec.KexX25519`.  S6.8d changes only that group argument.
+* `process_send_server_hello_from_arrays` and `build_server_hello_from_arrays`
+  take a 65-byte share, and every witness use is
+  `CryptoSpec.unpad_share_65 'server_key_share_bytes 32`.  **The width is still
+  the literal `32`** — the single token S6.8d turns into `kex_public_len g`.
+  Mirrored in `Server.fsti` / `Server.fst`; no driver module moved, exactly as
+  measured.
+* `build_server_hello_from_arrays` stores the caller's buffer verbatim with
+  `CR.copy_fixed65_array_to_vec`; the padding now happens one layer up.
+  `CR.copy_padded32_array_to_vec65` is consequently unused — S6.8d can delete
+  it, or leave it for a client-side caller.
 
-### Then: S6.8d — the behavioural flip, one commit
+Two supporting additions, both of which S6.8d inherits:
+
+* **`CryptoSpec.padded_share_65 share len`** (`TLS13.Crypto.Spec.fsti:~228`) —
+  "the 65-byte buffer is `pad_share_65` of its own `len`-byte prefix".  This is
+  the precondition the send path carries, and at S6.8d `len` becomes
+  `kex_public_len g` with nothing else moving.
+* **`KEX.kex_public_from_private_runtime` gained an additive postcondition**: a
+  caller handing in a *zeroed* buffer gets back exactly
+  `pad_share_65 (kex_public_from_private g sk)`.  The X25519 arm needs it
+  because it writes 32 bytes and leaves the tail as it found it; at P-256 the
+  share fills the buffer and the padding is the identity.  No caller was
+  affected — there were none.  The proof is
+  `lemma_pad_share_65_from_zeroed_prefix_copy` in `TLS13.KEX.fst`.
+
+**One F* gotcha worth carrying:** in a `#lang-pulse` file, `introduce p ==> q
+with _. ( ...; ... )` is a *syntax* error at the open paren.  Prove the
+implication with a `requires`-strengthened helper lemma plus
+`FStar.Classical.arrow_to_impl` instead.
+
+### Next: S6.8d — the behavioural flip, one commit
 
 Measured surface: **78** `KexX25519` sites in `src/impl`, **32**
 `is_valid_client_hello` sites, **12** `server_selection_group_pinned` sites to
@@ -1229,7 +1245,9 @@ groups, so nothing about that signature changes when P-256 is selected.  The
 inside that function's body (`Send.fst:1572`), handed to
 `process_send_server_hello_from_arrays`.
 
-So the widening touches only:
+**S6.8c-2 has since landed this widening** (`bf2581056`); what follows is the
+measurement it was planned from, kept for the record.  The widening touches
+only:
 
 * `Send.fst:1572`'s stack-local (32sz -> 65sz, with
   `KEX.kex_public_from_private_runtime` in place of
@@ -1267,7 +1285,14 @@ indivisible commit, and it is now *only* the parts that change behaviour:
    691,757,791,831`) set `CS.server_selected_group` from
    `CM.stored_client_hello_kex_group` rather than the literal `T.X25519`, and
    the concrete share they hand on comes from
-   `KEX.kex_public_from_private_runtime` at that group.
+   `KEX.kex_public_from_private_runtime` at that group.  On the *send* path
+   that call already exists (S6.8c-2); only its group argument — the literal
+   `CryptoSpec.KexX25519` in
+   `process_send_server_hello_with_derived_public_from_private_array` — and the
+   two `unpad_share_65 ... 32` widths in
+   `process_send_server_hello_from_arrays` / `build_server_hello_from_arrays`
+   have to become `kex_public_len g`, together with the
+   `CryptoSpec.padded_share_65 ... 32` preconditions beside them.
 3. **`CM.valid_selection`** (`Model.fsti:539`) drops its third conjunct, and
    `lemma_server_hello_of_selection_bytesize` (`Model.fsti:~864`, `.fst:~511`)
    concludes `58 + kex_public_len (server_selected_kex_group sel) + |sid|`.
