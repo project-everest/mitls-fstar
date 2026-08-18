@@ -2,13 +2,13 @@
 
 Status date: 2026-08-13.  Branch `interop`.
 
-**Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection), G4
-(variable-length `legacy_session_id` echo) and G5 (ECDSA server credentials)
-are **closed**; see the sections below.  G2 and G3 remain open, and both are
-research-scale rather than incremental -- the closing sections say why, now
-from *measurement* rather than estimate: G3's buffering design was built
-against the whole tree and its fallout enumerated, and G2's surface was
-counted.
+**Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection), **G2
+(`secp256r1` key exchange)**, G4 (variable-length `legacy_session_id` echo) and
+G5 (ECDSA server credentials) are **closed**; see the sections below.  Only G3
+(cross-record ClientHello reassembly) remains open.  G2 was closed on
+2026-08-18 by `c6fdefad6`, the last of the staged commits laid out in
+`docs/server-p256-plan.md`; HelloRetryRequest remains out of scope and is
+tracked separately.
 
 ## Why this document exists
 
@@ -56,7 +56,7 @@ insist on:
 | `TLS_CHACHA20_POLY1305_SHA256` | yes | yes | -- |
 | `TLS_AES_128_GCM_SHA256` | yes | yes (G1 closed) | -- |
 | X25519 key exchange | yes | yes | -- |
-| `secp256r1` key exchange | yes | **in progress** (G2, S1-S6.5 landed) | `TLS13.Wire.Spec.clientHello_representable:472` (the acceptance gate) |
+| `secp256r1` key exchange | yes | yes (G2 closed) | -- |
 | cross-record handshake reassembly | yes | **no** | `TLS13.Spec.StateMachine.legal_protected_handshake_step:1986` |
 | HelloRetryRequest | n/a (rejects) | **no** | `TLS13.Impl.Serializer.Handshake.fst:1704` |
 | short/empty `legacy_session_id` echo | n/a | yes (G4 closed) | -- |
@@ -179,21 +179,26 @@ are offered.
 
 ### G2. The server has no `secp256r1` key exchange, and no HelloRetryRequest
 
-> **Status: in progress, stages S1-S6.5 landed.**  The gap analysis below is the
-> original one and still describes the *capability*: the server will not yet
-> negotiate secp256r1, and `p256-only` is still `refused` in the ledger.  What
-> has changed is everything underneath.  The specification is now fully
-> group-parametric, the parser reads a secp256r1 offer, the mirror stores it,
-> the ServerHello writer builds at the selected group, the server derives a
-> secp256r1 keypair, and a `client_hello_kex_group` metadata box carries the
-> negotiated group at runtime.  What remains is one atomic commit — gate, ECDH
-> dispatch, selection policy, ServerHello lengths, `server_supported_groups`,
-> ledger — because widening the acceptance gate is what makes the group
-> non-constant, and nothing downstream can handle a non-constant group until it
-> all moves together.  See `docs/server-p256-plan.md` §7, "S6 as re-measured".
+> **Status: CLOSED (2026-08-18, `c6fdefad6`).**  The secp256r1 half of this gap
+> is gone.  The gap analysis below is the original one and is kept because it
+> names, at file and line, every place that had to move; the staged plan that
+> moved them is `docs/server-p256-plan.md`.
 >
-> HelloRetryRequest remains out of scope, so the `p256-first-x25519-listed` cell
-> stays `refused` even after G2 closes.
+> What the server does now: `ch_key_share_pick` accepts a ClientHello whose only
+> key_share is a well-formed 65-byte uncompressed secp256r1 point, the ECDH runs
+> at whichever group that gate picked, the ServerHello carries the matching
+> group tag and a 65-byte share, and the default `server_supported_groups` is
+> `[X25519; Secp256r1]`.  X25519 still wins whenever both shares are well
+> formed, so no pre-existing peer changes behaviour.  Three ledger cells flipped
+> to `OK`: `p256-only`, `p256-first-x25519-listed` and
+> `ecdsa-credential-p256-only`.
+>
+> `p256-first-x25519-listed` flipped **without** HelloRetryRequest, contrary to
+> the prediction below.  Given `P-256:X25519`, OpenSSL sends its key_share for
+> P-256 only and merely *lists* X25519 in `supported_groups`; the gate follows
+> the share that was actually sent, so no retry is needed.  HelloRetryRequest is
+> still unimplemented, and is only reachable if a peer offers *no* group the
+> server supports — which the ledger does not currently exercise.
 
 Two independent blockers, both fatal on their own.
 
@@ -533,11 +538,11 @@ aes256-only                          rsa    refused   out of scope for both role
 aes-first-chacha-last                rsa    ok        server preference wins
 aes256-then-aes128                   rsa    ok        G1: fallback past an unsupported suite
 aes128-tcp-dribble                   rsa    ok        G1: AES-GCM through the retry loop
-p256-only                            rsa    refused   G2
+p256-only                            rsa    ok        G2: secp256r1-only offer
 x25519-and-p256                      rsa    ok        X25519 selected
 aes128-x25519-and-p256               rsa    ok        G1: both agile axes at once
-p256-first-x25519-listed             rsa    refused   G2 (needs HelloRetryRequest)
-ecdsa-credential-p256-only           ecdsa  refused   G2 is independent of the credential axis
+p256-first-x25519-listed             rsa    ok        G2: only a P-256 share is sent
+ecdsa-credential-p256-only           ecdsa  ok        G2 is independent of the credential axis
 rsa-pss-only                         rsa    ok        the RSA credential's scheme
 ecdsa-only-rsa-credential            rsa    refused   G5: RSA key cannot serve an ECDSA-only offer
 ecdsa-only                           ecdsa  ok        G5: ECDSA credential signs CertificateVerify
@@ -824,7 +829,11 @@ week's work.
    ```
    git diff interop...g3-route-b-spec-attempt
    ```
-5. **G2 (secp256r1, then HelloRetryRequest).**  The largest; its surface was
+5. **G2 (secp256r1, then HelloRetryRequest).**  *Done as of `c6fdefad6`; the
+   secp256r1 half is closed and HelloRetryRequest was not needed for any ledger
+   cell.  The scoping below is kept because it is the estimate the staged plan
+   in `docs/server-p256-plan.md` was built from, and comparing the two is
+   useful when scoping G3.*  The largest; its surface was
    counted rather than guessed -- `server_key_share_private` occurs 166 times in
    27 modules, `server_key_share_public` 78 times in 20, and
    `server_selected_group` 41 times in 11, because

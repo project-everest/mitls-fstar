@@ -10,14 +10,17 @@ be picked up first.
 
 ---
 
-## Where to pick up (updated 2026-08-17, HEAD `bf2581056`)
+## Where to pick up (updated 2026-08-18, HEAD `c6fdefad6`)
 
-The tree is **green**: `make verify` 0 errors (341 modules), `make check-admits`
-0 admits, `make -j60 test` 34/34 matrix cells plus loopback and OpenSSL interop.
-Stages S1–S5, S6.1–S6.7, S6.7b/c/d, S6.8a, S6.8b, S6.8c-1 and S6.8c-2 have
-landed, every one capability-neutral with the ledger unmoved.
+**G2 is closed.**  The tree is **green**: `make verify` 0 errors,
+`make check-admits` 0 admits, `make -j60 test` 34/34 matrix cells plus loopback
+and OpenSSL interop.  Stages S1–S5, S6.1–S6.7, S6.7b/c/d, S6.8a, S6.8b,
+S6.8c-1, S6.8c-2 and finally **S6.8d** have all landed; S6.8d is the one that
+moved the ledger.
 
-**One commit remains**, and it is the behaviour change.
+Nothing in this plan remains to be done.  What follows is kept as the record of
+how it was staged, and because the **G3** plan in the last section reuses the
+same discipline.
 
 ### S6.8c-2 as landed — the send path's share buffer is 65 bytes wide
 
@@ -54,12 +57,30 @@ Two supporting additions, both of which S6.8d inherits:
   affected — there were none.  The proof is
   `lemma_pad_share_65_from_zeroed_prefix_copy` in `TLS13.KEX.fst`.
 
-**One F* gotcha worth carrying:** in a `#lang-pulse` file, `introduce p ==> q
-with _. ( ...; ... )` is a *syntax* error at the open paren.  Prove the
-implication with a `requires`-strengthened helper lemma plus
-`FStar.Classical.arrow_to_impl` instead.
+**One Pulse gotcha worth carrying** (the first write-up of this got the rule
+wrong; corrected here).  `introduce` is *not* rejected in a `#lang-pulse` file.
+The only Pulse-specific rule is that **the whole `introduce ... with ...` must
+be parenthesised**, so Pulse parses it as an F* ghost term rather than as a
+Pulse statement.  Without the parens you get `Expected type
+Pulse.Lib.Core.slprop but ... has type Prims.prop`.  All three connectives work:
 
-### Next: S6.8d — the behavioural flip, one commit
+```fstar
+(introduce forall x. x >= x
+ with ());
+(introduce exists x. r x
+ with 0 and (mk 0));
+(introduce p ==> q          // p2q () : Lemma (requires p) (ensures q)
+ with p2q ());
+```
+
+The `with h. e` form that the earlier note tripped over is not a Pulse
+restriction at all: F* itself dropped it ("`introduce` and `eliminate` no longer
+bind names for hypotheses; write `with e` instead of `with h. e`.  The
+hypothesis is available in the proof context of `e`"), and it fails identically
+in a plain `.fst`.  So `FStar.Classical.arrow_to_impl` is *not* required for
+implications; the one use of it in `TLS13.KEX.fst` is a stylistic leftover.
+
+### S6.8d as landed — the behavioural flip, one commit (`c6fdefad6`)
 
 Measured surface: **78** `KexX25519` sites in `src/impl`, **32**
 `is_valid_client_hello` sites, **12** `server_selection_group_pinned` sites to
@@ -81,6 +102,69 @@ capability-neutrally.  They travel with the gate.
 unrelated* queries twice during S2.  Do **not** reach for `--z3rlimit` or
 `--z3seed`; name the failing projection as a lemma, or discharge it in explicit
 `assert (pure ...)` steps before the call that needs it.  See §8, R7.
+
+#### What it actually took
+
+The predictions above held, with four things the plan had not foreseen.
+
+* **The group pin had to stay a *pure policy* pin.**  The first two attempts
+  gave `server_selection_presence_exactly` more arguments — first the whole
+  handshake state, then the two projections `hs_server_selection` and
+  `hs_client_hello`.  Both fail, because Pulse's `rewrite A as B` needs `A` and
+  `B` provably equal, so a predicate that must survive a state transition may
+  only mention things the transition does not change.  The second attempt broke
+  the *client* role: `sent_client_hello_state` rewrites `hs_client_hello` while
+  the selection is `None`, and `rewrite` cannot exploit that.  The design that
+  works is `server_selection_group_pinned (sel:option server_handshake_selection)`
+  — one argument, phrased over `sel.server_selected_client_hello`, with the
+  link `hs_client_hello == Some sel.server_selected_client_hello` supplied
+  separately by the reachability lemmas in `TLS13.ConnectionState.Lemmas`.
+
+* **Two spec-level predicates had to be strengthened**, both for free:
+  `CS.server_selection_key_share_consistent` now states that the X25519 and
+  P-256 privates are the *same* 32 bytes (which is what the server does — one
+  scalar per handshake), and
+  `lemma_connection_state_consistent_server_pre_server_hello_shape` now also
+  yields `hs_client_hello == Some selection.server_selected_client_hello`.
+
+* **The driver-level correctness properties were X25519-specific too**, and the
+  plan's site census had missed them because they live in `.fsti` files two
+  layers above the ECDH: `BN.local_event_success_correct` and
+  `BH.derive_shared_secret_from_payload_correct` both said `x25519_shared` /
+  `CS.client_hello_key_share`.  They are now stated with `kex_shared` at
+  `client_hello_kex_group_for`.
+
+* **Pulse does not carry `SZ.add`'s `Pure` postcondition out of an `if`
+  condition**, and not reliably out of a plain `let` either.  The
+  LocalSendServerHello dispatch in `Server.fst` needed the sum let-bound and
+  then stepped through `assert (pure (SZ.v 63sz == 63))` and
+  `assert (pure (SZ.v total == 63 + SZ.v a + SZ.v b))` before the semantic form.
+
+R7 materialised exactly once, in `Network.fst`'s store path, and was repaired by
+restating the assert as the two-armed disjunction — not by rlimit or seed, as
+the rule above demands.  R9 materialised as a `padded_share_65 … 32` left
+behind in an `.fsti`, which surfaced as a 200-line "Could not prove subtyping of
+fn …" in which the *only* difference between the two printed types was that one
+constant.
+
+#### The interop ledger, and one trap in it
+
+Three cells flip to `OK`: `p256-only`, `p256-first-x25519-listed` and
+`ecdsa-credential-p256-only`.  `p256-first-x25519-listed` **does** flip — the
+open question of whether it would is settled.  OpenSSL, given
+`P-256:X25519`, sends its key_share for P-256 only and merely *lists* X25519 in
+`supported_groups`, and the acceptance gate follows the share that was actually
+sent.  (`x25519-and-p256` still lands on X25519, because there OpenSSL sends
+both shares and the gate prefers X25519.)
+
+The trap: `expect_group` is compared against `OBJ_nid2sn(SSL_get_negotiated_group(…))`,
+whose short name for P-256 is **`prime256v1`**, not `P-256`.  `P-256` is only
+accepted on the `SSL_CTX_set1_groups_list` *input* side, so a row can perfectly
+well configure `"P-256"` and still have to expect `"prime256v1"`.  Getting this
+wrong produces the maximally confusing diagnostic
+`negotiated group prime256v1, expected P-256` immediately followed by
+`expected the server to accept this offer but it refused it` — the handshake had
+in fact succeeded at P-256, and only the post-handshake parameter check failed.
 
 ### Working rules that have paid off every stage
 
