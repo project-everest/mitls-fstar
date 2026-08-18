@@ -79,6 +79,15 @@ unrelated* queries twice during S2.  Do **not** reach for `--z3rlimit` or
   replacement (risk R10).
 * Rollback is always `git checkout -- src/`.
 
+### Related artifacts kept outside this branch
+
+The **G3** Route B spec attempt is archived on the branch
+`g3-route-b-spec-attempt` (24 files, +529/-20).  It does not verify green and is
+deliberately unmerged; its commit message carries the full fallout enumeration,
+and `docs/server-client-parity.md`'s G3 entry explains why step (1) of the route
+-- a concrete reassembly buffer in the server representation -- must come first.
+Recover it with `git diff interop...g3-route-b-spec-attempt`.
+
 ---
 
 ## 0. What does not change

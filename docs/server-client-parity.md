@@ -812,6 +812,18 @@ week's work.
    mechanism above; (4) the pairing-theorem hypotheses; (5) flip
    `clienthello-across-two-records`, and add a three-record cell and an
    over-cap cell to pin the boundaries.
+
+   **The spec attempt itself is preserved on the branch
+   `g3-route-b-spec-attempt`** (24 files, +529/-20), whose commit message
+   carries the full fallout enumeration above.  It is archived rather than
+   merged because, as measured, landing it alone would buy no capability while
+   weakening three proved pairing theorems -- step (1) has to come first.  It
+   was checked to still apply cleanly to `interop` as of `e0727d23c`; recover
+   the diff with
+
+   ```
+   git diff interop...g3-route-b-spec-attempt
+   ```
 5. **G2 (secp256r1, then HelloRetryRequest).**  The largest; its surface was
    counted rather than guessed -- `server_key_share_private` occurs 166 times in
    27 modules, `server_key_share_public` 78 times in 20, and
