@@ -238,6 +238,7 @@ let lemma_step_preserves_secrets
 =
   match ev with
   | CS.ConnProtectedHandshake _ -> ()
+  | CS.ConnCleartextHandshake _ -> ()
   | CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> ()
   | _ -> ()
 #pop-options
@@ -2083,6 +2084,7 @@ let lemma_server_field_step (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.co
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg -> ()
   | CS.ConnProtectedHandshake step -> ()
+  | CS.ConnCleartextHandshake _ -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
@@ -2139,6 +2141,7 @@ let lemma_client_field_step (m:CS.connection_model) (ev:CS.conn_event) (m1:CS.co
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg -> ()
   | CS.ConnProtectedHandshake step -> ()
+  | CS.ConnCleartextHandshake _ -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
@@ -2181,6 +2184,7 @@ let lemma_step_preserves_config (m:CS.connection_model) (ev:CS.conn_event) (m1:C
     | CS.ConnLocalEvent local -> ()
     | CS.ConnNetworkEvent msg -> ()
     | CS.ConnProtectedHandshake step -> ()
+    | CS.ConnCleartextHandshake _ -> ()
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"

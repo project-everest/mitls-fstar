@@ -814,6 +814,12 @@ let lemma_step_ss_shape (model:CS.connection_model) (ev:CS.conn_event) (model':C
          created and `ks_handshake_secret` is untouched -- every conjunct of
          `ss_shape` carries. *)
       ()
+    (* A cleartext buffering step leaves [model_record] and [hs_keys] alone, so
+       every conjunct of [ss_shape] carries verbatim. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake model step);
+      CS.lemma_step_cleartext_handshake_inert model step
 #pop-options
 
 let conn_ss_shape (st:CS.connection_state) : prop = ss_shape st.CS.cs_model
@@ -1483,6 +1489,8 @@ let lemma_client_step_pread
         (
           match conn_ev with
           | CS.ConnLocalEvent _ -> ()   // `client_wire_received_event` is False here
+          (* [client_wire_received_event] is False on a cleartext buffering step. *)
+          | CS.ConnCleartextHandshake _ -> ()
           | CS.ConnProtectedHandshake step ->
             lemma_client_protected_pread st0 d st1 step msgs
           | CS.ConnNetworkEvent dm ->
@@ -1506,6 +1514,8 @@ let lemma_client_step_pread
         match conn_ev with
         | CS.ConnLocalEvent _ ->
           SCB.lemma_client_local_pread st0 d st1
+        (* [client_wire_received_event] is False on a cleartext buffering step. *)
+        | CS.ConnCleartextHandshake _ -> ()
         | CS.ConnProtectedHandshake step ->
           (* `ClientProcessPendingHandshake`: a TAIL protected step.  Zero received
              bytes AND zero read-seq movement (`record_read` is restored from the
@@ -1826,6 +1836,12 @@ let lemma_write_seq_step_bound
        | CL.Sent ->
          assert (ev == SMKM.sent_tls_event dm.CL.message_value);
          lemma_write_seq_step_bound_sent m dm.CL.message_value m' rs rr)
+    (* A cleartext buffering step leaves [model_record], [model_control] and
+       [hs_keys] alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake _ ->
       (* NEW ARM.  `CS.step_protected_handshake` routes through
          `CS.step_handshake_message _ CL.Received _`, and no `CL.Received` arm
@@ -2048,6 +2064,12 @@ let lemma_read_seq_step_bound
        | CL.Received ->
          assert (ev == SMKM.received_tls_event dm.CL.message_value);
          lemma_read_seq_step_bound_recv m dm.CL.message_value m' rs rr)
+    (* A cleartext buffering step leaves [model_record], [model_control] and
+       [hs_keys] alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  HEAD: one `Application_data` record charged and `R.next_seq`
          (+1, epoch-preserving) applied -- `r1.seq == r0.seq + 1 == r0.seq + count rr`.
@@ -2543,6 +2565,12 @@ let lemma_client_local_record_effect
     | CS.ConnLocalEvent lev -> ()
     | CS.ConnNetworkEvent dm ->
       ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
+    (* A cleartext buffering step leaves [model_record], [model_control] and
+       [hs_keys] alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  A HEAD step is charged `raw_records_exactly rr Application_data 1`
          by `CS.event_raw_delta_legal`, impossible with `rr == B.empty`; so under the
@@ -2756,6 +2784,12 @@ let lemma_client_local_read_change_resets_seq
     | CS.ConnLocalEvent lev -> ()
     | CS.ConnNetworkEvent dm ->
       ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
+    (* A cleartext buffering step leaves [model_record], [model_control] and
+       [hs_keys] alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       (if step.CS.protected_handshake_head
        then (WStep.lemma_protected_raw_count_one B.empty;
@@ -2860,6 +2894,11 @@ let lemma_server_local_record_effect
          m'.CS.model_record.CS.record_write == m.CS.model_record.CS.record_write))
   = match ce with
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves [model_record] alone (first disjunct). *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnNetworkEvent dm ->
       ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
 #pop-options
@@ -3697,6 +3736,12 @@ let lemma_step_model_ctrl_not_hscfv
       lemma_step_tls_not_hscfv m dm.CL.message_direction dm.CL.message_value m'
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_hscfv m lev m'
+    (* A cleartext buffering step leaves [model_record], [model_control] and
+       [hs_keys] alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       if step.CS.protected_handshake_buffering then
         (* A BUFFERING step never touches `model_control` — it only advances
@@ -4435,6 +4480,8 @@ let lemma_hsp_deliver_to_client
       | CS.ConnLocalEvent _ ->
         (* `EC.client_wire_received_event` is `False` on a local event. *)
         ()
+      (* [client_wire_received_event] is False on a cleartext buffering step. *)
+      | CS.ConnCleartextHandshake _ -> ()
       | CS.ConnProtectedHandshake step ->
         (* NEW ARM (coalesced protected handshake).  `origin/agentic` extended the
            client's WIRE receive path so that a delivered record may be consumed by a

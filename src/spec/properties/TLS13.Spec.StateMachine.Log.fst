@@ -30,6 +30,7 @@ let conn_event_sent_tls_delta (ev:conn_event) : list M.tls_message =
      | CL.Sent -> [msg.CL.message_value]
      | CL.Received -> [])
   | ConnProtectedHandshake _ -> []
+  | ConnCleartextHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
   match ev with
@@ -43,6 +44,8 @@ let conn_event_received_tls_delta (ev:conn_event) : list M.tls_message =
     if step.protected_handshake_buffering
     then []
     else [M.TlsHandshake step.protected_handshake_message]
+  (* A cleartext buffering step delivers no message either. *)
+  | ConnCleartextHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -51,6 +54,7 @@ let conn_event_app_sent_delta (ev:conn_event) : list B.bytes =
      | CL.Sent, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
   | ConnProtectedHandshake _ -> []
+  | ConnCleartextHandshake _ -> []
   | ConnLocalEvent _ -> []
 let conn_event_app_received_delta (ev:conn_event) : list B.bytes =
   match ev with
@@ -59,6 +63,7 @@ let conn_event_app_received_delta (ev:conn_event) : list B.bytes =
      | CL.Received, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
   | ConnProtectedHandshake _ -> []
+  | ConnCleartextHandshake _ -> []
   | ConnLocalEvent local ->
     (match local with
      | LocalDeliverApplicationData bytes -> [bytes]
@@ -92,6 +97,8 @@ let state_event_of_conn_event (ev:conn_event) : GTot (option S.event) =
      | M.CertificateVerify cv -> Some (S.RecvCertificateVerify cv)
      | M.Finished fin -> Some (S.RecvServerFinished fin)
      | _ -> None)
+  (* A cleartext buffering step corresponds to no abstract state event. *)
+  | ConnCleartextHandshake _ -> None
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (S.ValidateCertificate peer)
@@ -159,6 +166,8 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
     if step.protected_handshake_buffering
     then B.empty
     else W.serialize_handshake step.protected_handshake_message
+  (* Cleartext buffering appends nothing to the transcript either. *)
+  | ConnCleartextHandshake _ -> B.empty
   | ConnLocalEvent local ->
     (match local with
      | LocalVerifyFinished fin -> W.serialize_handshake (M.Finished fin)
@@ -201,6 +210,8 @@ let key_update_response_pending_step
      | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested -> false
      | _, _ -> pending)
   | ConnProtectedHandshake _ ->
+    pending
+  | ConnCleartextHandshake _ ->
     pending
   | ConnLocalEvent _ ->
     pending
@@ -365,6 +376,10 @@ let projected_record_layer_step_for_role
       if step.protected_handshake_head
       then { record with projected_read = projected_next_seq record.projected_read }
       else record)
+  (* A cleartext record carries no AEAD sequence number, so a cleartext
+     buffering step leaves the record layer completely untouched -- exactly as
+     the delivery of a cleartext ClientHello does. *)
+  | ConnCleartextHandshake _ -> record
 let projected_record_layer_step
   (record:projected_record_layer_state)
   (ev:conn_event)
@@ -556,6 +571,8 @@ let connection_log_event_of_conn_event (ev:conn_event) : option CL.host_event =
           CL.message_direction = CL.Received;
           CL.message_value = M.TlsHandshake step.protected_handshake_message;
         })
+  (* A cleartext buffering step logs no host event. *)
+  | ConnCleartextHandshake _ -> None
   | ConnLocalEvent local ->
     (match local with
      | LocalValidateCertificate peer -> Some (CL.LocalEvent (CL.LocalValidateCertificate peer))

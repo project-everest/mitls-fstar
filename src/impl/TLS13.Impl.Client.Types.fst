@@ -653,6 +653,8 @@ let sent_protected_event_write_key_schedule_projection
     else True
   | CS.ConnProtectedHandshake _ ->
     True
+  | CS.ConnCleartextHandshake _ ->
+    True
   | CS.ConnLocalEvent _ ->
     True
 

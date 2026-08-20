@@ -38,6 +38,9 @@ unfold let received_handshake_head_normal_form
   | CS.ConnProtectedHandshake step ->
     step.CS.protected_handshake_message == received_msg /\
     TLS13.Spec.StateMachine.Replay.single_message_head_step_shape step
+  (* A cleartext buffering step delivers no message, so it can never be the
+     normal form of a single-message record. *)
+  | CS.ConnCleartextHandshake _ -> False
   | CS.ConnLocalEvent _ -> False
 
 unfold let normalized_received_handshake_replay
@@ -78,6 +81,8 @@ val lemma_sent_replay_skip_empty_head_preserves_peer_stream
         (match ev with
          | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake _ -> True
+           (* A cleartext buffering step sends nothing. *)
+           | CS.ConnCleartextHandshake _ -> True
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists sender1 sender_tail_sent sender_tail_received.
@@ -111,6 +116,8 @@ val lemma_received_replay_skip_empty_head_preserves_peer_stream
         (match ev with
          | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           (* A cleartext buffering step DOES consume a received record. *)
+           | CS.ConnCleartextHandshake _ -> False
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists receiver1 receiver_tail_sent receiver_tail_received.
@@ -144,6 +151,8 @@ val lemma_sent_replay_skip_zero_received_head_preserves_peer_stream
         (match ev with
          | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           (* A cleartext buffering step DOES consume a received record. *)
+           | CS.ConnCleartextHandshake _ -> False
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists sender1 sender_tail_sent sender_tail_received.
@@ -177,6 +186,8 @@ val lemma_received_replay_skip_zero_sent_head_preserves_peer_stream
         (match ev with
          | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake _ -> True
+           (* A cleartext buffering step sends nothing. *)
+           | CS.ConnCleartextHandshake _ -> True
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists receiver1 receiver_tail_sent receiver_tail_received.
@@ -221,10 +232,14 @@ val lemma_sent_received_replays_skip_zero_opposite_heads_preserve_peer_stream
         (match sender_ev with
          | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           (* A cleartext buffering step DOES consume a received record. *)
+           | CS.ConnCleartextHandshake _ -> False
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
           (match receiver_ev with
            | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake _ -> True
+           (* A cleartext buffering step sends nothing. *)
+           | CS.ConnCleartextHandshake _ -> True
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received))
       (ensures
         exists sender1 receiver1
@@ -279,10 +294,14 @@ val lemma_sent_received_replays_skip_empty_opposite_heads_preserve_peer_stream
         (match sender_ev with
          | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake _ -> True
+           (* A cleartext buffering step sends nothing. *)
+           | CS.ConnCleartextHandshake _ -> True
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
           (match receiver_ev with
            | CS.ConnLocalEvent _ -> True
            | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+           (* A cleartext buffering step DOES consume a received record. *)
+           | CS.ConnCleartextHandshake _ -> False
            | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent))
       (ensures
         exists sender1 receiver1
@@ -405,6 +424,9 @@ val lemma_single_message_sender_normalizes_received_handshake_head
               must say the step is not a buffering one. *)
            step.CS.protected_handshake_buffering == false /\
            step.CS.protected_handshake_message == received_msg
+         (* A cleartext buffering step delivers no message either. *)
+         | CS.ConnCleartextHandshake _ ->
+           False
          | CS.ConnLocalEvent _ ->
            False) /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -985,6 +1007,8 @@ val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake _ -> True
+         (* A cleartext buffering step sends nothing. *)
+         | CS.ConnCleartextHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         sender_after.CS.model_record.CS.record_write.R.seq ==
           receiver.CS.model_record.CS.record_read.R.seq /\
@@ -1047,6 +1071,8 @@ val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake _ -> True
+         (* A cleartext buffering step sends nothing. *)
+         | CS.ConnCleartextHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         write_read_record_material_aligned sender_after receiver /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1145,6 +1171,8 @@ val lemma_protected_handshake_event_projection_pair_after_sender_skip_empty_head
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake _ -> True
+         (* A cleartext buffering step sends nothing. *)
+         | CS.ConnCleartextHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         write_read_record_material_aligned sender_after receiver /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1213,6 +1241,8 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+         (* A cleartext buffering step DOES consume a received record. *)
+         | CS.ConnCleartextHandshake _ -> False
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         sender.CS.model_record.CS.record_write.R.seq ==
           receiver_after.CS.model_record.CS.record_read.R.seq /\
@@ -1275,6 +1305,8 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+         (* A cleartext buffering step DOES consume a received record. *)
+         | CS.ConnCleartextHandshake _ -> False
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1373,6 +1405,8 @@ val lemma_protected_handshake_event_projection_pair_after_receiver_skip_empty_he
         (match skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+         (* A cleartext buffering step DOES consume a received record. *)
+         | CS.ConnCleartextHandshake _ -> False
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1444,10 +1478,14 @@ val lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads
         (match sender_skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake _ -> True
+         (* A cleartext buffering step sends nothing. *)
+         | CS.ConnCleartextHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+         (* A cleartext buffering step DOES consume a received record. *)
+         | CS.ConnCleartextHandshake _ -> False
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         sender_after.CS.model_record.CS.record_write.R.seq ==
           receiver_after.CS.model_record.CS.record_read.R.seq /\
@@ -1513,10 +1551,14 @@ val lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
         (match sender_skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake _ -> True
+         (* A cleartext buffering step sends nothing. *)
+         | CS.ConnCleartextHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+         (* A cleartext buffering step DOES consume a received record. *)
+         | CS.ConnCleartextHandshake _ -> False
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender_after receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\
@@ -1618,10 +1660,14 @@ val lemma_protected_handshake_event_projection_pair_after_both_skip_empty_heads_
         (match sender_skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake _ -> True
+         (* A cleartext buffering step sends nothing. *)
+         | CS.ConnCleartextHandshake _ -> True
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received) /\
         (match receiver_skip_ev with
          | CS.ConnLocalEvent _ -> True
          | CS.ConnProtectedHandshake step -> not step.CS.protected_handshake_head
+         (* A cleartext buffering step DOES consume a received record. *)
+         | CS.ConnCleartextHandshake _ -> False
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Sent) /\
         write_read_record_material_aligned sender_after receiver_after /\
         Seq.equal sender_raw_sent receiver_raw_received /\

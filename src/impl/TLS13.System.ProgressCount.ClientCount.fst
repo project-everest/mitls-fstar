@@ -102,6 +102,11 @@ let lemma_client_control_change_progress
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
     | CS.ConnLocalEvent _ -> ()
+    (* A cleartext buffering step changes only the pending cleartext buffer. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       (* `step_protected_handshake` is a RECEIVED handshake message step.  The
          two post-processing rewrites it applies on top of

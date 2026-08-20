@@ -105,6 +105,7 @@ let lemma_step_model_from_failed_results_failed
             msg.CL.message_direction
             msg.CL.message_value == None);
           assert False)
+     | ConnCleartextHandshake _ -> ()
      | ConnProtectedHandshake step ->
        (* A buffering step succeeds without consulting the control state, so
           it is reachable here.  It rewrites only [model_record] and
@@ -584,6 +585,7 @@ let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
        lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1
+      | ConnCleartextHandshake _ -> ()
       | ConnProtectedHandshake step ->
        assert (legal_protected_handshake_step st0.cs_model step);
        assert_norm (
@@ -639,6 +641,7 @@ let lemma_legal_connection_delta_stable_client_x25519_key_share_projection
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
        lemma_legal_tls_message_stable_client_x25519_key_share_projection st0 msg st1
+      | ConnCleartextHandshake _ -> ()
       | ConnProtectedHandshake step ->
        assert False)
   | ControlFailed _ ->
@@ -700,6 +703,7 @@ let lemma_legal_connection_delta_stable_server_x25519_key_share_projection
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
        lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1
+      | ConnCleartextHandshake _ -> ()
       | ConnProtectedHandshake step ->
        assert False)
   | ControlClosed ->
@@ -731,6 +735,7 @@ let lemma_legal_connection_delta_stable_server_x25519_key_share_projection
          msg.CL.message_direction
          msg.CL.message_value == Some st1.cs_model);
        lemma_legal_tls_message_stable_server_x25519_key_share_projection st0 msg st1
+      | ConnCleartextHandshake _ -> ()
       | ConnProtectedHandshake step ->
        assert False)
   | ControlFailed _ ->
@@ -1143,6 +1148,7 @@ let lemma_step_model_supported_profile_key_schedule_reachable_shape
       msg.CL.message_direction
       msg.CL.message_value
       model'
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     assert (step_protected_handshake model step == Some model');
     if step.protected_handshake_buffering
@@ -1173,6 +1179,10 @@ let lemma_step_model_supported_profile_key_schedule_reachable_shape
         lemma_same_key_schedule_reachable_shape stepped model'
     else
       assert False
+  (* A cleartext buffering step rewrites only the reassembly buffer, so the
+     key schedule is preserved verbatim. *)
+  | ConnCleartextHandshake step ->
+    lemma_same_key_schedule_reachable_shape model model'
 
 let lemma_connection_delta_supported_profile_key_schedule_reachable_shape
   (st0:connection_state)
@@ -1674,6 +1684,7 @@ let lemma_connection_delta_client_x25519_reachable_shape
                assert (client_x25519_reachable_shape st1)
              | _, _, _ ->
                assert False))
+       | ConnCleartextHandshake _ -> ()
        | ConnProtectedHandshake step ->
          assert (legal_protected_handshake_step st0.cs_model step);
          assert_norm (
@@ -1790,7 +1801,15 @@ let lemma_connection_delta_server_x25519_reachable_shape
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             assert (server_x25519_reachable_shape st1)
           | ConnProtectedHandshake step ->
-            assert False)
+            assert False
+          (* A cleartext buffering step touches nothing but the reassembly
+             buffer, so every key-share projection is carried over verbatim. *)
+          | ConnCleartextHandshake step ->
+            assert (step_cleartext_handshake st0.cs_model step ==
+              Some st1.cs_model);
+            assert (st1.cs_model.model_handshake.hs_keys ==
+              st0.cs_model.model_handshake.hs_keys);
+            assert (server_x25519_reachable_shape st1))
        | ControlFailed _ ->
          lemma_step_model_from_failed_results_failed
            st0.cs_model
@@ -1811,6 +1830,11 @@ let lemma_connection_delta_server_x25519_reachable_shape
               assert (st1.cs_model == fail_model st0.cs_model (T.AlertError alert))
             | _ -> assert False)
          | ConnProtectedHandshake step ->
+           assert False
+         (* Buffering cleartext is legal only from
+            [ControlHandshaking HsAwaitingClientHello], never from a failed
+            state. *)
+         | ConnCleartextHandshake step ->
            assert False);
         assert (st1.cs_model.model_handshake == st0.cs_model.model_handshake);
         assert (server_x25519_reachable_shape st1)
@@ -1923,7 +1947,15 @@ let lemma_connection_delta_server_x25519_reachable_shape
              | _, _, _ ->
                assert False))
        | ConnProtectedHandshake step ->
-         assert False)
+         assert False
+       (* Buffering cleartext moves nothing but the reassembly buffer, so every
+          key-share projection is carried over verbatim. *)
+       | ConnCleartextHandshake step ->
+         assert (step_cleartext_handshake st0.cs_model step ==
+           Some st1.cs_model);
+         assert (st1.cs_model.model_handshake.hs_keys ==
+           st0.cs_model.model_handshake.hs_keys);
+         assert (server_x25519_reachable_shape st1))
 
 let lemma_initial_client_x25519_reachable_shape
   (cfg:connection_config)
@@ -2363,6 +2395,12 @@ let lemma_step_model_server_handshake_write_key_reachable_shape
         assert False)
     | ConnProtectedHandshake step ->
       assert False
+    (* Buffering cleartext changes only the reassembly buffer, so the write-key
+       shape is whatever it already was. *)
+    | ConnCleartextHandshake step ->
+      assert (step_cleartext_handshake model step == Some model');
+      assert (model'.model_control == model.model_control);
+      lemma_server_handshake_write_key_shape_unchanged model model'
   end
 
 let lemma_connection_delta_server_handshake_write_key_reachable_shape
@@ -2942,6 +2980,7 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
             assert (model' == model)
           | _, _, _ ->
             assert False)
+      | ConnCleartextHandshake _ -> ()
       | ConnProtectedHandshake step ->
         assert (legal_protected_handshake_step model step);
         assert (step_protected_handshake model step == Some model');
@@ -3235,7 +3274,11 @@ let lemma_step_model_application_record_epoch_reachable_shape_for_role
           | _, _, _ ->
             assert False)
        | ConnProtectedHandshake step ->
-         assert False);
+         assert False
+       (* Inert: the record layer and the key schedule are untouched. *)
+       | ConnCleartextHandshake step ->
+         assert (step_cleartext_handshake model step == Some model');
+         assert (server_application_record_epoch_reachable_shape model'));
       assert (server_application_record_epoch_reachable_shape model')
     end;
     assert (model_application_record_epoch_reachable_shape_for_role
@@ -5313,11 +5356,12 @@ let lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
         application_traffic_key_slot_stage_shape_for_role role model')
 =
   (* Split by hand rather than leaving it to Z3: only the [ConnLocalEvent] case
-     carries the group-indexed [legal_event] arm, so the other two cases get a
+     carries the group-indexed [legal_event] arm, so the other cases get a
      small context. *)
   match ev with
   | ConnNetworkEvent _ -> ()
   | ConnProtectedHandshake _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnLocalEvent _ -> ()
 #pop-options
 
@@ -5785,6 +5829,7 @@ let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_
        lemma_server_finished_sent_checkpoint_ready_elim model0
      | _, _, _, _ ->
        ())
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_buffering
     then
@@ -5810,6 +5855,8 @@ let lemma_step_model_preserves_application_traffic_install_checkpoint_ready_for_
       lemma_client_certificate_verify_verified_checkpoint_ready_elim model0
      | _, _, _ ->
       assert False)
+  (* Inert: neither the transcript nor the key schedule moves. *)
+  | ConnCleartextHandshake _ -> ()
 
 #pop-options
 #restart-solver
@@ -6441,6 +6488,7 @@ let lemma_step_model_preserves_first_epoch_application_traffic_material_slots_ma
        lemma_first_epoch_application_slots_preserved_when_slots_unchanged_or_checkpoint_stable
          model0
          model1)
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_buffering
     then
@@ -6823,6 +6871,7 @@ let lemma_step_model_post_handshake_application_slots_stable
   match ev with
   | ConnLocalEvent _ -> ()
   | ConnProtectedHandshake _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnNetworkEvent msg ->
     (match msg.CL.message_value with
      | M.TlsKeyUpdate _ -> assert False
@@ -7379,6 +7428,7 @@ let lemma_step_model_server_certificate_verify_body_empty_reachable_shape
      | _, _ ->
        assert (model'.model_handshake.hs_certificate_verify ==
                model.model_handshake.hs_certificate_verify))
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     assert (model.model_config.config_role == ClientEndpoint)
 
@@ -7504,6 +7554,7 @@ let lemma_step_model_key_update_pending_delta
      | _, _ -> ())
   | ConnLocalEvent _ -> ()
   | ConnProtectedHandshake _ -> ()
+  | ConnCleartextHandshake _ -> ()
 
 #push-options "--z3rlimit 150"
 let lemma_step_model_record_keys_consistent
@@ -7745,6 +7796,7 @@ let lemma_step_model_record_keys_consistent
         | _ ->
           assert (model1.model_record == model0.model_record);
           assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)))
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_buffering
     then begin
@@ -7803,6 +7855,7 @@ let lemma_step_model_record_keys_consistent
       assert False)
 
 #pop-options
+#push-options "--z3rlimit 100"
 let lemma_step_model_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)
@@ -8063,8 +8116,11 @@ let lemma_step_model_record_keys_consistent_for_role
          assert (model1 == model0)
        | _ ->
          assert False)
+     | ConnCleartextHandshake step ->
+       lemma_step_cleartext_handshake_inert model0 step
      | ConnProtectedHandshake step ->
        assert False)
+#pop-options
 
 (* [set_pending_protected_handshake] rewrites the handshake buffers and nothing
    else; both of its branches leave [model_record] alone.  Naming the fact
@@ -8387,6 +8443,7 @@ let lemma_step_model_record_layer_delta
      | _, _ ->
        assert (model1.model_record == model0.model_record);
        assert (model_record_layer_delta model0 ev model1))
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     assert (ev == ConnProtectedHandshake step);
     if step.protected_handshake_buffering
@@ -8486,6 +8543,7 @@ let lemma_step_model_pending_application_delta
          model0.model_application.app_pending_received_raw)
      | _ ->
        assert (model1.model_application == model0.model_application))
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake _ ->
     assert (model1.model_application == model0.model_application)
 
@@ -8524,6 +8582,7 @@ let lemma_step_model_transcript_delta
        CL.lemma_append_empty_right t0;
        Seq.lemma_eq_refl model1.model_handshake.hs_transcript t0)
   | ConnProtectedHandshake _ -> ()
+  | ConnCleartextHandshake _ -> ()
 
 let lemma_step_model_app_log_delta
   (model0:connection_model)
@@ -8544,6 +8603,9 @@ let lemma_step_model_app_log_delta
      | _ ->
        append_l_nil app.CL.app_sent;
        append_l_nil app.CL.app_received)
+  | ConnCleartextHandshake _ ->
+    append_l_nil app.CL.app_sent;
+    append_l_nil app.CL.app_received
   | ConnProtectedHandshake _ ->
     append_l_nil app.CL.app_sent;
     append_l_nil app.CL.app_received
@@ -8575,6 +8637,7 @@ let rec lemma_connection_log_trace_sent_tls
     match ev with
     | ConnNetworkEvent _ -> ()
     | ConnProtectedHandshake _ -> ()
+    | ConnCleartextHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -8597,6 +8660,7 @@ let rec lemma_connection_log_trace_received_tls
     match ev with
     | ConnNetworkEvent _ -> ()
     | ConnProtectedHandshake _ -> ()
+    | ConnCleartextHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -8618,6 +8682,7 @@ let rec lemma_connection_log_trace_state_events
     lemma_connection_log_trace_state_events rest;
     match ev with
     | ConnNetworkEvent _ -> ()
+    | ConnCleartextHandshake _ -> ()
     | ConnProtectedHandshake step ->
       (match step.protected_handshake_message with
        | M.ClientHello _
@@ -8649,6 +8714,7 @@ let rec lemma_connection_log_trace_app_sent
     match ev with
     | ConnNetworkEvent _ -> ()
     | ConnProtectedHandshake _ -> ()
+    | ConnCleartextHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -8671,6 +8737,7 @@ let rec lemma_connection_log_trace_app_received
     match ev with
     | ConnNetworkEvent _ -> ()
     | ConnProtectedHandshake _ -> ()
+    | ConnCleartextHandshake _ -> ()
     | ConnLocalEvent local ->
       (match local with
        | LocalValidateCertificate _
@@ -9513,6 +9580,7 @@ let lemma_event_raw_delta_legal_protected_single_parse_record
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_head
     then
@@ -9550,6 +9618,7 @@ let lemma_event_raw_delta_legal_protected_parse_prefix
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_head
     then
@@ -9588,6 +9657,7 @@ let lemma_event_raw_delta_legal_protected_decompose_prefix
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_head
     then
@@ -9630,6 +9700,7 @@ let lemma_event_raw_delta_legal_protected_segmented
 =
   match ev with
   | ConnLocalEvent _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     if step.protected_handshake_head
     then
@@ -12664,6 +12735,7 @@ let lemma_step_model_preserves_handshake_secret_requires_shared_secret
   match ev with
   | ConnNetworkEvent _ -> ()
   | ConnProtectedHandshake _ -> ()
+  | ConnCleartextHandshake _ -> ()
   | ConnLocalEvent _ -> ()
 #pop-options
 
@@ -13137,6 +13209,7 @@ let lemma_step_model_preserves_first_epoch_handshake_traffic_material_slots_matc
   | ConnNetworkEvent msg ->
     lemma_first_epoch_handshake_slots_preserved_when_slots_unchanged_or_checkpoint_stable
       model0 model1
+  | ConnCleartextHandshake _ -> ()
   | ConnProtectedHandshake step ->
     (* A protected-handshake step is a RECEIVED handshake message step, so it
        is covered by exactly the same reasoning as the `ConnNetworkEvent` arm:

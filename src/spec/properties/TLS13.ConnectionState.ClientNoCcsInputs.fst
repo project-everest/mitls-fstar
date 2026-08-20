@@ -99,6 +99,7 @@ let lemma_client_local_matches_not_received_ccs
   match conn_ev with
   | CS.ConnLocalEvent _ -> ()
   | CS.ConnProtectedHandshake _ -> ()
+  | CS.ConnCleartextHandshake _ -> ()
   | CS.ConnNetworkEvent msg ->
     // for any matching local event, a network event must be SENT
     ()
@@ -146,6 +147,7 @@ let lemma_client_step_appends_non_ccs
       // rule out a received CCS
       (match conn_ev with
        | CS.ConnProtectedHandshake _ -> ()
+       | CS.ConnCleartextHandshake _ -> ()
        | CS.ConnLocalEvent _ -> ()
        | CS.ConnNetworkEvent dm ->
          (match dm.CL.message_value with

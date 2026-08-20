@@ -67,6 +67,11 @@ let event_protected_single_raw_parse_success
        W.parse_record_wire raw_received ==
          Some (T.Application_data, fragment, B.length raw_received)
     else True
+  (* A cleartext record is not an [Application_data] record, so these
+     protected-record shape obligations do not apply to a cleartext
+     buffering step -- exactly as they do not apply to a cleartext
+     [ConnNetworkEvent]. *)
+  | ConnCleartextHandshake _ -> True
   | ConnLocalEvent _ -> True
 let event_protected_raw_parse_prefix_success
   (ev:conn_event)
@@ -100,6 +105,11 @@ let event_protected_raw_parse_prefix_success
        consumed > 0 /\
        consumed <= B.length raw_received
     else True
+  (* A cleartext record is not an [Application_data] record, so these
+     protected-record shape obligations do not apply to a cleartext
+     buffering step -- exactly as they do not apply to a cleartext
+     [ConnNetworkEvent]. *)
+  | ConnCleartextHandshake _ -> True
   | ConnLocalEvent _ -> True
 let event_protected_raw_decompose_prefix_success
   (ev:conn_event)
@@ -145,6 +155,11 @@ let event_protected_raw_decompose_prefix_success
           T.Application_data
           0
     else True
+  (* A cleartext record is not an [Application_data] record, so these
+     protected-record shape obligations do not apply to a cleartext
+     buffering step -- exactly as they do not apply to a cleartext
+     [ConnNetworkEvent]. *)
+  | ConnCleartextHandshake _ -> True
   | ConnLocalEvent _ -> True
 let event_protected_raw_segmented_success
   (ev:conn_event)
@@ -172,6 +187,11 @@ let event_protected_raw_segmented_success
       raw_received
       T.Application_data
       (if step.protected_handshake_head then 1 else 0)
+  (* A cleartext record is not an [Application_data] record, so these
+     protected-record shape obligations do not apply to a cleartext
+     buffering step -- exactly as they do not apply to a cleartext
+     [ConnNetworkEvent]. *)
+  | ConnCleartextHandshake _ -> True
   | ConnLocalEvent _ -> True
 let rec conn_events_raw_replay
   (model:connection_model)

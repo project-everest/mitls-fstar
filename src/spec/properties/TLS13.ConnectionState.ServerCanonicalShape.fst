@@ -278,6 +278,9 @@ let is_server_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsAlert T.Close_notify -> True
         | _ -> False))
   | CS.ConnProtectedHandshake _ -> False
+  (* Cleartext reassembly steps are not yet emitted by [server_step]; see the
+     staging note on [ConnCleartextHandshake] in TLS13.Spec.StateMachine. *)
+  | CS.ConnCleartextHandshake _ -> False
   | CS.ConnLocalEvent le ->
     (match le with
      | CS.LocalStartServer -> True

@@ -75,6 +75,10 @@ let lemma_step_model_shape
        by hypothesis), and `set_pending_protected_handshake` touches only
        `model_handshake.hs_buffers`. *)
     ()
+  (* A cleartext buffering step touches ONLY
+     `model_handshake.hs_buffers.hb_cleartext_handshake_bytes`, so every
+     record-state shape is preserved verbatim. *)
+  | CS.ConnCleartextHandshake step -> ()
   | CS.ConnLocalEvent local -> ()
 #pop-options
 

@@ -248,6 +248,7 @@ let lemma_step_preserves_secrets
   match ev with
   | CS.ConnNetworkEvent _ -> ()
   | CS.ConnProtectedHandshake _ -> ()
+  | CS.ConnCleartextHandshake _ -> ()
   | CS.ConnLocalEvent lev ->
     match lev with
     | CS.LocalStartHandshake _ -> ()
@@ -1376,6 +1377,7 @@ let lemma_step_preserves_config (m:CS.connection_model) (ev:CS.conn_event) (m1:C
           (ensures m1.CS.model_config == m.CS.model_config)
   = match ev with
     | CS.ConnProtectedHandshake _ -> ()
+    | CS.ConnCleartextHandshake _ -> ()
     | CS.ConnLocalEvent local -> ()
     | CS.ConnNetworkEvent msg -> ()
 
@@ -3489,6 +3491,7 @@ let lemma_server_step_classify
   =
   match ev with
   | CS.ConnProtectedHandshake _ -> ()
+  | CS.ConnCleartextHandshake _ -> ()
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg ->
     match msg.CL.message_value with
@@ -3535,6 +3538,7 @@ let lemma_client_step_classify
   =
   match ev with
   | CS.ConnProtectedHandshake _ -> ()
+  | CS.ConnCleartextHandshake _ -> ()
   | CS.ConnLocalEvent local -> ()
   | CS.ConnNetworkEvent msg ->
     match msg.CL.message_value with

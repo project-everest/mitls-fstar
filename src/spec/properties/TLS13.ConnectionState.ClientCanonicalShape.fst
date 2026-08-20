@@ -602,6 +602,9 @@ let is_client_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsKeyUpdate _ -> True
         | _ -> False))
   | CS.ConnProtectedHandshake _ -> True
+  (* Server-only: a cleartext reassembly step is legal only for a
+     [ServerEndpoint], so it is never a canonical CLIENT event. *)
+  | CS.ConnCleartextHandshake _ -> False
   | CS.ConnLocalEvent le ->
     (match le with
      | CS.LocalStartHandshake _ -> True

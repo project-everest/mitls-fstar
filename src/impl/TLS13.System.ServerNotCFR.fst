@@ -102,6 +102,10 @@ let lemma_step_model_ctrl_not_cfr
          lemma_step_handshake_not_cfr m CL.Received
            step.CS.protected_handshake_message stepped
        | None -> ())
+    (* A cleartext buffering step leaves `model_control` untouched -- the ONLY
+       field it rewrites is
+       `model_handshake.hs_buffers.hb_cleartext_handshake_bytes`. *)
+    | CS.ConnCleartextHandshake step -> ()
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_cfr m lev m'
 #pop-options
@@ -253,6 +257,8 @@ let lemma_step_model_not_shsfv
          lemma_step_handshake_not_shsfv m CL.Received
            step.CS.protected_handshake_message stepped
        | None -> ())
+    (* A cleartext buffering step leaves `model_control` untouched. *)
+    | CS.ConnCleartextHandshake step -> ()
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_shsfv m lev m'
 #pop-options
@@ -382,6 +388,8 @@ let lemma_step_model_not_cfv
          lemma_step_handshake_not_cfv m CL.Received
            step.CS.protected_handshake_message stepped
        | None -> ())
+    (* A cleartext buffering step leaves `model_control` untouched. *)
+    | CS.ConnCleartextHandshake step -> ()
     | CS.ConnLocalEvent lev ->
       lemma_step_local_not_cfv m lev m'
 #pop-options

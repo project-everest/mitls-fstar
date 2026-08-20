@@ -120,6 +120,8 @@ let conn_event_is_key_update (ev:conn_event) : bool =
      | _ -> false)
   | ConnProtectedHandshake _ ->
     false
+  | ConnCleartextHandshake _ ->
+    false
   | ConnLocalEvent _ ->
     false
 let rec conn_events_no_key_update (events:list conn_event) : bool =

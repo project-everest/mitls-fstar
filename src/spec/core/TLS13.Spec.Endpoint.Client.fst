@@ -202,6 +202,10 @@ let client_wire_received_event
     network_input_message_projection st0 wire tm.CL.message_value
   | CS.ConnProtectedHandshake step ->
     step.CS.protected_handshake_head == true
+  (* A CLIENT never buffers cleartext handshake bytes: the only cleartext
+     handshake record it receives is the ServerHello, and a server never
+     splits it.  Cleartext reassembly is a SERVER-side rule. *)
+  | CS.ConnCleartextHandshake _ -> False
   | CS.ConnLocalEvent _ -> False
 
 let client_step

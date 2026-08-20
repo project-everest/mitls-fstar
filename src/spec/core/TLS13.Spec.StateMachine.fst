@@ -172,6 +172,15 @@ type handshake_buffer_state = {
   hb_encrypted_server_handshake_parsed: nat;
   hb_certificate_leaf_der: option B.bytes;
   hb_certificate_verify_input: option B.bytes;
+  (* Server-side CLEARTEXT reassembly buffer: the plaintext of cleartext
+     Handshake records taken delivery of that do not yet amount to a whole
+     handshake message.  This is the mirror of
+     [hb_encrypted_server_handshake_bytes] for the one handshake message a
+     server receives in the clear, the ClientHello.  It needs no companion
+     "parsed" offset: a cleartext buffering step never delivers a message, so
+     the buffer only ever holds a strict prefix of one message and is cleared
+     wholesale when that message is delivered. *)
+  hb_cleartext_handshake_bytes: B.bytes;
 }
 let empty_handshake_buffer_state : handshake_buffer_state = {
   hb_client_hello_bytes = B.empty;
@@ -180,6 +189,7 @@ let empty_handshake_buffer_state : handshake_buffer_state = {
   hb_encrypted_server_handshake_parsed = 0;
   hb_certificate_leaf_der = None;
   hb_certificate_verify_input = None;
+  hb_cleartext_handshake_bytes = B.empty;
 }
 type server_handshake_selection = {
   server_selected_client_hello: GCH.clientHello;
@@ -522,9 +532,34 @@ type protected_handshake_step = {
      [protected_handshake_consumed] are inert for such a step. *)
   protected_handshake_buffering: bool;
 }
+(* A CLEARTEXT buffering step: the server's analogue of a buffering
+   [protected_handshake_step].  It takes delivery of one cleartext Handshake
+   record whose plaintext does not complete a handshake message, appends that
+   plaintext to the pending cleartext buffer, and steps nothing else.
+
+   It carries no message.  Unlike the protected case there is no message-
+   bearing variant: once the buffer plus a record's fragment DO amount to a
+   whole message, that message is delivered by the ordinary
+   [ConnNetworkEvent] path, whose raw-delta rule reads the buffer.  So a
+   cleartext step is always a buffering one, and the type needs no flags.
+
+   STAGING NOTE.  As of this commit the buffer is machinery without a
+   consumer: [received_cleartext_tls_message_raw] still requires the
+   delivering record to carry the whole ClientHello, so a server that
+   buffered anything could never drain it.  Generalising that rule is what
+   actually closes G3, and it cannot land on its own -- it makes the
+   ClientHello raw-delta depend on the buffer, which the record decoder
+   (shared by both roles) and the concrete server representation have to be
+   able to discharge.  Those move together in a later commit; this one is
+   deliberately capability-neutral. *)
+noextract
+type cleartext_handshake_step = {
+  cleartext_handshake_fragment: B.bytes;
+}
 type conn_event =
   | ConnNetworkEvent of directed_message M.tls_message
   | ConnProtectedHandshake of protected_handshake_step
+  | ConnCleartextHandshake of cleartext_handshake_step
   | ConnLocalEvent of local_event
 type connection_state = {
   cs_model: connection_model;
@@ -857,7 +892,12 @@ let step_handshake_message
         { hs with
             hs_client_hello = Some ch;
             hs_buffers =
-              { hs.hs_buffers with hb_client_hello_bytes = W.serialize_handshake msg };
+              { hs.hs_buffers with
+                  hb_client_hello_bytes = W.serialize_handshake msg;
+                  (* Delivering the message drains whatever cleartext records
+                     were set aside while assembling it. *)
+                  hb_cleartext_handshake_bytes = B.empty;
+              };
         }
         msg in
     Some (with_handshake_stage model hs' HsClientHelloReceived)
@@ -1438,14 +1478,144 @@ let step_protected_handshake
           step.protected_handshake_fragment
           consumed_to)
   else None
+(* The cleartext counterpart.  A ClientHello is bounded by the record-layer
+   fragment cap either way; the cap here plays the same role as the protected
+   one -- it bounds how many records a server will accept that merely extend
+   the buffer, since every buffering step contributes at least one byte. *)
+let max_pending_cleartext_handshake : nat = 32768
+
+let pending_cleartext_handshake (model:connection_model) : B.bytes =
+  model.model_handshake.hs_buffers.hb_cleartext_handshake_bytes
+
+let cleartext_handshake_buffer_empty (model:connection_model) : prop =
+  Seq.equal (pending_cleartext_handshake model) B.empty
+
+(* The byte stream a cleartext step assembles: whatever earlier records set
+   aside, followed by this record's fragment.  With an empty buffer this is
+   exactly the record's own fragment, which is the pre-reassembly behaviour --
+   the bridge that keeps every property proved before server-side reassembly
+   applicable. *)
+let cleartext_handshake_stream
+  (model:connection_model)
+  (step:cleartext_handshake_step)
+  : B.bytes =
+  B.append
+    (pending_cleartext_handshake model)
+    step.cleartext_handshake_fragment
+
+let lemma_cleartext_handshake_stream_of_buffer_empty
+  (model:connection_model)
+  (step:cleartext_handshake_step)
+  : Lemma
+      (requires cleartext_handshake_buffer_empty model)
+      (ensures
+        Seq.equal
+          (cleartext_handshake_stream model step)
+          step.cleartext_handshake_fragment)
+      [SMTPat (cleartext_handshake_stream model step);
+       SMTPat (cleartext_handshake_buffer_empty model)]
+  = Seq.append_empty_l step.cleartext_handshake_fragment
+
+(* Buffering cleartext is legal only for a SERVER, only while it is waiting
+   for the ClientHello -- the one handshake message it receives in the clear,
+   and hence the only one whose reassembly could ever be drained -- and only
+   as a LAST RESORT.  The last conjunct is what stops a server buffering a
+   record that already carries a whole message instead of delivering it,
+   which would otherwise let a peer feed records indefinitely without ever
+   advancing the handshake. *)
+let legal_cleartext_handshake_step
+  (model:connection_model)
+  (step:cleartext_handshake_step)
+  : GTot prop =
+  model.model_config.config_role == ServerEndpoint /\
+  0 < B.length step.cleartext_handshake_fragment /\
+  B.length (cleartext_handshake_stream model step) <= max_pending_cleartext_handshake /\
+  model.model_control == ControlHandshaking HsAwaitingClientHello /\
+  W.parse_tls_message T.Handshake (cleartext_handshake_stream model step) == None
+
+(* A cleartext buffering step advances no key schedule and no read sequence:
+   nothing was opened, the bytes were merely set aside.  The ONLY model change
+   is the buffer itself. *)
+let step_cleartext_handshake
+  (model:connection_model)
+  (step:cleartext_handshake_step)
+  : GTot (option connection_model) =
+  if legal_cleartext_handshake_step model step
+  then
+    let hs = model.model_handshake in
+    Some
+      { model with
+          model_handshake =
+            { hs with
+                hs_buffers =
+                  { hs.hs_buffers with
+                      hb_cleartext_handshake_bytes =
+                        cleartext_handshake_stream model step;
+                  };
+            };
+      }
+  else None
+
+(* Everything a cleartext buffering step leaves alone -- which is everything
+   except the reassembly buffer itself.
+
+   This carries an SMT pattern deliberately.  Adding a [conn_event]
+   constructor forces a new arm on every exhaustive match over events, and
+   there are hundreds of them; without this lemma each such arm would have to
+   re-derive the same inertness by hand.  With it, almost all of them are
+   discharged by [()]. *)
+let lemma_step_cleartext_handshake_inert
+  (model:connection_model)
+  (step:cleartext_handshake_step)
+  : Lemma
+      (requires Some? (step_cleartext_handshake model step))
+      (ensures
+       (let model' = Some?.v (step_cleartext_handshake model step) in
+        model'.model_config == model.model_config /\
+        model'.model_control == model.model_control /\
+        model'.model_record == model.model_record /\
+        model'.model_application == model.model_application /\
+        model'.model_failure == model.model_failure /\
+        (let hs = model.model_handshake in
+         let hs' = model'.model_handshake in
+         hs'.hs_start == hs.hs_start /\
+         hs'.hs_server_selection == hs.hs_server_selection /\
+         hs'.hs_client_hello == hs.hs_client_hello /\
+         hs'.hs_server_hello == hs.hs_server_hello /\
+         hs'.hs_encrypted_extensions == hs.hs_encrypted_extensions /\
+         hs'.hs_certificate == hs.hs_certificate /\
+         hs'.hs_validated_peer == hs.hs_validated_peer /\
+         hs'.hs_certificate_verify == hs.hs_certificate_verify /\
+         hs'.hs_certificate_verify_verified == hs.hs_certificate_verify_verified /\
+         hs'.hs_server_finished == hs.hs_server_finished /\
+         hs'.hs_server_finished_verified == hs.hs_server_finished_verified /\
+         hs'.hs_client_finished == hs.hs_client_finished /\
+         hs'.hs_transcript == hs.hs_transcript /\
+         hs'.hs_keys == hs.hs_keys /\
+         (let b = hs.hs_buffers in
+          let b' = hs'.hs_buffers in
+          b'.hb_client_hello_bytes == b.hb_client_hello_bytes /\
+          b'.hb_server_hello_bytes == b.hb_server_hello_bytes /\
+          b'.hb_encrypted_server_handshake_bytes ==
+            b.hb_encrypted_server_handshake_bytes /\
+          b'.hb_encrypted_server_handshake_parsed ==
+            b.hb_encrypted_server_handshake_parsed /\
+          b'.hb_certificate_leaf_der == b.hb_certificate_leaf_der /\
+          b'.hb_certificate_verify_input == b.hb_certificate_verify_input))))
+      [SMTPat (step_cleartext_handshake model step)]
+  = ()
+
 let step_model (model:connection_model) (ev:conn_event) : GTot (option connection_model) =
   match ev with
   | ConnNetworkEvent msg ->
     step_tls_message model msg.CL.message_direction msg.CL.message_value
   | ConnProtectedHandshake step ->
     step_protected_handshake model step
+  | ConnCleartextHandshake step ->
+    step_cleartext_handshake model step
   | ConnLocalEvent local ->
     step_local_event model local
+
 let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
   : Tot prop
         (decreases suites)
@@ -2178,6 +2348,8 @@ let legal_event (model:connection_model) (ev:conn_event) : GTot prop =
     legal_tls_message model msg.CL.message_direction msg.CL.message_value
   | ConnProtectedHandshake step ->
     legal_protected_handshake_step model step
+  | ConnCleartextHandshake step ->
+    legal_cleartext_handshake_step model step
   | ConnLocalEvent local ->
     legal_local_event model local
 let rec all_records_outer_type
@@ -2261,6 +2433,11 @@ let event_raw_delta_legal
     (if step.protected_handshake_head
      then raw_records_exactly raw_received T.Application_data 1
      else Seq.equal raw_received B.empty)
+  | ConnCleartextHandshake step ->
+    (* One cleartext Handshake record, whose fragment is the step's. *)
+    Seq.equal raw_sent B.empty /\
+    W.parse_record_wire raw_received ==
+      Some (T.Handshake, step.cleartext_handshake_fragment, B.length raw_received)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction with
      | CL.Sent ->

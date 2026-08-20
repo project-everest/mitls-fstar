@@ -453,6 +453,12 @@ let lemma_legal_response_for_event_preserves_server_selection_except_select
   | CS.ConnProtectedHandshake _ ->
     assert (st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+  | CS.ConnCleartextHandshake step ->
+    assert_norm (CS.step_model st0.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                 CS.step_cleartext_handshake st0.CS.cs_model step);
+    CS.lemma_step_cleartext_handshake_inert st0.CS.cs_model step;
+    assert (st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
   | CS.ConnLocalEvent local ->
     assert (st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)

@@ -372,6 +372,12 @@ let lemma_server_s_flag_step
       Seq.lemma_eq_elim raw_received B.empty;
       WStep.lemma_raw_appdata_count_empty ();
       WStep.lemma_raw_appdata_count_seq_equal raw_received B.empty
+    (* A cleartext buffering step leaves [model_control] alone, so the flag is
+       unchanged and the bound holds outright. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnNetworkEvent dm ->
       (match dm.CL.message_direction with
        | CL.Sent ->

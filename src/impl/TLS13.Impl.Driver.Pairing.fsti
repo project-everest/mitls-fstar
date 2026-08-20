@@ -245,6 +245,9 @@ let rec event_trace_has_tls_message
     | CS.ConnProtectedHandshake step ->
       dir == CL.Received /\
       msg == M.TlsHandshake step.CS.protected_handshake_message
+    (* A cleartext buffering step carries no message. *)
+    | CS.ConnCleartextHandshake _ ->
+      False
     | CS.ConnLocalEvent _ ->
       False) \/
     event_trace_has_tls_message dir msg rest

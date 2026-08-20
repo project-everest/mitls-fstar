@@ -224,6 +224,12 @@ let lemma_client_local_preserves_app_read
        | CS.ControlHandshaking _ ->
          CSL.lemma_handshaking_nonfinal_read_not_application st
        | _ -> ())
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
          restores/raises the read slot, freezes the write slot, and writes only the
@@ -254,6 +260,12 @@ let lemma_server_local_preserves_app_read
        | CS.ControlHandshaking _ ->
          CSL.lemma_handshaking_nonfinal_read_not_application st
        | _ -> ())
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
          `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
@@ -295,6 +307,12 @@ let lemma_client_local_preserves_client_finished
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
          restores/raises the read slot, freezes the write slot, and writes only the
@@ -320,6 +338,12 @@ let lemma_server_local_preserves_server_finished
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
          `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
@@ -983,6 +1007,11 @@ let lemma_conn_network_or_local_preserves_hs_reassembly
   = match ev with
     | CS.ConnLocalEvent local ->
       CS.lemma_local_event_preserves_protected_handshake_buffer m local m'
+    (* A cleartext buffering step writes only [hb_cleartext_handshake_bytes]. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnNetworkEvent tm -> ()
 #pop-options
 
@@ -1017,6 +1046,12 @@ let lemma_client_local_step_preserves_hs_buffer_empty
       CS.protected_handshake_buffer_empty model)
     (ensures CS.protected_handshake_buffer_empty model')
   = match ce with
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake model step);
+      CS.lemma_step_cleartext_handshake_inert model step
     | CS.ConnProtectedHandshake step ->
       lemma_client_local_protected_handshake_impossible model step
     | CS.ConnNetworkEvent _ ->
@@ -1828,6 +1863,8 @@ let lemma_deliver_to_client_all3
         assert (c'.CS.cs_event_log == a.client.CS.cs_event_log @ [conn_ev0]);
         match conn_ev0 with
         | CS.ConnLocalEvent _ -> ()   (* client_wire_received_event is False here *)
+        (* [client_wire_received_event] is False on a cleartext buffering step. *)
+        | CS.ConnCleartextHandshake _ -> ()
         | CS.ConnProtectedHandshake step ->
           Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
           assert (step.CS.protected_handshake_head);
@@ -1991,6 +2028,8 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
         | CS.ConnLocalEvent _ ->
           (* `EC.client_wire_received_event` is `False` on a local event. *)
           ()
+        (* [client_wire_received_event] is False on a cleartext buffering step. *)
+        | CS.ConnCleartextHandshake _ -> ()
         | CS.ConnProtectedHandshake step ->
           (* NEW ARM.  The delivered record is consumed by a HEAD protected-handshake
              step.  SECOND half is passive (H5).  FIRST half splits on the PRE-state
@@ -2330,6 +2369,12 @@ let lemma_client_local_preserves_app_write
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
          restores/raises the read slot, freezes the write slot, and writes only the
@@ -2355,6 +2400,12 @@ let lemma_server_local_preserves_app_write
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
          `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
@@ -2454,6 +2505,12 @@ let lemma_client_local_cad_backward
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  Empty byte delta ==> TAIL step (head refuted); a tail step
          restores/raises the read slot, freezes the write slot, and writes only the
@@ -2480,6 +2537,12 @@ let lemma_server_local_cad_backward
       ASP.lemma_network_empty_delta_record_unchanged_ungated
         st.CS.cs_model dm st'.CS.cs_model
     | CS.ConnLocalEvent lev -> ()
+    (* A cleartext buffering step leaves every model field except the pending
+       cleartext buffer alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model st.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake st.CS.cs_model step);
+      CS.lemma_step_cleartext_handshake_inert st.CS.cs_model step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM, STRUCTURALLY VACUOUS.  `CS.legal_protected_handshake_step` pins
          `model_config.config_role == CS.ClientEndpoint` as its FIRST conjunct, so a
@@ -2859,6 +2922,8 @@ let lemma_awc_deliver_to_client (a b:SY.tls_system_state)
         (
           match conn_ev0 with
           | CS.ConnLocalEvent _ -> ()
+          (* [client_wire_received_event] is False on a cleartext buffering step. *)
+          | CS.ConnCleartextHandshake _ -> ()
           | CS.ConnProtectedHandshake step ->
             HSP.lemma_protected_preserves_wr_full
               a.client.CS.cs_model c'.CS.cs_model step

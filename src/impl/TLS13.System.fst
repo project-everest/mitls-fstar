@@ -1340,6 +1340,17 @@ let lemma_cc_client_send
                  Some (M.TlsHandshake (M.ClientHello server_ch))
              with
                W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
+        | CS.ConnCleartextHandshake _ ->
+          // Cleartext buffering step: raw_sent is empty, exactly as for a local event.
+          eliminate exists server_ch.
+            CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw
+          with
+            (eliminate exists fragment.
+               W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+               W.parse_tls_message T.Handshake fragment ==
+                 Some (M.TlsHandshake (M.ClientHello server_ch))
+             with
+               W.lemma_parse_record_wire_some_consumed_positive raw T.Handshake fragment (B.length raw))
         | CS.ConnProtectedHandshake _ ->
           // Internal event: raw_sent is empty, exactly as for a local event.
           eliminate exists server_ch.
@@ -1716,6 +1727,8 @@ let lemma_wire_facts_deliver_to_client a b =
       assert (WStep.hs_hellos_stable a.client.CS.cs_model c'.CS.cs_model);
       match conn_ev with
       | CS.ConnLocalEvent _ -> ()
+      (* [client_wire_received_event] is False on a cleartext buffering step. *)
+      | CS.ConnCleartextHandshake _ -> ()
       | CS.ConnProtectedHandshake _ ->
         // A protected handshake receipt touches neither hello field, so FACTS
         // 1-3 and the coupling transfer from a unchanged.
@@ -2140,6 +2153,12 @@ let lemma_step_model_preserves_pending
          lemma_step_tls_preserves_pending model0 CL.Received
            (M.TlsHandshake step.CS.protected_handshake_message) stepped
        | None -> ())
+    (* A cleartext buffering step touches only the pending cleartext handshake
+       buffer, so [model_application] is preserved outright. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model model0 (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake model0 step);
+      CS.lemma_step_cleartext_handshake_inert model0 step
     | CS.ConnLocalEvent local ->
       lemma_step_local_preserves_pending model0 local model1
 #pop-options
@@ -3184,6 +3203,7 @@ let lemma_client_step_preserves_stage_ok
          (match dm.CL.message_direction with
           | CL.Sent -> ()
           | CL.Received -> ())
+       | CS.ConnCleartextHandshake _ -> ()
        | CS.ConnProtectedHandshake _ -> ())
 #pop-options
 

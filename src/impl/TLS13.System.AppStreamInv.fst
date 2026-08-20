@@ -287,6 +287,11 @@ let lemma_step_empty_delta_streams
       lemma_step_tls_streams m m' dm.CL.message_direction dm.CL.message_value;
       Seq.append_empty_r (m_sent m);
       Seq.append_empty_r (m_recv m)
+    (* A cleartext buffering step changes only the pending cleartext buffer. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  `CS.step_protected_handshake` routes through
          `CS.step_handshake_message _ CL.Received _` -- a HANDSHAKE step, which never
@@ -866,6 +871,8 @@ let lemma_asi_deliver_to_client_raw
       | CS.ConnLocalEvent _ ->
         (* `EC.client_wire_received_event` is `False` on a local event. *)
         ()
+      (* [client_wire_received_event] is False on a cleartext buffering step. *)
+      | CS.ConnCleartextHandshake _ -> ()
       | CS.ConnProtectedHandshake step ->
         (* NEW ARM (coalesced protected handshake).  The delivered record is consumed
            by a HEAD protected-handshake step, which moves NO application bytes

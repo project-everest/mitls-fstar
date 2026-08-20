@@ -484,6 +484,7 @@ let lemma_step_record_schedule_coupling
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
     | CS.ConnProtectedHandshake _ -> ()
+    | CS.ConnCleartextHandshake _ -> ()
     | CS.ConnLocalEvent local ->
       (match local with
        | CS.LocalInstallTrafficKeys install -> ()
@@ -677,6 +678,7 @@ let lemma_nonempty_sent_event
   = match ev with
     | CS.ConnLocalEvent _ -> ()
     | CS.ConnProtectedHandshake _ -> ()
+    | CS.ConnCleartextHandshake _ -> ()
     | CS.ConnNetworkEvent dm ->
       (match dm.CL.message_direction with
        | CL.Sent ->
@@ -1172,6 +1174,7 @@ let lemma_step_record_app_epoch_coupling
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
     | CS.ConnProtectedHandshake _ -> ()
+    | CS.ConnCleartextHandshake _ -> ()
     | CS.ConnLocalEvent local ->
       (match local with
        | CS.LocalInstallTrafficKeys install -> ()
@@ -1661,6 +1664,7 @@ let lemma_client_local_pwrite
            lemma_client_local_record_seq_stable_write a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnProtectedHandshake _ -> ()
+         | CS.ConnCleartextHandshake _ -> ()
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pwrite_algebra a d c' msgs
@@ -1708,6 +1712,11 @@ let lemma_client_local_pread
            assert (CS.step_local_event a.CS.cs_model local' == Some c'.CS.cs_model);
            lemma_client_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_client_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
+         (* A cleartext buffering step changes only the pending cleartext buffer. *)
+         | CS.ConnCleartextHandshake step ->
+           assert_norm (CS.step_model a.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                        CS.step_cleartext_handshake a.CS.cs_model step);
+           CS.lemma_step_cleartext_handshake_inert a.CS.cs_model step
          | CS.ConnProtectedHandshake step ->
            assert (CS.legal_event a.CS.cs_model (CS.ConnProtectedHandshake step));
            assert (CS.step_model a.CS.cs_model (CS.ConnProtectedHandshake step) ==
@@ -1769,6 +1778,7 @@ let lemma_server_local_pwrite
            lemma_server_local_record_seq_stable_write a.CS.cs_model local' c'.CS.cs_model;
            lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnProtectedHandshake _ -> ()
+         | CS.ConnCleartextHandshake _ -> ()
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pwrite_algebra a d c' msgs
@@ -1816,6 +1826,7 @@ let lemma_server_local_pread
            lemma_server_local_record_seq_stable_read a.CS.cs_model local' c'.CS.cs_model;
            lemma_server_local_record_install_char a.CS.cs_model local' c'.CS.cs_model
          | CS.ConnProtectedHandshake _ -> ()
+         | CS.ConnCleartextHandshake _ -> ()
          | CS.ConnNetworkEvent dm ->
            lemma_network_empty_delta_record_unchanged a.CS.cs_model dm c'.CS.cs_model);
         lemma_pread_algebra a d c' msgs

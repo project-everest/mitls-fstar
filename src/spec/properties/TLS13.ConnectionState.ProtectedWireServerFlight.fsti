@@ -58,6 +58,10 @@ val lemma_single_message_sender_after_server_write_client_read_install_normalize
               skipped, not paired, by the flight inversion. *)
            step.CS.protected_handshake_buffering == false /\
            step.CS.protected_handshake_message == received_msg
+         (* A cleartext buffering step delivers no message either.  It is also
+            server-only, so it can never be a CLIENT head event. *)
+         | CS.ConnCleartextHandshake _ ->
+           False
          | CS.ConnLocalEvent _ ->
            False) /\
         TLS13.Spec.StateMachine.Replay.conn_events_sent_seal_replay

@@ -1674,7 +1674,11 @@ let received_client_hello_state
          CS.hs_client_hello = Some ch;
          CS.hs_buffers =
            { hs0.CS.hs_buffers with
-               CS.hb_client_hello_bytes = W.serialize_handshake msg };
+               CS.hb_client_hello_bytes = W.serialize_handshake msg;
+               (* Delivering the ClientHello DRAINS the cleartext reassembly
+                  buffer: whatever earlier records set aside has now been
+                  consumed as part of this message. *)
+               CS.hb_cleartext_handshake_bytes = B.empty };
       }
       msg in
   {

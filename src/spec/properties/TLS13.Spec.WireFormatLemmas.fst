@@ -644,6 +644,12 @@ let lemma_step_model_handshake_fields
      | M.TlsAlert _, _, _
      | M.TlsChangeCipherSpec, _, CS.ControlHandshaking _ -> ()
      | _, _, _ -> ())
+  (* A cleartext buffering step changes only the pending cleartext buffer, so
+     every field [step_fields_post] talks about is preserved outright. *)
+  | CS.ConnCleartextHandshake step ->
+    assert_norm (CS.step_model model (CS.ConnCleartextHandshake step) ==
+                 CS.step_cleartext_handshake model step);
+    CS.lemma_step_cleartext_handshake_inert model step
   | CS.ConnProtectedHandshake step ->
     assert_norm (
       CS.step_model model (CS.ConnProtectedHandshake step) ==

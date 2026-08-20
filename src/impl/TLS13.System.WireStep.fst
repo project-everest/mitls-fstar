@@ -115,6 +115,7 @@ let lemma_step_model_preserves_hellos
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
     | CS.ConnProtectedHandshake _ -> ()
+    | CS.ConnCleartextHandshake _ -> ()
     | CS.ConnLocalEvent _ -> ()
 #pop-options
 
@@ -1525,6 +1526,10 @@ let lemma_client_step_into_appdata_emits
          | CS.ConnNetworkEvent dm ->
            lemma_client_recv_not_into_appdata
              st0.CS.cs_model dm.CL.message_value st1.CS.cs_model
+         (* [client_wire_received_event] rules a cleartext buffering step out
+            for a client. *)
+         | CS.ConnCleartextHandshake _ ->
+           assert False
          | CS.ConnProtectedHandshake step ->
            lemma_client_protected_not_into_appdata
              st0.CS.cs_model step st1.CS.cs_model)
@@ -1932,6 +1937,11 @@ let lemma_server_marker_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    (* A cleartext buffering step sends nothing, exactly like a protected one. *)
+    | CS.ConnCleartextHandshake _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
     | CS.ConnNetworkEvent dm ->
       (match dm.CL.message_direction with
        | CL.Received ->
@@ -2245,6 +2255,14 @@ let lemma_client_marker_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    (* Cleartext reassembly is a SERVER-side event, so this arm is
+       unreachable in a client-role lemma. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (
+        CS.legal_event m (CS.ConnCleartextHandshake step) ==
+        CS.legal_cleartext_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
+      assert False
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
@@ -2737,6 +2755,14 @@ let lemma_client_recv_potential_step
       Seq.lemma_eq_elim raw_received B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_received B.empty
+    (* Cleartext reassembly is a SERVER-side event, so this arm is
+       unreachable in a client-role lemma. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (
+        CS.legal_event m (CS.ConnCleartextHandshake step) ==
+        CS.legal_cleartext_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
+      assert False
     | CS.ConnProtectedHandshake step ->
       if step.CS.protected_handshake_head
       then lemma_protected_raw_count_one raw_received
@@ -2923,6 +2949,14 @@ let lemma_client_sent_potential_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    (* Cleartext reassembly is a SERVER-side event, so this arm is
+       unreachable in a client-role lemma. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (
+        CS.legal_event m (CS.ConnCleartextHandshake step) ==
+        CS.legal_cleartext_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
+      assert False
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
@@ -3301,6 +3335,14 @@ let lemma_client_stay_appdata_raw_sent_first_appdata
   = match conn_ev with
     | CS.ConnLocalEvent _ ->
       Seq.lemma_eq_elim raw_sent B.empty
+    (* Cleartext reassembly is a SERVER-side event, so this arm is
+       unreachable in a client-role lemma. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (
+        CS.legal_event m (CS.ConnCleartextHandshake step) ==
+        CS.legal_cleartext_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
+      assert False
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty
     | CS.ConnNetworkEvent dm ->
@@ -3385,6 +3427,10 @@ let lemma_client_recv_at_appdata_count1
         lemma_client_recv_at_appdata_appdata_record
           st0.CS.cs_model dm st1.CS.cs_model (CW.wire_serialize wire);
         lemma_protected_raw_count_one (CW.wire_serialize wire)
+      (* [client_wire_received_event] rules a cleartext buffering step out
+         for a client. *)
+      | CS.ConnCleartextHandshake _ ->
+        assert False
       | CS.ConnProtectedHandshake step ->
         // A head protected-handshake step consumes exactly one Application_data
         // record, straight from [event_raw_delta_legal].
@@ -3477,6 +3523,10 @@ let lemma_client_wire_recv_not_into_appdata
         | CS.ConnNetworkEvent dm ->
           lemma_client_recv_not_into_appdata
             st0.CS.cs_model dm.CL.message_value st1.CS.cs_model
+        (* [client_wire_received_event] rules a cleartext buffering step out
+           for a client. *)
+        | CS.ConnCleartextHandshake _ ->
+          assert False
         | CS.ConnProtectedHandshake step ->
           lemma_client_protected_not_into_appdata
             st0.CS.cs_model step st1.CS.cs_model
@@ -3634,6 +3684,12 @@ let lemma_server_cf_region_step
         lemma_raw_appdata_count_empty ();
         lemma_raw_appdata_count_seq_equal raw_received B.empty
       )
+    (* A cleartext buffering step leaves [model_control] alone, so the
+       CF-region potential is unchanged and the bound holds outright. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnNetworkEvent dm ->
       (match dm.CL.message_direction with
        | CL.Sent ->
@@ -4254,6 +4310,14 @@ let lemma_client_recv_upper_step
       Seq.lemma_eq_elim raw_received B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_received B.empty
+    (* Cleartext reassembly is a SERVER-side event, so this arm is
+       unreachable in a client-role lemma. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (
+        CS.legal_event m (CS.ConnCleartextHandshake step) ==
+        CS.legal_cleartext_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
+      assert False
     | CS.ConnProtectedHandshake step ->
       if step.CS.protected_handshake_head
       then begin
@@ -4536,6 +4600,11 @@ let lemma_server_marker_step_lower
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    (* A cleartext buffering step changes no flight marker and no control. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       assert_norm (
         CS.legal_event m (CS.ConnProtectedHandshake step) ==
@@ -4750,6 +4819,14 @@ let lemma_client_finished_flag_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
+    (* Cleartext reassembly is a SERVER-side event, so this arm is
+       unreachable in a client-role lemma. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (
+        CS.legal_event m (CS.ConnCleartextHandshake step) ==
+        CS.legal_cleartext_handshake_step m step);
+      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
+      assert False
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
@@ -4974,6 +5051,9 @@ let lemma_server_recv_upper_step
       Seq.lemma_eq_elim raw_received B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_received B.empty
+    (* A cleartext buffering step consumes exactly one Handshake record. *)
+    | CS.ConnCleartextHandshake _ ->
+      lemma_single_full_record_count raw_received T.Handshake
     | CS.ConnProtectedHandshake step ->
       assert_norm (
         CS.legal_event m (CS.ConnProtectedHandshake step) ==

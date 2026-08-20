@@ -189,6 +189,11 @@ let lemma_client_local_preserves_write_epoch
   = match ce with
     | CS.ConnLocalEvent lev ->
       lemma_client_local_event_preserves_write_epoch m lev m'
+    (* A cleartext buffering step changes only the pending cleartext buffer. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnProtectedHandshake step ->
       (* NEW ARM.  A HEAD protected step is charged
          `raw_records_exactly raw_received Application_data 1`, which `B.empty`
@@ -228,6 +233,11 @@ let lemma_server_local_preserves_read_epoch
          explicit role conjunct of `legal_protected_handshake_step`.) *)
       assert (CS.legal_protected_handshake_step m step);
       assert (m.CS.model_config.CS.config_role == CS.ClientEndpoint)
+    (* A cleartext buffering step leaves [model_record] alone. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnNetworkEvent dm ->
       ASP.lemma_network_empty_delta_record_unchanged_ungated m dm m'
 #pop-options
@@ -314,6 +324,11 @@ let lemma_ama_client_local (a b:SY.tls_system_state)
           (match ce with
            | CS.ConnLocalEvent lev ->
              AB.lemma_client_step_appboth_preserves_record_material a.client c' ce
+           (* A cleartext buffering step changes only the pending cleartext buffer. *)
+           | CS.ConnCleartextHandshake step ->
+             assert_norm (CS.step_model a.client.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                          CS.step_cleartext_handshake a.client.CS.cs_model step);
+             CS.lemma_step_cleartext_handshake_inert a.client.CS.cs_model step
            | CS.ConnProtectedHandshake step ->
              (* NEW ARM.  The empty byte-delta forces a TAIL step (a HEAD step is
                 charged exactly one `Application_data` record by
@@ -451,6 +466,8 @@ let lemma_ama_deliver_to_client
       (
       match conn_ev0 with
       | CS.ConnLocalEvent _ -> ()   // `client_wire_received_event` is False here
+      (* [client_wire_received_event] is False on a cleartext buffering step. *)
+      | CS.ConnCleartextHandshake _ -> ()
       | CS.ConnProtectedHandshake step ->
         (* NEW ARM (HEAD protected handshake, the new client wire-receive shape).
            `AB.record_mat_eq` compares only epoch/key/static_iv -- NOT seq -- so the

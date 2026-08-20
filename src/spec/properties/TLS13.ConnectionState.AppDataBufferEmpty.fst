@@ -174,6 +174,9 @@ let lemma_step_model_shape
       lemma_step_tls_buffer m dm.CL.message_direction dm.CL.message_value m'
     | CS.ConnProtectedHandshake step ->
       lemma_step_protected_buffer m step m'
+    (* A cleartext buffering step rewrites only the cleartext handshake
+       buffer, so the application-data buffer is preserved verbatim. *)
+    | CS.ConnCleartextHandshake step -> ()
     | CS.ConnLocalEvent lev ->
       lemma_step_local_buffer m lev m'
 #pop-options

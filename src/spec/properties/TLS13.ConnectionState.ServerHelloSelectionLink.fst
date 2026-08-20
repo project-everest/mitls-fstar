@@ -114,6 +114,12 @@ let lemma_connection_delta_server_hello_selection_link
          assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
          assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
          assert (server_hello_selection_link_shape st1))
+    (* A cleartext buffering step rewrites only the reassembly buffer, so both
+       linked fields are preserved verbatim. *)
+    | ConnCleartextHandshake step ->
+      assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+      assert (st1.cs_model.model_handshake.hs_server_selection == hs0.hs_server_selection);
+      assert (server_hello_selection_link_shape st1)
   end
   else ()
 
@@ -199,6 +205,11 @@ let lemma_connection_delta_server_hello_none_pre_send
        | _, _, _ ->
          assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
          assert (server_hello_none_pre_send_shape st1))
+    (* A cleartext buffering step leaves both the control state and
+       `hs_server_hello` untouched. *)
+    | ConnCleartextHandshake step ->
+      assert (st1.cs_model.model_handshake.hs_server_hello == hs0.hs_server_hello);
+      assert (server_hello_none_pre_send_shape st1)
   end
   else ()
 

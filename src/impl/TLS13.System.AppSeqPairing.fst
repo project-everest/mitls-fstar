@@ -1043,6 +1043,12 @@ let lemma_step_empty_delta_preserves_app_seq
       if step.CS.protected_handshake_head
       then WStep.lemma_ws_raw_records_nonempty_parse_record B.empty T.Application_data 1
       else ()
+    (* A cleartext buffering step leaves [model_record] alone, so both sequence
+       projections are preserved outright. *)
+    | CS.ConnCleartextHandshake step ->
+      assert_norm (CS.step_model m (CS.ConnCleartextHandshake step) ==
+                   CS.step_cleartext_handshake m step);
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnNetworkEvent dm ->
       lemma_network_empty_delta_record_unchanged_ungated m dm m'
 #pop-options
@@ -2302,6 +2308,8 @@ let lemma_asp_deliver_to_client
       | CS.ConnLocalEvent _ ->
         // `EC.client_wire_received_event` is `False` on a local event.
         ()
+      (* [client_wire_received_event] is False on a cleartext buffering step. *)
+      | CS.ConnCleartextHandshake _ -> ()
       | CS.ConnProtectedHandshake step ->
         (* NEW ARM (coalesced protected handshake).  `origin/agentic` extended the
            client's WIRE receive path so that a wire record may be consumed by a

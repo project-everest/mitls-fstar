@@ -39,6 +39,7 @@ let conn_event_app_received_delta (ev:CS.conn_event) : list B.bytes =
      | CL.Received, M.TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
   | CS.ConnProtectedHandshake _ -> []
+  | CS.ConnCleartextHandshake _ -> []
   | CS.ConnLocalEvent local ->
     (match local with
      | CS.LocalDeliverApplicationData bytes -> [bytes]

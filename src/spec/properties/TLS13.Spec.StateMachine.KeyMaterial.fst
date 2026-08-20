@@ -444,6 +444,7 @@ let conn_event_key_update_label
             | CL.Received -> TrafficRead))
      | _ -> None)
   | ConnProtectedHandshake _ -> None
+  | ConnCleartextHandshake _ -> None
   | ConnLocalEvent _ -> None
 
 (** How many times `l`'s application traffic secret has been rotated. **)

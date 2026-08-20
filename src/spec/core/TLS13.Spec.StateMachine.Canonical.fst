@@ -128,6 +128,8 @@ let sent_event_seal_projection
     else True
   | ConnProtectedHandshake _ ->
     True
+  | ConnCleartextHandshake _ ->
+    True
   | ConnLocalEvent _ ->
     True
 
@@ -226,6 +228,11 @@ let received_event_decode_projection
     if step.protected_handshake_head
     then received_protected_handshake_head_decode model step raw_received
     else True
+  (* A cleartext buffering step opens nothing -- its record is in the clear --
+     so there is no unseal obligation here.  The record's shape is pinned by
+     [event_raw_delta_legal]. *)
+  | ConnCleartextHandshake _ ->
+    True
   | ConnLocalEvent _ ->
     True
 

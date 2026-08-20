@@ -77,6 +77,10 @@ let lemma_single_message_sender_after_server_write_client_read_install_normalize
               skipped, not paired, by the flight inversion. *)
            step.protected_handshake_buffering == false /\
            step.protected_handshake_message == received_msg
+         (* Cleartext reassembly is a SERVER-side event; [client_head] is a
+            client event, so this shape never arises here. *)
+         | ConnCleartextHandshake _ ->
+           False
          | ConnLocalEvent _ ->
            False) /\
         conn_events_sent_seal_replay

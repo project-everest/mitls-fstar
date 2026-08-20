@@ -1640,8 +1640,59 @@ reopened.
 | 6 | Byte cap, mirroring `max_pending_protected_handshake = 32768` | `src/spec/core/TLS13.Spec.StateMachine.fst` |
 | 7 | Flip `clienthello-across-two-records` **and** `aes128-clienthello-across-two-records`; add a three-record cell and an over-cap cell | `test/unit/test_server_interop_matrix.c` |
 
-Steps 1-2 are spec-only and capability-neutral: they can land as an independent
-green commit before any implementation work starts, exactly as G2's S1-S6.6 did.
+### The A/B split (decided while landing step 1)
+
+Steps 1-2 as tabled above are **not** the right first commit.  Measured against
+the tree, the archived patch bundles two separable things:
+
+- **(a) the buffering *event* machinery** -- the `ConnCleartextHandshake`
+  constructor, `hb_cleartext_handshake_bytes`, `legal_cleartext_handshake_step`,
+  `step_cleartext_handshake`, the `event_raw_delta_legal` rule, and the
+  ClientHello-delivery drain;
+- **(b) the generalised *delivery rule*** -- `received_cleartext_tls_message_raw_buffered`,
+  which makes the ClientHello raw-delta depend on the buffer.
+
+Only (b) has hard fallout.  It breaks
+`Impl.Parser.DecoderWF.lemma_mk_cleartext_network_input_wf`, whose `st0` is a
+universally-quantified ghost with no invariant in scope, so the emptiness
+obligation has to propagate through the record decoder's signature -- which is
+shared by **both roles** -- up to the driver.  (b) is therefore inseparable from
+steps 3-5.
+
+So the landing order is:
+
+- **Commit A = (a) only.**  Fully inert: the buffer is machinery without a
+  consumer, because the delivery rule still requires the delivering record to
+  carry the whole ClientHello, and `server_step` still does not admit a
+  `ConnCleartextHandshake`.  No pairing theorem is touched, so **step 2 moves
+  into commit B**.  The ledger does not move.
+- **Commit B = (b) + steps 2-7**, landing together, exactly the discipline G2
+  used (S1-S6.6 capability-neutral, S6.8d indivisible).
+
+Two findings from landing commit A that commit B should carry forward:
+
+1. `lemma_step_cleartext_handshake_inert` (`TLS13.Spec.StateMachine.fst`) is
+   what makes a new `conn_event` constructor tractable.  Adding a constructor
+   forces an arm onto every exhaustive `match ev with` in the tree (~60 sites,
+   26 files); with that lemma in scope almost all of them collapse to a
+   three-line `assert_norm` + lemma call.  An `SMTPat`-triggered variant keyed
+   on `step_model` was tried and does **not** fire, because the branch context
+   holds `step_model model ev` with `ev` a variable, not the constructor
+   application -- the explicit `assert_norm` is what recovers the equation.
+2. Adding the constructor widens some already-tight VCs past their rlimit.
+   Three needed a bump, none needed a proof change:
+   `ConnectionState.Lemmas.lemma_step_model_record_keys_consistent_for_role`
+   and `Impl.Server.CanonicalProtocol.lemma_server_network_nonstep_canonical_step`.
+
+Step 2 must not simply weaken the three pairing guarantees.
+`lemma_paired_replay_split_prefixes_equal_single_client_hello`
+(`ProtectedWireSegmentation.fsti:1398`) has **no callers in `src/`** -- it is a
+published guarantee, so the added `cleartext_handshake_buffer_empty server_model`
+hypothesis is a real weakening rather than a caller-discharged one.  It is also
+genuinely necessary for the statement as written (`server_model` is
+unconstrained, so a mid-reassembly server falsifies the record-aligned
+conclusion).  Commit B should therefore add the hypothesis **and** a
+fresh-server corollary, so the guarantee for real connections is unweakened.
 
 ## Related limitation, both roles
 
