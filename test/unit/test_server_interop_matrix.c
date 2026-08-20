@@ -78,9 +78,11 @@
  * every configuration above (X25519:P-256 -> one 32-byte 0x001d entry;
  * P-256:X25519 -> one 65-byte 0x0017 entry).  The "*" key-share prefix that
  * would ask for two is an OpenSSL 3.2 feature.  So those cells exercise "one
- * share offered, a second group merely listed", which is the shape that makes
- * p256-first-x25519-listed need a HelloRetryRequest -- and they are labelled
- * accordingly.
+ * share offered, a second group merely listed".  Before G2 that shape was
+ * predicted to need a HelloRetryRequest for p256-first-x25519-listed; it does
+ * not, because the server follows the share that was actually sent rather than
+ * the client's preference order, so that cell now completes at secp256r1
+ * directly.  HelloRetryRequest remains unimplemented and unexercised here.
  *
  * The genuinely multi-KeyShareEntry ClientHello is exercised by
  * test_atlas_loopback, because the verified CLIENT's canonical ClientHello
