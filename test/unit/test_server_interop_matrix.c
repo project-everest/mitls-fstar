@@ -52,19 +52,40 @@
  *                         so a ServerHello split across two records would be
  *                         refused by the CLIENT just as a ClientHello is by the
  *                         server.  There is no cleartext reassembly in the tree
- *                         for either role.
+ *                         for either role.  The client-side half of that
+ *                         statement is not left as a claim in this comment: it
+ *                         is executed as a ledger row of its own, by
+ *                         test/unit/test_client_record_split.c, which re-frames
+ *                         the ServerHello in the server->client direction.
  *
- *                         The reason the client's step cannot simply be reused
- *                         is structural, not just the `config_role ==
- *                         ClientEndpoint` guard on
- *                         `legal_protected_handshake_step`: the protected event
- *                         `ConnProtectedHandshake` carries bytes (fragment,
- *                         offset, consumed), whereas the cleartext event
+ *                         The obstruction is in the SHAPE OF THE DELIVERY
+ *                         PREDICATE, not in the events and not in encryption.
+ *                         An earlier version of this comment called it
+ *                         structural -- "`ConnProtectedHandshake` carries bytes
+ *                         (fragment, offset, consumed) whereas
  *                         `ConnNetworkEvent` carries an already-PARSED
- *                         tls_message, and `parse_tls_message` requires
- *                         consumed == length fragment.  A cleartext record IS
- *                         exactly one whole message, so there is nowhere to put
- *                         a partial one.  See docs/server-client-parity.md, G3.
+ *                         tls_message, so there is nowhere to put a partial
+ *                         one" -- and that reading has since been shown to be
+ *                         wrong.  The real asymmetry is which side of the
+ *                         decoder/driver boundary each obligation sits on.  On
+ *                         the protected path the two obligations are SPLIT:
+ *                         record shape (`event_raw_delta_legal` =
+ *                         `raw_records_exactly raw Application_data 1`) is
+ *                         state-free and the decoder proves it, while message
+ *                         identity (`received_event_decode_projection`) is
+ *                         state-aware and the DRIVER proves it.  On the
+ *                         cleartext path they were FUSED: `event_raw_delta_legal`
+ *                         demanded record shape AND `parse_tls_message` success
+ *                         together, while the driver-side slot was literally
+ *                         `True`.  A buffer-relative claim therefore landed on
+ *                         the role-agnostic, state-blind decoder, which cannot
+ *                         see a pending buffer.  Un-fusing the two -- an
+ *                         `_unbuffered` rule for the decoder, the
+ *                         buffer-relative rule for the driver -- removed the
+ *                         obstruction without touching a single decoder proof.
+ *                         See docs/server-client-parity.md, G3, and the
+ *                         "Commit B, unblocked" section of
+ *                         docs/server-p256-plan.md.
  *
  * The split is performed by an in-process TCP proxy that re-frames the
  * client->server byte stream at the record layer.  It only ever re-frames

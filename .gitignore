@@ -23,6 +23,8 @@ test/test_chromium_client_socket_demo
 test/test_key_schedule_bindings
 test/test_atlas_loopback
 test/test_server_interop_matrix
+test/test_client_record_split
+test/.client_record_split.*.port
 test/test_record_bindings
 test/test_extracted_connection_wrapper_openssl
 test/openssl_echo_server

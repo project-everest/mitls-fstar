@@ -283,6 +283,13 @@ them explicitly:
   -- is not handled.  This is the `clienthello-across-two-records` cell, and it
   fails.
 
+This gap is **not server-only**, which the ledger now says out loud.  The
+verified *client* refuses a ServerHello torn across two records for the same
+reason, and `test/unit/test_client_record_split.c` measures it as
+`serverhello-across-two-records` (see P2b below).  The client's
+`protected_handshake_buffering` does not help: it is confined to the protected
+path and to stages at or after ServerHello, and a ServerHello is cleartext.
+
 Interop consequence: any peer whose ClientHello does not fit one record, or
 whose stack fragments it, cannot connect.  This is a live concern as client
 hellos grow (post-quantum key shares push a ClientHello past 1500 bytes and
@@ -575,6 +582,58 @@ the server ever starts accepting an offer that does not name TLS 1.3.  It is
 also the reason the version axis exists at all -- every other cell pins the
 OpenSSL client to TLS 1.3 with `min == max`, so no cell can silently start
 succeeding for the wrong version.
+
+### P2b. The client-side mirror of the framing axis -- `test-client-record-split`
+
+The server matrix above re-frames the *client -> server* direction only.  That
+left the symmetric question unmeasured: what does the **verified client** do
+when the **server's** cleartext ServerHello arrives as two records?  The
+prose answer -- "there is no cleartext reassembly in the tree for either role"
+-- was asserted in this document and in the header of
+`test/unit/test_server_interop_matrix.c`, but nothing executed it, so nothing
+would notice when it stopped being true.
+
+`test/unit/test_client_record_split.c` executes it.  It runs the extracted,
+verified client against the local OpenSSL echo server through an in-process
+proxy that re-frames the **server -> client** stream, and records three cells:
+
+```
+CASE                               EXPECT   NOTE
+passthrough                        ok       control: the proxy is transparent
+serverhello-tcp-dribble            ok       control: TCP segmentation, not record segmentation
+serverhello-across-two-records     refused  G3, client side: the mirror of clienthello-across-two-records
+```
+
+The refusal is a *protocol* refusal, and the harness proves it rather than
+asserting it: cells connect with `tls13_client_driver_connect_reporting`, and
+the split cell reports `connect: verified protocol step failed` -- the verified
+state machine rejecting a truncated ServerHello.  A TCP error or a timeout
+would read differently.
+
+The two controls are load-bearing.  A single expect-refused cell proves nothing
+on its own, because a harness broken for any reason at all would also report
+"refused" and would still look green.  `passthrough` shows the proxy relays
+faithfully, so a refusal in the split cell is attributable to the re-framing;
+`serverhello-tcp-dribble` separates TCP-level segmentation -- which the client's
+retained receive buffer and `NeedMoreInput` retry loop already absorb -- from
+record-level segmentation, which is the gap.  If a control cell goes red, the
+split cell's verdict must not be read at all until it is green again.
+
+The client's `protected_handshake_buffering` does not cover this cell, and the
+distinction is easy to get wrong.  That buffering is confined to the protected
+path and to stages at or after ServerHello
+(`protected_handshake_buffering_stage` = `HsServerHelloReceived`,
+`HsEncryptedExtensionsReceived`, `HsCertificateValidated`,
+`HsCertificateVerifyVerified`).  A ServerHello is cleartext and precedes all of
+them.  Cross-record buffering on the protected path *is* exercised -- by the
+real-world sweep in `test/interop`, where Meta serves its flight in three
+protected records with `Certificate` starting at offset 6 of the first and
+running past its end -- but by the sweep, not by this file, and never in the
+clear.
+
+So G3 is a **both-roles** gap, and closing it on the server alone will leave
+`serverhello-across-two-records` red-by-ledger.  When the client half lands,
+flip that row and this table together.
 
 ### P3. The established connection keeps working -- existing tests
 

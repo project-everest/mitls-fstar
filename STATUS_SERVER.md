@@ -302,8 +302,14 @@ test plan.  Two standing gates keep it honest:
   the ledger.  Gaps claimed to be independent of an axis are recorded twice
   (`ecdsa-credential-p256-only`, `aes128-clienthello-across-two-records`) so
   that a fix which closes one only on one axis is visible as such.
+- `make test-client-record-split` -- the mirror of that matrix's framing axis,
+  run in the server->client direction.  Three cells with two-sided
+  expectations: two controls (`passthrough`, `serverhello-tcp-dribble`) that
+  keep the harness honest, and `serverhello-across-two-records`, recorded as
+  refused.  It measures the client half of the cross-record handshake
+  reassembly gap, which was previously only asserted in prose.
 
-Both are part of `make test`, and therefore of CI.
+All three are part of `make test`, and therefore of CI.
 
 The proof goal has two connected layers.
 
