@@ -321,12 +321,14 @@ fn free_client_hello_slot
   ensures emp
 {
   with spec. unfold (client_hello_slot_exactly present_box value spec);
-  with present random session_id server_name key_share cipher_suites signature_schemes. _;
+  with present random session_id server_name key_share p256_key_share
+       cipher_suites signature_schemes. _;
   Box.free present_box;
   V.free value.IM.client_hello_random;
   V.free value.IM.client_hello_session_id;
   V.free value.IM.client_hello_server_name;
   V.free value.IM.client_hello_key_share;
+  V.free value.IM.client_hello_p256_key_share;
   V.free value.IM.client_hello_cipher_suites;
   V.free value.IM.client_hello_signature_schemes;
 }
@@ -336,12 +338,16 @@ fn free_client_hello_metadata
   (server_name_len_box:box SZ.t)
   (cipher_suites_len_box:box SZ.t)
   (signature_schemes_len_box:box SZ.t)
+  (session_id_len_box:box SZ.t)
+  (kex_group_box:box CryptoSpec.kex_group)
   requires exists* spec.
     client_hello_metadata_exactly
       has_server_name_box
       server_name_len_box
       cipher_suites_len_box
       signature_schemes_len_box
+      session_id_len_box
+      kex_group_box
       spec
   ensures emp
 {
@@ -351,12 +357,17 @@ fn free_client_hello_metadata
       server_name_len_box
       cipher_suites_len_box
       signature_schemes_len_box
+      session_id_len_box
+      kex_group_box
       spec);
-  with has_server_name server_name_len cipher_suites_len signature_schemes_len. _;
+  with has_server_name server_name_len cipher_suites_len signature_schemes_len
+       session_id_len. _;
   Box.free has_server_name_box;
   Box.free server_name_len_box;
   Box.free cipher_suites_len_box;
   Box.free signature_schemes_len_box;
+  Box.free session_id_len_box;
+  Box.free kex_group_box;
 }
 
 fn free_server_hello_slot (slot:box (option IM.server_hello))
@@ -547,7 +558,9 @@ fn free_handshake_messages_exactly (messages:handshake_message_storage)
     messages.client_hello_has_server_name
     messages.client_hello_server_name_len
     messages.client_hello_cipher_suites_len
-    messages.client_hello_signature_schemes_len;
+    messages.client_hello_signature_schemes_len
+    messages.client_hello_session_id_len
+    messages.client_hello_kex_group;
   free_server_hello_slot messages.server_hello;
   free_encrypted_extensions_slot messages.encrypted_extensions;
   free_certificate_slot messages.certificate;
@@ -1555,15 +1568,20 @@ fn alloc_client_hello_slot_empty ()
   let client_hello_session_id = V.alloc 0uy 32sz;
   let client_hello_server_name = V.alloc 0uy (max_hostname_len_sz);
   let client_hello_key_share = V.alloc 0uy 32sz;
+  let client_hello_p256_key_share = V.alloc 0uy 65sz;
   let client_hello_cipher_suites = V.alloc 0us (max_cipher_suites_sz);
   let client_hello_signature_schemes = V.alloc 0us (max_signature_schemes_sz);
   let l = {
     IM.client_hello_random;
     IM.client_hello_session_id;
+    IM.client_hello_session_id_len = 0sz;
     IM.client_hello_server_name;
     IM.client_hello_server_name_len = 0sz;
     IM.client_hello_has_server_name = false;
     IM.client_hello_key_share;
+    IM.client_hello_has_x25519_key_share = false;
+    IM.client_hello_p256_key_share;
+    IM.client_hello_has_p256_key_share = false;
     IM.client_hello_cipher_suites;
     IM.client_hello_cipher_suites_len = 0sz;
     IM.client_hello_signature_schemes;
@@ -1577,11 +1595,14 @@ fn alloc_client_hello_slot_empty ()
     (V.pts_to l.IM.client_hello_server_name (Seq.create max_hostname_len 0uy));
   rewrite (V.pts_to client_hello_key_share (Seq.create 32 0uy)) as
     (V.pts_to l.IM.client_hello_key_share (Seq.create 32 0uy));
+  rewrite (V.pts_to client_hello_p256_key_share (Seq.create 65 0uy)) as
+    (V.pts_to l.IM.client_hello_p256_key_share (Seq.create 65 0uy));
   rewrite (V.pts_to client_hello_cipher_suites (Seq.create max_cipher_suites 0us)) as
     (V.pts_to l.IM.client_hello_cipher_suites (Seq.create max_cipher_suites 0us));
   rewrite (V.pts_to client_hello_signature_schemes (Seq.create max_signature_schemes 0us)) as
     (V.pts_to l.IM.client_hello_signature_schemes (Seq.create max_signature_schemes 0us));
   assert (pure (B.length (Seq.create 32 0uy) == 32));
+  assert (pure (B.length (Seq.create 65 0uy) == 65));
   assert (pure (B.length (Seq.create max_hostname_len 0uy) == max_hostname_len));
   assert (pure (Seq.length (Seq.create max_cipher_suites 0us) == max_cipher_suites));
   assert (pure (Seq.length (Seq.create max_signature_schemes 0us) == max_signature_schemes));
@@ -1604,6 +1625,9 @@ fn alloc_handshake_messages_empty ()
   let client_hello_server_name_len : box SZ.t = Box.alloc 0sz;
   let client_hello_cipher_suites_len : box SZ.t = Box.alloc 0sz;
   let client_hello_signature_schemes_len : box SZ.t = Box.alloc 0sz;
+  let client_hello_session_id_len : box SZ.t = Box.alloc 0sz;
+  let client_hello_kex_group : box CryptoSpec.kex_group =
+    Box.alloc CryptoSpec.KexX25519;
   rewrite (client_hello_slot_exactly client_hello_slot.ch_present client_hello_slot.ch_value None) as
     (client_hello_slot_exactly client_hello_present client_hello None);
   let server_hello : box (option IM.server_hello) = Box.alloc (None #IM.server_hello);
@@ -1622,6 +1646,8 @@ fn alloc_handshake_messages_empty ()
     client_hello_server_name_len;
     client_hello_cipher_suites_len;
     client_hello_signature_schemes_len;
+    client_hello_session_id_len;
+    client_hello_kex_group;
     server_hello;
     encrypted_extensions;
     certificate;
@@ -1639,23 +1665,33 @@ fn alloc_handshake_messages_empty ()
     (Box.pts_to msgs.client_hello_cipher_suites_len 0sz);
   rewrite (Box.pts_to client_hello_signature_schemes_len 0sz) as
     (Box.pts_to msgs.client_hello_signature_schemes_len 0sz);
+  rewrite (Box.pts_to client_hello_session_id_len 0sz) as
+    (Box.pts_to msgs.client_hello_session_id_len 0sz);
+  rewrite (Box.pts_to client_hello_kex_group CryptoSpec.KexX25519) as
+    (Box.pts_to msgs.client_hello_kex_group CryptoSpec.KexX25519);
   fold (client_hello_metadata_exactly
     msgs.client_hello_has_server_name
     msgs.client_hello_server_name_len
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
+    msgs.client_hello_session_id_len
+    msgs.client_hello_kex_group
     None);
   rewrite (client_hello_metadata_exactly
     msgs.client_hello_has_server_name
     msgs.client_hello_server_name_len
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
+    msgs.client_hello_session_id_len
+    msgs.client_hello_kex_group
     None) as
     (client_hello_metadata_exactly
       msgs.client_hello_has_server_name
       msgs.client_hello_server_name_len
       msgs.client_hello_cipher_suites_len
       msgs.client_hello_signature_schemes_len
+      msgs.client_hello_session_id_len
+      msgs.client_hello_kex_group
       CS.empty_handshake_state.CS.hs_client_hello);
   rewrite (Box.pts_to server_hello None) as (Box.pts_to msgs.server_hello None);
   rewrite (Box.pts_to encrypted_extensions None) as

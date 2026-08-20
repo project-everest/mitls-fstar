@@ -22,6 +22,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module GSHbody = TLS13.Wire.Generated.ServerHello_body
+module GNG = TLS13.Wire.Generated.NamedGroup
 
 type server_flight_result =
   | ServerFlightOk
@@ -50,14 +51,18 @@ val lemma_select_server_parameters_input_ready_intro
            CM.can_select_server_parameters st {
              CS.server_selected_client_hello = ch;
              CS.server_selected_cipher_suite =
-               T.TLS_CHACHA20_POLY1305_SHA256;
-             CS.server_selected_group = T.X25519;
+               (CM.server_selected_suite st);
+             CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
              CS.server_selected_signature_scheme =
-               T.Rsa_pss_rsae_sha256;
+               CryptoSpec.credential_signature_scheme
+                 (cfg.CS.server_credential_identity);
              CS.server_random = server_random;
              CS.server_key_share_private = Some server_private_key;
              CS.server_key_share_public =
                CryptoSpec.x25519_public_from_private server_private_key;
+             CS.server_p256_private = Some server_private_key;
+             CS.server_p256_public =
+               CryptoSpec.p256_public_from_private server_private_key;
              CS.server_selected_credential =
                cfg.CS.server_credential_identity;
            }
@@ -79,14 +84,20 @@ let selection_from_payload_correct
    | Some ch, Some cfg ->
      let selection = {
        CS.server_selected_client_hello = ch;
-       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-       CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+       CS.server_selected_cipher_suite = (CM.server_selected_suite st0);
+       CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+       CS.server_selected_signature_scheme =
+         CryptoSpec.credential_signature_scheme
+           (cfg.CS.server_credential_identity);
        CS.server_random = CL.raw_slice payload 0 32;
        CS.server_key_share_private = Some (CL.raw_slice payload 32 64);
        CS.server_key_share_public =
          CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
-       CS.server_selected_credential = cfg.CS.server_credential_identity;
+       CS.server_p256_private = Some (CL.raw_slice payload 32 64);
+       CS.server_p256_public =
+         CryptoSpec.p256_public_from_private (CL.raw_slice payload 32 64);
+       CS.server_selected_credential =
+         cfg.CS.server_credential_identity;
      } in
      st1 == CM.selected_server_parameters_state st0 selection
    | _ -> False)
@@ -98,12 +109,12 @@ let server_hello_from_payload_correct
   : prop =
   B.length payload == 64 /\
   (let sh =
-     SS.mk_server_hello_witness
+     SS.mk_server_hello_witness (CM.stored_client_hello_named_group st0)
        (CL.raw_slice payload 0 32)
-       (CryptoSpec.x25519_public_from_private
+       (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st0)
          (CL.raw_slice payload 32 64))
        (CM.stored_client_hello_session_id st0)
-       T.TLS_CHACHA20_POLY1305_SHA256 in
+       (CM.server_selected_suite st0) in
    st1 ==
      CM.sent_server_hello_state
        st0
@@ -121,11 +132,14 @@ let derive_shared_secret_from_payload_correct
   (resp.ST.status == ST.StepOk ==>
    exists shared.
      st1 == CM.derived_shared_secret_state st0 shared /\
+     (* G2 stage S6.8d: group-agile; see BN.local_event_success_correct. *)
      (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
-       (match CS.client_hello_key_share ch with
+       (let g = CM.client_hello_kex_group_for ch in
+        match CS.client_hello_kex ch g with
         | Some client_public ->
-          CryptoSpec.x25519_shared
+          CryptoSpec.kex_shared
+            g
             (CL.raw_slice payload 32 64)
             client_public == Some shared
         | None -> False)
@@ -261,12 +275,12 @@ fn send_server_hello_from_payload_once
        (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness
+         SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-           (CryptoSpec.x25519_public_from_private
+           (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
-           T.TLS_CHACHA20_POLY1305_SHA256 in
+           (CM.server_selected_suite 'st0) in
        CM.can_send_server_hello
          'st0
          sh
@@ -299,12 +313,12 @@ fn send_server_hello_from_payload_once
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake
               (M.ServerHello
-                (SS.mk_server_hello_witness
+                (SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
                   (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-                  (CryptoSpec.x25519_public_from_private
+                  (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
                     (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
                   (CM.stored_client_hello_session_id 'st0)
-                  T.TLS_CHACHA20_POLY1305_SHA256))))
+                  (CM.server_selected_suite 'st0)))))
           app_out_bytes)
 
 fn derive_shared_secret_from_payload_once
@@ -403,13 +417,14 @@ fn select_derive_send_server_hello_from_payload_once
           32 <: Seq.lseq U8.t 32) <>
          GSHbody.serverHello_body_cst) /\
       (let sh =
-         SS.mk_server_hello_witness
+         SS.mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
            (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)
-           (CryptoSpec.x25519_public_from_private
+           (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
              (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64))
            (CM.stored_client_hello_session_id 'st0)
-           T.TLS_CHACHA20_POLY1305_SHA256 in
-       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) == 122))
+           (CM.server_selected_suite 'st0) in
+       B.length (TLS13.Wire.Spec.serialize_handshake (M.ServerHello sh)) ==
+         58 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0) + Seq.length (CM.stored_client_hello_session_id 'st0)))
   returns result:server_flight_result
   ensures
     exists* st1 network_out_bytes app_out_bytes.

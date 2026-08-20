@@ -9,6 +9,7 @@ module CL = TLS13.ConnectionLog
 module CPI = Common.ProtocolImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module SMRep = TLS13.Spec.StateMachine.Replay
 module SMLog = TLS13.Spec.StateMachine.Log
 module SMCan = TLS13.Spec.StateMachine.Canonical
@@ -106,18 +107,29 @@ let server_supported_profile_selection
   : prop =
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-    T.Rsa_pss_rsae_sha256 /\
+    (CryptoSpec.credential_signature_scheme credential_identity) /\
   (match st.CS.cs_model.CS.model_config.CS.config_server with
    | Some cfg ->
      CS.cipher_suite_offered
        cfg.CS.server_supported_cipher_suites
        T.TLS_CHACHA20_POLY1305_SHA256 /\
+     (* Cipher-suite agility (gap G1): the server negotiates ChaCha20-Poly1305
+        when offered and falls back to AES-128-GCM otherwise, so its profile
+        must support both.  The default server config offers exactly these two. *)
+     CS.cipher_suite_offered
+       cfg.CS.server_supported_cipher_suites
+       T.TLS_AES_128_GCM_SHA256 /\
      CS.named_group_offered
        cfg.CS.server_supported_groups
        T.X25519 /\
+     (* G2: the selected group follows the peer's accepted key_share offer,
+        so the profile must offer both groups the gate can pick. *)
+     CS.named_group_offered
+       cfg.CS.server_supported_groups
+       T.Secp256r1 /\
      CS.signature_scheme_offered
        cfg.CS.server_allowed_signature_schemes
-       T.Rsa_pss_rsae_sha256 /\
+       (CryptoSpec.credential_signature_scheme credential_identity) /\
      (match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
       | Some ch ->
         CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
@@ -128,7 +140,8 @@ let server_supported_profile_selection
   server_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
-     selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
+     selection.CS.server_selected_signature_scheme ==
+       CryptoSpec.credential_signature_scheme credential_identity /\
      selection.CS.server_selected_credential == credential_identity
    | None ->
      True)

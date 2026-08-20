@@ -26,6 +26,9 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
 module M = TLS13.Messages
+module O = TLS13.OpenSSL
+module U16 = FStar.UInt16
+module GNG = TLS13.Wire.Generated.NamedGroup
 
 fn control_snapshot
   (d:DS.buffered_driver)
@@ -113,16 +116,20 @@ fn selection_ready
          CM.can_select_server_parameters 'st0 {
            CS.server_selected_client_hello = ch;
            CS.server_selected_cipher_suite =
-             T.TLS_CHACHA20_POLY1305_SHA256;
-           CS.server_selected_group = T.X25519;
+             CM.server_selected_suite 'st0;
+           CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
            CS.server_selected_signature_scheme =
-             T.Rsa_pss_rsae_sha256;
+             CryptoSpec.credential_signature_scheme
+               cfg.CS.server_credential_identity;
            CS.server_random = Ghost.reveal server_random;
            CS.server_key_share_private =
              Some (Ghost.reveal server_private_key);
            CS.server_key_share_public =
              CryptoSpec.x25519_public_from_private
                (Ghost.reveal server_private_key);
+           CS.server_p256_private = Some (Ghost.reveal server_private_key);
+           CS.server_p256_public =
+             CryptoSpec.p256_public_from_private (Ghost.reveal server_private_key);
            CS.server_selected_credential =
              cfg.CS.server_credential_identity;
          }
@@ -162,13 +169,22 @@ fn selection_ready
     | Some ch, Some cfg ->
       CS.cipher_suite_offered
         cfg.CS.server_supported_cipher_suites
-        T.TLS_CHACHA20_POLY1305_SHA256 /\
+        (CM.server_selected_suite 'st0) /\
+      CS.cipher_suite_offered
+        cfg.CS.server_supported_cipher_suites
+        T.TLS_AES_128_GCM_SHA256 /\
       CS.named_group_offered
         cfg.CS.server_supported_groups
         T.X25519 /\
+      (* G2: the selected group follows the peer's accepted key_share offer,
+         so the profile must offer both groups the gate can pick. *)
+      CS.named_group_offered
+        cfg.CS.server_supported_groups
+        T.Secp256r1 /\
       CS.signature_scheme_offered
         cfg.CS.server_allowed_signature_schemes
-        T.Rsa_pss_rsae_sha256 /\
+        (CryptoSpec.credential_signature_scheme
+          cfg.CS.server_credential_identity) /\
       CS.sni_policy_accepts
         cfg.CS.server_sni_policy
         (TLS13.Wire.Semantics.clientHello_server_name ch)
@@ -177,11 +193,24 @@ fn selection_ready
     (S.connection_exactly d.DS.buffered_driver_server 'st0)
     as
     (CR.connection_exactly d.DS.buffered_driver_server 'st0);
-  let ready =
-    CQ.can_select_supported_server_parameters_runtime
+  (* The negotiation query now returns the *selected* wire code (0 = refuse), so
+     the server can accept AES-128-GCM-only clients as well as ChaCha20 ones. *)
+  // Parity gap G5: the scheme the negotiation looks for in the client's offer
+  // is the one this server's credential can produce, read off the credential
+  // itself rather than pinned to rsa_pss_rsae_sha256.
+  assert (pure (DS.server_driver_config_matches_credentials
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  let cred_scheme =
+    O.server_credential_signature_scheme d.DS.buffered_driver_credentials;
+  let selected_suite =
+    CQ.select_supported_server_parameters_runtime
       d.DS.buffered_driver_server
+      cred_scheme
       #server_random
       #server_private_key;
+  let ready = selected_suite <> 0us;
   rewrite
     (CR.connection_exactly d.DS.buffered_driver_server 'st0)
     as
@@ -315,12 +344,12 @@ fn rec drive_handshake
               let differs =
                 SS.server_random_differs_from_cst material_payload;
               if differs {
-                SS.lemma_mk_server_hello_witness_bytesize
+                SS.lemma_mk_server_hello_witness_bytesize (CM.stored_client_hello_named_group 'st0)
                   (TLS13.ConnectionLog.raw_slice material_bytes 0 32)
-                  (CryptoSpec.x25519_public_from_private
+                  (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
                     (TLS13.ConnectionLog.raw_slice material_bytes 32 64))
                   (CM.stored_client_hello_session_id 'st0)
-                  T.TLS_CHACHA20_POLY1305_SHA256;
+                  (CM.server_selected_suite 'st0);
                 let flight =
                   BH.select_derive_send_server_hello_from_payload_once
                     d

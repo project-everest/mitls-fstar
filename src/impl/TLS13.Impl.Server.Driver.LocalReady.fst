@@ -42,7 +42,7 @@ let lemma_sign_certificate_verify_ready
   let selection =
     Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
   assert (selection.CS.server_selected_signature_scheme ==
-    TLS13.Types.Rsa_pss_rsae_sha256);
+    TLS13.Crypto.Spec.credential_signature_scheme credential_identity);
   assert (selection.CS.server_selected_credential == credential_identity);
   assert (ST.server_local_event_input_ready
     st action.ST.next_local_kind B.empty);

@@ -424,8 +424,22 @@ fn can_receive_client_finished
                 CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
               }))
 
-fn can_select_supported_server_parameters_runtime
+(** Cipher-suite negotiation.
+
+    Returns the wire code of the suite the server selects, or [0us] if it
+    cannot select any (0x0000 is TLS_NULL_WITH_NULL_NULL, never a TLS 1.3
+    offer, so it is unambiguous as a "refused" marker).  Server preference
+    order is ChaCha20-Poly1305 first, then AES-128-GCM: the offer is scanned
+    for each in turn, so a client that lists AES first still gets ChaCha if it
+    offers both.
+
+    A non-zero result carries the full [can_select_server_parameters]
+    obligation for the selection naming *that* suite, so the caller can hand
+    the same wire code to the ServerHello builder and the two stay in step by
+    construction. *)
+fn select_supported_server_parameters_runtime
   (c:connection_state)
+  (cred_scheme:U16.t)
   (#server_random:erased (b:B.bytes{B.length b == 32}))
   (#server_private_key:erased (b:B.bytes{B.length b == 32}))
   (#st0:erased CS.connection_state)
@@ -437,17 +451,31 @@ fn can_select_supported_server_parameters_runtime
                      CS.cipher_suite_offered
                        cfg.CS.server_supported_cipher_suites
                        T.TLS_CHACHA20_POLY1305_SHA256 /\
+                     CS.cipher_suite_offered
+                       cfg.CS.server_supported_cipher_suites
+                       T.TLS_AES_128_GCM_SHA256 /\
                      CS.named_group_offered
                        cfg.CS.server_supported_groups
                        T.X25519 /\
+                     (* G2: the selected group follows the peer's accepted key_share offer,
+                        so the profile must offer both groups the gate can pick. *)
+                     CS.named_group_offered
+                       cfg.CS.server_supported_groups
+                       T.Secp256r1 /\
                      CS.signature_scheme_offered
                        cfg.CS.server_allowed_signature_schemes
-                       T.Rsa_pss_rsae_sha256 /\
+                       (CryptoSpec.credential_signature_scheme
+                         cfg.CS.server_credential_identity) /\
+                     IM.signature_scheme_matches
+                       cred_scheme
+                       (CryptoSpec.credential_signature_scheme
+                         cfg.CS.server_credential_identity) /\
                      CS.sni_policy_accepts cfg.CS.server_sni_policy (Sem.clientHello_server_name ch)
                    | _, _ -> True))
-  returns ok: bool
+  returns suite: U16.t
   ensures connection_exactly c st0 **
-          pure (ok ==>
+          pure (suite <> 0us ==>
+            (suite == 0x1303us \/ suite == 0x1301us) /\
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloReceived /\
             st0.CS.cs_model.CS.model_config.CS.config_role ==
@@ -462,15 +490,20 @@ fn can_select_supported_server_parameters_runtime
                 let selection = {
                   CS.server_selected_client_hello = ch;
                   CS.server_selected_cipher_suite =
-                    T.TLS_CHACHA20_POLY1305_SHA256;
-                  CS.server_selected_group = T.X25519;
-                  CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                    IM.cipher_suite_of_u16 suite;
+                  CS.server_selected_group = named_group_of_kex_group (client_hello_kex_group_for (ch));
+                  CS.server_selected_signature_scheme =
+                    CryptoSpec.credential_signature_scheme
+                      cfg.CS.server_credential_identity;
                   CS.server_random = Ghost.reveal server_random;
                   CS.server_key_share_private =
                     Some (Ghost.reveal server_private_key);
                   CS.server_key_share_public =
                     CryptoSpec.x25519_public_from_private
                       (Ghost.reveal server_private_key);
+                  CS.server_p256_private = Some (Ghost.reveal server_private_key);
+                  CS.server_p256_public =
+                    CryptoSpec.p256_public_from_private (Ghost.reveal server_private_key);
                   CS.server_selected_credential =
                     cfg.CS.server_credential_identity;
                 } in
@@ -509,6 +542,7 @@ fn can_schedule_derive_shared_secret_runtime
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
              | Some selection ->
                CS.server_selection_key_share_consistent selection /\
+               CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                  Some selection.CS.server_selected_client_hello
              | None -> False))
@@ -531,9 +565,10 @@ fn can_send_server_hello_runtime
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
              | Some selection ->
                CS.server_selection_key_share_consistent selection /\
+               CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                Some? selection.CS.server_key_share_private
              | None -> False) /\
-            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 122 <=
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 155 <=
               max_transcript_len)
 
 fn can_receive_application_data
@@ -1176,10 +1211,56 @@ fn can_receive_close_notify
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
 
-/// Read the (clamped, 32-byte) legacy_session_id of the stored ClientHello
-/// into [out].  Total: when no ClientHello is stored the mirror still holds
-/// its all-zero initial content, which is what
-/// [Model.stored_client_hello_session_id] reports for such a state.
+/// Runtime re-computation of the server's cipher-suite negotiation policy from
+/// the stored ClientHello mirror.  Returns the *wire* code of the suite the
+/// server selects: 0x1303 (ChaCha20-Poly1305) when the client offers it, and
+/// 0x1301 (AES-128-GCM) otherwise.  The postcondition ties the result to the
+/// ghost policy function [Model.server_selected_suite], so the ServerHello
+/// build path can emit the negotiated suite without threading it through the
+/// driver: the policy is a function of the ClientHello alone, and the mirror
+/// that ClientHello lives in is immutable for the rest of the handshake.
+fn read_negotiated_server_suite
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello)
+  returns suite: U16.t
+  ensures connection_exactly c st0 **
+          pure ((suite == 0x1303us \/ suite == 0x1301us) /\
+                IM.cipher_suite_of_u16 suite ==
+                  server_selected_suite (Ghost.reveal st0))
+
+/// Read the key-exchange group the server's policy picks for the stored
+/// ClientHello, out of the mirror's [client_hello_kex_group] metadata box.
+///
+/// Like the cipher-suite and session-id-width policies, the *answer* is a
+/// function of the stored ClientHello alone, so no negotiation decision has to
+/// be remembered.  Unlike them, it cannot be recomputed from the stored bytes:
+/// an all-zero 32-byte X25519 slot is a legal share, so "did the peer offer
+/// X25519?" is genuinely extra information, written at parse time.
+///
+/// Total: when no ClientHello is stored the box still holds its initial
+/// [KexX25519], which is what [Model.stored_client_hello_kex_group] reports for
+/// such a state.
+fn read_client_hello_kex_group
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns g: CryptoSpec.kex_group
+  ensures connection_exactly c st0 **
+          pure (g == stored_client_hello_kex_group (Ghost.reveal st0))
+
+/// Read the offered legacy_session_id of the stored ClientHello into [out],
+/// zero-padded to the mirror's fixed 32-byte width, and return its true wire
+/// length.  RFC 8446 4.1.3 obliges the server to echo the id *verbatim*, so
+/// the length is as much a part of the answer as the bytes: a peer with
+/// middlebox compatibility mode off (RFC 8446 D.4) offers an empty id and
+/// must get an empty one back.
+///
+/// Total: when no ClientHello is stored the mirror still holds its all-zero
+/// initial content and the length box still holds 0, which is exactly what
+/// [Model.stored_client_hello_session_id] reports (the empty sequence) for
+/// such a state.
 fn read_client_hello_session_id
   (c:connection_state)
   (out:array U8.t)
@@ -1188,8 +1269,11 @@ fn read_client_hello_session_id
   requires connection_exactly c st0 **
            pts_to out pout **
            pure (B.length pout == 32)
+  returns sid_len: SZ.t
   ensures exists* (o:Seq.seq U8.t).
             connection_exactly c st0 **
             pts_to out o **
             pure (B.length o == 32 /\
-                  Seq.equal o (stored_client_hello_session_id st0))
+                  SZ.v sid_len == Seq.length (stored_client_hello_session_id st0) /\
+                  Seq.equal o
+                    (Sem.pad_session_id_32 (stored_client_hello_session_id st0)))

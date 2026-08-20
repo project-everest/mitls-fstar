@@ -52,6 +52,7 @@ module L = TLS13.Impl.Messages
 module LL = FStar.List.Tot
 module M = TLS13.Messages
 module V = Pulse.Lib.Vec
+module CryptoSpec = TLS13.Crypto.Spec
 module Sem = TLS13.Wire.Semantics
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -68,13 +69,13 @@ module WS = TLS13.Wire.Spec
    of TLS13.Impl.Server.Send.mk_server_hello_witness) ---- *)
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
-let poc_canonical_sh (rnd ks sid: B.bytes) (cs: GCS.cipherSuite)
+let poc_canonical_sh (rnd ks sid: B.bytes) (g: GNG.namedGroup) (cs: GCS.cipherSuite)
   : Pure GSH.serverHello
-    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ Seq.length ks == 32 /\ Seq.length sid == 32)
+    (requires Seq.length rnd == 32 /\ (rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\ 32 <= Seq.length ks /\ Seq.length ks <= 65 /\ Seq.length sid <= 32)
     (ensures fun _ -> True)
   = let ke : GKSE.keyShareEntry_key_exchange = ks in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    let kse : GKSE.keyShareEntry = { GKSE.group = g; GKSE.key_exchange = ke } in
+    GNG.namedGroup_bytesize_eq g;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
     let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
@@ -261,23 +262,26 @@ fn serialize_server_hello_handshake_poc
   (#rnd: erased B.bytes)
   (#ks: erased B.bytes)
   (#sid: erased B.bytes)
+  (#g: erased GNG.namedGroup)
   (#cs: erased GCS.cipherSuite)
   (lsh: L.server_hello)
   (out: A.array U8.t)
   (out_len: SZ.t)
   (#old: erased B.bytes)
   requires L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out (reveal old) **
-           pure (B.length (reveal old) == SZ.v out_len /\ SZ.v out_len == 122 /\
+           pure (B.length (reveal old) == SZ.v out_len /\
+                 SZ.v out_len == 58 + Seq.length (reveal ks) + Seq.length (reveal sid) /\
                  Seq.length (reveal rnd) == 32 /\
                  (reveal rnd <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-                 Seq.length (reveal ks) == 32 /\
-                 Seq.length (reveal sid) == 32 /\
-                 reveal cs == GCS.TLS_CHACHA20_POLY1305_SHA256 /\
-                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal cs))
+                 (reveal g == GNG.X25519 \/ reveal g == GNG.Secp256r1) /\
+                 Seq.length (reveal ks) ==
+                   CryptoSpec.kex_public_len (Sem.kex_group_of_named_group (reveal g)) /\
+                 Seq.length (reveal sid) <= 32 /\
+                 Ghost.reveal sh == poc_canonical_sh (reveal rnd) (reveal ks) (reveal sid) (reveal g) (reveal cs))
   returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
   ensures exists* out_bytes.
           L.is_valid_server_hello lsh (reveal sh) ** A.pts_to out out_bytes **
-          pure (B.length out_bytes == 122 /\ SZ.v written == 122 /\
+          pure (B.length out_bytes == SZ.v out_len /\ SZ.v written == SZ.v out_len /\
                 Seq.equal out_bytes (WS.serialize_handshake (M.ServerHello (Ghost.reveal sh))))
 
 fn serialize_certificate_handshake_poc
@@ -327,6 +331,18 @@ val lemma_ch_key_share (rnd sni ks pks sid: B.bytes)
                     1 <= Seq.length sni /\ Seq.length sni <= 255 /\
                     LL.length cs <= 16 /\ LL.length sa <= 16)
           (ensures Sem.clientHello_key_share_x25519 (poc_canonical_ch rnd sni ks pks sid cs sa) == Some (ks <: Seq.seq U8.t))
+
+(* Mirror of [lemma_ch_key_share] at the second offered group.  The canonical
+   ClientHello's key_share extension carries two KeyShareEntry values --
+   X25519 then secp256r1 (see [CM.cho_ks_ext]) -- so the secp256r1 finder
+   returns the 65-byte uncompressed point. *)
+val lemma_ch_p256_key_share (rnd sni ks pks sid: B.bytes)
+  (cs: GCH.clientHello_cipher_suites)
+  (sa: GECH.extensionClientHello_extension_data_signature_algorithms)
+  : Lemma (requires Seq.length rnd == 32 /\ Seq.length ks == 32 /\ Seq.length pks == 65 /\ Seq.length sid == 32 /\
+                    1 <= Seq.length sni /\ Seq.length sni <= 255 /\
+                    LL.length cs <= 16 /\ LL.length sa <= 16)
+          (ensures Sem.clientHello_key_share_secp256r1 (poc_canonical_ch rnd sni ks pks sid cs sa) == Some (pks <: Seq.seq U8.t))
 
 val lemma_ch_cipher_suites (rnd sni ks pks sid: B.bytes)
   (cs: GCH.clientHello_cipher_suites)

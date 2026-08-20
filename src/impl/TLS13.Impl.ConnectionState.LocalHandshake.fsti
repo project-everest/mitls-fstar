@@ -11,6 +11,7 @@ module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -115,6 +116,13 @@ fn select_server_parameters
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (can_select_server_parameters st0 selection /\
+                 // The runtime stores no group tag, so the caller has to name the
+                 // selection's group.  Since G2 stage S6.8d the group is the one
+                 // the stored ClientHello's accepted key_share offer names, and
+                 // CR.server_selection_group_pinned records that policy in the
+                 // representation; the runtime reads it back off the ClientHello
+                 // metadata box.
+                 CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  server_selection_private_absent selection)
@@ -138,6 +146,13 @@ fn select_server_parameters_with_private_from_array
            ArrPts.pts_to server_private_key 'server_private_key_bytes **
            pure (B.length 'server_private_key_bytes == 32 /\
                  can_select_server_parameters st0 selection /\
+                 // The runtime stores no group tag, so the caller has to name the
+                 // selection's group.  Since G2 stage S6.8d the group is the one
+                 // the stored ClientHello's accepted key_share offer names, and
+                 // CR.server_selection_group_pinned records that policy in the
+                 // representation; the runtime reads it back off the ClientHello
+                 // metadata box.
+                 CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  Some? selection.CS.server_key_share_private /\
@@ -830,6 +845,18 @@ fn try_derive_server_shared_secret_from_private_array
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
+                    (* The ECDH is group-parametric in both the code and the
+                       specification (G2 stage S6.8d): the body reads the
+                       negotiated group off the client_hello_kex_group metadata
+                       box and dispatches through KEX.kex_shared_split_runtime,
+                       and this precondition -- and hence the postcondition
+                       below -- names that same group rather than X25519.  The
+                       group is pinned to the stored ClientHello's accepted
+                       key_share offer, which is what the whole thread up
+                       through Server.Keys, Server, the two drivers and the
+                       canonical-protocol lemmas that discharge
+                       server_local_event_input_ready now carries. *)
+                    CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\
@@ -841,11 +868,14 @@ fn try_derive_server_shared_secret_from_private_array
              exists* shared.
                connection_exactly c (derived_shared_secret_state st0 shared) **
                ArrPts.pts_to server_private_key 'server_private_key_bytes **
-               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
-                      | Some ch ->
-                        (match CS.client_hello_key_share ch with
+               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                      | Some selection ->
+                        (match CS.client_hello_kex
+                                 selection.CS.server_selected_client_hello
+                                 (CS.server_selected_kex_group selection) with
                          | Some k ->
-                           TLS13.Crypto.Spec.x25519_shared
+                           TLS13.Crypto.Spec.kex_shared
+                             (CS.server_selected_kex_group selection)
                              (Ghost.reveal 'server_private_key_bytes)
                              k == Some shared
                          | None -> False)

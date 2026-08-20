@@ -74,11 +74,27 @@ let max_record_fragment_len : nat = 16640
 noeq
 type client_hello = {
   client_hello_random: V.vec U8.t;
+  (* 32 bytes, zero-padded past [client_hello_session_id_len]; the length is
+     the sole carrier of the wire width (RFC 8446 4.1.3 requires the server to
+     echo it verbatim, and a compatibility-mode-off peer sends an empty one). *)
   client_hello_session_id: V.vec U8.t;
+  client_hello_session_id_len: SZ.t;
   client_hello_server_name: V.vec U8.t;
   client_hello_server_name_len: SZ.t;
   client_hello_has_server_name: bool;
   client_hello_key_share: V.vec U8.t;
+  (* Whether the peer named an X25519 group in its (first) key_share extension
+     at all -- equivalently, whether [client_hello_key_share] above is the share
+     the server will act on.  Not recoverable from the stored bytes, since an
+     all-zero 32-byte X25519 slot is a legal share, so the parser reports it. *)
+  client_hello_has_x25519_key_share: bool;
+  (* 65 bytes: the uncompressed secp256r1 point the peer offered, when it
+     offered one.  Held in its own slot rather than widening
+     [client_hello_key_share], so that every proof stated over the X25519 share
+     keeps its statement.  [client_hello_has_p256_key_share] says whether the
+     bytes are meaningful. *)
+  client_hello_p256_key_share: V.vec U8.t;
+  client_hello_has_p256_key_share: bool;
   client_hello_cipher_suites: V.vec U16.t;
   client_hello_cipher_suites_len: SZ.t;
   client_hello_signature_schemes: V.vec U16.t;
@@ -88,7 +104,10 @@ type client_hello = {
 noeq
 type server_hello = {
   server_hello_random: V.vec U8.t;
+  (* 32 bytes, zero-padded past [server_hello_session_id_len]; see
+     [client_hello_session_id]. *)
   server_hello_session_id: V.vec U8.t;
+  server_hello_session_id_len: SZ.t;
   (* 65 bytes: the widest group ATLAS offers, with the share zero-padded.
      [server_hello_kex_group] is the group the server named in its
      `KeyShareEntry` and says which prefix is the logical share; it is never
@@ -398,6 +417,43 @@ let rec cipher_suites_match
     | [] -> False
   else False
 
+(* Runtime coercion from a cipher-suite wire code to the enum.  The server's
+   negotiation runs on the wire codes stored in the ClientHello mirror; this is
+   what lets it name the *selected* suite in the (ghost) selection and in the
+   ServerHello it builds, instead of pinning a single literal. *)
+inline_for_extraction
+let cipher_suite_of_u16 (w:U16.t) : T.cipher_suite =
+  if w = 0x1303us then T.TLS_CHACHA20_POLY1305_SHA256
+  else if w = 0x1301us then T.TLS_AES_128_GCM_SHA256
+  else T.Unknown_cipherSuite w
+
+let lemma_cipher_suite_of_u16_matches (w:U16.t) (c:T.cipher_suite)
+  : Lemma (requires cipher_suite_matches w c)
+          (ensures cipher_suite_of_u16 w == c)
+  = match c with
+    | T.TLS_CHACHA20_POLY1305_SHA256 ->
+      assert_norm (U16.v 0x1303us == 0x1303); U16.v_inj w 0x1303us
+    | T.TLS_AES_128_GCM_SHA256 ->
+      assert_norm (U16.v 0x1301us == 0x1301); U16.v_inj w 0x1301us
+    | T.Unknown_cipherSuite n ->
+      assert_norm (U16.v 0x1303us == 0x1303);
+      assert_norm (U16.v 0x1301us == 0x1301);
+      U16.v_inj w n
+
+(* The two wire codes the server can select, and the fact that each names its
+   suite.  Stated as [assert_norm]-free lemmas so callers can use them under
+   [--fuel 0]. *)
+let lemma_cipher_suite_of_u16_chacha ()
+  : Lemma (cipher_suite_of_u16 0x1303us == T.TLS_CHACHA20_POLY1305_SHA256 /\
+           cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256)
+  = assert_norm (U16.v 0x1303us == 0x1303)
+
+let lemma_cipher_suite_of_u16_aes ()
+  : Lemma (cipher_suite_of_u16 0x1301us == T.TLS_AES_128_GCM_SHA256 /\
+           cipher_suite_matches 0x1301us T.TLS_AES_128_GCM_SHA256)
+  = assert_norm (U16.v 0x1301us == 0x1301);
+    assert_norm (not (0x1301us = 0x1303us))
+
 noextract
 let rec signature_schemes_match
   (wire:Seq.seq U16.t)
@@ -447,11 +503,12 @@ let rec certificate_chain_matches
   else False
 
 let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slprop =
-  exists* random session_id server_name key_share cipher_suites signature_schemes.
+  exists* random session_id server_name key_share p256_key_share cipher_suites signature_schemes.
     V.pts_to l.client_hello_random random **
     V.pts_to l.client_hello_session_id session_id **
     V.pts_to l.client_hello_server_name server_name **
     V.pts_to l.client_hello_key_share key_share **
+    V.pts_to l.client_hello_p256_key_share p256_key_share **
     V.pts_to l.client_hello_cipher_suites cipher_suites **
     V.pts_to l.client_hello_signature_schemes signature_schemes **
     pure (
@@ -459,19 +516,23 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
       V.is_full_vec l.client_hello_session_id /\
       V.length l.client_hello_session_id == 32 /\
       B.length session_id == 32 /\
-      Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
+      SZ.v l.client_hello_session_id_len == Seq.length (Sem.clientHello_session_id m) /\
+      Seq.equal session_id (Sem.pad_session_id_32 (Sem.clientHello_session_id m)) /\
       V.is_full_vec l.client_hello_server_name /\
       V.is_full_vec l.client_hello_key_share /\
+      V.is_full_vec l.client_hello_p256_key_share /\
       V.is_full_vec l.client_hello_cipher_suites /\
       V.is_full_vec l.client_hello_signature_schemes /\
       V.length l.client_hello_random == 32 /\
       V.length l.client_hello_server_name == max_server_name_len /\
       V.length l.client_hello_key_share == 32 /\
+      V.length l.client_hello_p256_key_share == 65 /\
       V.length l.client_hello_cipher_suites == max_cipher_suites /\
       V.length l.client_hello_signature_schemes == max_signature_schemes /\
       B.length random == 32 /\
       B.length server_name == max_server_name_len /\
       B.length key_share == 32 /\
+      B.length p256_key_share == 65 /\
       Seq.length cipher_suites == max_cipher_suites /\
       Seq.length signature_schemes == max_signature_schemes /\
       SZ.v l.client_hello_server_name_len <= B.length server_name /\
@@ -483,9 +544,32 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:GCH.clientHello) : slpro
         server_name
         l.client_hello_server_name_len
         (Sem.clientHello_server_name m) /\
+      (* The two-group acceptance gate.  When the peer offered an X25519 share
+         it must be well formed and it is what the [client_hello_key_share]
+         slot holds; when it offered none, acceptance instead requires a
+         well-formed secp256r1 offer, whose bytes the P-256 slot below holds.
+         This mirrors [WS.ch_key_share_pick]: X25519 wins whenever it is
+         present, and a malformed X25519 entry is still a hard reject. *)
       (match Sem.clientHello_key_share_x25519 m with
        | Some k -> B.length k == 32 /\ Seq.equal key_share k
-       | None -> False) /\
+       | None -> l.client_hello_has_p256_key_share == true) /\
+      (* ...and which of the two the acceptance gate picked, as a runtime bit:
+         [TLS13.Impl.ConnectionState.Model.client_hello_kex_group_for] is
+         exactly this test, and the store path copies the answer into the
+         [client_hello_kex_group] metadata box. *)
+      l.client_hello_has_x25519_key_share ==
+        Some? (Sem.clientHello_key_share_x25519 m) /\
+      (* An iff: the flag is set exactly when the peer offered a well-formed
+         (65-byte, uncompressed-point) secp256r1 share, and when it is set the
+         stored bytes are that share.  A secp256r1 KeyShareEntry of any other
+         length is treated as no offer at all rather than as a parse failure,
+         which is what the RFC 8446 4.2.8 "ignore unrecognised/unusable groups"
+         reading requires -- the peer may legitimately offer several groups. *)
+      (match Sem.clientHello_key_share_secp256r1 m with
+       | Some k ->
+         l.client_hello_has_p256_key_share == (B.length k = 65) /\
+         (B.length k == 65 ==> Seq.equal p256_key_share k)
+       | None -> l.client_hello_has_p256_key_share == false) /\
       cipher_suites_match
         cipher_suites
         (SZ.v l.client_hello_cipher_suites_len)
@@ -508,7 +592,8 @@ let is_valid_server_hello ([@@@mkey] l:server_hello) (m:GSH.serverHello) : slpro
       V.is_full_vec l.server_hello_session_id /\
       V.length l.server_hello_session_id == 32 /\
       B.length session_id == 32 /\
-      Seq.equal session_id (Sem.serverHello_session_id_echo_32 m) /\
+      SZ.v l.server_hello_session_id_len == Seq.length (Sem.serverHello_session_id_echo m) /\
+      Seq.equal session_id (Sem.pad_session_id_32 (Sem.serverHello_session_id_echo m)) /\
       V.is_full_vec l.server_hello_key_share /\
       V.length l.server_hello_random == 32 /\
       V.length l.server_hello_key_share == 65 /\
@@ -666,11 +751,13 @@ fn free_client_hello
   ensures emp
 {
   with m. unfold (is_valid_client_hello l m);
-  with random session_id server_name key_share cipher_suites signature_schemes. _;
+  with random session_id server_name key_share p256_key_share
+       cipher_suites signature_schemes. _;
   V.free l.client_hello_random;
   V.free l.client_hello_session_id;
   V.free l.client_hello_server_name;
   V.free l.client_hello_key_share;
+  V.free l.client_hello_p256_key_share;
   V.free l.client_hello_cipher_suites;
   V.free l.client_hello_signature_schemes;
 }

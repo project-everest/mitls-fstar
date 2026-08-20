@@ -1473,6 +1473,10 @@ fn process_decode_error
   resp
 }
 
+(* Headroom for the per-goal SMT encoding introduced by the fstar2
+   simplified effect system: the goals here are unchanged, but they are
+   now discharged one at a time against the whole Pulse context. *)
+#push-options "--z3rlimit 60"
 fn process_network_bytes
   (s:server)
   (raw:array U8.t)
@@ -1714,7 +1718,7 @@ fn process_network_bytes
                 (M.TlsHandshake (M.ClientHello ch))
                 raw_record_bytes));
               unfold (IM.is_valid_client_hello lch ch);
-              with random session_id server_name key_share cipher_suites signature_schemes. _;
+              with random session_id server_name key_share p256_key_share cipher_suites signature_schemes. _;
               CM.lemma_cipher_suites_match_length
                 cipher_suites
                 (SZ.v lch.IM.client_hello_cipher_suites_len)
@@ -3156,3 +3160,5 @@ fn process_network_bytes
   }
 }
 }
+
+#pop-options

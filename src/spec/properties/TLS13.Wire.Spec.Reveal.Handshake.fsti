@@ -17,6 +17,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module LP = LowParse.Spec
 module WS = TLS13.Wire.Spec
+module Sem = TLS13.Wire.Semantics
 module GHS = TLS13.Wire.Generated.Handshake
 module GCH = TLS13.Wire.Generated.ClientHello
 module GSH = TLS13.Wire.Generated.ServerHello
@@ -76,10 +77,10 @@ let reveal_ch_find_key_share (l:list GKSE.keyShareEntry)
 let reveal_ch_extensions
   (l:list GECH.extensionClientHello)
   (server_name:option T.hostname)
-  (key_share:option (B.bytes_of_len 32))
+  (key_share:option WS.ch_key_share_offer)
   (saw_supported_versions:bool)
   (signature_schemes:list T.signature_scheme)
-  : GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme)) =
+  : GTot (option (option T.hostname & option WS.ch_key_share_offer & bool & list T.signature_scheme)) =
   WS.ch_extensions l server_name key_share saw_supported_versions signature_schemes
 
 (* --- one-step reveals of the scanners --- *)
@@ -144,14 +145,47 @@ val lemma_reveal_kse_list_find_x25519_cons (e:GKSE.keyShareEntry) (tl:list GKSE.
             then Some (e.GKSE.key_exchange <: Seq.seq U8.t)
             else TLS13.Wire.Semantics.kse_list_find_x25519 tl))
 
+(* Reveal lemmas for the Semantics secp256r1 finders, used by the standalone
+   second pass [Impl.Parser.scan_ch_p256_key_share].  Unlike the X25519 share,
+   the secp256r1 offer is *not* threaded through the commit-first
+   [ch_extensions] scan: [Sem.clientHello_key_share_secp256r1] is specified as
+   an independent walk, so the implementation mirrors that structure. *)
+val lemma_reveal_kse_list_find_secp256r1_nil (_:unit)
+  : Lemma (TLS13.Wire.Semantics.kse_list_find_secp256r1 [] == None)
+
+val lemma_reveal_kse_list_find_secp256r1_cons
+  (e:GKSE.keyShareEntry)
+  (tl:list GKSE.keyShareEntry)
+  : Lemma (TLS13.Wire.Semantics.kse_list_find_secp256r1 (e :: tl) ==
+           (if GNG.Secp256r1? e.GKSE.group
+            then Some (e.GKSE.key_exchange <: Seq.seq U8.t)
+            else TLS13.Wire.Semantics.kse_list_find_secp256r1 tl))
+
+val lemma_reveal_ch_find_key_share_secp256r1_nil (_:unit)
+  : Lemma (TLS13.Wire.Semantics.ch_find_key_share_secp256r1 [] == None)
+
+val lemma_reveal_ch_find_key_share_secp256r1_cons_ks
+  (ks:GECH.extensionClientHello_extension_data_key_share)
+  (tl:list GECH.extensionClientHello)
+  : Lemma (TLS13.Wire.Semantics.ch_find_key_share_secp256r1
+             (GECH.Extension_data_key_share ks :: tl) ==
+           TLS13.Wire.Semantics.kse_list_find_secp256r1 (ks <: list GKSE.keyShareEntry))
+
+val lemma_reveal_ch_find_key_share_secp256r1_cons_other
+  (e:GECH.extensionClientHello)
+  (tl:list GECH.extensionClientHello)
+  : Lemma (requires ~(GECH.Extension_data_key_share? e))
+          (ensures TLS13.Wire.Semantics.ch_find_key_share_secp256r1 (e :: tl) ==
+                   TLS13.Wire.Semantics.ch_find_key_share_secp256r1 tl)
+
 val lemma_reveal_ch_extensions_nil
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions [] sn ks sv ss == (if sv then Some (sn, ks, sv, ss) else None))
 
 val lemma_reveal_ch_extensions_cons_sn
   (snl:GESN.extensionClientHello_extension_data_server_name)
   (tl:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_server_name snl :: tl) sn ks sv ss ==
            (if Some? sn then reveal_ch_extensions tl sn ks sv ss
             else (match reveal_ch_server_name snl with
@@ -161,31 +195,31 @@ val lemma_reveal_ch_extensions_cons_sn
 val lemma_reveal_ch_extensions_cons_sg
   (sgl:GESG.extensionClientHello_extension_data_supported_groups)
   (tl:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_supported_groups sgl :: tl) sn ks sv ss ==
            reveal_ch_extensions tl sn ks sv ss)
 
 val lemma_reveal_ch_extensions_cons_sa
   (ssl:GESA.extensionClientHello_extension_data_signature_algorithms)
   (tl:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_signature_algorithms ssl :: tl) sn ks sv ss ==
            reveal_ch_extensions tl sn ks sv (if Nil? ss then reveal_synth_sig_schemes ssl else ss))
 
 val lemma_reveal_ch_extensions_cons_ks
   (kscl:GESK.extensionClientHello_extension_data_key_share)
   (tl:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_key_share kscl :: tl) sn ks sv ss ==
            (if Some? ks then reveal_ch_extensions tl sn ks sv ss
-            else (match TLS13.Wire.Semantics.kse_list_find_x25519 (kscl <: list GKSE.keyShareEntry) with
-                  | Some raw -> if B.length raw = 32 then reveal_ch_extensions tl sn (Some (raw <: B.bytes_of_len 32)) sv ss else None
+            else (match WS.ch_key_share_pick (kscl <: list GKSE.keyShareEntry) with
+                  | Some offer -> reveal_ch_extensions tl sn (Some offer) sv ss
                   | None -> None)))
 
 val lemma_reveal_ch_extensions_cons_sv
   (svl:GESV.extensionClientHello_extension_data_supported_versions)
   (tl:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma (reveal_ch_extensions (GECH.Extension_data_supported_versions svl :: tl) sn ks sv ss ==
            (if FStar.List.Tot.mem GOV.Offered_TLS_1p3 svl
             then reveal_ch_extensions tl sn ks true ss
@@ -194,7 +228,7 @@ val lemma_reveal_ch_extensions_cons_sv
 val lemma_reveal_ch_extensions_cons_other
   (e:GECH.extensionClientHello)
   (tl:list GECH.extensionClientHello)
-  (sn:option T.hostname) (ks:option (B.bytes_of_len 32)) (sv:bool) (ss:list T.signature_scheme)
+  (sn:option T.hostname) (ks:option WS.ch_key_share_offer) (sv:bool) (ss:list T.signature_scheme)
   : Lemma
     (requires
       not (GECH.Extension_data_server_name? e) /\
@@ -245,8 +279,15 @@ val lemma_reveal_ch_extensions_connect (c:GCH.clientHello)
     | Some (sn, ks, _, ss) ->
       sn == TLS13.Wire.Semantics.clientHello_server_name c /\
       (match ks with
-       | Some k -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c
-                   == Some ((k <: B.bytes) <: Seq.seq U8.t)
+       | Some k ->
+         (if GNG.X25519? (fst k)
+          then B.length (snd k) == 32 /\
+               TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+               == Some ((snd k <: B.bytes) <: Seq.seq U8.t)
+          else GNG.Secp256r1? (fst k) /\ B.length (snd k) == 65 /\
+               TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None /\
+               TLS13.Wire.Semantics.clientHello_key_share_secp256r1 c
+               == Some ((snd k <: B.bytes) <: Seq.seq U8.t))
        | None -> TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None) /\
       (match TLS13.Wire.Semantics.clientHello_sig_algs c with
        | Some sas -> ss == reveal_synth_sig_schemes sas
@@ -263,8 +304,14 @@ val lemma_reveal_ch_extensions_connect_valid (c:GCH.clientHello)
                                None None false [] with
     | Some (sn, Some k, _, ss) ->
       TLS13.Wire.Semantics.clientHello_server_name c == sn /\
-      TLS13.Wire.Semantics.clientHello_key_share_x25519 c
-        == Some ((k <: B.bytes) <: Seq.seq U8.t) /\
+      (if GNG.X25519? (fst k)
+       then B.length (snd k) == 32 /\
+            TLS13.Wire.Semantics.clientHello_key_share_x25519 c
+            == Some ((snd k <: B.bytes) <: Seq.seq U8.t)
+       else GNG.Secp256r1? (fst k) /\ B.length (snd k) == 65 /\
+            TLS13.Wire.Semantics.clientHello_key_share_x25519 c == None /\
+            TLS13.Wire.Semantics.clientHello_key_share_secp256r1 c
+            == Some ((snd k <: B.bytes) <: Seq.seq U8.t)) /\
       (Cons? ss ==> TLS13.Wire.Semantics.clientHello_sig_algs c == Some ss)
     | _ -> True))
 

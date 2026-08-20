@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CF = TLS13.Impl.ConnectionState.Fail
@@ -165,12 +166,14 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.Rsa_pss_rsae_sha256 /\
+                      CryptoSpec.credential_signature_scheme
+                        (Ghost.reveal 'credential_identity) /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.Rsa_pss_rsae_sha256
+                      (CryptoSpec.credential_signature_scheme
+                        (Ghost.reveal 'credential_identity))
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
@@ -301,7 +304,8 @@ fn process_sign_certificate_verify
         (Seq.slice signature_bytes 0 (SZ.v signature_len))));
       assert (pure (B.length (Ghost.reveal signature) == SZ.v signature_len));
       assert (pure (TLS13.Crypto.Spec.verify_signature
-        T.Rsa_pss_rsae_sha256
+        (CryptoSpec.credential_signature_scheme
+          (Ghost.reveal 'credential_identity))
         (Ghost.reveal 'credential_identity)
         (Seq.slice (Ghost.reveal certificate_verify_input_bytes) 0 130)
         (Ghost.reveal signature)));
@@ -310,28 +314,38 @@ fn process_sign_certificate_verify
         (H.certificate_verify_input
           (Tr.hash 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript))));
       assert (pure (TLS13.Crypto.Spec.verify_signature
-        T.Rsa_pss_rsae_sha256
+        (CryptoSpec.credential_signature_scheme
+          (Ghost.reveal 'credential_identity))
         (Ghost.reveal 'credential_identity)
         (H.certificate_verify_input
           (Tr.hash 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript))
         (Ghost.reveal signature)));
       assert (pure (Seq.length (Ghost.reveal signature) <= 65535));
+      // Parity gap G5: the CertificateVerify algorithm follows the credential.
+      // The runtime query and the ghost [credential_signature_scheme] name the
+      // same thing, so the wire code and the spec-level scheme cannot drift.
+      let scheme_code = O.server_credential_signature_scheme creds;
+      assert (pure (IM.signature_scheme_matches
+        scheme_code
+        (CryptoSpec.credential_signature_scheme
+          (Ghost.reveal 'credential_identity))));
       let cv : erased GCV.certificateVerify = Ghost.hide ({
-        GCV.algorithm = T.Rsa_pss_rsae_sha256;
+        GCV.algorithm =
+          CryptoSpec.credential_signature_scheme
+            (Ghost.reveal 'credential_identity);
         GCV.signature = (Ghost.reveal signature <: GCV.certificateVerify_signature);
       });
       let lcv = {
-        IM.certificate_verify_scheme = 0x0804us;
+        IM.certificate_verify_scheme = scheme_code;
         IM.certificate_verify_signature = signature_vec;
         IM.certificate_verify_signature_len = signature_len;
       };
       V.to_vec_pts_to signature_vec;
       assert (pure (lcv.IM.certificate_verify_signature == signature_vec));
       assert (pure (lcv.IM.certificate_verify_signature_len == signature_len));
-      assert (pure (lcv.IM.certificate_verify_scheme == 0x0804us));
+      assert (pure (lcv.IM.certificate_verify_scheme == scheme_code));
       rewrite (V.pts_to signature_vec signature_bytes)
         as (V.pts_to lcv.IM.certificate_verify_signature signature_bytes);
-      assert_norm (IM.signature_scheme_matches 0x0804us T.Rsa_pss_rsae_sha256);
       assert (pure (IM.byte_prefix_matches
         signature_bytes
         signature_len

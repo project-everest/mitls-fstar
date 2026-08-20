@@ -170,6 +170,18 @@ type handshake_message_storage = {
   client_hello_server_name_len: box SZ.t;
   client_hello_cipher_suites_len: box SZ.t;
   client_hello_signature_schemes_len: box SZ.t;
+  (* The offered legacy_session_id's width, which RFC 8446 4.1.3 makes the
+     width the ServerHello must echo.  Mutable, like the other metadata: the
+     mirror's [IM.client_hello] struct is allocated once and its own length
+     fields cannot be rewritten when a ClientHello arrives. *)
+  client_hello_session_id_len: box SZ.t;
+  (* The negotiated key-exchange group, as decided by [CM.client_hello_kex_group_for]
+     from the offered ClientHello.  Mutable metadata for the same reason as the
+     session-id width: the mirror's [IM.client_hello] struct is allocated once
+     and its scalars cannot be rewritten.  Unlike the other metadata this one is
+     not recoverable from the stored bytes at all -- an all-zero 32-byte X25519
+     slot is a legal share -- so the parse path writes it. *)
+  client_hello_kex_group: box CryptoSpec.kex_group;
   server_hello: box (option IM.server_hello);
   encrypted_extensions: box (option IM.encrypted_extensions);
   certificate: box (option IM.certificate_msg);
@@ -887,45 +899,74 @@ let client_hello_slot_exactly
   ([@@@mkey] l:IM.client_hello)
   (spec:option GCH.clientHello)
   : slprop =
-  exists* present random session_id server_name key_share cipher_suites signature_schemes.
+  exists* present random session_id server_name key_share p256_key_share
+          cipher_suites signature_schemes.
     Box.pts_to present_box present **
     V.pts_to l.IM.client_hello_random random **
     V.pts_to l.IM.client_hello_session_id session_id **
     V.pts_to l.IM.client_hello_server_name server_name **
     V.pts_to l.IM.client_hello_key_share key_share **
+    (* The slot's [IM.client_hello] struct is allocated once and its scalar
+       fields cannot be rewritten -- the same reason the session-id width lives
+       in a metadata box -- so the struct's own
+       [client_hello_has_p256_key_share] flag says nothing here.  Whether the
+       peer offered a usable secp256r1 share is instead a property of the spec
+       message, and the runtime reads it off the [client_hello_kex_group]
+       metadata box; the bytes are constrained below. *)
+    V.pts_to l.IM.client_hello_p256_key_share p256_key_share **
     V.pts_to l.IM.client_hello_cipher_suites cipher_suites **
     V.pts_to l.IM.client_hello_signature_schemes signature_schemes **
     pure (V.is_full_vec l.IM.client_hello_random /\
           V.is_full_vec l.IM.client_hello_session_id /\
           V.is_full_vec l.IM.client_hello_server_name /\
           V.is_full_vec l.IM.client_hello_key_share /\
+          V.is_full_vec l.IM.client_hello_p256_key_share /\
           V.is_full_vec l.IM.client_hello_cipher_suites /\
           V.is_full_vec l.IM.client_hello_signature_schemes /\
           V.length l.IM.client_hello_random == 32 /\
           V.length l.IM.client_hello_session_id == 32 /\
           V.length l.IM.client_hello_server_name == max_hostname_len /\
           V.length l.IM.client_hello_key_share == 32 /\
+          V.length l.IM.client_hello_p256_key_share == 65 /\
           V.length l.IM.client_hello_cipher_suites == max_cipher_suites /\
           V.length l.IM.client_hello_signature_schemes == max_signature_schemes /\
           B.length random == 32 /\
           B.length session_id == 32 /\
           B.length server_name == max_hostname_len /\
           B.length key_share == 32 /\
+          B.length p256_key_share == 65 /\
           Seq.length cipher_suites == max_cipher_suites /\
           Seq.length signature_schemes == max_signature_schemes /\
           (if present then
             match spec with
             | Some m ->
               Seq.equal random (Sem.clientHello_random m) /\
-              Seq.equal session_id (Sem.clientHello_session_id_32 m) /\
+              Seq.equal session_id
+                (Sem.pad_session_id_32 (Sem.clientHello_session_id m)) /\
               IM.optional_byte_prefix_matches
                 (client_hello_has_sni m)
                 server_name
                 (client_hello_server_name_len_for m)
                 (Sem.clientHello_server_name m) /\
+              (* The two-group acceptance gate, mirroring
+                 [IM.is_valid_client_hello]: a stored ClientHello offered either
+                 a well-formed X25519 share (which the X25519 mirror holds) or,
+                 failing that, a well-formed secp256r1 one (which the P-256
+                 mirror holds).  [client_hello_kex_group_for] reads off which. *)
               (match Sem.clientHello_key_share_x25519 m with
                | Some k -> B.length k == 32 /\ Seq.equal key_share k
-               | None -> False) /\
+               | None ->
+                 (match Sem.clientHello_key_share_secp256r1 m with
+                  | Some k -> B.length k == 65 /\ Seq.equal p256_key_share k
+                  | None -> False)) /\
+              (* The peer's secp256r1 offer, when it made a usable one.  Stated
+                 as a property of the message rather than of a struct scalar, so
+                 no flag has to be rewritten when a ClientHello is stored; an
+                 entry at any length other than 65 is no offer at all (RFC 8446
+                 4.2.8), and places no demand on the mirror. *)
+              (match Sem.clientHello_key_share_secp256r1 m with
+               | Some k -> B.length k == 65 ==> Seq.equal p256_key_share k
+               | None -> True) /\
               IM.cipher_suites_match
                 cipher_suites
                 (SZ.v (client_hello_cipher_suites_len_for m))
@@ -942,8 +983,8 @@ let client_hello_slot_exactly
             // The slot is allocated but empty: the session-id mirror still
             // holds its all-zero initial content, which is exactly what
             // [TLS13.Impl.ConnectionState.Model.stored_client_hello_session_id]
-            // reports for a state with no stored ClientHello.  Pinning it here
-            // makes the runtime session-id reader total.
+            // reports (at length 0) for a state with no stored ClientHello.
+            // Pinning it here makes the runtime session-id reader total.
             spec == None /\ Seq.equal session_id (Seq.create 32 0uy)))
 
 let client_hello_metadata_exactly
@@ -951,24 +992,33 @@ let client_hello_metadata_exactly
   (server_name_len_box:box SZ.t)
   (cipher_suites_len_box:box SZ.t)
   (signature_schemes_len_box:box SZ.t)
+  (session_id_len_box:box SZ.t)
+  (kex_group_box:box CryptoSpec.kex_group)
   (spec:option GCH.clientHello)
   : slprop =
-  exists* has_server_name server_name_len cipher_suites_len signature_schemes_len.
+  exists* has_server_name server_name_len cipher_suites_len signature_schemes_len
+          session_id_len kex_group.
     Box.pts_to has_server_name_box has_server_name **
     Box.pts_to server_name_len_box server_name_len **
     Box.pts_to cipher_suites_len_box cipher_suites_len **
     Box.pts_to signature_schemes_len_box signature_schemes_len **
+    Box.pts_to session_id_len_box session_id_len **
+    Box.pts_to kex_group_box kex_group **
     pure (match spec with
       | Some m ->
         has_server_name == client_hello_has_sni m /\
         server_name_len == client_hello_server_name_len_for m /\
         cipher_suites_len == client_hello_cipher_suites_len_for m /\
-        signature_schemes_len == client_hello_signature_schemes_len_for m
+        signature_schemes_len == client_hello_signature_schemes_len_for m /\
+        session_id_len == client_hello_session_id_len_for m /\
+        kex_group == client_hello_kex_group_for m
       | None ->
         has_server_name == false /\
         server_name_len == 0sz /\
         cipher_suites_len == 0sz /\
-        signature_schemes_len == 0sz)
+        signature_schemes_len == 0sz /\
+        session_id_len == 0sz /\
+        kex_group == CryptoSpec.KexX25519)
 
 let server_hello_slot_exactly
   ([@@@mkey] slot:box (option IM.server_hello))
@@ -1045,6 +1095,8 @@ let handshake_messages_exactly
     msgs.client_hello_server_name_len
     msgs.client_hello_cipher_suites_len
     msgs.client_hello_signature_schemes_len
+    msgs.client_hello_session_id_len
+    msgs.client_hello_kex_group
     hs.CS.hs_client_hello **
   server_hello_slot_exactly msgs.server_hello hs.CS.hs_server_hello **
   encrypted_extensions_slot_exactly msgs.encrypted_extensions hs.CS.hs_encrypted_extensions **
@@ -1118,13 +1170,45 @@ let server_selection_private_absent
   | Some _ -> False
   | None -> True
 
+(**
+  The selected group is a purely ghost field of [CS.server_handshake_selection]:
+  the runtime stores the 32 private bytes and a presence flag, never a group tag.
+  [CS.legal_event] and [CS.server_hello_matches_selection] are group-indexed, so
+  without this representation-level pin nothing downstream -- the scheduler, the
+  ServerHello writer, the ECDH -- could learn which group its own stored
+  selection names.
+
+  G2 stage S6.8d replaced the old X25519 pin by a *policy* pin: whatever group
+  the selection names, it is the one the server's key-exchange policy
+  ([client_hello_kex_group_for]) picks for the ClientHello the selection was
+  made from.  That is what lets the runtime recover the group by reading the
+  ClientHello metadata box ([client_hello_metadata_exactly]'s kex_group field),
+  which is written at parse time and is not recoverable from the stored bytes.
+
+  Deliberately phrased over [sel.CS.server_selected_client_hello] rather than
+  over the state's [hs_client_hello]: the two coincide for every reachable
+  server state (that is [CS.legal_event] for LocalSelectServerParameters, and
+  the contracts on this file's consumers thread it), but stating it here would
+  make the slprop sensitive to the client role's ClientHello store, which
+  rewrites [hs_client_hello] under a [None] selection.
+**)
+let server_selection_group_pinned
+  (selection:option CS.server_handshake_selection)
+  : prop =
+  match selection with
+  | Some sel ->
+    CS.server_selected_kex_group sel ==
+      client_hello_kex_group_for sel.CS.server_selected_client_hello
+  | None -> True
+
 let server_selection_presence_exactly
   ([@@@mkey] present_box:box bool)
   (selection:option CS.server_handshake_selection)
   : slprop =
   exists* present.
     Box.pts_to present_box present **
-    pure (present == Some? selection)
+    pure (present == Some? selection /\
+          server_selection_group_pinned selection)
 
 let server_key_share_private_exactly
   ([@@@mkey] slot:optional_fixed_bytes)
@@ -1367,11 +1451,17 @@ let server_connection_config
       Some {
         CS.server_certificate_chain = certificate_chain;
         CS.server_credential_identity = credential_identity;
+        (* Parity gap G5: the schemes the server may select are exactly the one
+           its credential can produce.  A TLS 1.3 credential's algorithm is
+           fixed by its SubjectPublicKeyInfo, so this is a function of the
+           configured identity and needs no extra configuration field. *)
         CS.server_allowed_signature_schemes =
-          default_connection_config.CS.config_signature_schemes;
+          [CryptoSpec.credential_signature_scheme credential_identity];
         CS.server_supported_cipher_suites =
           default_connection_config.CS.config_cipher_suites;
-        CS.server_supported_groups = [T.X25519];
+        (* G2: the server negotiates whichever of the two groups the peer's
+           accepted key_share offer named, so both must be in the profile. *)
+        CS.server_supported_groups = [T.X25519; T.Secp256r1];
         CS.server_sni_policy = None;
       };
   }

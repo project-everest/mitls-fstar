@@ -399,13 +399,44 @@ tls13_server_credentials *tls13_openssl_server_credentials_new(
   }
   creds->certificate_chain_len = certificate_chain_len;
   creds->private_key = read_private_key_pem_or_der(private_key, private_key_len);
-  if (creds->private_key == NULL || EVP_PKEY_base_id(creds->private_key) != EVP_PKEY_RSA) {
+  if (creds->private_key == NULL ||
+      tls13_openssl_server_credential_signature_scheme(creds) == 0u) {
     tls13_openssl_server_credentials_free(creds);
     return NULL;
   }
   return creds;
 }
 
+/* Parity gap G5: the signature scheme a server credential can produce is fixed
+   by the key in its leaf certificate.  Returns the TLS SignatureScheme code
+   point, or 0 for an unsupported key type. */
+uint16_t tls13_openssl_server_credential_signature_scheme(
+    const tls13_server_credentials *creds) {
+  if (creds == NULL || creds->private_key == NULL) {
+    return 0u;
+  }
+  switch (EVP_PKEY_base_id(creds->private_key)) {
+  case EVP_PKEY_RSA:
+    return TLS13_SIG_RSA_PSS_RSAE_SHA256;
+  case EVP_PKEY_EC: {
+    /* Only the NIST P-256 curve is negotiated by this stack. */
+    char group[64];
+    size_t group_len = 0u;
+    if (EVP_PKEY_get_group_name(creds->private_key, group, sizeof group, &group_len) != 1) {
+      return 0u;
+    }
+    if (strcmp(group, SN_X9_62_prime256v1) != 0 && strcmp(group, "P-256") != 0) {
+      return 0u;
+    }
+    return TLS13_SIG_ECDSA_SECP256R1_SHA256;
+  }
+  default:
+    return 0u;
+  }
+}
+
+/* Signs with whatever scheme the credential's key determines: RSA-PSS-SHA256
+   for RSA keys, ECDSA-SHA256 for P-256 keys.  The name is historical. */
 bool tls13_openssl_server_sign_rsa_pss_sha256(
     const tls13_server_credentials *creds,
     const uint8_t *message,
@@ -418,17 +449,26 @@ bool tls13_openssl_server_sign_rsa_pss_sha256(
     return false;
   }
 
+  uint16_t scheme = tls13_openssl_server_credential_signature_scheme(creds);
   bool ok = false;
   EVP_MD_CTX *ctx = EVP_MD_CTX_new();
   EVP_PKEY_CTX *pkey_ctx = NULL;
   size_t needed = 0u;
   if (ctx == NULL ||
       EVP_DigestSignInit(ctx, &pkey_ctx, EVP_sha256(), NULL, creds->private_key) != 1 ||
-      pkey_ctx == NULL ||
-      EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_PSS_PADDING) != 1 ||
-      EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx, RSA_PSS_SALTLEN_DIGEST) != 1 ||
-      EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, EVP_sha256()) != 1 ||
-      EVP_DigestSign(ctx, NULL, &needed, message, message_len) != 1 ||
+      pkey_ctx == NULL) {
+    goto done;
+  }
+  if (scheme == TLS13_SIG_RSA_PSS_RSAE_SHA256) {
+    if (EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_PSS_PADDING) != 1 ||
+        EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx, RSA_PSS_SALTLEN_DIGEST) != 1 ||
+        EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, EVP_sha256()) != 1) {
+      goto done;
+    }
+  } else if (scheme != TLS13_SIG_ECDSA_SECP256R1_SHA256) {
+    goto done;
+  }
+  if (EVP_DigestSign(ctx, NULL, &needed, message, message_len) != 1 ||
       needed > signature_capacity ||
       EVP_DigestSign(ctx, signature, &needed, message, message_len) != 1) {
     goto done;

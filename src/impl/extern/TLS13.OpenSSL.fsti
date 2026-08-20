@@ -124,11 +124,30 @@ fn sign_certificate_verify
                    SZ.v signature_len <= SZ.v signature_capacity /\
                    SZ.v signature_len <= B.length signature_bytes /\
                    C.verify_signature
-                     T.Rsa_pss_rsae_sha256
+                     (C.credential_signature_scheme
+                       (Ghost.reveal 'credential_identity))
                      (Ghost.reveal 'credential_identity)
                      (Seq.slice (Ghost.reveal 'input_bytes) 0 (SZ.v input_len))
                      (Seq.slice signature_bytes 0 (SZ.v signature_len))
                  | None -> True))
+
+(* The wire code of the scheme the credential can produce (parity gap G5).
+   TLS 1.3 fixes a credential's algorithm by its SubjectPublicKeyInfo, so this
+   is a pure query of the loaded key: 0x0804 for an RSA key, 0x0403 for a P-256
+   key.  It is what lets the server's selection and its CertificateVerify
+   follow the credential instead of being pinned to rsa_pss_rsae_sha256. *)
+fn server_credential_signature_scheme (creds:server_credentials)
+  requires is_server_credentials creds 'certificate_chain 'credential_identity
+  returns code: U16.t
+  ensures is_server_credentials creds 'certificate_chain 'credential_identity **
+          pure ((U16.v code == 0x0804 /\
+                 C.credential_signature_scheme
+                   (Ghost.reveal 'credential_identity) ==
+                   T.Rsa_pss_rsae_sha256) \/
+                (U16.v code == 0x0403 /\
+                 C.credential_signature_scheme
+                   (Ghost.reveal 'credential_identity) ==
+                   T.Ecdsa_secp256r1_sha256))
 
 fn copy_server_certificate_chain
   (creds:server_credentials)

@@ -19,6 +19,7 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
+module KEX = TLS13.KEX
 module KS = TLS13.KeySchedule
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
@@ -31,6 +32,7 @@ module SZ = FStar.SizeT
 module Tr = TLS13.Transcript
 module U64 = FStar.UInt64
 module U8 = FStar.UInt8
+module U16 = FStar.UInt16
 module V = Pulse.Lib.Vec
 module Ref = Pulse.Lib.Reference
 module W = TLS13.Wire.Spec
@@ -179,6 +181,7 @@ let lemma_serialize_handshake_finished_len (fin: GFin.finished)
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 80"
 let mk_server_hello_witness
+  (g: GNG.namedGroup)
   (random: B.bytes)
   (key_share: B.bytes)
   (session_id: B.bytes)
@@ -186,22 +189,23 @@ let mk_server_hello_witness
   : (sh:GSH.serverHello {
       (Seq.length random == 32 /\
        (Seq.length random == 32 ==> (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-       Seq.length session_id == 32 /\
-       Seq.length key_share == 32) ==>
+       Seq.length session_id <= 32 /\
+       32 <= Seq.length key_share /\ Seq.length key_share <= 65) ==>
       ((match Sem.serverHello_random sh with Some r -> Seq.equal r random | None -> False) /\
        Sem.serverHello_cipher_suite sh == Some cs /\
-       Seq.equal (Sem.serverHello_session_id_echo_32 sh) session_id /\
-       (match Sem.serverHello_key_share_x25519 sh with
-        | Some k -> Seq.equal k key_share
-        | None -> False)) })
+       Seq.equal (Sem.serverHello_session_id_echo sh) session_id /\
+       (g == GNG.X25519 /\ Seq.length key_share == 32 ==>
+        (match Sem.serverHello_key_share_x25519 sh with
+         | Some k -> Seq.equal k key_share
+         | None -> False))) })
 =
-  let safe_ks : (k:Seq.seq U8.t{Seq.length k == 32}) =
-    if Seq.length key_share = 32 then key_share else Seq.create 32 0uy in
+  let safe_ks : (k:Seq.seq U8.t{32 <= Seq.length k /\ Seq.length k <= 65}) =
+    if 32 <= Seq.length key_share && Seq.length key_share <= 65
+    then key_share else Seq.create 32 0uy in
   let ke : GKE.keyShareEntry_key_exchange = safe_ks in
-  let kse : GKE.keyShareEntry = { GKE.group = GNG.X25519; GKE.key_exchange = ke } in
-  GNG.namedGroup_bytesize_eq GNG.X25519;
+  let kse : GKE.keyShareEntry = { GKE.group = g; GKE.key_exchange = ke } in
+  GNG.namedGroup_bytesize_eq g;
   GKE.keyShareEntry_key_exchange_bytesize_eqn ke;
-  assert (GKE.keyShareEntry_key_exchange_bytesize ke == 34);
   let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
   let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
   // RFC 8446: a TLS 1.3 ServerHello MUST carry the supported_versions extension
@@ -218,10 +222,11 @@ let mk_server_hello_witness
           GESH.extensionServerHello_bytesize ks_ext +
           GESH.extensionServerHello_bytesize sv_ext);
   let exts : GSHB.serverHelloBody_extensions = [ks_ext; sv_ext] in
-  (* RFC 8446 D.4 middlebox compatibility: echo the client's 32-byte
-     legacy_session_id verbatim.  Clamped to keep this function total. *)
+  (* RFC 8446 4.1.3: echo the client's legacy_session_id verbatim, whatever
+     its width (32 under D.4 middlebox compatibility mode, 0 with it off).
+     Clamped at the codec's 32-byte ceiling to keep this function total. *)
   let sid : GSHB.serverHelloBody_legacy_session_id_echo =
-    if Seq.length session_id = 32 then session_id else Seq.create 32 0uy in
+    if Seq.length session_id <= 32 then session_id else Seq.empty in
   let body : GSHB.serverHelloBody = {
     GSHB.legacy_session_id_echo = sid;
     GSHB.cipher_suite = cs;
@@ -245,11 +250,18 @@ let mk_server_hello_witness
 #pop-options
 
 (* The canonical ServerHello produced by [mk_server_hello_witness] (key_share +
-   supported_versions extensions) serializes to exactly 122 bytes on the wire.
-   This discharges the [|serialize_handshake (M.ServerHello sh)| == 122]
-   preconditions threaded through the server send path. *)
+   supported_versions extensions) serializes to exactly
+   [58 + |key_share| + |session_id|] bytes on the wire (RFC 8446 4.1.3 makes
+   the echo verbatim): the familiar 90 + |session_id| at X25519's 32-byte
+   share -- 122 for a middlebox-compatibility peer, 90 for one with
+   compatibility mode off -- and 123 + |session_id| at secp256r1's 65-byte one.
+   A [namedGroup] is a two-byte enum at every group, so the tag contributes a
+   constant and drops out of the arithmetic.  This discharges the
+   [|serialize_handshake (M.ServerHello sh)|] preconditions threaded through
+   the server send path. *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
 let lemma_mk_server_hello_witness_bytesize
+  (g: GNG.namedGroup)
   (random: B.bytes)
   (key_share: B.bytes)
   (session_id: B.bytes)
@@ -257,18 +269,19 @@ let lemma_mk_server_hello_witness_bytesize
   : Lemma
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-              Seq.length session_id == 32 /\
-              Seq.length key_share == 32)
+              Seq.length session_id <= 32 /\
+              32 <= Seq.length key_share /\ Seq.length key_share <= 65)
     (ensures
       B.length (W.serialize_handshake
-        (M.ServerHello (mk_server_hello_witness random key_share session_id cs))) == 122)
-  = let sh = mk_server_hello_witness random key_share session_id cs in
+        (M.ServerHello (mk_server_hello_witness g random key_share session_id cs)))
+        == 58 + Seq.length key_share + Seq.length session_id)
+  = let sh = mk_server_hello_witness g random key_share session_id cs in
     Rev.lemma_serialize_handshake_server_hello sh;
     GHS.handshake_bytesize_eq (GHS.Body_server_hello sh);
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p2;
     GPV.protocolVersion_bytesize_eq GPV.TLS_1p3;
     GCS.cipherSuite_bytesize_eq cs;
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    GNG.namedGroup_bytesize_eq g;
     GKE.keyShareEntry_key_exchange_bytesize_eqn (key_share <: GKE.keyShareEntry_key_exchange);
     GSHB.serverHelloBody_extensions_list_bytesize_nil;
     ()
@@ -282,9 +295,10 @@ let lemma_mk_server_hello_witness_bytesize
    with sid = the echoed 32-byte session id, cipher_suite = cs, compression = 0, extensions =
    [key_share(X25519, ks); supported_versions(TLS_1p3)]); only the local module
    aliases differ.  Establishing this lets callers discharge the serializer's
-   [sh == SerH.poc_canonical_sh rnd ks sid cs] precondition. *)
+   [sh == SerH.poc_canonical_sh rnd ks sid g cs] precondition. *)
 #push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
 let lemma_mk_server_hello_witness_eq_poc
+  (g: GNG.namedGroup)
   (random: B.bytes)
   (key_share: B.bytes)
   (session_id: B.bytes)
@@ -292,11 +306,11 @@ let lemma_mk_server_hello_witness_eq_poc
   : Lemma
     (requires Seq.length random == 32 /\
               (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-              Seq.length session_id == 32 /\
-              Seq.length key_share == 32)
+              Seq.length session_id <= 32 /\
+              32 <= Seq.length key_share /\ Seq.length key_share <= 65)
     (ensures
-      mk_server_hello_witness random key_share session_id cs ==
-      SerH.poc_canonical_sh random key_share session_id cs)
+      mk_server_hello_witness g random key_share session_id cs ==
+      SerH.poc_canonical_sh random key_share session_id g cs)
   = ()
 #pop-options
 
@@ -315,10 +329,11 @@ let lemma_server_hello_of_selection_eq_witness
     (ensures
       CM.server_hello_of_selection sel ==
       mk_server_hello_witness
+        (CM.sho_named_group sel)
         (CM.sho_random sel)
-        sel.CS.server_key_share_public
+        (CM.sho_key_share sel)
         (CM.sho_session_id sel)
-        T.TLS_CHACHA20_POLY1305_SHA256)
+        (CM.sho_cipher_suite sel))
   = ()
 #pop-options
 
@@ -327,11 +342,12 @@ let lemma_server_hello_of_selection_eq_witness
 (*                                                                          *)
 (* [CM.can_send_server_hello] constrains the ServerHello only through       *)
 (* [CS.server_hello_matches_selection] (random / key share / cipher suite), *)
-(* the serialized length (a constant 122 for any 32-byte echo) and          *)
+(* the serialized length (90 + |echo|, hence equal for equal-width echoes)  *)
 (* [CS.event_raw_delta_legal], which just ties [raw_sent] to the            *)
 (* serialization of the very same message.  None of these mention the       *)
 (* echo, so the obligation transports between two witnesses that differ     *)
-(* only in their 32-byte legacy_session_id.  This is what lets the send     *)
+(* only in the *contents* of an equal-width legacy_session_id.  This is     *)
+(* what lets the send                                                       *)
 (* path echo the *stored ClientHello's* session id while the Model-level    *)
 (* canonical builder names the selection's copy.                            *)
 (* ----------------------------------------------------------------------- *)
@@ -345,22 +361,28 @@ let lemma_can_send_server_hello_session_id_irrelevant
   : Lemma
     (requires
       Seq.length random == 32 /\
-      Seq.length key_share == 32 /\
-      Seq.length sid1 == 32 /\
-      Seq.length sid2 == 32 /\
+      // G2 stage S6.8d: the share is the negotiated group's, so its width is
+      // 32 at X25519 and 65 at secp256r1.  Only the bound matters here.
+      32 <= Seq.length key_share /\ Seq.length key_share <= 65 /\
+      Seq.length sid1 <= 32 /\
+      Seq.length sid2 <= 32 /\
+      // RFC 8446 4.1.3 makes the echo verbatim, so the ServerHello's
+      // serialized size (90 + |echo|) -- which the send obligation's
+      // transcript bound DOES see -- is fixed by the echo's width alone.
+      Seq.length sid1 == Seq.length sid2 /\
       (random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-      (let sh1 = mk_server_hello_witness random key_share sid1 T.TLS_CHACHA20_POLY1305_SHA256 in
+      (let sh1 = mk_server_hello_witness (CM.stored_client_hello_named_group st) random key_share sid1 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh1
          (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh1)))))
     (ensures
-      (let sh2 = mk_server_hello_witness random key_share sid2 T.TLS_CHACHA20_POLY1305_SHA256 in
+      (let sh2 = mk_server_hello_witness (CM.stored_client_hello_named_group st) random key_share sid2 (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh2
          (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ServerHello sh2)))))
   =
-  let sh1 = mk_server_hello_witness random key_share sid1 T.TLS_CHACHA20_POLY1305_SHA256 in
-  let sh2 = mk_server_hello_witness random key_share sid2 T.TLS_CHACHA20_POLY1305_SHA256 in
-  lemma_mk_server_hello_witness_bytesize random key_share sid1 T.TLS_CHACHA20_POLY1305_SHA256;
-  lemma_mk_server_hello_witness_bytesize random key_share sid2 T.TLS_CHACHA20_POLY1305_SHA256;
+  let sh1 = mk_server_hello_witness (CM.stored_client_hello_named_group st) random key_share sid1 (CM.server_selected_suite st) in
+  let sh2 = mk_server_hello_witness (CM.stored_client_hello_named_group st) random key_share sid2 (CM.server_selected_suite st) in
+  lemma_mk_server_hello_witness_bytesize (CM.stored_client_hello_named_group st) random key_share sid1 (CM.server_selected_suite st);
+  lemma_mk_server_hello_witness_bytesize (CM.stored_client_hello_named_group st) random key_share sid2 (CM.server_selected_suite st);
   ()
 #pop-options
 
@@ -398,15 +420,29 @@ let lemma_can_send_server_hello_witness_of_selection
       Seq.equal (Some?.v selection.CS.server_key_share_private <: Seq.seq U8.t)
                 (server_private_key <: Seq.seq U8.t) /\
       CS.server_selection_key_share_consistent selection /\
+      // Both builders are group-parametric since G2 stage S6.8d, but they take
+      // the group from different places: [mk_server_hello_witness] from the
+      // stored ClientHello's accepted offer (what the runtime can read back),
+      // [CM.server_hello_of_selection] from [CS.server_selected_kex_group].
+      // Pinning the two together is what makes them the same record.  It is the
+      // same hypothesis [server_local_event_input_ready]/LocalSendServerHello
+      // carries.
+      CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
+      // RFC 8446 4.1.3: the send path echoes the *stored* ClientHello's
+      // legacy_session_id while the Model builder names the selection's copy.
+      // The echo is now width-carrying, so the two must be the same message.
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection.CS.server_selected_client_hello /\
+      selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
       CM.can_send_server_hello st (CM.server_hello_of_selection selection)
         (CS.serialized_cleartext_tls_message
           (M.TlsHandshake (M.ServerHello (CM.server_hello_of_selection selection)))))
     (ensures
       ((server_random <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-      (let sh = mk_server_hello_witness server_random
-                  (CryptoSpec.x25519_public_from_private server_private_key)
+      (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group st) server_random
+                  (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st) server_private_key)
                   (CM.stored_client_hello_session_id st)
-                  T.TLS_CHACHA20_POLY1305_SHA256 in
+                  (CM.server_selected_suite st) in
        CM.can_send_server_hello st sh
          (CS.serialized_cleartext_tls_message
            (M.TlsHandshake (M.ServerHello sh)))))
@@ -435,16 +471,18 @@ let lemma_can_send_server_hello_witness_of_selection
   // 4. the canonical builders coincide; congruence with (2)/(3) gives the
   //    witness equality, and can_send_server_hello transfers.
   lemma_server_hello_of_selection_eq_witness selection;
-  assert (sh0 == mk_server_hello_witness server_random
-                   (CryptoSpec.x25519_public_from_private server_private_key)
+  assert (sh0 == mk_server_hello_witness (CM.stored_client_hello_named_group st) server_random
+                   (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st) server_private_key)
                    (CM.sho_session_id selection)
-                   T.TLS_CHACHA20_POLY1305_SHA256);
+                   (CM.server_selected_suite st));
   // The send path echoes the *stored ClientHello's* session id rather than the
   // selection's copy; the send obligation does not see the echo at all.
   lemma_can_send_server_hello_session_id_irrelevant
     st
     server_random
-    (CryptoSpec.x25519_public_from_private server_private_key)
+    (CryptoSpec.kex_public_from_private
+      (CM.stored_client_hello_kex_group st)
+      server_private_key)
     (CM.sho_session_id selection)
     (CM.stored_client_hello_session_id st);
   ()
@@ -475,7 +513,12 @@ let lemma_input_ready_server_hello_of_selection
       st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
       st.CS.cs_model.CS.model_handshake.CS.hs_server_selection == Some selection /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-        122 <= Bounds.max_transcript_len /\
+        155 <= Bounds.max_transcript_len /\
+      // See lemma_can_send_server_hello_witness_of_selection: the echo is
+      // width-carrying, so the stored ClientHello and the selection's copy
+      // must be the same message (RFC 8446 4.1.3).
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+        Some selection.CS.server_selected_client_hello /\
       Seq.equal (selection.CS.server_random <: Seq.seq U8.t)
                 (CL.raw_slice material 0 32 <: Seq.seq U8.t) /\
       ((CL.raw_slice material 0 32 <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
@@ -484,7 +527,17 @@ let lemma_input_ready_server_hello_of_selection
                 (CL.raw_slice material 32 64 <: Seq.seq U8.t) /\
       (selection.CS.server_key_share_public <: B.bytes) ==
         CryptoSpec.x25519_public_from_private (CL.raw_slice material 32 64) /\
-      selection.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256)
+      // The selection agrees with itself on every group it carries a keypair
+      // for, not only on X25519.  [material] only carries the X25519 pair, so
+      // the secp256r1 half has to be assumed rather than reconstructed here.
+      CS.server_selection_key_share_consistent selection /\
+      Some? selection.CS.server_p256_private /\
+      // CS.server_hello_matches_selection is group-indexed, and the writer
+      // builds at the group the stored ClientHello's accepted offer names, so
+      // the selection must name that same group.
+      CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      selection.CS.server_selected_cipher_suite == CM.server_selected_suite st)
     (ensures
       ST.server_local_event_input_ready st ST.LocalSendServerHello material)
   =
@@ -498,7 +551,8 @@ let lemma_input_ready_server_hello_of_selection
                     (CL.raw_slice material 32 64 <: Seq.seq U8.t);
   assert (CS.server_selection_key_share_consistent selection);
   // valid_selection holds (random off HRR sentinel + CHACHA cipher suite), so
-  // the canonical builder matches the selection and serialises to 122 bytes;
+  // the canonical builder matches the selection and serialises to
+  // 58 + |key_share| + |legacy_session_id_echo| (<= 155) bytes;
   // legal_event / event_raw_delta_legal / can_send_server_hello follow, exactly
   // as in Driver.Handshake's inline discharge.
   assert (CM.valid_selection selection);
@@ -506,7 +560,8 @@ let lemma_input_ready_server_hello_of_selection
   CM.lemma_server_hello_of_selection_matches selection;
   CM.lemma_server_hello_of_selection_bytesize selection;
   assert (CS.server_hello_matches_selection selection sh_sel);
-  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) == 122);
+  assert (B.length (W.serialize_handshake (M.ServerHello sh_sel)) ==
+          58 + CryptoSpec.kex_public_len (CS.server_selected_kex_group selection) + Seq.length (CM.sho_session_id selection));
   assert (CS.legal_event
     st.CS.cs_model
     (CS.ConnNetworkEvent {
@@ -573,15 +628,16 @@ let lemma_server_process_local_obligations
          Bounds.max_transcript_len /\
        CM.can_verify_client_finished st
          (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)) /\
-      (kind == ST.LocalSendServerHello /\ out_len_v == 127 ==>
+      (kind == ST.LocalSendServerHello /\
+       out_len_v == 63 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group st) + Seq.length (CM.stored_client_hello_session_id st) ==>
        (Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
-       (let sh = mk_server_hello_witness
+       (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group st)
                    (CL.raw_slice payload 0 32)
-                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                   (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st) (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
-                   T.TLS_CHACHA20_POLY1305_SHA256 in
+                   (CM.server_selected_suite st) in
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake (M.ServerHello sh))))) /\
@@ -615,15 +671,15 @@ let lemma_server_process_local_obligations
       assert (CM.can_verify_client_finished st fin) )
   | ST.LocalSendServerHello ->
     introduce
-      out_len_v == 127 ==>
+      out_len_v == 63 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group st) + Seq.length (CM.stored_client_hello_session_id st) ==>
       ((Seq.length (CL.raw_slice payload 0 32) == 32 ==>
         (CL.raw_slice payload 0 32 <: Seq.lseq U8.t 32) <>
           GSHbody.serverHello_body_cst) /\
-       (let sh = mk_server_hello_witness
+       (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group st)
                    (CL.raw_slice payload 0 32)
-                   (CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64))
+                   (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group st) (CL.raw_slice payload 32 64))
                    (CM.stored_client_hello_session_id st)
-                   T.TLS_CHACHA20_POLY1305_SHA256 in
+                   (CM.server_selected_suite st) in
         CM.can_send_server_hello st sh
           (CS.serialized_cleartext_tls_message
             (M.TlsHandshake (M.ServerHello sh)))))
@@ -1025,6 +1081,8 @@ fn process_send_server_hello
 fn process_send_server_hello_serialized
   (s:server)
   (lsh:IM.server_hello)
+  (kex_group:CryptoSpec.kex_group)
+  (sid_len:SZ.t)
   (#sh:erased GSH.serverHello)
   (#server_random_bytes: erased B.bytes)
   (#server_key_share_bytes: erased B.bytes)
@@ -1038,17 +1096,25 @@ fn process_send_server_hello_serialized
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   63 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0) + Seq.length (CM.stored_client_hello_session_id 'st0) /\
+                 SZ.v sid_len ==
+                   Seq.length (CM.stored_client_hello_session_id 'st0) /\
+                 // G2: the caller has read the accepted group off the stored
+                 // ClientHello, so the record's share width is known at run time.
+                 kex_group == CM.stored_client_hello_kex_group 'st0 /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Seq.length (Ghost.reveal server_random_bytes) == 32 /\
                  (Ghost.reveal server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst /\
-                 Seq.length (Ghost.reveal server_key_share_bytes) == 32 /\
+                 Seq.length (Ghost.reveal server_key_share_bytes) ==
+                   CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0) /\
                  Ghost.reveal sh ==
-                   mk_server_hello_witness
+                   mk_server_hello_witness (CM.stored_client_hello_named_group 'st0)
                      (Ghost.reveal server_random_bytes)
                      (Ghost.reveal server_key_share_bytes)
                      (CM.stored_client_hello_session_id 'st0)
-                     (T.TLS_CHACHA20_POLY1305_SHA256) /\
+                     ((CM.server_selected_suite 'st0)) /\
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1079,24 +1145,26 @@ fn process_send_server_hello_serialized
                   network_out_bytes
                   app_out_bytes)
 {
-  lemma_mk_server_hello_witness_eq_poc
+  lemma_mk_server_hello_witness_eq_poc (CM.stored_client_hello_named_group 'st0)
     (Ghost.reveal server_random_bytes)
     (Ghost.reveal server_key_share_bytes)
     (CM.stored_client_hello_session_id 'st0)
-    (T.TLS_CHACHA20_POLY1305_SHA256);
+    ((CM.server_selected_suite 'st0));
   let written_raw =
     Ser.serialize_server_hello_record_from_selection
       #sh
       #server_random_bytes
       #server_key_share_bytes
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
-      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
+      #(Ghost.hide (CM.stored_client_hello_named_group 'st0 <: GNG.namedGroup))
+      #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
+      sid_len
       network_out
       network_out_len;
   with network_out_bytes. assert (pts_to network_out network_out_bytes);
-  assert (pure (B.length network_out_bytes == 127));
-  assert (pure (SZ.v written_raw == 127));
+  assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+  assert (pure (SZ.v written_raw == SZ.v network_out_len));
   assert (pure (Seq.equal
     network_out_bytes
     (CS.serialized_cleartext_tls_message
@@ -1106,20 +1174,28 @@ fn process_send_server_hello_serialized
     sh
     network_out_bytes));
 
-  let mut fragment = [| 0uy; 122sz |];
+  (* RFC 8446 4.1.3: the handshake message is 58 bytes plus the key share
+     (G2: its width follows the accepted group) plus the echoed
+     legacy_session_id, so the transcript fragment buffer is sized at run
+     time.  Pulse stack arrays need a constant extent, hence the heap vec. *)
+  let fragment_share_len = KEX.kex_public_len_sz kex_group;
+  let fragment_len = 58sz `SZ.add` fragment_share_len `SZ.add` sid_len;
+  let fragment_vec = V.alloc 0uy fragment_len;
+  V.to_array_pts_to fragment_vec;
   let written_fragment =
     Ser.serialize_server_hello_from_selection
       #sh
       #server_random_bytes
       #server_key_share_bytes
       #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes))
-      #(Ghost.hide (T.TLS_CHACHA20_POLY1305_SHA256 <: GCS.cipherSuite))
+      #(Ghost.hide (CM.stored_client_hello_named_group 'st0 <: GNG.namedGroup))
+      #(Ghost.hide ((CM.server_selected_suite 'st0) <: GCS.cipherSuite))
       lsh
-      fragment
-      122sz;
-  with fragment_bytes. assert (pts_to fragment fragment_bytes);
-  assert (pure (B.length fragment_bytes == 122));
-  assert (pure (SZ.v written_fragment == 122));
+      (V.vec_to_array fragment_vec)
+      fragment_len;
+  with fragment_bytes. assert (pts_to (V.vec_to_array fragment_vec) fragment_bytes);
+  assert (pure (B.length fragment_bytes == SZ.v fragment_len));
+  assert (pure (SZ.v written_fragment == SZ.v fragment_len));
   assert (pure (Seq.equal
     fragment_bytes
     (W.serialize_handshake (M.ServerHello sh))));
@@ -1129,13 +1205,15 @@ fn process_send_server_hello_serialized
   CLH.mark_sent_server_hello
     s
     network_out
-    fragment
+    (V.vec_to_array fragment_vec)
     written_fragment
     lsh
     #sh;
   fold (connection_exactly
     s
     (CM.sent_server_hello_state 'st0 sh network_out_bytes));
+  V.to_vec_pts_to fragment_vec;
+  V.free fragment_vec;
 
   let resp = {
     ST.network_out_len = written_raw;
@@ -1273,20 +1351,33 @@ fn process_send_server_hello_serialized
 
 #restart-solver
 fn build_server_hello_from_arrays
+  (kex_group:CryptoSpec.kex_group)
   (server_random:array U8.t)
   (server_key_share:array U8.t)
   (session_id:array U8.t)
+  (session_id_len:SZ.t)
+  (cipher_suite:U16.t)
   (#sh:erased GSH.serverHello)
+  (#sid:erased B.bytes)
   requires pts_to server_random 'server_random_bytes **
            pts_to server_key_share 'server_key_share_bytes **
            pts_to session_id 'session_id_bytes **
            pure (B.length 'server_random_bytes == 32 /\
-                B.length 'server_key_share_bytes == 32 /\
+                B.length 'server_key_share_bytes == 65 /\
+                CryptoSpec.padded_share_65 'server_key_share_bytes
+                  (CryptoSpec.kex_public_len kex_group) /\
                 B.length 'session_id_bytes == 32 /\
+                // RFC 8446 4.1.3: the echoed id is the offered one verbatim,
+                // carried as a 32-byte zero-padded mirror plus its true width.
+                Seq.length (Ghost.reveal sid) <= 32 /\
+                SZ.v session_id_len == Seq.length (Ghost.reveal sid) /\
+                Seq.equal (Ghost.reveal 'session_id_bytes)
+                          (Sem.pad_session_id_32 (Ghost.reveal sid)) /\
                 // TODO-A1: ServerHello random must differ from the HRR sentinel
                 (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                  (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                Ghost.reveal sh == (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (Ghost.reveal 'session_id_bytes) (T.TLS_CHACHA20_POLY1305_SHA256)))
+                (cipher_suite == 0x1303us \/ cipher_suite == 0x1301us) /\
+                Ghost.reveal sh == (mk_server_hello_witness (CM.named_group_of_kex_group kex_group) (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes) (CryptoSpec.kex_public_len kex_group)) (Ghost.reveal sid) (IM.cipher_suite_of_u16 cipher_suite)))
   returns lsh:IM.server_hello
   ensures pts_to server_random 'server_random_bytes **
           pts_to server_key_share 'server_key_share_bytes **
@@ -1295,28 +1386,35 @@ fn build_server_hello_from_arrays
 {
   let random_vec = V.alloc 0uy 32sz;
   let session_id_vec = V.alloc 0uy 32sz;
-  (* Key shares are stored at the widest offered width (65 bytes); this server
-     role only ever offers X25519, so its 32-byte share is zero-padded and the
-     group tag is X25519. *)
+  (* Key shares are carried at the widest offered width (65 bytes) all the way
+     from the caller's buffer, so the representation stores them verbatim; the
+     logical share is the [unpad_share_65] prefix at the width named by the
+     [kex_group] tag the caller read off the stored ClientHello. *)
   let key_share_vec = V.alloc 0uy 65sz;
   CR.copy_fixed32_array_to_vec server_random random_vec;
   CR.copy_fixed32_array_to_vec session_id session_id_vec;
-  CR.copy_padded32_array_to_vec65 server_key_share key_share_vec;
+  CR.copy_fixed65_array_to_vec server_key_share key_share_vec;
   let lsh = {
     IM.server_hello_random = random_vec;
     IM.server_hello_session_id = session_id_vec;
+    IM.server_hello_session_id_len = session_id_len;
     IM.server_hello_key_share = key_share_vec;
-    IM.server_hello_kex_group = CryptoSpec.KexX25519;
-    IM.server_hello_cipher_suite = 0x1303us;
+    IM.server_hello_kex_group = kex_group;
+    IM.server_hello_cipher_suite = cipher_suite;
   };
   with random_bytes. assert (V.pts_to random_vec random_bytes);
   with session_id_vec_bytes. assert (V.pts_to session_id_vec session_id_vec_bytes);
   with key_share_bytes. assert (V.pts_to key_share_vec key_share_bytes);
   assert (pure (Seq.equal random_bytes (Ghost.reveal 'server_random_bytes)));
   assert (pure (Seq.equal session_id_vec_bytes (Ghost.reveal 'session_id_bytes)));
+  assert (pure (Seq.equal (Sem.serverHello_session_id_echo (Ghost.reveal sh))
+                          (Ghost.reveal sid)));
   assert (pure (Seq.equal key_share_bytes
-    (CryptoSpec.pad_share_65 (Ghost.reveal 'server_key_share_bytes))));
-  assert_norm (IM.cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256);
+    (CryptoSpec.pad_share_65
+      (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes)
+        (CryptoSpec.kex_public_len kex_group)))));
+  IM.lemma_cipher_suite_of_u16_chacha ();
+  IM.lemma_cipher_suite_of_u16_aes ();
   rewrite (V.pts_to random_vec random_bytes)
     as (V.pts_to lsh.IM.server_hello_random random_bytes);
   rewrite (V.pts_to session_id_vec session_id_vec_bytes)
@@ -1343,17 +1441,22 @@ fn process_send_server_hello_from_arrays
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'server_random_bytes == 32 /\
-                 B.length 'server_key_share_bytes == 32 /\
+                 B.length 'server_key_share_bytes == 65 /\
+                 CryptoSpec.padded_share_65 'server_key_share_bytes
+                   (CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   63 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0)
+                      + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group 'st0) (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes) (CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0))) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1369,8 +1472,8 @@ fn process_send_server_hello_from_arrays
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
-                 B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 B.length (Ghost.reveal 'server_key_share_bytes) == 65 ==>
+                 (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group 'st0) (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes) (CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0))) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -1389,25 +1492,45 @@ fn process_send_server_hello_from_arrays
                   network_out_bytes
                   app_out_bytes)
 {
-  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (Ghost.reveal 'server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) <: GSH.serverHello);
+  let sh = Ghost.hide (mk_server_hello_witness (CM.stored_client_hello_named_group 'st0) (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes) (CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0))) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) <: GSH.serverHello);
   let mut session_id = [| 0uy; 32sz |];
   rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
-  CQ.read_client_hello_session_id s session_id;
+  let session_id_len = CQ.read_client_hello_session_id s session_id;
   rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
   with sid_bytes. assert (pts_to session_id sid_bytes);
-  Seq.lemma_eq_elim (Ghost.reveal sid_bytes) (CM.stored_client_hello_session_id 'st0);
+  Seq.lemma_eq_elim (Ghost.reveal sid_bytes)
+    (Sem.pad_session_id_32 (CM.stored_client_hello_session_id 'st0));
+  (* Recover the negotiated suite from the stored ClientHello mirror.  The
+     ghost selection's suite is that policy value (carried by
+     [ST.server_local_event_input_ready]/LocalSendServerHello), so the emitted
+     ServerHello names exactly the suite the state machine selected. *)
+  rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
+  let negotiated_suite = CQ.read_negotiated_server_suite s;
+  rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
+  (* G2: the emitted ServerHello names the group the stored ClientHello's
+     accepted key_share offer pinned, read back off the metadata mirror. *)
+  rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
+  let kex_group = CQ.read_client_hello_kex_group s;
+  rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
   let lsh =
     build_server_hello_from_arrays
+      kex_group
       server_random
       server_key_share
       session_id
-      #sh;
+      session_id_len
+      negotiated_suite
+      #sh
+      #(Ghost.hide (CM.stored_client_hello_session_id 'st0 <: B.bytes));
   process_send_server_hello_serialized
     s
     lsh
+    kex_group
+    session_id_len
     #sh
     #('server_random_bytes)
-    #('server_key_share_bytes)
+    #(Ghost.hide (CryptoSpec.unpad_share_65 (Ghost.reveal 'server_key_share_bytes)
+        (CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0))))
     network_out
     network_out_len
     app_out
@@ -1431,15 +1554,17 @@ fn process_send_server_hello_with_derived_public_from_private_array
                  B.length 'server_private_key_bytes == 32 /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
-                 SZ.v network_out_len == 127 /\
+                 SZ.v network_out_len ==
+                   63 + CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0) + Seq.length (CM.stored_client_hello_session_id 'st0) /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  // TODO-A1: ServerHello random must differ from the HelloRetryRequest
                  // sentinel (serverHello_body_cst); unprovable for a symbolic random,
                  // so threaded as an explicit caller obligation.
                  (Seq.length (Ghost.reveal 'server_random_bytes) == 32 ==>
                   (Ghost.reveal 'server_random_bytes <: Seq.lseq U8.t 32) <> GSHbody.serverHello_body_cst) /\
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                     (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group 'st0) (Ghost.reveal 'server_random_bytes) (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
+                     (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                  CM.can_send_server_hello
                    'st0
                    sh
@@ -1456,8 +1581,8 @@ fn process_send_server_hello_with_derived_public_from_private_array
                 B.length app_out_bytes == SZ.v app_out_len /\
                 (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
                  B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
-                 (let sh = mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (CryptoSpec.x25519_public_from_private
-                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256) in
+                 (let sh = mk_server_hello_witness (CM.stored_client_hello_named_group 'st0) (Ghost.reveal 'server_random_bytes) (CryptoSpec.kex_public_from_private (CM.stored_client_hello_kex_group 'st0)
+                       (Ghost.reveal 'server_private_key_bytes)) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)) in
                   Seq.equal
                     network_out_bytes
                     (CS.serialized_cleartext_tls_message
@@ -1476,13 +1601,29 @@ fn process_send_server_hello_with_derived_public_from_private_array
                   network_out_bytes
                   app_out_bytes)
 {
-  let mut server_key_share = [| 0uy; 32sz |];
-  Crypto.x25519_public_from_private server_private_key server_key_share;
+  let mut server_key_share = [| 0uy; 65sz |];
+  (* The share buffer is carried at the widest offered width; [KEX] writes the
+     negotiated group's public into its prefix and leaves the zeroed tail as
+     padding.  G2 stage S6.8d: the group is the one the stored ClientHello's
+     accepted key_share offer named, read back off the metadata mirror. *)
+  rewrite (connection_exactly s 'st0) as (CR.connection_exactly s 'st0);
+  let derived_kex_group = CQ.read_client_hello_kex_group s;
+  rewrite (CR.connection_exactly s 'st0) as (connection_exactly s 'st0);
+  let n = KEX.kex_public_from_private_runtime derived_kex_group server_private_key server_key_share;
   with server_key_share_bytes. assert (pts_to server_key_share server_key_share_bytes);
-  assert (pure (server_key_share_bytes ==
-    CryptoSpec.x25519_public_from_private (Ghost.reveal 'server_private_key_bytes)));
-  assert (pure (B.length server_key_share_bytes == 32));
-  let sh = Ghost.hide (mk_server_hello_witness (Ghost.reveal 'server_random_bytes) (server_key_share_bytes) (CM.stored_client_hello_session_id 'st0) (T.TLS_CHACHA20_POLY1305_SHA256));
+  assert (pure (B.length server_key_share_bytes == 65));
+  assert (pure (Seq.equal
+    server_key_share_bytes
+    (CryptoSpec.pad_share_65
+      (CryptoSpec.kex_public_from_private derived_kex_group
+        (Ghost.reveal 'server_private_key_bytes)))));
+  assert (pure (CryptoSpec.unpad_share_65 server_key_share_bytes
+      (CryptoSpec.kex_public_len derived_kex_group) ==
+    CryptoSpec.kex_public_from_private derived_kex_group
+      (Ghost.reveal 'server_private_key_bytes)));
+  assert (pure (CryptoSpec.padded_share_65 server_key_share_bytes
+    (CryptoSpec.kex_public_len derived_kex_group)));
+  let sh = Ghost.hide (mk_server_hello_witness (CM.stored_client_hello_named_group 'st0) (Ghost.reveal 'server_random_bytes) (CryptoSpec.unpad_share_65 server_key_share_bytes (CryptoSpec.kex_public_len (CM.stored_client_hello_kex_group 'st0))) (CM.stored_client_hello_session_id 'st0) ((CM.server_selected_suite 'st0)));
   assert (pure (CM.can_send_server_hello
     'st0
     (Ghost.reveal sh)

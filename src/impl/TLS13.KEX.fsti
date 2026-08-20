@@ -67,6 +67,12 @@ val lemma_kex_shared_call_success
 (** ECDH against a peer share held in the uniform 65-byte buffer.  The logical
     share is the group's [kex_public_len]-byte prefix, recovered through the
     explicit group tag. *)
+(** The share a peer offering *both* groups contributes to the ECDH at [g]. *)
+let kex_split_share (g:C.kex_group) (x25519_bytes p256_bytes:B.bytes) : B.bytes =
+  match g with
+  | C.KexX25519 -> x25519_bytes
+  | C.KexP256 -> p256_bytes
+
 fn kex_shared_runtime
   (g: C.kex_group)
   (sk: array U8.t)
@@ -87,3 +93,78 @@ fn kex_shared_runtime
                 kex_shared_call g 'sk_bytes
                   (C.unpad_share_65 'pk_bytes (C.kex_public_len g))
                   out_bytes ok)
+
+(** ECDH against a peer whose two possible shares are held **in their natural
+    widths** rather than padded to a uniform 65 bytes.
+
+    [kex_shared_runtime] above suits the client, whose mirror stores whichever
+    single share the *server* named in its ServerHello, in the uniform
+    [kex_share_storage] buffer.  A server's mirror is different: it stores the
+    ClientHello's *offer*, which may carry an X25519 share and a secp256r1 share
+    at the same time, so it keeps a 32-byte slot and a 65-byte slot side by side.
+    Padding the 32-byte one only to have [unpad_share_65] undo it would cost a
+    copy and a pair of extensional-equality lemmas at every call.
+
+    Both arms therefore go straight to the raw binding, which already takes
+    exactly the width its group requires. *)
+fn kex_shared_split_runtime
+  (g: C.kex_group)
+  (sk: array U8.t)
+  (pk32: array U8.t)
+  (pk65: array U8.t)
+  (out: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to pk32 'x25519_bytes **
+           pts_to pk65 'p256_bytes **
+           pts_to out 'old **
+           pure (B.length 'sk_bytes == 32 /\
+                 B.length 'x25519_bytes == 32 /\
+                 B.length 'p256_bytes == 65 /\
+                 B.length 'old == 32)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to pk32 'x25519_bytes **
+          pts_to pk65 'p256_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                kex_shared_call g 'sk_bytes
+                  (kex_split_share g 'x25519_bytes 'p256_bytes)
+                  out_bytes ok)
+
+(** The server's own public share at the negotiated group, written into the
+    uniform 65-byte buffer the send path carries, together with the share's true
+    wire width.
+
+    This is the build-direction counterpart of [kex_shared_runtime]: the same
+    "one buffer, one explicit group tag, never a length test" discipline, but
+    for the value the server puts on the wire rather than the one it reads off
+    it.  The X25519 arm writes 32 bytes and leaves the remaining 33 as it found
+    them, so the logical share is the [kex_public_len g]-byte prefix -- exactly
+    [C.unpad_share_65], as on the read side.
+
+    Callers that hand in a zeroed buffer get the stronger conclusion that the
+    result *is* [C.pad_share_65] of the share, which is the form the ServerHello
+    representation stores; the X25519 arm needs it because it leaves the tail
+    untouched, and at P-256 the share fills the buffer so padding is the
+    identity. *)
+fn kex_public_from_private_runtime
+  (g: C.kex_group)
+  (sk: array U8.t)
+  (out65: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to out65 'old **
+           pure (B.length 'sk_bytes == 32 /\ B.length 'old == 65)
+  returns n: SZ.t
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to out65 out_bytes **
+          pure (B.length out_bytes == 65 /\
+                SZ.v n == C.kex_public_len g /\
+                Seq.equal
+                  (C.unpad_share_65 out_bytes (C.kex_public_len g))
+                  (C.kex_public_from_private g 'sk_bytes) /\
+                (Seq.equal (Ghost.reveal 'old) (Seq.create 65 0uy) ==>
+                 Seq.equal
+                   out_bytes
+                   (C.pad_share_65 (C.kex_public_from_private g 'sk_bytes))))

@@ -166,6 +166,9 @@ let lemma_conn_events_sent_seal_replay_head
     with model1 delta_sent delta_received tail_sent tail_received
     and () )
 
+(* The per-goal SMT encoding introduced by the fstar2 simplified effect system
+   costs this four-binder [exists_intro] chain more than the default budget. *)
+#push-options "--z3rlimit 60"
 let lemma_conn_events_sent_seal_replay_cons
   (model:connection_model)
   (ev:conn_event)
@@ -275,6 +278,8 @@ let lemma_conn_events_sent_seal_replay_cons
        Seq.equal raw_received (B.append delta_received' tail_received') /\
        conn_events_sent_seal_replay model1' rest tail_sent' tail_received' final_model));
   assert (conn_events_sent_seal_replay model (ev :: rest) raw_sent raw_received final_model)
+
+#pop-options
 
 let lemma_conn_events_received_decode_replay_head
   (model:connection_model)

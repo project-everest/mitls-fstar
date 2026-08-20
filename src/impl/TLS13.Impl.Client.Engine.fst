@@ -243,6 +243,10 @@ fn new_engine
   e
 }
 
+(* Headroom for the per-goal SMT encoding introduced by the fstar2
+   simplified effect system: the goals here are unchanged, but they are
+   now discharged one at a time against the whole Pulse context. *)
+#push-options "--z3rlimit 60"
 fn poll
   (e:client_engine)
   (network_out:array U8.t)
@@ -394,6 +398,8 @@ fn poll
     }
   }
 }
+
+#pop-options
 
 fn feed_network
   (e:client_engine)

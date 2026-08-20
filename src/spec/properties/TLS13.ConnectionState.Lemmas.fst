@@ -1305,12 +1305,7 @@ let server_selected_client_hello_reachable_shape
   match hs.hs_server_selection with
   | Some selection ->
     hs.hs_client_hello == Some selection.server_selected_client_hello /\
-    (match selection.server_key_share_private with
-     | Some server_sk ->
-       C.x25519_public_from_private server_sk ==
-         selection.server_key_share_public
-     | None ->
-       True)
+    server_selection_key_share_consistent selection
   | None ->
     True
 
@@ -1457,15 +1452,19 @@ let lemma_legal_local_event_server_x25519_reachable_shape
     assert (server_selected_client_hello_reachable_shape st0);
     (match hs0.hs_server_selection with
      | Some selection ->
-       (match selection.server_key_share_private with
+       (* The group comes from the selection, which names it; the legal_event arm
+          and server_x25519_pre_server_hello_projection agree on that reading. *)
+       let g = server_selected_kex_group selection in
+       (match server_kex_private selection g with
         | Some server_sk ->
           assert (hs0.hs_client_hello ==
             Some selection.server_selected_client_hello);
-          assert (C.x25519_public_from_private server_sk ==
-            selection.server_key_share_public);
-          (match client_hello_key_share selection.server_selected_client_hello with
+          lemma_server_kex_public_from_private selection g;
+          assert (C.kex_public_from_private g server_sk ==
+            server_kex_public selection g);
+          (match client_hello_kex selection.server_selected_client_hello g with
            | Some ch_ks ->
-             assert (C.x25519_shared server_sk ch_ks == Some shared)
+             assert (C.kex_shared g server_sk ch_ks == Some shared)
            | None -> assert False)
         | None ->
           assert False)
@@ -1758,15 +1757,19 @@ let lemma_connection_delta_server_x25519_reachable_shape
                  st0.cs_model.model_handshake.hs_keys.ks_shared_secret
                with
                | Some selection, Some ch, Some shared ->
-                 (match selection.server_key_share_private with
+                 // The group comes from the selection, which names it; the
+                 // ServerHello just sent carries that group's share.
+                 let g = server_selected_kex_group selection in
+                 (match server_kex_private selection g with
                   | Some server_sk ->
-                    assert (server_hello_key_share sh ==
-                      Some selection.server_key_share_public);
-                    assert (C.x25519_public_from_private server_sk ==
-                      selection.server_key_share_public);
-                    (match client_hello_key_share ch with
+                    assert (server_hello_kex sh ==
+                      Some (| g, server_kex_public selection g |));
+                    lemma_server_kex_public_from_private selection g;
+                    assert (C.kex_public_from_private g server_sk ==
+                      server_kex_public selection g);
+                    (match client_hello_kex ch g with
                      | Some ch_ks ->
-                       assert (C.x25519_shared server_sk ch_ks == Some shared)
+                       assert (C.kex_shared g server_sk ch_ks == Some shared)
                      | None -> assert False)
                   | None ->
                     assert False)
@@ -1845,15 +1848,17 @@ let lemma_connection_delta_server_x25519_reachable_shape
             assert (step_local_event st0.cs_model local == Some st1.cs_model);
             (match st0.cs_model.model_handshake.hs_server_selection with
             | Some selection ->
-              (match selection.server_key_share_private with
+              let g = server_selected_kex_group selection in
+              (match server_kex_private selection g with
                | Some server_sk ->
                  assert (st0.cs_model.model_handshake.hs_client_hello ==
                    Some selection.server_selected_client_hello);
-                 assert (C.x25519_public_from_private server_sk ==
-                   selection.server_key_share_public);
-                 (match client_hello_key_share selection.server_selected_client_hello with
+                 lemma_server_kex_public_from_private selection g;
+                 assert (C.kex_public_from_private g server_sk ==
+                   server_kex_public selection g);
+                 (match client_hello_kex selection.server_selected_client_hello g with
                   | Some ch_ks ->
-                    assert (C.x25519_shared server_sk ch_ks == Some shared)
+                    assert (C.kex_shared g server_sk ch_ks == Some shared)
                   | None -> assert False)
                | None ->
                  assert False)
@@ -2063,7 +2068,13 @@ let lemma_connection_state_consistent_server_pre_server_hello_shape
         (match st.cs_model.model_handshake.hs_server_selection with
          | Some selection ->
            server_selection_key_share_consistent selection /\
-           Some? selection.server_key_share_private
+           Some? selection.server_key_share_private /\
+           (* G2 stage S6.8d: the selection was made from the stored
+              ClientHello.  Needed by the ServerHello writer, which reads the
+              negotiated group off the stored ClientHello's metadata and has to
+              match it against the group the selection names. *)
+           st.cs_model.model_handshake.hs_client_hello ==
+             Some selection.server_selected_client_hello
          | None -> False))
 =
   lemma_connection_state_consistent_server_x25519_reachable_shape st;
@@ -4029,31 +4040,38 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
     server_hs.hs_client_hello
   with
   | Some start, Some sh, Some selection, Some ch ->
-    (match
-      start.start_client_key_share_private,
-      selection.server_key_share_private,
-      client_hs.hs_keys.ks_shared_secret,
-      server_hs.hs_keys.ks_shared_secret
-     with
-     | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
-       C.lemma_x25519_shared_agreement
-         client_sk
-         server_sk
-         start.start_client_key_share_public
-         selection.server_key_share_public;
-       (match client_hello_key_share ch, server_hello_key_share sh with
-        | Some ch_ks, Some sh_ks ->
-          assert (ch_ks == start.start_client_key_share_public);
-          assert (sh_ks == selection.server_key_share_public);
-          assert (C.x25519_shared client_sk sh_ks == Some client_shared);
-          assert (C.x25519_shared server_sk ch_ks == Some server_shared);
-          assert (C.x25519_shared client_sk sh_ks ==
-                  C.x25519_shared server_sk ch_ks);
-          assert (Some client_shared == Some server_shared);
-          assert (client_shared == server_shared);
-          Seq.lemma_eq_intro client_shared server_shared
-        | _, _ -> assert False)
-     | _, _, _, _ -> assert False)
+    (* The group comes off the client's ServerHello, and Diffie-Hellman
+       agreement is C.lemma_kex_shared_agreement, which dispatches to the
+       X25519 or the secp256r1 axiom. *)
+    (match server_hello_kex sh with
+     | Some (| g, sh_ks |) ->
+      (match
+        start_kex_private start g,
+        server_kex_private selection g,
+        client_hs.hs_keys.ks_shared_secret,
+        server_hs.hs_keys.ks_shared_secret
+       with
+       | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
+         C.lemma_kex_shared_agreement
+           g
+           client_sk
+           server_sk
+           (start_kex_public start g)
+           (server_kex_public selection g);
+         (match client_hello_kex ch g with
+          | Some ch_ks ->
+            assert (ch_ks == start_kex_public start g);
+            assert (sh_ks == server_kex_public selection g);
+            assert (C.kex_shared g client_sk sh_ks == Some client_shared);
+            assert (C.kex_shared g server_sk ch_ks == Some server_shared);
+            assert (C.kex_shared g client_sk sh_ks ==
+                    C.kex_shared g server_sk ch_ks);
+            assert (Some client_shared == Some server_shared);
+            assert (client_shared == server_shared);
+            Seq.lemma_eq_intro client_shared server_shared
+          | None -> assert False)
+       | _, _, _, _ -> assert False)
+     | None -> assert False)
   | _, _, _, _ -> assert False
 
 #restart-solver
@@ -5275,6 +5293,11 @@ let application_traffic_key_slot_stage_shape_for_role
   | _, _ ->
     True
 
+(* [legal_event]'s server LocalDeriveSharedSecret arm is group-indexed since G2
+   stage S4/S5, which enlarges every VC that carries [legal_event].  This proof
+   is a pure case analysis over the event, so splitting the query keeps each
+   case's context small rather than raising the rlimit. *)
+#push-options "--z3rlimit 40"
 let lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
   (role:endpoint_role)
   (model:connection_model)
@@ -5289,7 +5312,14 @@ let lemma_step_model_preserves_application_traffic_key_slot_stage_shape_for_role
       (ensures
         application_traffic_key_slot_stage_shape_for_role role model')
 =
-  ()
+  (* Split by hand rather than leaving it to Z3: only the [ConnLocalEvent] case
+     carries the group-indexed [legal_event] arm, so the other two cases get a
+     small context. *)
+  match ev with
+  | ConnNetworkEvent _ -> ()
+  | ConnProtectedHandshake _ -> ()
+  | ConnLocalEvent _ -> ()
+#pop-options
 
 let transcript_after_encrypted_extensions_bytes
   (hs:handshake_state)

@@ -223,6 +223,18 @@ let lemma_unpad_share_65 (k:kex_public_any)
           [SMTPat (unpad_share_65 (pad_share_65 k) (B.length k))]
   = assert (Seq.equal (Seq.slice (pad_share_65 k) 0 (B.length k)) k)
 
+(**
+  A 65-byte buffer is a *padded* share of width [share_len] when it is exactly
+  [pad_share_65] of its own [share_len]-byte prefix -- i.e. the bytes past the
+  logical share are zero.  This is the shape the ServerHello representation
+  stores, and the shape [TLS13.KEX.kex_public_from_private_runtime] produces
+  when handed a zeroed buffer.
+**)
+let padded_share_65 (share:B.bytes) (share_len:nat) : prop =
+  B.length share == 65 /\
+  (share_len == 32 \/ share_len == 65) /\
+  Seq.equal share (pad_share_65 (unpad_share_65 share share_len))
+
 let lemma_pad_share_65_injective (k1 k2:kex_public_any)
   : Lemma (requires Seq.equal (pad_share_65 k1) (pad_share_65 k2) /\
                     B.length k1 == B.length k2)
@@ -386,3 +398,24 @@ val verify_signature:
   message:B.bytes ->
   signature:signature ->
   Tot bool
+
+(* The signature scheme a credential can produce, as a function of the
+   credential's public key.  A TLS 1.3 credential's algorithm is determined by
+   its SubjectPublicKeyInfo -- an RSA key can only produce rsa_pss_rsae_sha256
+   in this profile and a P-256 key only ecdsa_secp256r1_sha256 -- so this is a
+   function of the identity rather than an extra field the configuration has to
+   carry.  It is what makes the server's CertificateVerify algorithm agile
+   (parity gap G5) without indexing the credential predicate by a scheme. *)
+val credential_signature_scheme:
+  public_key:public_key ->
+  Tot T.signature_scheme
+
+(* The profile implements exactly two credential algorithms, so a runtime query
+   of the credential's scheme has only two answers to distinguish. *)
+val lemma_credential_signature_scheme_supported:
+  public_key:public_key ->
+  Lemma
+    (ensures
+      credential_signature_scheme public_key == T.Rsa_pss_rsae_sha256 \/
+      credential_signature_scheme public_key == T.Ecdsa_secp256r1_sha256)
+    [SMTPat (credential_signature_scheme public_key)]

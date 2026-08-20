@@ -189,14 +189,58 @@ type server_handshake_selection = {
   server_random: B.bytes_of_len 32;
   server_key_share_private: option C.x25519_private;
   server_key_share_public: C.x25519_public;
+  (* The server generates a keypair for every group it supports, exactly as the
+     client does (see [handshake_start]), so that [server_selected_group] -- and
+     not a share's length -- decides which one the ECDH runs with.  Keeping the
+     X25519 pair in its own fields rather than indexing one pair by the selected
+     group is deliberate: it is what lets every proof that predates secp256r1
+     support keep its current statement.
+
+     Both private keys are 32 bytes ([C.x25519_private] and [C.p256_private] are
+     both [B.bytes_of_len 32]), and the implementation derives both publics from
+     the *same* 32 secret bytes rather than drawing a second random value.  That
+     is not key reuse: the server transmits exactly one share and runs exactly
+     one ECDH, the one named by [server_selected_group], so the scalar is only
+     ever used in a single group.  Drawing one random value instead of two also
+     keeps the whole feature off the driver's payload width, which is what makes
+     secp256r1 support additive rather than a re-plumbing of the send path. *)
+  server_p256_private: option C.p256_private;
+  server_p256_public: C.p256_public;
   server_selected_credential: server_credential_identity;
 }
 let server_selection_key_share_consistent
   (selection:server_handshake_selection)
   : prop =
-  match selection.server_key_share_private with
-  | Some sk -> C.x25519_public_from_private sk == selection.server_key_share_public
-  | None -> True
+  (match selection.server_key_share_private with
+   | Some sk -> C.x25519_public_from_private sk == selection.server_key_share_public
+   | None -> True) /\
+  (match selection.server_p256_private with
+   | Some sk -> C.p256_public_from_private sk == selection.server_p256_public
+   | None -> True) /\
+  (* The two keypairs are drawn together or not at all: the implementation
+     derives both publics from the same 32 secret bytes, so a selection that
+     carries one private carries the other.  This is what lets a proof that
+     recovers [Some? (server_kex_private selection g)] at the *selected* group
+     conclude [Some? selection.server_key_share_private], which the runtime
+     representation predicates are phrased in terms of. *)
+  (Some? selection.server_key_share_private <==> Some? selection.server_p256_private) /\
+  (* ...and they are drawn from the *same* 32 secret bytes.  ATLAS's server
+     generates one scalar per handshake and derives both group publics from it
+     ([server_key_share_public] and [server_p256_public] above), and the whole
+     runtime carries that scalar as a single 32-byte array.  Recording it here
+     is what lets the group-parametric ECDH run
+     [C.kex_shared (server_selected_kex_group selection) sk k] with the array it
+     holds, whichever group the selection names, instead of every contract on
+     the path having to be restated over [server_kex_private]. *)
+  selection.server_key_share_private == selection.server_p256_private
+
+(** Stands in [server_p256_public] wherever the server has not generated a
+    secp256r1 keypair.  [server_p256_private] is [None] alongside it, so
+    [server_selection_key_share_consistent] places no demand on the value, and
+    [server_selected_group] never names secp256r1 while the configured
+    [server_supported_groups] does not offer it. **)
+let server_p256_absent : C.p256_public = B.zeros 65
+
 type handshake_state = {
   hs_start: option handshake_start;
   hs_server_selection: option server_handshake_selection;
@@ -338,6 +382,56 @@ let client_hello_kex (ch:GCH.clientHello) (g:C.kex_group) : option (C.kex_public
   match g with
   | C.KexX25519 -> client_hello_key_share ch
   | C.KexP256 -> client_hello_p256_key_share ch
+
+(** The server's own private/public pair for a group, the exact mirror of
+    [start_kex_private] / [start_kex_public].  Both pairs are always generated;
+    [server_selected_group] selects which one the ECDH uses. **)
+let server_kex_private
+  (selection:server_handshake_selection)
+  (g:C.kex_group)
+  : option C.kex_private
+  = match g with
+    | C.KexX25519 -> selection.server_key_share_private
+    | C.KexP256 -> selection.server_p256_private
+
+let server_kex_public
+  (selection:server_handshake_selection)
+  (g:C.kex_group)
+  : C.kex_public g
+  = match g with
+    | C.KexX25519 -> selection.server_key_share_public
+    | C.KexP256 -> selection.server_p256_public
+
+(** The group the server chose, as a [kex_group] rather than a wire tag. **)
+let server_selected_kex_group (selection:server_handshake_selection) : C.kex_group =
+  kex_group_of_named_group selection.server_selected_group
+
+(** The X25519 instances of the two accessors are the legacy fields, definitionally.
+    Carried with patterns so that the proofs written before secp256r1 support --
+    which speak of [server_key_share_private] / [server_key_share_public]
+    directly -- keep discharging without being restated. **)
+let lemma_server_kex_x25519_is_legacy (selection:server_handshake_selection)
+  : Lemma
+      (ensures
+        server_kex_private selection C.KexX25519 == selection.server_key_share_private /\
+        server_kex_public selection C.KexX25519 == selection.server_key_share_public)
+      [SMTPat (server_kex_private selection C.KexX25519)]
+  = ()
+
+(** [server_selection_key_share_consistent] states the private/public agreement
+    per group; this is its group-dispatched reading, the mirror of
+    [lemma_start_kex_public_from_private]. **)
+let lemma_server_kex_public_from_private
+  (selection:server_handshake_selection)
+  (g:C.kex_group)
+  : Lemma
+      (requires server_selection_key_share_consistent selection /\
+                Some? (server_kex_private selection g))
+      (ensures C.kex_public_from_private g (Some?.v (server_kex_private selection g)) ==
+               server_kex_public selection g)
+  = match g with
+    | C.KexX25519 -> ()
+    | C.KexP256 -> ()
 type record_layer_state = {
   record_read: R.direction_state;
   record_write: R.direction_state;
@@ -1470,10 +1564,17 @@ let server_hello_matches_selection
   (match Sem.serverHello_random sh with
    | Some r -> Seq.equal r selection.server_random
    | None -> False) /\
-  (match Sem.serverHello_key_share_x25519 sh with
-   | Some k -> B.length k = 32 /\ Seq.equal k selection.server_key_share_public
+  (* Dispatch on the group the server named in its own KeyShareEntry, exactly as
+     the client's [client_x25519_key_share_projection] does.  The group is read
+     back off the message rather than recovered from the configuration, and it
+     is then required to be the one the selection names -- which is what ties the
+     wire image to the keypair the ECDH will run with. *)
+  (match server_hello_kex sh with
+   | Some (| g, k |) ->
+     g == server_selected_kex_group selection /\
+     Seq.equal k (server_kex_public selection g)
    | None -> False) /\
-  selection.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256 /\
+  H.is_supported_cipher_suite selection.server_selected_cipher_suite /\
   Sem.serverHello_cipher_suite sh == Some selection.server_selected_cipher_suite /\
   B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640
 let certificate_msg_matches_server_config
@@ -1629,12 +1730,19 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     (match hs.hs_server_selection with
      | Some selection ->
        server_selection_key_share_consistent selection /\
-       (match selection.server_key_share_private with
-       | Some sk ->
-         (match client_hello_key_share selection.server_selected_client_hello with
-          | Some k -> C.x25519_shared sk k == Some shared
-          | None -> False)
-       | None -> False)
+       (* Dispatch on the group the server selected.  The server generated a
+          keypair for every group it supports (see [server_handshake_selection]),
+          so [server_selected_group] -- and not a share's length -- decides which
+          private key the ECDH runs with.  This is the exact mirror of the
+          client's arm above; the difference is only where the group comes from,
+          the selection here rather than the received ServerHello there. *)
+       (let g = server_selected_kex_group selection in
+        match server_kex_private selection g with
+        | Some sk ->
+          (match client_hello_kex selection.server_selected_client_hello g with
+           | Some k -> C.kex_shared g sk k == Some shared
+           | None -> False)
+        | None -> False)
      | None -> False)
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
     model.model_config.config_role == ClientEndpoint /\

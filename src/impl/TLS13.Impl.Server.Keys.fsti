@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module M = TLS13.Messages
@@ -86,6 +87,10 @@ fn process_derive_shared_secret_from_private_array
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
+                    (* See TLS13.Impl.Server.Types.server_local_event_input_ready:
+                       the ECDH is group-indexed in the specification but this
+                       implementation still runs it at X25519 only. *)
+                    CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
                     'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\
@@ -111,11 +116,14 @@ fn process_derive_shared_secret_from_private_array
                 (resp.ST.status == ST.StepOk ==>
                   (exists shared.
                     st1 == CM.derived_shared_secret_state 'st0 shared /\
-                    (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
-                     | Some ch ->
-                       (match CS.client_hello_key_share ch with
+                    (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                     | Some selection ->
+                       (match CS.client_hello_kex
+                                selection.CS.server_selected_client_hello
+                                (CS.server_selected_kex_group selection) with
                         | Some ch_ks ->
-                          TLS13.Crypto.Spec.x25519_shared
+                          TLS13.Crypto.Spec.kex_shared
+                            (CS.server_selected_kex_group selection)
                             (Ghost.reveal 'server_private_key_bytes)
                             ch_ks == Some shared
                         | None -> False)

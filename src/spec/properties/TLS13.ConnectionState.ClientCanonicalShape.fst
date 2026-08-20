@@ -1182,6 +1182,7 @@ let step_from_cvr (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
         with region validate verifysig and () )
     | _ -> ()
 
+#push-options "--z3rlimit 80"
 let step_from_cvv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma
       (requires hpre st0 s' conn_ev /\
@@ -1257,6 +1258,8 @@ let step_from_cvv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
            | _ -> assert False )
        | _ -> ())
     | _ -> ()
+
+#pop-options
 
 let step_from_sfv (st0 s':CS.connection_state) (conn_ev:CS.conn_event)
   : Lemma

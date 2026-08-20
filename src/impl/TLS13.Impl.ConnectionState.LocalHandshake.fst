@@ -531,6 +531,13 @@ fn select_server_parameters
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            pure (can_select_server_parameters st0 selection /\
+                 // The runtime stores no group tag, so the caller has to name the
+                 // selection's group.  Since G2 stage S6.8d the group is the one
+                 // the stored ClientHello's accepted key_share offer names, and
+                 // CR.server_selection_group_pinned records that policy in the
+                 // representation; the runtime reads it back off the ClientHello
+                 // metadata box.
+                 CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  server_selection_private_absent selection)
@@ -610,12 +617,16 @@ fn select_server_parameters
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
     (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages
@@ -671,6 +682,13 @@ fn select_server_parameters_with_private_from_array
            ArrPts.pts_to server_private_key 'server_private_key_bytes **
            pure (B.length 'server_private_key_bytes == 32 /\
                  can_select_server_parameters st0 selection /\
+                 // The runtime stores no group tag, so the caller has to name the
+                 // selection's group.  Since G2 stage S6.8d the group is the one
+                 // the stored ClientHello's accepted key_share offer names, and
+                 // CR.server_selection_group_pinned records that policy in the
+                 // representation; the runtime reads it back off the ClientHello
+                 // metadata box.
+                 CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                  server_selection_absent
                    st0.CS.cs_model.CS.model_handshake /\
                  Some? selection.CS.server_key_share_private /\
@@ -761,12 +779,16 @@ fn select_server_parameters_with_private_from_array
     c.handshake.messages.client_hello_server_name_len
     c.handshake.messages.client_hello_cipher_suites_len
     c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
     (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages
@@ -2638,12 +2660,15 @@ fn try_send_client_hello
       c.handshake.messages.client_hello
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     with old_client_hello_present old_l_random old_l_session_id old_l_server_name
-         old_l_key_share old_l_cipher_suites old_l_signature_schemes. _;
+         old_l_key_share old_l_p256_key_share old_l_cipher_suites
+         old_l_signature_schemes. _;
     unfold (client_hello_metadata_exactly
       c.handshake.messages.client_hello_has_server_name
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     with old_ch_has_server_name old_ch_server_name_len
          old_ch_cipher_suites_len old_ch_signature_schemes_len. _;
@@ -2712,6 +2737,13 @@ fn try_send_client_hello
          cipher_suites cipher_suites_len
          signature_schemes signature_schemes_len
          handshake_bytes network_out_bytes handshake_len. _;
+    // The client offers two groups, so its own mirror carries both shares; the
+    // serializer fills the secp256r1 slot from start_client_p256_public exactly
+    // as it fills the X25519 one.
+    assert (pure (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+      | Some k -> B.length k == 65 /\
+                  Seq.equal (Ghost.reveal pks_g) k
+      | None -> False));
 
     assert (pure (B.length network_out_bytes == SZ.v network_out_len));
     assert (pure (SZ.v written <= B.length network_out_bytes));
@@ -2859,6 +2891,13 @@ fn try_send_client_hello
     c.handshake.messages.client_hello_server_name_len := metadata_server_name_len;
     c.handshake.messages.client_hello_cipher_suites_len := metadata_cipher_suites_len;
     c.handshake.messages.client_hello_signature_schemes_len := metadata_signature_schemes_len;
+    // The client always offers the 32-byte middlebox-compatibility session id
+    // (client_hello_of_start reuses the client random), so the mirror's width
+    // slot is the constant 32 (gap G4).
+    assert (pure (Seq.length
+      (Sem.clientHello_session_id (Ghost.reveal ch)) == 32));
+    assert (pure (client_hello_session_id_len_for (Ghost.reveal ch) == 32sz));
+    c.handshake.messages.client_hello_session_id_len := 32sz;
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello
@@ -2868,6 +2907,8 @@ fn try_send_client_hello
       c.handshake.messages.client_hello_server_name_len
       c.handshake.messages.client_hello_cipher_suites_len
       c.handshake.messages.client_hello_signature_schemes_len
+      c.handshake.messages.client_hello_session_id_len
+      c.handshake.messages.client_hello_kex_group
       (Some (Ghost.reveal ch)));
     fold (handshake_messages_exactly
       c.handshake.messages
@@ -5122,6 +5163,46 @@ fn try_derive_shared_secret
   }
 }
 
+(* The peer's contribution to the ECDH, when the mirror holds *both* of the
+   ClientHello's possible offers, each in its natural width.
+
+   The case analysis lives here, as a pure lemma, rather than inside the Pulse
+   function below: a [match] on the runtime group there would have to duplicate
+   the entire fold/unfold discipline -- eight slot existentials, six metadata
+   boxes and five nested slprops -- in both arms.  The Pulse function reads the
+   group, calls one group-dispatching [fn], and cites this lemma once.
+
+   Both hypotheses are *conditional*, so the lemma survives the widening of the
+   acceptance gate: today [client_hello_slot_exactly] happens to guarantee an
+   X25519 share outright, but nothing here depends on that. *)
+let lemma_client_hello_kex_split_share
+  (m:GCH.clientHello)
+  (x25519_bytes p256_bytes:B.bytes)
+  : Lemma
+    (requires
+      Some? (CS.client_hello_kex m (client_hello_kex_group_for m)) /\
+      (match Sem.clientHello_key_share_x25519 m with
+       | Some k -> Seq.equal x25519_bytes k
+       | None -> True) /\
+      (match Sem.clientHello_key_share_secp256r1 m with
+       | Some k -> B.length k == 65 ==> Seq.equal p256_bytes k
+       | None -> True))
+    (ensures
+      CS.client_hello_kex m (client_hello_kex_group_for m) ==
+        Some (KEX.kex_split_share
+                (client_hello_kex_group_for m)
+                x25519_bytes
+                p256_bytes))
+  = match client_hello_kex_group_for m with
+    | CryptoSpec.KexX25519 ->
+      assert (Some? (Sem.clientHello_key_share_x25519 m));
+      Seq.lemma_eq_elim x25519_bytes (Some?.v (Sem.clientHello_key_share_x25519 m))
+    | CryptoSpec.KexP256 ->
+      assert (Some? (CS.client_hello_p256_key_share m));
+      assert (Some? (Sem.clientHello_key_share_secp256r1 m));
+      assert (B.length (Some?.v (Sem.clientHello_key_share_secp256r1 m)) == 65);
+      Seq.lemma_eq_elim p256_bytes (Some?.v (Sem.clientHello_key_share_secp256r1 m))
+
 fn try_derive_server_shared_secret_from_private_array
   (c:connection_state)
   (server_private_key:array U8.t)
@@ -5139,6 +5220,18 @@ fn try_derive_server_shared_secret_from_private_array
                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     CS.server_selection_key_share_consistent selection /\
+                    (* The ECDH is group-parametric in both the code and the
+                       specification (G2 stage S6.8d): the body reads the
+                       negotiated group off the client_hello_kex_group metadata
+                       box and dispatches through KEX.kex_shared_split_runtime,
+                       and this precondition -- and hence the postcondition
+                       below -- names that same group rather than X25519.  The
+                       group is pinned to the stored ClientHello's accepted
+                       key_share offer, which is what the whole thread up
+                       through Server.Keys, Server, the two drivers and the
+                       canonical-protocol lemmas that discharge
+                       server_local_event_input_ready now carries. *)
+                    CS.server_selected_kex_group selection == stored_client_hello_kex_group st0 /\
                     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
                       Some selection.CS.server_selected_client_hello /\
                     Some? selection.CS.server_key_share_private /\
@@ -5150,11 +5243,14 @@ fn try_derive_server_shared_secret_from_private_array
              exists* shared.
                connection_exactly c (derived_shared_secret_state st0 shared) **
                ArrPts.pts_to server_private_key 'server_private_key_bytes **
-               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
-                      | Some ch ->
-                        (match CS.client_hello_key_share ch with
+               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                      | Some selection ->
+                        (match CS.client_hello_kex
+                                 selection.CS.server_selected_client_hello
+                                 (CS.server_selected_kex_group selection) with
                          | Some k ->
-                           TLS13.Crypto.Spec.x25519_shared
+                           TLS13.Crypto.Spec.kex_shared
+                             (CS.server_selected_kex_group selection)
                              (Ghost.reveal 'server_private_key_bytes)
                              k == Some shared
                          | None -> False)
@@ -5187,18 +5283,45 @@ fn try_derive_server_shared_secret_from_private_array
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_cipher_suites ch_signature_schemes. _;
+  with ch_present ch_random ch_session_id ch_server_name ch_key_share ch_p256_key_share ch_cipher_suites ch_signature_schemes. _;
+  unfold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
 
   let ch = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
     Some (Ghost.reveal ch)));
   assert (pure ch_present);
-  assert (pure (Some? (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)) /\
-    Seq.equal ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)))));
-  Seq.lemma_eq_elim ch_key_share (Some?.v (Sem.clientHello_key_share_x25519 (Ghost.reveal ch)));
-  assert (pure (CS.client_hello_key_share (Ghost.reveal ch) == Some ch_key_share));
+  (* G2: the mirror that carries the peer's offer depends on the accepted
+     group.  Only the matching one is pinned by [client_hello_slot_exactly];
+     the other holds whatever the parser last left there, which is exactly the
+     shape [lemma_client_hello_kex_split_share] is stated at. *)
+  assert (pure (match Sem.clientHello_key_share_x25519 (Ghost.reveal ch) with
+                | Some k -> Seq.equal ch_key_share k
+                | None -> True));
+  assert (pure (match Sem.clientHello_key_share_secp256r1 (Ghost.reveal ch) with
+                | Some k -> B.length k == 65 ==> Seq.equal ch_p256_key_share k
+                | None -> True));
   assert (pure (B.length ch_key_share == 32));
+  assert (pure (B.length ch_p256_key_share == 65));
   assert (pure (B.length (Ghost.reveal 'server_private_key_bytes) == 32));
+
+  (* The negotiated group, read off the metadata box rather than assumed. *)
+  let kex_group = !c.handshake.messages.client_hello_kex_group;
+  assert (pure (kex_group == client_hello_kex_group_for (Ghost.reveal ch)));
+  (* ...and the caller's pinned selection names that same group (G2 stage
+     S6.8d replaced the X25519 pin by the policy one), so the dispatch below
+     runs at the group the peer's accepted offer named. *)
+  assert (pure (kex_group == CS.server_selected_kex_group
+    (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)));
+  assert (pure (Some? (CS.client_hello_kex
+    (Ghost.reveal ch)
+    (client_hello_kex_group_for (Ghost.reveal ch)))));
 
   assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
   lemma_option_some_v st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection;
@@ -5216,53 +5339,77 @@ fn try_derive_server_shared_secret_from_private_array
   assert (pure ((Ghost.reveal selection).CS.server_key_share_private ==
     Some (Ghost.reveal 'server_private_key_bytes)));
 
+  let peer_share =
+    Ghost.hide (KEX.kex_split_share kex_group ch_key_share ch_p256_key_share);
+  lemma_client_hello_kex_split_share (Ghost.reveal ch) ch_key_share ch_p256_key_share;
+  assert (pure (CS.client_hello_kex (Ghost.reveal ch) kex_group ==
+    Some (Ghost.reveal peer_share)));
+
   V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
   let mut shared_out = [| 0uy; 32sz |];
   let crypto_ok =
-    Crypto.x25519_shared_runtime
+    KEX.kex_shared_split_runtime
+      kex_group
       server_private_key
       (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_key_share)
+      (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_p256_key_share)
       shared_out;
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_p256_key_share;
 
   if crypto_ok {
     with shared. assert (ArrPts.pts_to shared_out shared);
     ArrPts.pts_to_len shared_out;
     assert (pure (B.length shared == 32));
-    assert (pure (Crypto.x25519_shared_call
+    assert (pure (KEX.kex_shared_call
+      kex_group
       (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share
+      (Ghost.reveal peer_share)
       shared
       crypto_ok));
-    Crypto.lemma_x25519_shared_call_success
+    KEX.lemma_kex_shared_call_success
+      kex_group
       (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share
+      (Ghost.reveal peer_share)
       shared
       crypto_ok;
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
+    assert (pure (CryptoSpec.kex_shared
+      kex_group
       (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share == Some shared));
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
-      (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share == Some shared));
+      (Ghost.reveal peer_share) == Some shared));
     let shared_secret =
-      Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared
+      Ghost.hide (Some?.v (CryptoSpec.kex_shared
+        kex_group
         (Ghost.reveal 'server_private_key_bytes)
-        ch_key_share));
+        (Ghost.reveal peer_share)));
     assert (pure (Ghost.reveal shared_secret == shared));
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
-      (Ghost.reveal 'server_private_key_bytes)
-      ch_key_share == Some (Ghost.reveal shared_secret)));
-    assert (pure (CS.client_hello_key_share (Ghost.reveal selection).CS.server_selected_client_hello == Some ch_key_share));
-    assert (pure (TLS13.Crypto.Spec.x25519_shared
+    assert (pure (CS.client_hello_kex
+      (Ghost.reveal selection).CS.server_selected_client_hello
+      (CS.server_selected_kex_group (Ghost.reveal selection)) ==
+      Some (Ghost.reveal peer_share)));
+    assert (pure (CryptoSpec.kex_shared
+      (CS.server_selected_kex_group (Ghost.reveal selection))
       (Some?.v (Ghost.reveal selection).CS.server_key_share_private)
-      ch_key_share ==
+      (Ghost.reveal peer_share) ==
       Some (Ghost.reveal shared_secret)));
     assert (pure (CS.legal_event
       st0.CS.cs_model
       (CS.ConnLocalEvent
         (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
+    (* No specialising back: the postcondition is stated at
+       CS.server_selected_kex_group, which is exactly the form proved just
+       above, and (G2 stage S6.8d) the precondition now pins that group to the
+       stored ClientHello's accepted offer rather than to X25519. *)
 
+    fold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello
@@ -5285,6 +5432,14 @@ fn try_derive_server_shared_secret_from_private_array
     true
   } else {
     with shared_old. assert (ArrPts.pts_to shared_out shared_old);
+    fold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    c.handshake.messages.client_hello_session_id_len
+    c.handshake.messages.client_hello_kex_group
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
     fold (client_hello_slot_exactly
       c.handshake.messages.client_hello_present
       c.handshake.messages.client_hello

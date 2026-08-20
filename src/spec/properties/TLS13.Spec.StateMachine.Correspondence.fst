@@ -217,28 +217,38 @@ let paired_x25519_key_shares
     server_hs.hs_client_hello
   with
   | Some start, Some (sh:GSH.serverHello), Some selection, Some (ch:GCH.clientHello) ->
-    (match
-      start.start_client_key_share_private,
-      selection.server_key_share_private,
-      client_hs.hs_keys.ks_shared_secret,
-      server_hs.hs_keys.ks_shared_secret
-     with
-     | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
-       (match client_hello_key_share ch, server_hello_key_share sh with
-        | Some ch_ks, Some sh_ks ->
-          ch_ks == start.start_client_key_share_public /\
-          sh_ks == selection.server_key_share_public /\
-          C.x25519_public_from_private client_sk == start.start_client_key_share_public /\
-          C.x25519_public_from_private server_sk == selection.server_key_share_public /\
-          C.x25519_shared client_sk sh_ks == Some client_shared /\
-          C.x25519_shared server_sk ch_ks == Some server_shared /\
-          // The two endpoints negotiated the same AEAD algorithm.  Both read it
-          // off their own stored ServerHello; the server's is the message it
-          // sent and the client's is the message it received, so this holds for
-          // any pair of genuinely peered endpoints.
-          negotiated_aead_alg client_hs == negotiated_aead_alg server_hs
-        | _, _ -> False)
-     | _, _, _, _ -> False)
+    (* Group-indexed, exactly like the two projections it is assembled from: the
+       group is read back off the client's stored ServerHello and is then
+       required to be the one the server's selection names.  Reading it from the
+       message rather than from either configuration is what makes the statement
+       provable -- at the spec level both endpoints' supported-group lists are
+       arbitrary, so nothing here could otherwise fix the group. *)
+    (match server_hello_kex sh with
+     | Some (| g, sh_ks |) ->
+      (match
+        start_kex_private start g,
+        server_kex_private selection g,
+        client_hs.hs_keys.ks_shared_secret,
+        server_hs.hs_keys.ks_shared_secret
+       with
+       | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
+         (match client_hello_kex ch g with
+          | Some ch_ks ->
+            g == server_selected_kex_group selection /\
+            ch_ks == start_kex_public start g /\
+            sh_ks == server_kex_public selection g /\
+            C.kex_public_from_private g client_sk == start_kex_public start g /\
+            C.kex_public_from_private g server_sk == server_kex_public selection g /\
+            C.kex_shared g client_sk sh_ks == Some client_shared /\
+            C.kex_shared g server_sk ch_ks == Some server_shared /\
+            // The two endpoints negotiated the same AEAD algorithm.  Both read it
+            // off their own stored ServerHello; the server's is the message it
+            // sent and the client's is the message it received, so this holds for
+            // any pair of genuinely peered endpoints.
+            negotiated_aead_alg client_hs == negotiated_aead_alg server_hs
+          | None -> False)
+       | _, _, _, _ -> False)
+     | None -> False)
   | _, _, _, _ -> False
 let client_x25519_key_share_projection
   (client:connection_state)
@@ -318,14 +328,23 @@ let server_x25519_key_share_projection
     hs.hs_keys.ks_shared_secret
   with
   | Some selection, Some ch, Some sh, Some shared ->
-    (match selection.server_key_share_private with
-     | Some server_sk ->
-      (match server_hello_key_share sh, client_hello_key_share ch with
-       | Some sh_ks, Some ch_ks ->
-        sh_ks == selection.server_key_share_public /\
-        C.x25519_public_from_private server_sk ==
-          selection.server_key_share_public /\
-        C.x25519_shared server_sk ch_ks == Some shared
+    (* The group is read back off the ServerHello, exactly as the client's
+       [client_x25519_key_share_projection] reads it, and is then required to be
+       the one the selection names.  Recovering it from the message rather than
+       from the configuration is what makes this statement provable at all: at
+       the spec level [server_supported_groups] is an arbitrary list, so nothing
+       here could otherwise establish which group was chosen. *)
+    (match server_hello_kex sh with
+     | Some (| g, sh_ks |) ->
+      (match server_kex_private selection g, client_hello_kex ch g with
+       | Some server_sk, Some ch_ks ->
+        g == server_selected_kex_group selection /\
+        Seq.equal sh_ks (server_kex_public selection g) /\
+        C.kex_public_from_private g server_sk == server_kex_public selection g /\
+        (* The selection agrees with itself on every group it carries a keypair
+           for. *)
+        server_selection_key_share_consistent selection /\
+        C.kex_shared g server_sk ch_ks == Some shared
        | _, _ -> False)
      | None ->
       False)
@@ -341,14 +360,17 @@ let server_x25519_pre_server_hello_projection
     hs.hs_keys.ks_shared_secret
   with
   | Some selection, Some ch, Some shared ->
-    (match selection.server_key_share_private with
+    (* No ServerHello exists yet, so the group comes from the selection itself --
+       which names it -- rather than from a message. *)
+    (let g = server_selected_kex_group selection in
+     match server_kex_private selection g with
      | Some server_sk ->
-       (match client_hello_key_share ch with
+       (match client_hello_kex ch g with
         | Some ch_ks ->
           selection.server_selected_client_hello == ch /\
-          C.x25519_public_from_private server_sk ==
-            selection.server_key_share_public /\
-          C.x25519_shared server_sk ch_ks == Some shared
+          C.kex_public_from_private g server_sk == server_kex_public selection g /\
+          server_selection_key_share_consistent selection /\
+          C.kex_shared g server_sk ch_ks == Some shared
         | None -> False)
      | None ->
        False)
@@ -383,6 +405,9 @@ let client_hello_corresponds
   Sem.clientHello_random left == Sem.clientHello_random right /\
   Sem.clientHello_server_name left == Sem.clientHello_server_name right /\
   Sem.clientHello_key_share_x25519 left == Sem.clientHello_key_share_x25519 right /\
+  // The secp256r1 offer travels with the X25519 one: [paired_x25519_key_shares]
+  // is group-indexed and may instantiate at either group.
+  Sem.clientHello_key_share_secp256r1 left == Sem.clientHello_key_share_secp256r1 right /\
   Sem.clientHello_cipher_suites left == Sem.clientHello_cipher_suites right /\
   Sem.clientHello_sig_algs left == Sem.clientHello_sig_algs right
 let server_hello_corresponds
@@ -391,6 +416,12 @@ let server_hello_corresponds
   : prop =
   Sem.serverHello_random left == Sem.serverHello_random right /\
   Sem.serverHello_key_share_x25519 left == Sem.serverHello_key_share_x25519 right /\
+  // The negotiated group travels with the share: [paired_x25519_key_shares] is
+  // group-indexed and reads the group off the client's stored ServerHello, so
+  // peering has to pin the whole key-share extension, not only its X25519
+  // instance.  Both sides hold the same parsed message, so this is as free as
+  // the line above.
+  Sem.serverHello_kex_share left == Sem.serverHello_kex_share right /\
   Sem.serverHello_cipher_suite left == Sem.serverHello_cipher_suite right
 let encrypted_extensions_corresponds
   (left:GEE.encryptedExtensions)

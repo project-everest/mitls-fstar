@@ -77,6 +77,11 @@ fn process_select_server_parameters
                   B.length 'old_app_out == SZ.v app_out_len /\
                   ST.server_end_to_end_invariant 'st0 /\
                   CM.can_select_server_parameters 'st0 selection /\
+                  // The runtime stores no group tag; since G2 stage S6.8d
+                  // CR.server_selection_group_pinned records that the selected
+                  // group is the one the stored ClientHello's accepted offer
+                  // names, and the runtime reads it off the metadata box.
+                  CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
                   CR.server_selection_absent
                     'st0.CS.cs_model.CS.model_handshake /\
                   CR.server_selection_private_absent selection)
@@ -117,6 +122,11 @@ fn process_select_server_parameters_with_private_from_array
                   B.length 'old_app_out == SZ.v app_out_len /\
                   ST.server_end_to_end_invariant 'st0 /\
                   CM.can_select_server_parameters 'st0 selection /\
+                  // The runtime stores no group tag; since G2 stage S6.8d
+                  // CR.server_selection_group_pinned records that the selected
+                  // group is the one the stored ClientHello's accepted offer
+                  // names, and the runtime reads it off the metadata box.
+                  CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
                   CR.server_selection_absent
                     'st0.CS.cs_model.CS.model_handshake /\
                   Some? selection.CS.server_key_share_private /\
@@ -171,13 +181,16 @@ fn process_select_default_server_parameters_from_arrays
                     Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
                   let selection = {
                     CS.server_selected_client_hello = ch;
-                    CS.server_selected_cipher_suite =
-                      T.TLS_CHACHA20_POLY1305_SHA256;
-                    CS.server_selected_group = T.X25519;
-                    CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                    CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
+                    CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+                    CS.server_selected_signature_scheme =
+                      CryptoSpec.credential_signature_scheme
+                        (cfg.CS.server_credential_identity);
                     CS.server_random = Ghost.reveal 'server_random_bytes;
                     CS.server_key_share_private = None;
                     CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+                    CS.server_p256_private = None;
+                    CS.server_p256_public = CS.server_p256_absent;
                     CS.server_selected_credential =
                       cfg.CS.server_credential_identity;
                   } in
@@ -198,13 +211,16 @@ fn process_select_default_server_parameters_from_arrays
                   | Some ch, Some cfg ->
                     let selection = {
                       CS.server_selected_client_hello = ch;
-                      CS.server_selected_cipher_suite =
-                        T.TLS_CHACHA20_POLY1305_SHA256;
-                      CS.server_selected_group = T.X25519;
-                      CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                      CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
+                      CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+                      CS.server_selected_signature_scheme =
+                        CryptoSpec.credential_signature_scheme
+                          (cfg.CS.server_credential_identity);
                       CS.server_random = Ghost.reveal 'server_random_bytes;
                       CS.server_key_share_private = None;
                       CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+                      CS.server_p256_private = None;
+                      CS.server_p256_public = CS.server_p256_absent;
                       CS.server_selected_credential =
                         cfg.CS.server_credential_identity;
                     } in
@@ -250,14 +266,18 @@ fn process_select_default_server_parameters_with_private_from_arrays
                    Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
                   let selection = {
                    CS.server_selected_client_hello = ch;
-                   CS.server_selected_cipher_suite =
-                     T.TLS_CHACHA20_POLY1305_SHA256;
-                   CS.server_selected_group = T.X25519;
-                   CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                   CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
+                   CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+                   CS.server_selected_signature_scheme =
+                     CryptoSpec.credential_signature_scheme
+                       (cfg.CS.server_credential_identity);
                    CS.server_random = Ghost.reveal 'server_random_bytes;
                    CS.server_key_share_private =
                      Some (Ghost.reveal 'server_private_key_bytes);
                    CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+                   CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                   CS.server_p256_public =
+                     CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                    CS.server_selected_credential =
                      cfg.CS.server_credential_identity;
                   } in
@@ -280,14 +300,18 @@ fn process_select_default_server_parameters_with_private_from_arrays
                   | Some ch, Some cfg ->
                    let selection = {
                      CS.server_selected_client_hello = ch;
-                     CS.server_selected_cipher_suite =
-                       T.TLS_CHACHA20_POLY1305_SHA256;
-                     CS.server_selected_group = T.X25519;
-                     CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                     CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
+                     CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+                     CS.server_selected_signature_scheme =
+                       CryptoSpec.credential_signature_scheme
+                         (cfg.CS.server_credential_identity);
                      CS.server_random = Ghost.reveal 'server_random_bytes;
                      CS.server_key_share_private =
                        Some (Ghost.reveal 'server_private_key_bytes);
                      CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+                     CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                     CS.server_p256_public =
+                       CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                      CS.server_selected_credential =
                        cfg.CS.server_credential_identity;
                    } in
@@ -330,16 +354,20 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                    Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
                   let selection = {
                    CS.server_selected_client_hello = ch;
-                   CS.server_selected_cipher_suite =
-                     T.TLS_CHACHA20_POLY1305_SHA256;
-                   CS.server_selected_group = T.X25519;
-                   CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                   CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
+                   CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+                   CS.server_selected_signature_scheme =
+                     CryptoSpec.credential_signature_scheme
+                       (cfg.CS.server_credential_identity);
                    CS.server_random = Ghost.reveal 'server_random_bytes;
                    CS.server_key_share_private =
                      Some (Ghost.reveal 'server_private_key_bytes);
                    CS.server_key_share_public =
                      CryptoSpec.x25519_public_from_private
                        (Ghost.reveal 'server_private_key_bytes);
+                   CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                   CS.server_p256_public =
+                     CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                    CS.server_selected_credential =
                      cfg.CS.server_credential_identity;
                   } in
@@ -360,16 +388,20 @@ fn process_select_default_server_parameters_with_derived_public_from_private_arr
                   | Some ch, Some cfg ->
                    let selection = {
                      CS.server_selected_client_hello = ch;
-                     CS.server_selected_cipher_suite =
-                       T.TLS_CHACHA20_POLY1305_SHA256;
-                     CS.server_selected_group = T.X25519;
-                     CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+                     CS.server_selected_cipher_suite = CM.server_selected_suite 'st0;
+                     CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+                     CS.server_selected_signature_scheme =
+                       CryptoSpec.credential_signature_scheme
+                         (cfg.CS.server_credential_identity);
                      CS.server_random = Ghost.reveal 'server_random_bytes;
                      CS.server_key_share_private =
                        Some (Ghost.reveal 'server_private_key_bytes);
                      CS.server_key_share_public =
                        CryptoSpec.x25519_public_from_private
                          (Ghost.reveal 'server_private_key_bytes);
+                     CS.server_p256_private = Some (Ghost.reveal 'server_private_key_bytes);
+                     CS.server_p256_public =
+                       CryptoSpec.p256_public_from_private (Ghost.reveal 'server_private_key_bytes);
                      CS.server_selected_credential =
                        cfg.CS.server_credential_identity;
                    } in

@@ -193,6 +193,19 @@ GENERATED_MAKE_VARS = \
 GENERATED_SRCS  = $(wildcard $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti)
 GENERATED_STAMP = $(GENERATED_DIR)/.checked.stamp
 
+# A .checked file is specific to the F* build that produced it, and F* does not
+# check that: a cache written by a different build can segfault the typechecker
+# rather than being rejected.  Discard both cache trees when the toolchain
+# changes.  This runs at parse time -- note the `:=` -- because it must happen
+# before `.depend` is read; doing it from a recipe would delete files that make
+# has already built rules around.  See scripts/invalidate-stale-cache.sh.
+TOOLCHAIN_STAMP = .fstar-version
+STALE_CACHE_CHECK := $(shell $(CURDIR)/scripts/invalidate-stale-cache.sh \
+  "$(FSTAR_EXE)" "$(TOOLCHAIN_STAMP)" \
+  "$(CACHE_DIR)" "_cache_quick" \
+  "$(GENERATED_DIR)/cache" "$(GENERATED_DIR)/.depend" \
+  "$(GENERATED_STAMP)" $(wildcard $(GENERATED_DIR)/TLS13.Wire.Generated.*.checked))
+
 .PHONY: regen-generated
 regen-generated: | check-toolchain
 	rm -f $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti
@@ -1128,11 +1141,13 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile 
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
   test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
+  test-atlas-loopback test-server-matrix \
   test-key-schedule-bindings check-c-stubs
 
 test: verify verify-samples check-c-stubs test-hacl-stubs test-key-schedule-bindings \
   test-openssl-echo test-client-engine-openssl-echo \
-  test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient
+  test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \
+  test-atlas-loopback test-server-matrix
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
 check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
@@ -1188,7 +1203,8 @@ $(TEST_CERT_STAMP): scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
 	touch $@
 
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: $(TEST_CERT_STAMP)
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der \
+test/certs/ec-chain.pem test/certs/ec-leaf.key test/certs/ec-leaf.der: $(TEST_CERT_STAMP)
 	@test -f $@
 
 test/test_extracted_client_openssl_echo: \
@@ -1699,6 +1715,74 @@ test-openssl-sclient: test/test_extracted_server_openssl_client \
   test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
 	./test/test_extracted_server_openssl_client
 
+# ── ATLAS client <-> ATLAS server loopback ─────────────────────────
+# The parity gate.  Every other interop test pairs one verified endpoint with
+# OpenSSL under a hand-pinned OpenSSL configuration, so none of them notices
+# when the verified client's offer moves past what the verified server can
+# select.  This one does: it is the only test in which the ClientHello under
+# test is the one ATLAS actually sends.
+test/test_atlas_loopback: \
+  test/unit/test_atlas_loopback.c $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_client_driver.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_atlas_loopback.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test-atlas-loopback: test/test_atlas_loopback \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+	./test/test_atlas_loopback
+
+# ── Server capability matrix ───────────────────────────────────────
+# Drives OpenSSL clients across a matrix of offers (cipher suites, key-exchange
+# groups, signature schemes, middlebox-compatibility mode, and TCP/record
+# framing) at the verified server, and asserts the OBSERVED outcome of every
+# cell against a recorded expectation.  Cells the server cannot yet serve are
+# recorded as expected failures, so closing a gap fails the test until the
+# ledger is updated: the matrix is the parity ledger, not just a smoke test.
+test/test_server_interop_matrix: \
+  test/unit/test_server_interop_matrix.c $(TLS13_BUNDLE_OBJS_STAMP) \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) \
+	  $(TLS13_BUNDLE_INCLUDES) \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  $(HACL_TEST_OBJECTS) \
+	  c_stubs/atlas_trace.c \
+	  c_stubs/tls13_crypto_external.c \
+	  runtime/common_memmove.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_server_interop_matrix.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test-server-matrix: test/test_server_interop_matrix \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der \
+  test/certs/ec-leaf.key test/certs/ec-leaf.der
+	./test/test_server_interop_matrix
+
 # ── Dependency Checks ──────────────────────────────────────────────
 check-toolchain:
 	@if [ ! -x "$(FSTAR_EXE)" ] && ! command -v "$(FSTAR_EXE)" >/dev/null 2>&1; then \
@@ -1749,6 +1833,8 @@ clean:
 	  test/test_extracted_client_engine_openssl_echo \
 	  test/openssl_http_server test/test_chromium_client_socket_demo \
 	  test/test_extracted_server_openssl_client \
+	  test/test_atlas_loopback \
+	  test/test_server_interop_matrix \
 	  test/test_key_schedule_bindings \
 	  $(BENCHMARK_BINARY) $(BENCHMARK_PROFILE_BINARY) \
 	  test/openssl_echo_server.port \
@@ -1806,6 +1892,7 @@ quick:
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \
+  test-atlas-loopback test-server-matrix \
   tls13-client-provider chromium-install-provider chromium-configure \
   chromium-net chromium-browser test-chromium-browser \
   test-chromium-browser-public chromium-demo-bundle \

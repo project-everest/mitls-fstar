@@ -107,6 +107,7 @@ let next_local_action_sound
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
+         CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
          st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
            Some selection.CS.server_selected_client_hello
        | None -> False)
@@ -120,6 +121,7 @@ let next_local_action_sound
       (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
        | Some selection ->
          CS.server_selection_key_share_consistent selection /\
+         CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
          Some? selection.CS.server_key_share_private
        | None -> False)
     | LocalInstallServerHandshakeTrafficKeys ->
@@ -392,13 +394,16 @@ let server_local_event_input_ready
      let server_private_key = CL.raw_slice payload 32 64 in
      let selection = {
        CS.server_selected_client_hello = ch;
-       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-       CS.server_selected_group = T.X25519;
-       CS.server_selected_signature_scheme = T.Rsa_pss_rsae_sha256;
+       CS.server_selected_cipher_suite = CM.server_selected_suite st;
+       CS.server_selected_group = CM.named_group_of_kex_group (CM.client_hello_kex_group_for (ch));
+       CS.server_selected_signature_scheme = CM.server_credential_scheme cfg;
        CS.server_random = server_random;
        CS.server_key_share_private = Some server_private_key;
        CS.server_key_share_public =
          CryptoSpec.x25519_public_from_private server_private_key;
+       CS.server_p256_private = Some server_private_key;
+       CS.server_p256_public =
+         CryptoSpec.p256_public_from_private server_private_key;
        CS.server_selected_credential = cfg.CS.server_credential_identity;
      } in
      CM.can_select_server_parameters st selection)
@@ -415,6 +420,31 @@ let server_local_event_input_ready
           (Some?.v selection.CS.server_key_share_private)
           server_private_key /\
         CS.server_selection_key_share_consistent selection /\
+        (* The ServerHello writer builds its KeyShareEntry at the group the
+           stored ClientHello's accepted offer names, and
+           CS.server_hello_matches_selection is group-indexed, so the selection
+           has to name that same group (G2 stage S6.8d). *)
+        CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
+        (* Cipher-suite agility (gap G1): the stored selection's suite is the one
+           the deterministic negotiation policy computes from the stored
+           ClientHello.  The select step installs exactly that value, and neither
+           the ClientHello nor the selection changes afterwards, so this is an
+           invariant of every reachable send-ServerHello state.  Carrying it here
+           is what lets the ServerHello writer recover the negotiated suite at
+           runtime (by re-scanning the ClientHello mirror) instead of threading it
+           through the whole driver. *)
+        Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+        (* Verbatim legacy_session_id echo (gap G4, RFC 8446 4.1.3): the send
+           path echoes the *stored* ClientHello's id (recovered at runtime from
+           the mirror) while the Model-level canonical builder names the
+           selection's copy.  The echo now carries a width, and that width is
+           visible in the ServerHello's serialized size, so the two must be the
+           same message.  The select step records exactly the stored
+           ClientHello, and neither field changes afterwards, so this is an
+           invariant of every reachable send-ServerHello state. *)
+        st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+          Some selection.CS.server_selected_client_hello /\
+        selection.CS.server_selected_cipher_suite == CM.server_selected_suite st /\
         // build-direction send obligation: the canonical ServerHello built from
         // the selection (CM.server_hello_of_selection, the server mirror of the
         // client's client_hello_of_start) can be sent.
@@ -491,6 +521,16 @@ let server_local_event_input_ready
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->
        CS.server_selection_key_share_consistent selection /\
+       (* Both CS.legal_event's LocalDeriveSharedSecret arm and
+          CS.server_hello_matches_selection are group-indexed, dispatching on
+          CS.server_selected_kex_group.  The server's ECDH dispatches through
+          KEX.kex_shared_split_runtime and its ServerHello writer builds at the
+          group read off the ClientHello metadata box, so both arms are
+          reachable (G2 stage S6.8d); what the input gate pins is that the
+          selection names the group the stored ClientHello's accepted offer
+          names, which is what the runtime can recover.  The send path's lengths
+          follow that group: 58/63 + kex_public_len g + |session_id|. *)
+       CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group st /\
        st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
          Some selection.CS.server_selected_client_hello /\
        Some? selection.CS.server_key_share_private /\
@@ -568,11 +608,12 @@ let server_local_event_input_ready
     (match st.CS.cs_model.CS.model_config.CS.config_server,
            st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some cfg, Some selection ->
-       selection.CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256 /\
+       selection.CS.server_selected_signature_scheme ==
+         CM.server_credential_scheme cfg /\
        selection.CS.server_selected_credential == cfg.CS.server_credential_identity /\
        CS.signature_scheme_offered
          st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-         T.Rsa_pss_rsae_sha256
+         (CM.server_credential_scheme cfg)
      | _, _ -> False)
   | _ ->
     False
@@ -618,11 +659,11 @@ let server_local_event_input_ready_with_credentials
     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
      | Some selection ->
        selection.CS.server_selected_signature_scheme ==
-         T.Rsa_pss_rsae_sha256 /\
+         CryptoSpec.credential_signature_scheme credential_identity /\
        selection.CS.server_selected_credential == credential_identity /\
        CS.signature_scheme_offered
          st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-         T.Rsa_pss_rsae_sha256
+         (CryptoSpec.credential_signature_scheme credential_identity)
      | None -> False)
   | _ ->
     server_local_event_input_ready st kind payload
@@ -684,14 +725,14 @@ let server_local_event_input_ready_with_state_credentials
     assert (st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None);
     assert (Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
-      .CS.server_selected_signature_scheme == T.Rsa_pss_rsae_sha256);
+      .CS.server_selected_signature_scheme == CM.server_credential_scheme cfg);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
       .CS.server_selected_credential == cfg.CS.server_credential_identity);
     assert ((Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
       .CS.server_selected_credential == credential_identity);
     assert (CS.signature_scheme_offered
       st.CS.cs_model.CS.model_config.CS.config_signature_schemes
-      T.Rsa_pss_rsae_sha256)
+      (CM.server_credential_scheme cfg))
   | _ ->
     ()
 

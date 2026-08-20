@@ -89,11 +89,16 @@ let local_event_success_correct
   resp.ST.status == ST.StepOk ==>
   exists shared.
    st1 == CM.derived_shared_secret_state st0 shared /\
+   (* G2 stage S6.8d: group-agile.  The ECDH runs at the group the stored
+      ClientHello's accepted key_share offer names, which is the group the
+      selection names too (that pin is carried by
+      ST.server_local_event_input_ready). *)
    (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
     | Some ch ->
-      (match CS.client_hello_key_share ch with
+      (let g = CM.client_hello_kex_group_for ch in
+       match CS.client_hello_kex ch g with
        | Some client_public ->
-         CryptoSpec.x25519_shared payload client_public == Some shared
+         CryptoSpec.kex_shared g payload client_public == Some shared
        | None -> False)
     | None -> False)
 

@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CF = TLS13.Impl.ConnectionState.Fail
@@ -92,12 +93,14 @@ fn process_sign_certificate_verify
                  (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
                   | Some selection ->
                     selection.CS.server_selected_signature_scheme ==
-                      T.Rsa_pss_rsae_sha256 /\
+                      CryptoSpec.credential_signature_scheme
+                        (Ghost.reveal 'credential_identity) /\
                     selection.CS.server_selected_credential ==
                       Ghost.reveal 'credential_identity /\
                     CS.signature_scheme_offered
                       'st0.CS.cs_model.CS.model_config.CS.config_signature_schemes
-                      T.Rsa_pss_rsae_sha256
+                      (CryptoSpec.credential_signature_scheme
+                        (Ghost.reveal 'credential_identity))
                   | None -> False))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.

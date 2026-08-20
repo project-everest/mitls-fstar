@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
+module CryptoSpec = TLS13.Crypto.Spec
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -124,6 +125,37 @@ let client_hello_server_name_len_for (m:GCH.clientHello) : SZ.t =
   | Some sn -> bounded_u16_sizet (B.length sn)
   | None -> 0sz
 
+(* The width of the offered legacy_session_id, which RFC 8446 4.1.3 makes the
+   width of the ServerHello's echo.  0..32; 32 for a middlebox-compatibility
+   peer (RFC 8446 D.4) and 0 for one with compatibility mode off. *)
+noextract
+let client_hello_session_id_len_for (m:GCH.clientHello) : SZ.t =
+  bounded_u16_sizet (Seq.length (Sem.clientHello_session_id m))
+
+(* The server's key-exchange group *policy*, as a total function of the offered
+   ClientHello: prefer X25519 whenever the peer offered a share at it, and fall
+   back to secp256r1 otherwise.  This is the group the ServerHello names, the
+   group the ECDH runs at, and -- through CryptoSpec.kex_public_len -- what
+   decides the serialized ServerHello's length.
+
+   It is a function of the message, exactly like the cipher-suite policy
+   (server_selected_suite) and the session-id width
+   (client_hello_session_id_len_for), so the runtime does not need to remember a
+   negotiation decision: it recomputes it from the stored ClientHello.  The
+   runtime counterpart is the client_hello_kex_group metadata box, which cannot
+   be recomputed from the stored bytes (an all-zero 32-byte slot is a legal
+   X25519 share) and so is written at parse time.
+
+   Since S6.8d the acceptance gate ([WS.ch_key_share_pick]) admits a ClientHello
+   that offers only secp256r1, so the fallback arm is reachable: an accepted
+   message with no X25519 offer necessarily carried a well-formed secp256r1
+   one. *)
+noextract
+let client_hello_kex_group_for (m:GCH.clientHello) : CryptoSpec.kex_group =
+  if Some? (Sem.clientHello_key_share_x25519 m)
+  then CryptoSpec.KexX25519
+  else CryptoSpec.KexP256
+
 (* Whether the ClientHello actually carried a server_name (SNI) extension.  The
    extension is optional in RFC 6066 and absent whenever a client connects to a
    bare IP literal, so this is genuinely a property of the message rather than a
@@ -228,6 +260,112 @@ val lemma_signature_schemes_match_exists_rsa_offer
                 len <= Seq.length wire /\
                 (exists (i:nat). i < len /\ U16.v (Seq.index wire i) == 0x0804))
       (ensures CS.signature_scheme_offered schemes T.Rsa_pss_rsae_sha256)
+
+/// The signature scheme the server's credential can produce (parity gap G5).
+/// A TLS 1.3 credential's algorithm is fixed by its SubjectPublicKeyInfo, so
+/// this is a function of the configured identity rather than an extra field --
+/// the same shape as [server_selected_suite], which reads the negotiated suite
+/// back out of the stored ClientHello instead of threading it through the
+/// driver.
+noextract
+let server_credential_scheme (cfg:CS.server_config) : T.signature_scheme =
+  CryptoSpec.credential_signature_scheme cfg.CS.server_credential_identity
+
+/// State-level form of [server_credential_scheme].  Defaults to
+/// rsa_pss_rsae_sha256 on a client state, which has no server config; every
+/// server-side use is guarded by [CS.server_config_present].
+noextract
+let server_selected_scheme (st:CS.connection_state) : T.signature_scheme =
+  match st.CS.cs_model.CS.model_config.CS.config_server with
+  | Some cfg -> server_credential_scheme cfg
+  | None -> T.Rsa_pss_rsae_sha256
+
+/// [IM.signature_scheme_matches] is a bijection between the wire code and the
+/// scheme, so a scan that finds a code determines the scheme it stands for.
+val lemma_signature_scheme_matches_injective
+  (wire:U16.t)
+  (s1 s2:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_scheme_matches wire s1 /\
+                IM.signature_scheme_matches wire s2)
+      (ensures s1 == s2)
+
+/// Scheme-generic forms of the three [..._rsa_offer] lemmas above: what the
+/// server needs once its CertificateVerify algorithm follows the credential
+/// rather than being pinned to rsa_pss_rsae_sha256 (parity gap G5).
+val lemma_signature_schemes_match_first_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                0 < len /\
+                len <= Seq.length wire /\
+                Seq.index wire 0 == target)
+      (ensures CS.signature_scheme_offered schemes scheme)
+
+val lemma_signature_schemes_match_index_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  (i:nat)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                i < len /\
+                len <= Seq.length wire /\
+                Seq.index wire i == target)
+      (ensures CS.signature_scheme_offered schemes scheme)
+
+val lemma_signature_schemes_match_exists_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  (target:U16.t)
+  (scheme:T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                IM.signature_scheme_matches target scheme /\
+                len <= Seq.length wire /\
+                (exists (i:nat). i < len /\ Seq.index wire i == target))
+      (ensures CS.signature_scheme_offered schemes scheme)
+
+/// Converse of the existential offer lemma: if a linear scan of the first [len]
+/// wire entries finds no occurrence of [target], the suite it names is *not* in
+/// the offered list.  A conclusive negative is what lets the server's runtime
+/// negotiation be proven equal to the policy function [server_selected_suite]
+/// rather than merely a sound under-approximation of it.
+val lemma_cipher_suites_match_absent_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (target:U16.t)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (forall (i:nat). i < len ==> Seq.index wire i <> target))
+      (ensures ~(CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target)))
+
+/// Suite-agile form of the existential offer lemma: for either of the two wire
+/// codes the server can select, a runtime scan hit proves the *named* suite was
+/// offered.  This is what lets the server select AES-128-GCM when the client
+/// does not offer ChaCha20-Poly1305, without duplicating the ServerHello gate.
+val lemma_cipher_suites_match_exists_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (target:U16.t)
+  : Lemma
+      (requires IM.cipher_suites_match wire len suites /\
+                len <= Seq.length wire /\
+                (target == 0x1303us \/ target == 0x1301us) /\
+                (exists (i:nat). i < len /\ Seq.index wire i == target))
+      (ensures CS.cipher_suite_offered suites (IM.cipher_suite_of_u16 target))
 
 val lemma_cipher_suites_match_exists_chacha_offer
   (wire:Seq.seq U16.t)
@@ -388,9 +526,17 @@ let client_hello_of_start (start:CS.handshake_start) : GCH.clientHello
 // valid-selection predicate: the selection random differs from the HRR sentinel
 // and the selected cipher suite is the single supported one, so the clamp in
 // server_hello_of_selection is an identity and the record matches the selection.
+//
+// Group-agnostic since S6.8d: [server_hello_of_selection] builds its
+// KeyShareEntry at [CS.server_selected_kex_group] and at that group's exact
+// width ([sho_named_group] / [sho_key_share]), so no group hypothesis is
+// needed for it to match [CS.server_hello_matches_selection].  What used to be
+// the third conjunct (== KexX25519) is what made every ServerHello length in
+// this file the concrete 90 + |sid|; those lengths are now
+// 58 + kex_public_len (server_selected_kex_group sel) + |sid|.
 let valid_selection (sel:CS.server_handshake_selection) : prop =
   (sel.CS.server_random <: Seq.lseq U8.t 32) <> GSHB.serverHello_body_cst /\
-  sel.CS.server_selected_cipher_suite == T.TLS_CHACHA20_POLY1305_SHA256
+  H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite
 
 // clamp: a 32-byte server random differing from the HRR sentinel (identity under
 // valid_selection).  The all-zero fallback differs from serverHello_body_cst at
@@ -404,35 +550,145 @@ let sho_random (sel:CS.server_handshake_selection)
           assert_norm (Seq.index GSHB.serverHello_body_cst 0 == 0xcfuy);
           Seq.create 32 0uy)
 
-(* The 32-byte legacy_session_id of the ClientHello currently stored in the
-   connection state -- i.e. exactly what the ServerHello must echo back for
-   RFC 8446 D.4 middlebox compatibility.  Ghost-only: the runtime value is
-   read out of the stored ClientHello mirror.  Defined for every state (the
-   all-zero default is never observable, because the ServerHello send path
-   runs only in HsClientHelloReceived). *)
+(* clamp: the negotiated cipher suite, defaulted to ChaCha20-Poly1305 for an
+   unsupported selection (identity under [valid_selection]).  Keeping
+   [server_hello_of_selection] total means the ServerHello builder must produce
+   *some* suite even for a selection the server could never have made. *)
+noextract
+let sho_cipher_suite (sel:CS.server_handshake_selection)
+  : (cs:GCS.cipherSuite { H.is_supported_cipher_suite cs })
+  = if H.is_supported_cipher_suite sel.CS.server_selected_cipher_suite
+    then sel.CS.server_selected_cipher_suite
+    else T.TLS_CHACHA20_POLY1305_SHA256
+
+(** The server's cipher-suite negotiation *policy*, as a total function of the
+    stored ClientHello.
+
+    ATLAS's server prefers ChaCha20-Poly1305 and falls back to AES-128-GCM, so
+    the selected suite is determined by the ClientHello alone: no extra state,
+    no extra parameter to thread, and the ServerHello build path can recompute
+    it from the same stored ClientHello mirror the selection was made from.
+
+    Total by construction: if the client offers neither suite this returns
+    AES-128-GCM, but then [CS.server_selection_acceptable] fails (the selected
+    suite is not in [Sem.clientHello_cipher_suites]), so the handshake is
+    refused before the value is ever used.  Likewise for the [None] case, which
+    is unreachable in [HsClientHelloReceived]. *)
+(* Decidable companion of [CS.cipher_suite_offered] (which is [prop]-valued, so
+   it cannot be scrutinised by a [Tot] function). *)
+noextract
+let rec cipher_suite_offered_b (suites:list T.cipher_suite) (suite:T.cipher_suite)
+  : Tot bool (decreases suites)
+  = match suites with
+    | [] -> false
+    | offered :: rest -> offered = suite || cipher_suite_offered_b rest suite
+
+val lemma_cipher_suite_offered_b (suites:list T.cipher_suite) (suite:T.cipher_suite)
+  : Lemma (cipher_suite_offered_b suites suite <==> CS.cipher_suite_offered suites suite)
+          [SMTPat (cipher_suite_offered_b suites suite)]
+
+noextract
+let server_selected_suite (st:CS.connection_state) : T.cipher_suite
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch ->
+      if cipher_suite_offered_b
+           (Sem.clientHello_cipher_suites ch)
+           T.TLS_CHACHA20_POLY1305_SHA256
+      then T.TLS_CHACHA20_POLY1305_SHA256
+      else T.TLS_AES_128_GCM_SHA256
+    | None -> T.TLS_CHACHA20_POLY1305_SHA256
+
+(* The negotiated suite is always one ATLAS's record layer can key. *)
+val lemma_server_selected_suite_supported (st:CS.connection_state)
+  : Lemma (H.is_supported_cipher_suite (server_selected_suite st))
+
+(* The legacy_session_id of the ClientHello currently stored in the connection
+   state -- i.e. exactly what the ServerHello must echo back, VERBATIM, under
+   RFC 8446 4.1.3.  Its length is whatever the peer sent: 32 bytes from a
+   middlebox-compatibility-mode client (RFC 8446 D.4), and EMPTY from a client
+   with compatibility mode off.  Ghost-only: the runtime value is read out of
+   the stored ClientHello mirror.  Defined for every state (the empty default
+   is never observable, because the ServerHello send path runs only in
+   HsClientHelloReceived). *)
 noextract
 let stored_client_hello_session_id (st:CS.connection_state)
-  : (b:Seq.seq U8.t { Seq.length b == 32 })
+  : (b:Seq.seq U8.t { Seq.length b <= 32 })
   = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
-    | Some ch -> Sem.clientHello_session_id_32 ch
-    | None -> Seq.create 32 0uy
+    | Some ch -> Sem.clientHello_session_id ch
+    | None -> Seq.empty
 
-(* clamp: the echoed legacy_session_id is fixed at 32 bytes (identity under
-   valid_selection; see the middlebox-compatibility note above). *)
+(* The key-exchange group the server's policy picks for the ClientHello
+   currently stored in the connection state -- i.e. exactly the group the
+   ServerHello must name, and whose [kex_public_len] fixes the ServerHello's
+   wire length.  Ghost-only: the runtime value is read out of the stored
+   ClientHello mirror's [client_hello_kex_group] box (it cannot be recomputed
+   from the stored bytes, since an all-zero 32-byte slot is a legal X25519
+   share).  Defined for every state; the X25519 default for a state with no
+   stored ClientHello is exactly what
+   [Repr.client_hello_metadata_exactly] holds in that case. *)
+noextract
+let stored_client_hello_kex_group (st:CS.connection_state) : CryptoSpec.kex_group
+  = match st.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+    | Some ch -> client_hello_kex_group_for ch
+    | None -> CryptoSpec.KexX25519
+
+(* The wire [NamedGroup] tag of a [kex_group]: the inverse of
+   [Sem.kex_group_of_named_group] on the two groups ATLAS implements.  Following
+   the TLS13.Crypto.Spec design law the group is an explicit tag throughout, so
+   this conversion is total in both directions and never inspects a share. *)
+noextract
+let named_group_of_kex_group (g:CryptoSpec.kex_group) : GNG.namedGroup
+  = match g with
+    | CryptoSpec.KexX25519 -> GNG.X25519
+    | CryptoSpec.KexP256 -> GNG.Secp256r1
+
+let lemma_kex_group_of_named_group_inv (g:CryptoSpec.kex_group)
+  : Lemma (ensures Sem.kex_group_of_named_group (named_group_of_kex_group g) == g)
+          [SMTPat (named_group_of_kex_group g)]
+  = ()
+
+(* The wire tag the server's key-exchange policy names for a given state: the
+   group of [stored_client_hello_kex_group], as a [NamedGroup]. *)
+noextract
+let stored_client_hello_named_group (st:CS.connection_state) : GNG.namedGroup
+  = named_group_of_kex_group (stored_client_hello_kex_group st)
+
+(* clamp: the echoed legacy_session_id is the offered one, verbatim (identity
+   under valid_selection; see the echo note above). *)
 noextract
 let sho_session_id (sel:CS.server_handshake_selection)
-  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b == 32 })
-  = Sem.clientHello_session_id_32 sel.CS.server_selected_client_hello
+  : (b:GSHBody.serverHelloBody_legacy_session_id_echo { B.length b <= 32 })
+  = Sem.clientHello_session_id sel.CS.server_selected_client_hello
+
+(* The wire tag for the group the selection names.  [CS.server_selected_kex_group]
+   is [kex_group_of_named_group] of the selection's [server_selected_group], so a
+   selection naming any group ATLAS does not implement clamps to X25519 -- the
+   same shape as [sho_cipher_suite]'s clamp, and an identity for the two groups
+   the server actually offers. *)
+noextract
+let sho_named_group (sel:CS.server_handshake_selection) : GNG.namedGroup
+  = named_group_of_kex_group (CS.server_selected_kex_group sel)
+
+(* The share the ServerHello carries: the public value of the selection's
+   keypair *at the selected group*.  Its length is [CryptoSpec.kex_public_len]
+   of that group -- 32 for X25519, 65 for secp256r1 -- which is what makes the
+   serialized ServerHello length a function of the group. *)
+noextract
+let sho_key_share (sel:CS.server_handshake_selection)
+  : (k:B.bytes { B.length k ==
+                 CryptoSpec.kex_public_len (CS.server_selected_kex_group sel) })
+  = CS.server_kex_public sel (CS.server_selected_kex_group sel)
 
 #push-options "--fuel 4 --ifuel 4 --z3rlimit 60"
 noextract
 let server_hello_of_selection (sel:CS.server_handshake_selection) : GSH.serverHello
   = let rnd : Seq.lseq U8.t 32 = sho_random sel in
-    let ks : B.bytes = sel.CS.server_key_share_public in
-    let cs : GCS.cipherSuite = T.TLS_CHACHA20_POLY1305_SHA256 in
+    let ng : GNG.namedGroup = sho_named_group sel in
+    let ks : B.bytes = sho_key_share sel in
+    let cs : GCS.cipherSuite = sho_cipher_suite sel in
     let ke : GKSE.keyShareEntry_key_exchange = ks in
-    let kse : GKSE.keyShareEntry = { GKSE.group = GNG.X25519; GKSE.key_exchange = ke } in
-    GNG.namedGroup_bytesize_eq GNG.X25519;
+    let kse : GKSE.keyShareEntry = { GKSE.group = ng; GKSE.key_exchange = ke } in
+    GNG.namedGroup_bytesize_eq ng;
     GKSE.keyShareEntry_key_exchange_bytesize_eqn ke;
     let ksesh : GESH.extensionServerHello_extension_data_key_share = kse in
     let ks_ext : GESH.extensionServerHello = GESH.Extension_data_key_share ksesh in
@@ -626,17 +882,29 @@ val lemma_client_hello_of_start_matches
 
 // Server mirror of the client bound (see lemma_client_hello_of_start_matches's
 // record-size reasoning): the canonical server_hello_of_selection serializes to
-// exactly 122 bytes (legacy_version TLS_1p2 + 32-byte random + 32-byte session-id echo +
-// CHACHA cipher suite + null compression + [X25519 key_share; supported_versions]).
-// Reveals serialize_handshake to the generated serializer and computes the
-// bytesize; used to discharge the transcript-length obligation inside
-// can_send_server_hello for the server build direction.
+// exactly 58 + |key_share| + |session_id| bytes (legacy_version TLS_1p2 + 32-byte random +
+// 1-byte session-id-echo length + the echo itself + cipher suite + null
+// compression + [X25519 key_share; supported_versions]).  The echo is the
+// client's, verbatim, so this is 122 for a middlebox-compatibility-mode peer
+// (RFC 8446 D.4, |session_id| == 32) and 90 for a peer with compatibility mode
+// off (|session_id| == 0).  Reveals serialize_handshake to the generated
+// serializer and computes the bytesize; used to discharge the transcript-length
+// obligation inside can_send_server_hello for the server build direction.
+// The share width is the selected group's, so the conclusion is stated as
+// [58 + kex_public_len g + |sid|] rather than the X25519-specific [90 + |sid|].
+// Generalising the conclusion ahead of dropping [valid_selection]'s group
+// conjunct is what let the arithmetic move before the policy did (stage S6.8c
+// of docs/server-p256-plan.md); the reverse order is not possible, because the
+// moment the selection's group stops being a literal the [90] is underivable.
+// Since S6.8d that conjunct is gone and the group really is a variable.
 val lemma_server_hello_of_selection_bytesize
   (sel:CS.server_handshake_selection)
   : Lemma (requires valid_selection sel)
           (ensures
             B.length (W.serialize_handshake
-              (M.ServerHello (server_hello_of_selection sel))) == 122)
+              (M.ServerHello (server_hello_of_selection sel))) ==
+            58 + CryptoSpec.kex_public_len (CS.server_selected_kex_group sel)
+               + Seq.length (sho_session_id sel))
 
 // Server mirror: under valid_selection, the canonical server_hello_of_selection
 // satisfies the spec's server_hello_matches_selection: every
