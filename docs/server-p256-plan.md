@@ -1684,6 +1684,44 @@ Two findings from landing commit A that commit B should carry forward:
    `ConnectionState.Lemmas.lemma_step_model_record_keys_consistent_for_role`
    and `Impl.Server.CanonicalProtocol.lemma_server_network_nonstep_canonical_step`.
 
+### Commit B, measured
+
+Commit B's spec half -- `received_cleartext_tls_message_raw_buffered`, its
+empty-buffer bridge lemma (with `SMTPat`), and the rewiring of
+`network_message_raw_delta_legal`'s `CL.Received` arm -- was applied on top of
+commit A and verified tree-wide, purely to measure the blast radius.  **It is
+three sites, not a cascade:**
+
+| site | what fails | fix |
+| --- | --- | --- |
+| `ProtectedWireSegmentation.fst:316` | an `assert` of the *unbuffered* rule | the empty-buffer hypothesis of step 2 |
+| `Impl.Server.CanonicalProtocol.fst:328` | same | same |
+| `Impl.Parser.DecoderWF.fst:269` (`lemma_mk_cleartext_network_input_wf`) | `network_input_wf`'s obligation | **the real blocker; see below** |
+
+The first two are step 2 and are cheap.  The third is the one that makes (b)
+inseparable from the implementation, and the measurement pins down exactly why:
+
+`network_input_wf st0 ct fragment raw` promises "if the FRAGMENT ALONE parses to
+`msg`, the raw delta is legal for delivering `msg`".  Under the buffered rule
+that is only true when the buffer is empty.  `st0` reaches the decoder as an
+**erased ghost** (`(reveal 'st0)` at `Impl.Parser.fst:7702,7712,8099,8110`) with
+no invariant attached, and the decoder is shared by both roles, so the emptiness
+fact cannot be produced there.
+
+The right shape for commit B is therefore **not** to gate `network_input_wf` on
+emptiness -- that only moves the obligation to callers who equally cannot
+discharge it -- but to **split the predicate**:
+
+- the decoder keeps promising the *unbuffered* delta (`received_cleartext_tls_message_raw`),
+  which is role-agnostic and needs no state knowledge;
+- the *driver*, which does hold the server's concrete pending buffer, applies a
+  bridge lemma to turn that into the buffered delta when the buffer is empty,
+  and takes the reassembling path (parse `pending ++ fragment`) when it is not.
+
+This keeps the shared record decoder out of the reassembly story entirely, and
+is what makes steps 3-5 land as one coherent change rather than as a
+signature-propagation exercise across both roles.
+
 Step 2 must not simply weaken the three pairing guarantees.
 `lemma_paired_replay_split_prefixes_equal_single_client_hello`
 (`ProtectedWireSegmentation.fsti:1398`) has **no callers in `src/`** -- it is a
