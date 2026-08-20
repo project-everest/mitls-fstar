@@ -1,15 +1,29 @@
 # TLS driver architecture audit
 
-This note describes the current client/server architecture and the cleanup that
-aligns the canonical protocol/endpoint layer with the verified driver modules.
-The proof-facing story is organized around
-`Common.ProtocolImplementation`, `Common.ProtocolEndpoint`, and valid byte traces
-of `Client.CanonicalProtocol.client_system` / `Server.CanonicalProtocol.server_system`.
-The extracted C runtime wrappers execute through the monomorphic endpoint
-runners, and the verified `Client.Driver` / `Server.Driver` interfaces now expose
-the endpoint-owned proof-facing workflow operations as their public audit surface.
+> **Currency note (audited 2026-08-20).**  This document was written while a
+> `Common.ProtocolEndpoint` layer -- `TLS13.Impl.Client.Endpoint` (3136 lines)
+> and `TLS13.Impl.Server.Endpoint` (4172 lines) -- existed and was described as
+> the path the C runtimes executed through.  **Both modules were deleted on
+> 2026-07-22 in `712c31c22` "Remove orphaned endpoint APIs."**  The sections
+> below have been corrected against the tree; the "Ideal architecture" and
+> "Recommended implementation plan" sections are left as-is and flagged, because
+> they are proposals that assume that layer.  Anything asserting that a runtime
+> calls `*_endpoint_run_workflow` is false: `runtime/tls13_client_driver.c` and
+> `runtime/tls13_server_driver.c` each include exactly one extracted header,
+> `TLS13_Impl_Client_Driver.h` and `TLS13_Impl_Server_Driver.h` respectively.
+
+This note describes the current client/server architecture.  The proof-facing
+story is organized around `Common.ProtocolImplementation` and valid byte traces
+of `TLS13.Spec.Endpoint.Client.client_system` /
+`TLS13.Spec.Endpoint.Server.server_system` -- both **spec** definitions.  The
+extracted C runtime wrappers execute through the verified `Client.Driver` /
+`Server.Driver` interfaces, which are the public audit surface.
 
 ## Implementation status
+
+> The stages below describe the endpoint-routing cleanup as it stood before
+> `712c31c22`.  Stages 1, 4 and 6 refer to endpoint modules that no longer
+> exist; stages 2, 3 and 5 describe work that survived the deletion.
 
 The endpoint-routing cleanup stages are complete:
 
@@ -108,24 +122,23 @@ flowchart TD
   Spec[Spec.ConnectionState\nconnection_state and legal_connection_delta]
   Repr[ConnectionState.Repr\nconfigured_connection_config\nconfigured_initial_state = CS.initial config]
   LowClient[TLS13.Impl.Client\nC.new_client\nC.next_local_action\nC.process_*]
-  Canonical[Client.CanonicalProtocol\nclient_step\nclient_state_machine initial\nclient_system initial\ncanonical_client\nclient_protocol_implementation]
-  Endpoint[Client.Endpoint\nclient_protocol_endpoint\nclient_endpoint_run_workflow]
+  Canonical[Client.CanonicalProtocol\nclient_step\ncanonical_client\nclient_protocol_implementation]
+  SpecEndpoint[Spec.Endpoint.Client\nclient_state_machine\nclient_system]
   DirectDriver[Client.Driver verified API\nnew_client/connect/send/receive/close]
-  DirectHelpers[Client.Driver direct workflow\nclient_driver_live/connected\ndriver_open/top_driver_exactly\ndriver_handshake]
-  Runtime[C runtime wrapper\nruntime/tls13_client_driver.c\nendpoint_run + api-local wrappers]
-  Proofs[Pairing/NoTail proof modules\nvalid_byte_trace over ClientCP.client_system initial]
+  DirectHelpers[Client.Driver workflow\nclient_driver_live/connected\ndriver_open/top_driver_exactly\ndriver_handshake]
+  Runtime[C runtime wrapper\nruntime/tls13_client_driver.c\nincludes TLS13_Impl_Client_Driver.h only]
+  Proofs[Pairing/NoTail proof modules\nvalid_byte_trace over client_system initial]
 
   Spec --> Repr
   Repr --> LowClient
+  SpecEndpoint --> Canonical
   LowClient --> Canonical
-  Canonical --> Endpoint
   Canonical --> Proofs
+  Canonical --> DirectDriver
   LowClient --> DirectDriver
   Repr --> DirectDriver
   DirectDriver --> DirectHelpers
-  DirectHelpers -. parallel to, not routed through .-> Endpoint
   DirectDriver --> Runtime
-  Runtime --> Endpoint
 ```
 
 ### What is tied together
@@ -144,16 +157,24 @@ flowchart TD
 - `Client.CanonicalProtocol.client_protocol_implementation` is the
   `Common.ProtocolImplementation` instance.  Its system is exactly
   `client_system (Ghost.reveal cc.canonical_client_initial)`
-  (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:3742-3767`).
-- `Client.Endpoint.client_protocol_endpoint` instantiates
-  `Common.ProtocolEndpoint` for that implementation
-  (`src/impl/TLS13.Impl.Client.Endpoint.fst:3064-3095`).  The endpoint layer owns
-  scheduling frames, auth buffers, TCP I/O buffers, and a fuel-bounded endpoint
-  workflow (`src/impl/TLS13.Impl.Client.Endpoint.fst:31-115`,
-  `2632-3062`).
-- `Client.CanonicalProtocol.new_canonical_client` now allocates the concrete
+  (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:6631`).
+- `Client.CanonicalProtocol.new_canonical_client` allocates the concrete
   client, the progress reference, and the canonical initial state in one place
-  (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:3038-3188`).
+  (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:3469`).
+
+> **Superseded (2026-07-22).**  Earlier revisions of this document described a
+> separate `Client.Endpoint` layer -- `client_protocol_endpoint` instantiating
+> `Common.ProtocolEndpoint`, owning scheduling frames, auth buffers and a
+> fuel-bounded endpoint workflow -- and claimed the C runtime called
+> `TLS13_Impl_Client_Endpoint_client_endpoint_run_workflow`.  That layer no
+> longer exists.  `src/impl/TLS13.Impl.Client.Endpoint.fst` (3136 lines) was
+> deleted in `712c31c22` "Remove orphaned endpoint APIs", together with
+> `TLS13.Impl.Server.Endpoint.fst`.  `runtime/tls13_client_driver.c` includes
+> exactly one extracted header, `TLS13_Impl_Client_Driver.h`, and contains zero
+> references to `Client_Endpoint`.  The `ProtocolImplementation` instance
+> survived the deletion and is now consumed directly by `Client.Driver`
+> (`src/impl/TLS13.Impl.Client.Driver.fst`,
+> `src/impl/TLS13.Impl.Client.ChannelImplementation.fst`).
 
 ### What the verified client driver still does directly
 
@@ -162,31 +183,22 @@ client and its own driver resource predicates:
 
 - `CR.configured_initial_state server_name trust_anchors validation_time_seconds`
   is `CS.initial (configured_connection_config ...)`
-  (`src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1200-1222`).
+  (`src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1430`).
 - `TLS13.Impl.Client.new_client` allocates a concrete `C.client` at that
-  configured initial state (`src/impl/TLS13.Impl.Client.fst:58-168`).
-- `TLS13.Impl.Client.Driver.new_client` builds a `client_driver` containing
-  `C.client`, `O.auth_context`, channel state, and driver-local buffers; its
-  postcondition exposes `client_driver_live result configured_initial_state`
-  (`src/impl/TLS13.Impl.Client.Driver.fst:1428-1586`).
-- `TLS13.Impl.Client.Driver.connect` opens the TCP channel and then calls the
-  direct driver workflow `driver_handshake` through `top_driver_exactly`, not
-  `Client.Endpoint.client_protocol_endpoint`
-  (`src/impl/TLS13.Impl.Client.Driver.fst:5744-5950`).
+  configured initial state (`src/impl/TLS13.Impl.Client.fst:1440`).
+- `TLS13.Impl.Client.Driver.new_client_with_auth_config` builds a
+  `client_driver` containing `C.client`, `O.auth_context`, channel state, and
+  driver-local buffers (`src/impl/TLS13.Impl.Client.Driver.fsti:133`).
+- `TLS13.Impl.Client.Driver.connect` opens the TCP channel and then runs the
+  driver workflow through `top_driver_exactly`
+  (`src/impl/TLS13.Impl.Client.Driver.fsti:273`).
 
-The C-facing runtime wrapper is already different: after
-`TLS13_Impl_Client_Driver_new_client`, `runtime/tls13_client_driver.c` builds
-endpoint frames and calls `TLS13_Impl_Client_Endpoint_client_endpoint_run_workflow`
-for `connect`/`receive` and endpoint local-action wrappers for `send`/`close`.
-This is extraction-safe because `canonical_client` erases to the same C
-representation as the concrete client state.
+So there is now **one** verified client path, not two: the endpoint
+alternative was deleted rather than kept in parallel.
 
-The result is still two verified client stories:
-
-1. Proof-facing canonical path:
-   `canonical_client -> client_protocol_implementation -> client_protocol_endpoint`.
-2. Legacy verified driver path:
-   `client_driver -> top_driver_exactly -> driver_handshake -> send/receive`.
+`client_driver -> top_driver_exactly -> driver_handshake -> send/receive`,
+with `canonical_client` / `client_protocol_implementation` supplying the
+proof-facing system that the driver's invariant refers to.
 
 ## Current server architecture
 
@@ -194,99 +206,174 @@ The result is still two verified client stories:
 flowchart TD
   Spec[Spec.ConnectionState\nconnection_state and legal_connection_delta]
   Repr[ConnectionState.Repr\nserver_connection_config\nserver_initial_state = CS.initial config]
-  LowServer[TLS13.Impl.Server\nS.new_server...\nS.next_local_action\nS.process_*]
-  Canonical[Server.CanonicalProtocol\nserver_step\nserver_state_machine initial\nserver_system initial\ncanonical_server\nserver_protocol_implementation]
-  Endpoint[Server.Endpoint\nserver_protocol_endpoint\nserver_endpoint_run_workflow]
-  DirectDriver[Server.Driver verified API\nnew_server/accept/send/receive/close]
-  DirectHelpers[Server.Driver direct workflow\nDriver.State predicates\nDriver.Transport/Handshake/Network/Local helpers]
-  Runtime[C runtime wrapper\nruntime/tls13_server_driver.c\nendpoint_run + api-local wrappers]
-  Proofs[Pairing/NoTail proof modules\nvalid_byte_trace over ServerCP.server_system initial]
+  LowServer[TLS13.Impl.Server\ntype server = CR.connection_state\nnew_server / next_local_action / process_*\nNO TCP]
+  Canonical[Server.CanonicalProtocol\ncanonical_server\nserver_protocol_implementation]
+  SpecEndpoint[Spec.Endpoint.Server\nserver_state_machine\nserver_system]
+  Driver[TLS13.Impl.Server.Driver\ntype server_driver = DS.top_server_driver\nnew_server_listener / accept_with_listener\nsend / send_key_update / receive / close / free]
+  Buffered[Server.Driver.Buffered* + Driver.State\nAccept / Transport / TopHandshake / Workflow\nHandshake / Network / Local / Channel / Send / Receive / Close]
+  Runtime[C runtime wrapper\nruntime/tls13_server_driver.c\nincludes TLS13_Impl_Server_Driver.h only]
+  Proofs[Pairing/NoTail proof modules\nvalid_byte_trace over server_system initial]
 
   Spec --> Repr
   Repr --> LowServer
+  SpecEndpoint --> Canonical
   LowServer --> Canonical
-  Canonical --> Endpoint
   Canonical --> Proofs
-  LowServer --> DirectDriver
-  Repr --> DirectDriver
-  DirectDriver --> DirectHelpers
-  DirectHelpers -. parallel to, not routed through .-> Endpoint
-  DirectDriver --> Runtime
-  Runtime --> Endpoint
+  Canonical --> Driver
+  Repr --> Driver
+  Driver --> Buffered
+  Buffered --> LowServer
+  Driver --> Runtime
 ```
+
+### The two layers, and which is which
+
+`TLS13.Impl.Server` is the **protocol-step layer**.  `type server =
+CR.connection_state` (`src/impl/TLS13.Impl.Server.fsti:42`).  Its entire
+exported API is a family of `process_*` functions -- `process_client_hello`,
+`process_send_server_hello`, `process_derive_shared_secret`,
+`process_install_client_handshake_read_keys`, `process_verify_client_finished`,
+`process_local_event`, `process_network_bytes`, and about thirty more -- each
+one verified single transition of the connection state.  It performs **no
+I/O**: `Common.TCP` and `Common.BufferedTCP` appear zero times in both
+`TLS13.Impl.Server.fst` and `.fsti`.  On its own it cannot run a connection.
+
+`TLS13.Impl.Server.Driver` is the **transport and lifecycle layer**.  `type
+server_driver = DS.top_server_driver`, and its exported API is
+`new_server_listener`, `free_server_listener`, `new_server_credentials`,
+`free_server_credentials`, `new_server_with_credentials`,
+`accept_with_listener`, `send`, `send_key_update`, `receive`, `close`, `free`
+(`src/impl/TLS13.Impl.Server.Driver.fsti:237-510`).  All socket I/O lives here
+and in the `Buffered*` submodules.
+
+The relationship is **containment, not specialisation**: the driver record has
+the step-layer server as a field.
+
+```fstar
+noeq type top_server_driver = {
+  top_server_driver_server: S.server;              // S = TLS13.Impl.Server
+  top_server_driver_credentials: O.server_credentials;
+  top_server_driver_channel: Box.box (option BT.t); // BT = Common.BufferedTCP
+  ... output and scratch vectors ...
+  top_server_driver_progress: MR.mref (ES.server_progress_preorder ...);
+  top_server_driver_tcp_history: MR.mref CI.io_history_preorder;
+  top_server_driver_initial: Ghost.erased ES.server_initial_state;
+  top_server_driver_supported_profile: Ghost.erased (SP.server_supported_profile_proof ...);
+}
+```
+
+(`src/impl/TLS13.Impl.Server.Driver.State.fsti:89-110`.)  The two monotonic
+ghost references are what let the driver state a *temporal* property the step
+layer cannot: that the steps it performed form a legal server trace and that
+what went on the wire agrees with it.  That is
+`Server.Driver.server_driver_canonical : SP.canonical_server` and
+`server_driver_canonical_progress`
+(`src/impl/TLS13.Impl.Server.Driver.fsti:37,42`).
+
+Dependency runs strictly one way.  Twelve modules abbreviate
+`TLS13.Impl.Server`, and every one of them is in the `Driver.*` tree or in
+`CanonicalProtocol`/`CanonicalQueries`; nothing in `TLS13.Impl.Server`
+mentions the driver.
+
+### The real call chain
+
+`accept_with_listener` is the entry point, and it delegates immediately:
+
+```
+Driver.accept_with_listener                  (Driver.fst:176, fsti:336)
+  -> BufferedAccept.run                      (BufferedAccept.fst:32)
+       -> BufferedTransport.accept_transport_once_from     TCP accept
+       -> BufferedTopHandshake.run_connected (BufferedTopHandshake.fst:18)
+            -> BufferedWorkflow.run          (BufferedWorkflow.fst:498)
+                 -> BufferedHandshake.select_derive_send_server_hello_from_payload_once
+                 -> BufferedLocal.process_ready_empty_local_action_once
+                 -> BufferedNetwork.drive    (BufferedNetwork.fst:1670)
+                      -> S.process_*         the step layer
+       -> BufferedChannel.pack_connected_channel
+```
+
+The calls that actually cross the layer boundary are
+`S.process_network_bytes`, `S.process_local_event_with_credentials`,
+`S.process_select_default_server_parameters_with_derived_public_from_private_array`,
+`S.process_send_server_hello_with_derived_public_from_private_array` and
+`S.process_derive_shared_secret_from_private_array`.
+
+### A naming trap
+
+`TLS13.Impl.Server.Network` and `TLS13.Impl.Server.Driver.Network` /
+`Driver.BufferedNetwork` are not variants of one another:
+
+- `Impl.Server.Network` is step-layer.  It exports `process_client_hello`,
+  `process_client_finished`, `process_network_bytes`, and requires the record
+  fragment to be *exactly* the serialized message
+  (`src/impl/TLS13.Impl.Server.Network.fsti:30,110,160`).
+- `Driver.BufferedNetwork` is driver-layer.  It exports `drive` and owns
+  `decode_network_buffer`, which can return `NetworkBufferNeedMoreInput` so the
+  driver retries against a retained buffer.
+
+That boundary is exactly where gap G3 sits.  TCP short reads are absorbed by
+the driver's retry loop -- the `tcp-dribble` cells pass -- while one handshake
+message spread over two *records* is refused, because the step layer's
+precondition is message-exact.  See `docs/server-client-parity.md`.
 
 ### What is tied together
 
-- `Server.CanonicalProtocol.server_state_machine initial` sets
-  `SM.sm_initial_state = initial`, and `server_system initial` pairs that state
-  machine with `CW.tls_record_wire_format`
-  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:122-148`).
+- `server_state_machine` and `server_system` are defined in the **spec**, not
+  in the implementation: `src/spec/core/TLS13.Spec.Endpoint.Server.fst:199` and
+  `:215`.
 - `Server.CanonicalProtocol.canonical_server` stores the concrete low-level
   server, server credentials, a monotonic progress reference, and
   `canonical_server_initial`.  Its invariant includes the server credential
   relation and the valid-byte-trace witness for
   `server_system (Ghost.reveal canonical_server_initial)`
-  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:230-273`,
-  `1467-1503`).
+  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:175`).
 - `Server.CanonicalProtocol.server_protocol_implementation` is the
-  `Common.ProtocolImplementation` instance, with
-  `pi_system srv = server_system (Ghost.reveal srv.canonical_server_initial)`
-  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:3500-3525`).
-- `Server.Endpoint.server_protocol_endpoint` instantiates
-  `Common.ProtocolEndpoint` for that implementation
-  (`src/impl/TLS13.Impl.Server.Endpoint.fst:4102-4135`).  The endpoint frame
-  carries query state, raw/network buffers, certificate-chain/material buffers,
-  and credential-dependent material facts
-  (`src/impl/TLS13.Impl.Server.Endpoint.fst:66-120`).
-- `Server.CanonicalProtocol.new_canonical_server` now allocates the concrete
+  `Common.ProtocolImplementation` instance
+  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:6967`).  It is consumed
+  directly by `Server.Driver` and `Server.ChannelImplementation`.
+- `Server.CanonicalProtocol.new_canonical_server` allocates the concrete
   server, credentials, progress reference, supported-profile proof carrier, and
   canonical initial state in one place
-  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:1856-1984`).
-
-### What the verified server driver still does directly
-
-The verified `Server.Driver` module also has a separate direct workflow:
-
+  (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:1811`).
 - `CR.server_initial_state certificate_chain credential_identity` is
   `CS.initial (server_connection_config certificate_chain credential_identity)`
-  (`src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1226-1256`).
-- `TLS13.Impl.Server.new_server` and
-  `new_server_erased_credential_identity` allocate the concrete server at that
-  initial state (`src/impl/TLS13.Impl.Server.fsti:49-131`).
-- `TLS13.Impl.Server.Driver` re-exports resource predicates from
-  `Server.Driver.State` and builds direct driver state around
-  `S.server`, `O.server_credentials`, channel state, and driver-local buffers
-  (`src/impl/TLS13.Impl.Server.Driver.fst:48-60`,
-  `src/impl/TLS13.Impl.Server.Driver.State.fsti:36-48`).
-- `TLS13.Impl.Server.Driver.accept` runs the direct staged workflow
-  `accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once`,
-  then uses direct network/local loops such as
-  `DN.read_process_network_until_ready` and
-  `DL.drain_ready_empty_local_actions` to reach application data
-  (`src/impl/TLS13.Impl.Server.Driver.fst:333-670`).
+  (`src/impl/TLS13.Impl.ConnectionState.Repr.fsti:1471`).
+- `TLS13.Impl.Server.new_server` and `new_server_erased_credential_identity`
+  allocate the concrete server at that initial state
+  (`src/impl/TLS13.Impl.Server.fsti:61,115`).
 
-The C-facing runtime wrapper already constructs a canonical-server-shaped value
-from the extracted server state and credentials, then calls
-`TLS13_Impl_Server_Endpoint_server_endpoint_run_workflow` and endpoint
-local-action wrappers.  Unlike the client, the server canonical value retains the
-credentials as concrete C data, so the runtime wrapper packages both
-`server_driver_server` and `server_driver_credentials`.
+> **Superseded (2026-07-22).**  Earlier revisions of this document described a
+> `Server.Endpoint` layer (`server_protocol_endpoint`,
+> `server_endpoint_run_workflow`) sitting between `CanonicalProtocol` and the
+> runtime, and described the server as having "the same split" as the client
+> between a proof-facing endpoint path and a legacy direct driver path.  Both
+> claims are obsolete.  `src/impl/TLS13.Impl.Server.Endpoint.fst` (4172 lines)
+> was deleted in `712c31c22` "Remove orphaned endpoint APIs", and
+> `runtime/tls13_server_driver.c` includes exactly one extracted header,
+> `TLS13_Impl_Server_Driver.h`.  The step layer is reachable from C only
+> through the driver.  Earlier revisions also named driver helpers
+> `accept`, `accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once`
+> and `read_process_network_until_ready`, none of which exist; the current
+> chain is the one listed above.
 
-So the server has the same split:
-
-1. Proof-facing canonical path:
-   `canonical_server -> server_protocol_implementation -> server_protocol_endpoint`.
-2. Legacy verified driver path:
-   `server_driver -> Driver.State/Transport/Handshake/Network/Local helpers`.
+So there is one verified server path, not two:
+`server_driver -> Driver.State + Buffered* helpers -> TLS13.Impl.Server.process_*`,
+with `canonical_server` / `server_protocol_implementation` supplying the
+proof-facing system that the driver's invariant refers to.
 
 ## Current proof-facing pairing path
 
-The pairing proof stack already speaks the canonical-system language:
+The pairing proof stack already speaks the canonical-system language.  Note the
+qualification: `client_system` and `server_system` are **spec** definitions
+(`EC = TLS13.Spec.Endpoint.Client:348`, `ES = TLS13.Spec.Endpoint.Server:215`),
+not implementation ones -- earlier revisions of this document attributed them to
+`Client.CanonicalProtocol`/`Server.CanonicalProtocol`, which is where the
+pairing modules consume them but not where they are defined.
 
 ```mermaid
 flowchart LR
-  CInit[client_initial] --> CSystem[ClientCP.client_system client_initial]
-  SInit[server_initial] --> SSystem[ServerCP.server_system server_initial]
+  CInit[client_initial] --> CSystem[EC.client_system client_initial]
+  SInit[server_initial] --> SSystem[ES.server_system server_initial]
   CSystem --> CTrace[WFSM.valid_byte_trace client bytes/state]
   SSystem --> STrace[WFSM.valid_byte_trace server bytes/state]
   CTrace --> WireLogs[PairingNoTailWireLogs\nraw logs exact for initial states]
@@ -296,21 +383,32 @@ flowchart LR
 
 Examples:
 
-- `PairingValidByteTrace.paired_valid_byte_traces_at_handshake_complete_boundary`
-  requires valid byte traces over `ClientCP.client_system client_initial` and
-  `ServerCP.server_system server_initial`
-  (`src/impl/TLS13.Impl.Driver.PairingValidByteTrace.fsti:15-41`).
+- `PairingNoTailWireLogs.lemma_client_valid_byte_trace_inverts_to_serialized_trace`
+  and its `lemma_server_...` counterpart require valid byte traces over
+  `EC.client_system client_initial` and `ES.server_system server_initial`
+  (`src/impl/TLS13.Impl.Driver.PairingNoTailWireLogs.fsti:219,255`).  An earlier
+  revision cited
+  `PairingValidByteTrace.paired_valid_byte_traces_at_handshake_complete_boundary`;
+  that module was removed in `a8b9dcf81` "Use generated TLS wire codecs" and the
+  theorem name no longer occurs anywhere in `src/`.
 - `PairingNoTailWireLogs` inverts valid byte traces for
-  `ClientCP.client_system` and `ServerCP.server_system`, then proves the final
+  `EC.client_system` and `ES.server_system`, then proves the final
   raw wire logs match the serialized trace when the initial state is
   `CS.initial initial.model_config`
   (`src/impl/TLS13.Impl.Driver.PairingNoTailWireLogs.fsti:216-310`).
 
-This is a good proof architecture in isolation.  The weak point is now more
-specific: the extracted C runtime follows the endpoint path, but the verified F*
-driver predicates do not expose canonical endpoint ownership.  Consequently, an
-auditor still has to distinguish the endpoint-centered C path from the older
-direct verified driver workflows.
+This is a good proof architecture in isolation.  The weak point described in
+earlier revisions -- "the extracted C runtime follows the endpoint path, but the
+verified F* driver predicates do not expose canonical endpoint ownership", so an
+auditor must distinguish the endpoint-centered C path from the direct driver
+workflows -- **no longer applies**, because the endpoint path was deleted rather
+than reconciled (`712c31c22`).  Both runtimes now go through the driver only.
+
+The residual weak point is narrower: the driver's exported predicates
+(`server_driver_canonical`, `server_driver_canonical_progress`) tie the driver
+to `canonical_server`, but the pairing theorems are stated over
+`ES.server_system initial`, so an auditor still has to follow that connection by
+hand rather than reading it off one predicate.
 
 ## Internal events: one client receive path
 
@@ -371,10 +469,11 @@ of the flagship pairing theorem.
 
 ## Architectural gaps and audit risks
 
-1. **Two verified stories.**  The endpoint layer is a generic, uniform executable
-   story over `Common.ProtocolImplementation`, but the verified driver APIs still
-   expose separate role-specific workflows.  The C runtime has moved to the
-   endpoint path; the verified F* driver surface has not.
+1. ~~**Two verified stories.**~~  **Resolved, by deletion rather than
+   convergence.**  The endpoint layer was removed in `712c31c22`, so there is no
+   longer a generic endpoint story running in parallel with the role-specific
+   driver workflows, and the C runtime does not use one either.  What remains is
+   the single driver path.
 
 2. **Canonical implementation values are not the public ownership units.**
    `canonical_client` and `canonical_server` contain exactly the ghost initial
@@ -387,18 +486,27 @@ of the flagship pairing theorem.
    `CR.configured_initial_state` or `CR.server_initial_state`.  The connection is
    conceptually clear but not packaged as the public driver invariant.
 
-4. **Scheduler reasoning is fragmented.**  Endpoint modules already encode a
-   uniform next-action/action-frame discipline.  Direct drivers encode their own
-   client handshake workflow and server accept/local-drain/network-loop workflow,
-   so scheduler-sensitive facts have to be audited separately.
+4. **Scheduler reasoning is role-specific.**  The client driver encodes its own
+   handshake workflow and the server driver its own
+   accept/local-drain/network-loop workflow
+   (`Driver.Buffered{Accept,TopHandshake,Workflow,Local,Network}`), so
+   scheduler-sensitive facts are audited separately per role.  The uniform
+   next-action/action-frame discipline that the endpoint modules encoded went
+   away with them.
 
-5. **Pairing theorems are one layer above the legacy driver predicates.**  The
-   clean valid-byte-trace theorems use canonical systems, while legacy top-level
-   driver theorems use driver-ready predicates and wire-log predicates.  Without
-   endpoint-owned public driver predicates, the audit path from verified driver
-   ownership to valid byte traces is still indirect.
+5. **Pairing theorems are one layer above the driver predicates.**  The
+   valid-byte-trace theorems use `EC.client_system`/`ES.server_system`, while
+   top-level driver theorems use driver-ready and wire-log predicates, so the
+   audit path from verified driver ownership to valid byte traces is indirect.
 
 ## Ideal architecture
+
+> **Note.**  This section and the implementation plan that follows were written
+> while `Client.Endpoint`/`Server.Endpoint` still existed, and they propose
+> routing the public drivers through `client_protocol_endpoint` /
+> `server_protocol_endpoint`.  Those modules were deleted as orphans in
+> `712c31c22`.  Read what follows as a design sketch whose endpoint layer would
+> have to be rebuilt, not as a description of code that exists.
 
 The clean architecture should make the endpoint path the only path used by
 exported drivers:
