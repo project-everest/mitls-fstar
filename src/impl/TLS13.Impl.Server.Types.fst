@@ -768,7 +768,17 @@ let server_end_to_end_invariant
   (st:CS.connection_state)
   : prop =
   server_state_correct st /\
-  server_raw_to_message_replay_consistent st
+  server_raw_to_message_replay_consistent st /\
+  (* Staging invariant for cleartext handshake reassembly.
+
+     The model now carries a pending cleartext-handshake buffer, and the
+     ClientHello raw-delta rule is relative to it.  No implementation emits a
+     [ConnCleartextHandshake] step yet, so the buffer is provably always empty;
+     pinning that here is what lets the server's ClientHello delivery site
+     bridge from the decoder's state-free promise to the model's buffer-relative
+     rule.  When the concrete pending buffer is threaded through the server, this
+     conjunct is replaced by "the model buffer equals the concrete buffer". *)
+  CS.cleartext_handshake_buffer_empty st.CS.cs_model
 
 let lemma_initial_server_state_correct
   (cfg:CS.connection_config)
@@ -1715,7 +1725,7 @@ let server_decoded_message_event_projection
   (app_out:B.bytes)
   : prop =
   legal_network_response st0 st1 resp msg raw_received network_out app_out \/
-  (CT.received_tls_raw_delta_legal st0 msg raw_received /\
+  (CT.received_tls_raw_delta_legal_unbuffered st0 msg raw_received /\
    unexpected_message_response st0 st1 resp network_out app_out)
 
 let server_protected_record_decode_uses_scheduled_read_key
@@ -1792,7 +1802,7 @@ let server_network_step_ok_received_decode_projection
   : prop =
   resp.response.status == StepOk ==>
     exists msg.
-      CT.received_tls_raw_delta_legal
+      CT.received_tls_raw_delta_legal_unbuffered
         st0
         msg
         (server_network_consumed_prefix resp input) /\
@@ -2000,7 +2010,7 @@ let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_acc
           network_out
           app_out);
         assert (exists msg.
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (server_network_consumed_prefix resp input) /\
@@ -2023,7 +2033,7 @@ let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_acc
           ID.indefinite_description_ghost
             M.tls_message
             (fun msg ->
-              CT.received_tls_raw_delta_legal
+              CT.received_tls_raw_delta_legal_unbuffered
                 st0
                 msg
                 (server_network_consumed_prefix resp input) /\
@@ -2268,7 +2278,7 @@ let lemma_server_network_bytes_end_to_end_nonfailed_previous
       network_out
       app_out);
     assert (exists msg.
-      CT.received_tls_raw_delta_legal
+      CT.received_tls_raw_delta_legal_unbuffered
         st0
         msg
         (server_network_consumed_prefix resp input) /\
@@ -2291,7 +2301,7 @@ let lemma_server_network_bytes_end_to_end_nonfailed_previous
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (server_network_consumed_prefix resp input) /\
@@ -2793,7 +2803,7 @@ let lemma_server_network_bytes_preserves_config
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (server_network_consumed_prefix resp input) /\

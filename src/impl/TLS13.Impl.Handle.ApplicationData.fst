@@ -210,7 +210,7 @@ fn handle_application_data
           content_type
           (Ghost.reveal 'fragment_bytes)
           (M.TlsApplicationData mapp)));
-        assert (pure (CT.received_tls_raw_delta_legal
+        assert (pure (CT.received_tls_raw_delta_legal_unbuffered
           'st0
           (M.TlsApplicationData mapp)
           (Ghost.reveal 'raw_bytes)));

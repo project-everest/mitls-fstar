@@ -464,7 +464,7 @@ fn process_application_data
                    'st0.CS.cs_model.CS.model_handshake
                    CL.Received /\
                  U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
-                 CT.received_tls_raw_delta_legal
+                 CT.received_tls_raw_delta_legal_unbuffered
                    'st0
                    (M.TlsApplicationData (Ghost.reveal app_payload))
                    (Ghost.reveal 'raw_bytes) /\
@@ -693,7 +693,7 @@ fn process_close_notify
                   'st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
                  'st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
                  U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
-                 CT.received_tls_raw_delta_legal
+                 CT.received_tls_raw_delta_legal_unbuffered
                    'st0
                    (M.TlsAlert T.Close_notify)
                    (Ghost.reveal 'raw_bytes) /\
@@ -863,7 +863,7 @@ fn process_key_update
                  (requested ==> reveal req == M.UpdateRequested) /\
                  (requested == false ==> reveal req == M.UpdateNotRequested) /\
                  U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
-                 CT.received_tls_raw_delta_legal
+                 CT.received_tls_raw_delta_legal_unbuffered
                    'st0
                    (M.TlsKeyUpdate (reveal req))
                    (Ghost.reveal 'raw_bytes) /\
@@ -1040,7 +1040,7 @@ fn process_alert_failure
                  ST.server_end_to_end_invariant 'st0 /\
                  Ghost.reveal alert <> T.Close_notify /\
                  Tags.alert_tag_matches alert_wire (Ghost.reveal alert) /\
-                 CT.received_tls_raw_delta_legal
+                 CT.received_tls_raw_delta_legal_unbuffered
                    'st0
                    (M.TlsAlert (Ghost.reveal alert))
                    (Ghost.reveal 'raw_bytes) /\
@@ -1215,7 +1215,7 @@ fn process_change_cipher_spec
                  ST.server_end_to_end_invariant 'st0 /\
                  (exists stage.
                    'st0.CS.cs_model.CS.model_control == CS.ControlHandshaking stage) /\
-                 CT.received_tls_raw_delta_legal
+                 CT.received_tls_raw_delta_legal_unbuffered
                    'st0
                    M.TlsChangeCipherSpec
                    (Ghost.reveal 'raw_bytes))
@@ -1713,7 +1713,7 @@ fn process_network_bytes
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
                 (M.TlsHandshake (M.ClientHello ch))));
-              assert (pure (CT.received_tls_raw_delta_legal
+              assert (pure (CT.received_tls_raw_delta_legal_unbuffered
                 'st0
                 (M.TlsHandshake (M.ClientHello ch))
                 raw_record_bytes));
@@ -2054,7 +2054,7 @@ fn process_network_bytes
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
                 (M.TlsHandshake (M.Finished fin))));
-              assert (pure (CT.received_tls_raw_delta_legal
+              assert (pure (CT.received_tls_raw_delta_legal_unbuffered
                 'st0
                 (M.TlsHandshake (M.Finished fin))
                 raw_record_bytes));
@@ -2284,7 +2284,7 @@ fn process_network_bytes
               decoded_buffer.IM.decoded_buffer_content_type
               fragment_bytes
               (M.TlsApplicationData mapp)));
-            assert (pure (CT.received_tls_raw_delta_legal
+            assert (pure (CT.received_tls_raw_delta_legal_unbuffered
               'st0
               (M.TlsApplicationData mapp)
               raw_record_bytes));
@@ -2519,7 +2519,7 @@ fn process_network_bytes
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
                 (M.TlsAlert T.Close_notify)));
-              assert (pure (CT.received_tls_raw_delta_legal
+              assert (pure (CT.received_tls_raw_delta_legal_unbuffered
                 'st0
                 (M.TlsAlert T.Close_notify)
                 raw_record_bytes));
@@ -2701,7 +2701,7 @@ fn process_network_bytes
                 decoded_buffer.IM.decoded_buffer_content_type
                 fragment_bytes
                 (M.TlsAlert (Ghost.reveal parsed_alert))));
-              assert (pure (CT.received_tls_raw_delta_legal
+              assert (pure (CT.received_tls_raw_delta_legal_unbuffered
                 'st0
                 (M.TlsAlert (Ghost.reveal parsed_alert))
                 raw_record_bytes));
@@ -2808,7 +2808,7 @@ fn process_network_bytes
               decoded_buffer.IM.decoded_buffer_content_type
               fragment_bytes
               M.TlsChangeCipherSpec));
-            assert (pure (CT.received_tls_raw_delta_legal
+            assert (pure (CT.received_tls_raw_delta_legal_unbuffered
               'st0
               M.TlsChangeCipherSpec
               raw_record_bytes));
@@ -2989,7 +2989,7 @@ fn process_network_bytes
               decoded_buffer.IM.decoded_buffer_content_type
               fragment_bytes
               (M.TlsKeyUpdate req)));
-            assert (pure (CT.received_tls_raw_delta_legal
+            assert (pure (CT.received_tls_raw_delta_legal_unbuffered
               'st0
               (M.TlsKeyUpdate req)
               raw_record_bytes));

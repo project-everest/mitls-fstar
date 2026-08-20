@@ -93,7 +93,7 @@ fn handle_alert
     content_type
     (Ghost.reveal 'fragment_bytes)
     (M.TlsAlert malert)));
-  assert (pure (CT.received_tls_raw_delta_legal
+  assert (pure (CT.received_tls_raw_delta_legal_unbuffered
     'st0
     (M.TlsAlert malert)
     (Ghost.reveal 'raw_bytes)));
@@ -105,7 +105,7 @@ fn handle_alert
     content_type
     (Ghost.reveal 'fragment_bytes)
     (M.TlsAlert (Ghost.reveal parsed_alert))));
-  assert (pure (CT.received_tls_raw_delta_legal
+  assert (pure (CT.received_tls_raw_delta_legal_unbuffered
     'st0
     (M.TlsAlert (Ghost.reveal parsed_alert))
     (Ghost.reveal 'raw_bytes)));
@@ -114,7 +114,7 @@ fn handle_alert
   if close_notify {
     assert (pure (U8.v alert_wire == 0));
     assert (pure (Ghost.reveal parsed_alert == T.Close_notify));
-    assert (pure (CT.received_tls_raw_delta_legal
+    assert (pure (CT.received_tls_raw_delta_legal_unbuffered
       'st0
       (M.TlsAlert T.Close_notify)
       (Ghost.reveal 'raw_bytes)));

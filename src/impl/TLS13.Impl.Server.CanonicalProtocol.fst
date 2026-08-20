@@ -302,7 +302,7 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
   (msg:M.tls_message)
   (raw_received:B.bytes)
   : Lemma
-      (requires CT.received_tls_raw_delta_legal st0 msg raw_received /\
+      (requires CT.received_tls_raw_delta_legal_unbuffered st0 msg raw_received /\
                 (match msg with
                  | M.TlsHandshake (M.ServerHello sh) ->
                    B.length (WS.serialize_handshake (M.ServerHello sh)) <= 16640
@@ -313,13 +313,7 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
     CL.message_direction = CL.Received;
     CL.message_value = msg;
   } in
-  assert (CS.event_raw_delta_legal
-    st0.CS.cs_model
-    (CS.ConnNetworkEvent received_msg)
-    B.empty
-    raw_received);
-  assert (CS.network_message_raw_delta_legal
-    st0.CS.cs_model
+  assert (CS.network_message_raw_delta_legal_unbuffered
     received_msg
     raw_received);
   if CS.network_message_is_cleartext CL.Received msg then (
@@ -459,7 +453,7 @@ let lemma_server_network_step_ok_legal_response
     network_out
     app_out);
   assert (exists msg.
-    CT.received_tls_raw_delta_legal
+    CT.received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -482,7 +476,7 @@ let lemma_server_network_step_ok_legal_response
     ID.indefinite_description_ghost
       M.tls_message
       (fun msg ->
-        CT.received_tls_raw_delta_legal
+        CT.received_tls_raw_delta_legal_unbuffered
           st0
           msg
           (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -557,7 +551,7 @@ let lemma_server_network_step_ok_received_decode_legal_response
         buffer_resp.ST.response.ST.status == ST.StepOk)
       (ensures
         exists msg.
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -585,7 +579,7 @@ let lemma_server_network_step_ok_received_decode_legal_response
     network_out
     app_out);
   assert (exists msg.
-    CT.received_tls_raw_delta_legal
+    CT.received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -608,7 +602,7 @@ let lemma_server_network_step_ok_received_decode_legal_response
     ID.indefinite_description_ghost
       M.tls_message
       (fun msg ->
-        CT.received_tls_raw_delta_legal
+        CT.received_tls_raw_delta_legal_unbuffered
           st0
           msg
           (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -645,7 +639,7 @@ let lemma_server_network_step_ok_received_decode_legal_response
     app_out
   then (
     assert (exists msg'.
-      CT.received_tls_raw_delta_legal
+      CT.received_tls_raw_delta_legal_unbuffered
         st0
         msg'
         (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -792,7 +786,7 @@ let lemma_server_network_step_ok_process_correct
     network_out
     app_out;
   assert (exists msg.
-    CT.received_tls_raw_delta_legal
+    CT.received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -815,7 +809,7 @@ let lemma_server_network_step_ok_process_correct
     ID.indefinite_description_ghost
       M.tls_message
       (fun msg ->
-        CT.received_tls_raw_delta_legal
+        CT.received_tls_raw_delta_legal_unbuffered
           st0
           msg
           (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -834,7 +828,7 @@ let lemma_server_network_step_ok_process_correct
              st0
              (ST.server_network_consumed_prefix buffer_resp input)
              msg)) in
-  assert (CT.received_tls_raw_delta_legal
+  assert (CT.received_tls_raw_delta_legal_unbuffered
     st0
     msg
     consumed);
@@ -855,7 +849,7 @@ let lemma_server_network_step_ok_process_correct
     consumed
     network_out
     app_out);
-  assert (CT.received_tls_raw_delta_legal st0 msg consumed);
+  assert (CT.received_tls_raw_delta_legal_unbuffered st0 msg consumed);
   assert (ST.server_end_to_end_invariant st0);
   lemma_server_received_msg_bound_server_hello
     st0 st1 resp msg consumed network_out app_out;
@@ -3749,7 +3743,7 @@ let lemma_server_network_connection_failed_bridge_result
     CS.delta_raw_sent = B.empty;
     CS.delta_raw_received = raw_received;
   } st1);
-  assert (CT.received_tls_raw_delta_legal st0 (M.TlsAlert alert) raw_received);
+  assert (CT.received_tls_raw_delta_legal_unbuffered st0 (M.TlsAlert alert) raw_received);
   lemma_received_tls_raw_delta_legal_raw_record_parse_success
     st0
     (M.TlsAlert alert)
@@ -5420,7 +5414,7 @@ let lemma_server_network_nonstep_canonical_step
       raw_received
       network_out
       app_out);
-    assert (CT.received_tls_raw_delta_legal st0 (M.TlsAlert alert) raw_received);
+    assert (CT.received_tls_raw_delta_legal_unbuffered st0 (M.TlsAlert alert) raw_received);
     lemma_received_tls_raw_delta_legal_raw_record_parse_success st0 (M.TlsAlert alert) raw_received;
     assert (CT.raw_record_parse_success raw_received);
     let outer_ct =

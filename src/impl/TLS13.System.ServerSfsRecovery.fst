@@ -386,7 +386,7 @@ let lemma_server_s_flag_step
          WStep.lemma_raw_appdata_count_seq_equal raw_received B.empty
        | CL.Received ->
          if CS.network_message_is_cleartext CL.Received dm.CL.message_value
-         then WStep.lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         then WStep.lemma_received_cleartext_count_zero m dm.CL.message_value raw_received
          else
            (assert (CS.protected_record_count CL.Received dm.CL.message_value == 1);
             WStep.lemma_protected_raw_count_one raw_received))

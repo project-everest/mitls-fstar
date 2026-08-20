@@ -1616,6 +1616,27 @@ let step_model (model:connection_model) (ev:conn_event) : GTot (option connectio
   | ConnLocalEvent local ->
     step_local_event model local
 
+(* [hb_cleartext_handshake_bytes] is written in exactly three places: the empty
+   initial buffer state, the ClientHello delivery drain, and the cleartext
+   buffering step itself.  Every other step carries it through unchanged.  So an
+   empty buffer stays empty across any step that is not a buffering step. *)
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 2"
+let lemma_step_model_preserves_cleartext_handshake_buffer_empty
+  (model:connection_model)
+  (ev:conn_event)
+  : Lemma
+      (requires
+        cleartext_handshake_buffer_empty model /\
+        ~(ConnCleartextHandshake? ev))
+      (ensures
+        (match step_model model ev with
+         | Some model' -> cleartext_handshake_buffer_empty model'
+         | None -> True))
+      [SMTPat (step_model model ev);
+       SMTPat (cleartext_handshake_buffer_empty model)]
+  = ()
+#pop-options
+
 let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
   : Tot prop
         (decreases suites)
@@ -2390,6 +2411,80 @@ let received_cleartext_tls_message_raw (msg:M.tls_message) (raw:B.bytes) : GTot 
       W.parse_tls_message T.Handshake fragment == Some msg
   | _ ->
     cleartext_tls_message_raw msg raw
+
+(* The reassembly-aware form of the rule above.
+
+   The message need not be carried by this record's fragment alone: it may be
+   completed by it, with the earlier records' plaintext supplied by the pending
+   cleartext buffer.  This record is still exactly ONE record -- reassembly
+   never makes a delta span records, because the earlier ones were taken
+   delivery of by their own [ConnCleartextHandshake] steps.  That is what keeps
+   "one physical record = one wire step" intact.
+
+   With an empty buffer this is literally the ungeneralised rule; see
+   [lemma_received_cleartext_tls_message_raw_buffered_of_empty], whose SMT
+   pattern is what carries every property proved before reassembly across the
+   change. *)
+let received_cleartext_tls_message_raw_buffered
+  (model:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : GTot prop =
+  match msg with
+  | M.TlsHandshake (M.ClientHello _) ->
+    exists fragment.
+      W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+      W.parse_tls_message
+        T.Handshake
+        (B.append (pending_cleartext_handshake model) fragment) == Some msg
+  | _ -> received_cleartext_tls_message_raw msg raw
+
+let lemma_received_cleartext_tls_message_raw_buffered_of_empty
+  (model:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires cleartext_handshake_buffer_empty model)
+      (ensures
+        received_cleartext_tls_message_raw_buffered model msg raw <==>
+        received_cleartext_tls_message_raw msg raw)
+      [SMTPat (received_cleartext_tls_message_raw_buffered model msg raw)]
+  =
+  match msg with
+  | M.TlsHandshake (M.ClientHello _) ->
+    (* The buffer is empty, so [buffer ++ f] IS [f] for every fragment; the
+       two rules then have literally the same body. *)
+    introduce forall (f:B.bytes).
+      Seq.equal (B.append (pending_cleartext_handshake model) f) f
+    with
+    ( Seq.append_empty_l f;
+      Seq.lemma_eq_elim (B.append (pending_cleartext_handshake model) f) f );
+    introduce
+      received_cleartext_tls_message_raw_buffered model msg raw ==>
+      received_cleartext_tls_message_raw msg raw
+    with
+    ( eliminate exists (fragment:B.bytes).
+        (W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+         W.parse_tls_message
+           T.Handshake
+           (B.append (pending_cleartext_handshake model) fragment) == Some msg)
+      with
+      ( Seq.lemma_eq_elim
+          (B.append (pending_cleartext_handshake model) fragment)
+          fragment ) );
+    introduce
+      received_cleartext_tls_message_raw msg raw ==>
+      received_cleartext_tls_message_raw_buffered model msg raw
+    with
+    ( eliminate exists (fragment:B.bytes).
+        (W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+         W.parse_tls_message T.Handshake fragment == Some msg)
+      with
+      ( Seq.lemma_eq_elim
+          (B.append (pending_cleartext_handshake model) fragment)
+          fragment ) )
+  | _ -> ()
+
 let network_message_is_cleartext (dir:direction) (msg:M.tls_message) : bool =
   match dir, msg with
   | CL.Sent, M.TlsHandshake (M.ClientHello _) -> true
@@ -2412,12 +2507,50 @@ let network_message_raw_delta_legal
   then
     match msg.CL.message_direction with
     | CL.Sent -> cleartext_tls_message_raw msg.CL.message_value raw
+    | CL.Received ->
+      received_cleartext_tls_message_raw_buffered
+        model
+        msg.CL.message_value
+        raw
+  else
+    raw_records_exactly
+      raw
+      T.Application_data
+      (protected_record_count msg.CL.message_direction msg.CL.message_value)
+
+(* The state-free counterpart of the rule above: what the shared record decoder
+   can establish about a wire record without knowing anything at all about the
+   connection.  It coincides with [network_message_raw_delta_legal] on every
+   message except a received ClientHello, which is the only case cleartext
+   reassembly generalises. *)
+let network_message_raw_delta_legal_unbuffered
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : GTot prop =
+  if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+  then
+    match msg.CL.message_direction with
+    | CL.Sent -> cleartext_tls_message_raw msg.CL.message_value raw
     | CL.Received -> received_cleartext_tls_message_raw msg.CL.message_value raw
   else
     raw_records_exactly
       raw
       T.Application_data
       (protected_record_count msg.CL.message_direction msg.CL.message_value)
+
+let lemma_network_message_raw_delta_legal_of_unbuffered
+  (model:connection_model)
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        network_message_raw_delta_legal_unbuffered msg raw /\
+        cleartext_handshake_buffer_empty model)
+      (ensures network_message_raw_delta_legal model msg raw)
+      [SMTPat (network_message_raw_delta_legal_unbuffered msg raw);
+       SMTPat (cleartext_handshake_buffer_empty model)]
+  =
+  ()
 let event_raw_delta_legal
   (model:connection_model)
   (ev:conn_event)

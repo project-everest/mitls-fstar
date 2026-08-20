@@ -188,7 +188,7 @@ fn dispatch_network_event
             content_type
             (Ghost.reveal 'fragment_bytes)
             M.TlsChangeCipherSpec));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             M.TlsChangeCipherSpec
             (Ghost.reveal 'raw_bytes)));
@@ -218,7 +218,7 @@ fn dispatch_network_event
             content_type
             (Ghost.reveal 'fragment_bytes)
             (M.TlsKeyUpdate req)));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsKeyUpdate req)
             (Ghost.reveal 'raw_bytes)));
@@ -334,7 +334,7 @@ fn dispatch_network_event
             content_type
             (Ghost.reveal 'fragment_bytes)
             (M.TlsIgnoredPostHandshake body)));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsIgnoredPostHandshake body)
             (Ghost.reveal 'raw_bytes)));

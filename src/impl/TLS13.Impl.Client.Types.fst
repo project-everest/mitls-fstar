@@ -1412,6 +1412,44 @@ let received_tls_raw_delta_legal
     B.empty
     raw_received
 
+(* The decoder-facing form of the rule above.
+
+   This is *exactly* what [received_tls_raw_delta_legal] meant before cleartext
+   reassembly existed, and it is deliberately state-free for the cleartext
+   receive case: it mentions no connection state at all.  That matters because
+   it is the shared, role-agnostic record decoder that has to establish it, and
+   the decoder only ever sees an erased ghost [st0] with no invariant attached.
+
+   The generalised, buffer-relative rule lives in the model
+   ([CS.received_cleartext_tls_message_raw_buffered]); the bridge between the
+   two is [lemma_received_tls_raw_delta_legal_of_unbuffered], and it is the
+   *driver* -- which holds the concrete pending buffer -- that discharges it.
+   This mirrors the protected path exactly, where the raw-delta rule is purely
+   record-shaped and message identity is established separately, by the driver,
+   through [SMCan.received_event_decode_projection]. *)
+let received_tls_raw_delta_legal_unbuffered
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : prop =
+  if CS.network_message_is_cleartext CL.Received msg
+  then CS.received_cleartext_tls_message_raw msg raw_received
+  else received_tls_raw_delta_legal st0 msg raw_received
+
+let lemma_received_tls_raw_delta_legal_of_unbuffered
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        received_tls_raw_delta_legal_unbuffered st0 msg raw_received /\
+        CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
+      (ensures received_tls_raw_delta_legal st0 msg raw_received)
+      [SMTPat (received_tls_raw_delta_legal_unbuffered st0 msg raw_received);
+       SMTPat (CS.cleartext_handshake_buffer_empty st0.CS.cs_model)]
+  =
+  ()
+
 let wire_parse_success
   (content_type:U8.t)
   (fragment:B.bytes)
@@ -2000,7 +2038,7 @@ let network_input_wf
   decoder_fragment_relation st0 content_type fragment raw_received /\
   forall msg.
   wire_parse_success content_type fragment msg ==>
-  received_tls_raw_delta_legal st0 msg raw_received
+  received_tls_raw_delta_legal_unbuffered st0 msg raw_received
 
 let raw_record_parse_success
   (raw_received:B.bytes)
@@ -2136,9 +2174,8 @@ let network_input_message_projection
   (if CS.network_message_is_cleartext CL.Received msg
    then True
    else protected_record_decodes_to_message st0 raw_received msg) /\
-  received_tls_raw_delta_legal st0 msg raw_received /\
-  CS.network_message_raw_delta_legal
-    st0.CS.cs_model
+  received_tls_raw_delta_legal_unbuffered st0 msg raw_received /\
+  CS.network_message_raw_delta_legal_unbuffered
     received_msg
     raw_received /\
   (if CS.network_message_is_cleartext CL.Received msg
@@ -2172,20 +2209,19 @@ let lemma_network_input_wf_message_projection
   } in
   assert (decoder_fragment_relation st0 content_type fragment raw_received);
   assert (raw_record_parse_success raw_received);
-  assert (received_tls_raw_delta_legal st0 msg raw_received);
-  assert (CS.event_raw_delta_legal
-    st0.CS.cs_model
-    (CS.ConnNetworkEvent received_msg)
-    B.empty
-    raw_received);
-  assert (CS.network_message_raw_delta_legal
-    st0.CS.cs_model
+  assert (received_tls_raw_delta_legal_unbuffered st0 msg raw_received);
+  assert (CS.network_message_raw_delta_legal_unbuffered
     received_msg
     raw_received);
   if CS.network_message_is_cleartext CL.Received msg
   then
     assert (CS.received_cleartext_tls_message_raw msg raw_received)
   else (
+    assert (CS.event_raw_delta_legal
+      st0.CS.cs_model
+      (CS.ConnNetworkEvent received_msg)
+      B.empty
+      raw_received);
     assert (CS.raw_records_exactly
       raw_received
       T.Application_data
@@ -2591,7 +2627,7 @@ let decoded_message_event_projection
   (app_out:B.bytes)
   : prop =
   legal_received_tls_response st0 st1 resp msg raw_received network_out app_out \/
-  (received_tls_raw_delta_legal st0 msg raw_received /\
+  (received_tls_raw_delta_legal_unbuffered st0 msg raw_received /\
    unexpected_message_response st0 st1 resp network_out app_out)
 
 let lemma_legal_handled_tls_response_decoded_message_event_projection
@@ -2618,7 +2654,7 @@ let lemma_legal_handled_tls_response_decoded_message_event_projection
   then ()
   else (
     assert (unexpected_message_response st0 st1 resp network_out app_out);
-    assert (received_tls_raw_delta_legal st0 msg raw_received)
+    assert (received_tls_raw_delta_legal_unbuffered st0 msg raw_received)
   )
 
 let legal_network_response
@@ -3093,7 +3129,7 @@ let network_bytes_received_event_projection
   buffer_resp.consumed_len == 0sz \/
   buffer_resp.response.status == DecodeError \/
   (exists msg.
-    received_tls_raw_delta_legal
+    received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -3140,7 +3176,7 @@ let network_bytes_received_decode_projection
   buffer_resp.consumed_len == 0sz \/
   buffer_resp.response.status == DecodeError \/
   (exists msg.
-    received_tls_raw_delta_legal
+    received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -3191,7 +3227,7 @@ let network_bytes_consumed_input_event_projection
   (buffer_resp.response.status == DecodeError /\
    network_bytes_decode_error_projection st0 st1 buffer_resp network_input network_out app_out) \/
   (exists msg.
-    received_tls_raw_delta_legal
+    received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -3216,7 +3252,7 @@ let network_bytes_consumed_input_projection
   (buffer_resp.response.status == DecodeError /\
    network_bytes_decode_error_projection st0 st1 buffer_resp network_input network_out app_out) \/
   (exists msg.
-    received_tls_raw_delta_legal
+    received_tls_raw_delta_legal_unbuffered
       st0
       msg
       (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -3372,7 +3408,7 @@ let lemma_network_bytes_consumed_input_event_projection_nonfailed_received_prefi
        tls_decode_error
     ) else (
       assert (exists msg.
-       received_tls_raw_delta_legal
+       received_tls_raw_delta_legal_unbuffered
          st0
          msg
          (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -3388,7 +3424,7 @@ let lemma_network_bytes_consumed_input_event_projection_nonfailed_received_prefi
        ID.indefinite_description_ghost
          M.tls_message
          (fun msg ->
-           received_tls_raw_delta_legal
+           received_tls_raw_delta_legal_unbuffered
              st0
              msg
              (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -4352,7 +4388,7 @@ let lemma_network_bytes_received_event_projection
       fragment
       msg
       raw_received);
-    assert (received_tls_raw_delta_legal st0 msg raw_received);
+    assert (received_tls_raw_delta_legal_unbuffered st0 msg raw_received);
     assert (decoded_message_event_projection
       st0
       st1
@@ -4362,7 +4398,7 @@ let lemma_network_bytes_received_event_projection
       network_out
       app_out);
     assert (exists msg'.
-      received_tls_raw_delta_legal st0 msg' raw_received /\
+      received_tls_raw_delta_legal_unbuffered st0 msg' raw_received /\
       decoded_message_event_projection
         st0
         st1
@@ -4394,7 +4430,7 @@ let lemma_network_bytes_consumed_input_event_projection
   else if buffer_resp.response.status == DecodeError then ()
   else (
     assert (exists msg.
-      received_tls_raw_delta_legal
+      received_tls_raw_delta_legal_unbuffered
         st0
         msg
         (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -4658,7 +4694,7 @@ let lemma_network_bytes_received_decode_projection
       fragment
       msg
       raw_received);
-    assert (received_tls_raw_delta_legal st0 msg raw_received);
+    assert (received_tls_raw_delta_legal_unbuffered st0 msg raw_received);
     assert (decoded_message_event_projection
       st0
       st1
@@ -4681,7 +4717,7 @@ let lemma_network_bytes_received_decode_projection
       assert (protected_record_decode_correct st0 raw_received msg)
     );
     assert (exists msg'.
-      received_tls_raw_delta_legal st0 msg' raw_received /\
+      received_tls_raw_delta_legal_unbuffered st0 msg' raw_received /\
       decoded_message_event_projection
        st0
        st1
@@ -4717,7 +4753,7 @@ let lemma_network_bytes_consumed_input_projection
   else if buffer_resp.response.status == DecodeError then ()
   else (
     assert (exists msg.
-      received_tls_raw_delta_legal
+      received_tls_raw_delta_legal_unbuffered
        st0
        msg
        (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -4861,7 +4897,7 @@ let lemma_decoded_message_event_response_received_decode_projection
       app_out
   )
   else (
-    assert (received_tls_raw_delta_legal st0 msg raw_received /\
+    assert (received_tls_raw_delta_legal_unbuffered st0 msg raw_received /\
       unexpected_message_response st0 st1 resp network_out app_out);
     lemma_unexpected_message_response_received_decode_projection
       st0
@@ -6450,7 +6486,7 @@ let network_unexpected_message_rejected_input_witness
   buffer_resp.response.status == IllegalTransition ==>
     buffer_resp.consumed_len == 0sz \/
     (exists msg.
-      received_tls_raw_delta_legal
+      received_tls_raw_delta_legal_unbuffered
         st0
         msg
         (network_consumed_prefix network_input buffer_resp.consumed_len) /\
@@ -6646,7 +6682,7 @@ let lemma_network_bytes_end_to_end_correct_rejected_input_witness
     else (
       assert (buffer_resp.response.status == DecodeError ==> False);
       assert (exists msg.
-        received_tls_raw_delta_legal
+        received_tls_raw_delta_legal_unbuffered
           st0
           msg
           (network_consumed_prefix network_input buffer_resp.consumed_len) /\

@@ -224,7 +224,7 @@ fn handle_handshake_message
             content_type
             (Ghost.reveal 'fragment_bytes)
             (M.TlsHandshake M.HelloRetryRequest)));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsHandshake M.HelloRetryRequest)
             (Ghost.reveal 'raw_bytes)));
@@ -333,7 +333,7 @@ fn handle_handshake_message
           assert (pure (Seq.equal
             (Ghost.reveal 'fragment_bytes)
             (WS.serialize_handshake (M.ServerHello sh))));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsHandshake (M.ServerHello sh))
             (Ghost.reveal 'raw_bytes)));
@@ -466,7 +466,7 @@ fn handle_handshake_message
           assert (pure (Seq.equal
             (Ghost.reveal 'fragment_bytes)
             (WS.serialize_handshake (M.EncryptedExtensions ee))));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsHandshake (M.EncryptedExtensions ee))
             (Ghost.reveal 'raw_bytes)));
@@ -583,7 +583,7 @@ fn handle_handshake_message
           assert (pure (Seq.equal
             (Ghost.reveal 'fragment_bytes)
             (WS.serialize_handshake (M.Certificate cert))));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsHandshake (M.Certificate cert))
             (Ghost.reveal 'raw_bytes)));
@@ -700,7 +700,7 @@ fn handle_handshake_message
           assert (pure (Seq.equal
             (Ghost.reveal 'fragment_bytes)
             (WS.serialize_handshake (M.CertificateVerify cv))));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsHandshake (M.CertificateVerify cv))
             (Ghost.reveal 'raw_bytes)));
@@ -814,7 +814,7 @@ fn handle_handshake_message
             content_type
             (Ghost.reveal 'fragment_bytes)
             (M.TlsHandshake (M.Finished fin))));
-          assert (pure (CT.received_tls_raw_delta_legal
+          assert (pure (CT.received_tls_raw_delta_legal_unbuffered
             'st0
             (M.TlsHandshake (M.Finished fin))
             (Ghost.reveal 'raw_bytes)));

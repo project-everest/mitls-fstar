@@ -1738,3 +1738,72 @@ fresh-server corollary, so the guarantee for real connections is unweakened.
 `consumed == B.length fragment`, so **two handshake messages coalesced into one
 record** are rejected on both the client and the server.  This is a separate
 gap from G3 and is not addressed by either route above.
+
+### Commit B, unblocked: un-fusing the cleartext delivery rule
+
+The "Commit B, measured" note above concluded that `Impl.Parser.DecoderWF` was an
+immovable obstruction, because the shared record decoder would have to prove a
+*state-dependent* fact about an erased ghost `'st0`.  That conclusion was wrong,
+and the reason it was wrong is worth recording, because it is the whole shape of
+the design.
+
+**The asymmetry has nothing to do with encryption.**  Compare the two receive
+paths in the model:
+
+| | record-shape obligation | message-identity obligation |
+|---|---|---|
+| protected | `event_raw_delta_legal`: `raw_records_exactly raw Application_data 1` — state-free, proved by the **decoder** | `SMCan.received_event_decode_projection` — state-aware (needs the read keys), proved by the **driver** |
+| cleartext (before) | `event_raw_delta_legal`: `∃f. parse_record_wire raw = Some (Handshake,f,·) ∧ parse_tls_message Handshake f = Some msg` — **both, fused**, proved by the decoder | `received_event_decode_projection` — literally `True` |
+
+For protected records the fragment is only obtainable by decrypting under the
+connection's keys, so the model was *forced* to keep the record-level obligation
+apart from the message-level one, and to give the latter its own driver-side slot.
+For cleartext records the fragment is right there in the record, so the original
+design fused the two into a single predicate and left the driver-side slot empty.
+That fusion — not encryption — is what made reassembly look impossible: it put a
+buffer-relative claim into a predicate that the role-agnostic, state-blind decoder
+has to discharge.
+
+**The fix is to un-fuse at the decoder/driver boundary**, exactly mirroring the
+protected path:
+
+* `CT.received_tls_raw_delta_legal_unbuffered` (new, `Impl.Client.Types`) is what
+  the decoder promises.  For a received cleartext message it is the *old*,
+  state-free rule; for everything else it is unchanged.  So
+  `network_input_wf`'s meaning is **bit-for-bit what it was before reassembly** —
+  `lemma_mk_cleartext_network_input_wf` needed no change at all, and the
+  `DecoderWF` "obstruction" simply evaporated.
+* `CS.network_message_raw_delta_legal_unbuffered` (new, `Spec.StateMachine`) is the
+  same split one level down, for `network_input_message_projection`.
+* `CS.received_cleartext_tls_message_raw_buffered` is the generalised, buffer-relative
+  model rule, wired into `network_message_raw_delta_legal`'s `Received` arm.
+* The bridge between them is emptiness of the pending buffer, carried by two
+  `SMTPat`-triggered lemmas
+  (`lemma_received_cleartext_tls_message_raw_buffered_of_empty`,
+  `lemma_network_message_raw_delta_legal_of_unbuffered`) plus a preservation lemma
+  `lemma_step_model_preserves_cleartext_handshake_buffer_empty`
+  (`hb_cleartext_handshake_bytes` is written in exactly three places, so an empty
+  buffer stays empty across any non-buffering step).
+
+**Where the obligation actually landed.**  Un-fusing pushed the buffer-relative
+claim to precisely the places that own a buffer:
+
+1. the **server's ClientHello delivery site** (`Impl.Server.Network`), via a
+   staging conjunct on `ST.server_end_to_end_invariant`;
+2. the **system-level wire bridges** (`TLS13.System`), via a staging conjunct on
+   `tls_system_inv`;
+3. the **cross-endpoint pairing theorems** (`ProtectedWireSegmentation`), via an
+   explicit `cleartext_handshake_buffer_empty server_model` hypothesis on the
+   published `.fsti` guarantees — the genuine, anticipated weakening.
+
+Items 1 and 2 are *staging* invariants: they are true today only because nothing
+emits a `ConnCleartextHandshake` step yet.  When the concrete pending buffer is
+threaded through the server they are replaced by "the model buffer equals the
+concrete buffer", and the delivery site proves the buffer-relative rule directly
+instead of bridging from emptiness.  Item 3 is permanent, and should eventually be
+accompanied by a fresh-server corollary that discharges the hypothesis from
+`initial`/`LocalStartServer`.
+
+State after this commit: `make -k -j48 verify` clean, `make check-admits` 0,
+`make -j48 test` 34/34 MATCH.  Behaviour is unchanged — the model *permits*
+reassembly now, and no implementation performs it yet.

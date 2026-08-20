@@ -635,13 +635,13 @@ let lemma_recv_read_model_facts
           r1.R.epoch == R.Initial ==> WStep.raw_appdata_count rr == 0)))
   = match msg with
     | M.TlsChangeCipherSpec ->
-      WStep.lemma_received_cleartext_count_zero msg rr
+      WStep.lemma_received_cleartext_count_zero m msg rr
     | M.TlsHandshake (M.ClientHello _) ->
-      WStep.lemma_received_cleartext_count_zero msg rr
+      WStep.lemma_received_cleartext_count_zero m msg rr
     | M.TlsHandshake (M.ServerHello _) ->
-      WStep.lemma_received_cleartext_count_zero msg rr
+      WStep.lemma_received_cleartext_count_zero m msg rr
     | M.TlsHandshake M.HelloRetryRequest ->
-      WStep.lemma_received_cleartext_count_zero msg rr
+      WStep.lemma_received_cleartext_count_zero m msg rr
     | M.TlsHandshake (M.EncryptedExtensions _)
     | M.TlsHandshake (M.Certificate _)
     | M.TlsHandshake (M.CertificateVerify _)

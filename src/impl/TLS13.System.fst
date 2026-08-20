@@ -645,7 +645,16 @@ let tls_system_inv (s:tls_system_state) : prop =
   server_e2e s /\
   client_clean s /\
   app_pending_empty s /\
-  protected_witnesses_ok s
+  protected_witnesses_ok s /\
+  (* Staging conjunct for cleartext handshake reassembly: the model now carries
+     a pending cleartext-handshake buffer and the ClientHello raw-delta rule is
+     relative to it, but no endpoint emits a [ConnCleartextHandshake] step yet,
+     so both buffers are provably always empty.  This is what lets the
+     system-level wire bridges keep reading "the raw bytes ARE the ClientHello"
+     off a delivery.  It is replaced by a buffer-agreement conjunct once the
+     server threads a concrete pending buffer. *)
+  CS.cleartext_handshake_buffer_empty s.client.CS.cs_model /\
+  CS.cleartext_handshake_buffer_empty s.server.CS.cs_model
 
 (** Application record-epoch reachable-shape bridge (sub-goal (a)).  The
     orphaned-but-inductive shapes from `TLS13.ConnectionState.Lemmas` have been

@@ -573,7 +573,7 @@ let lemma_server_driver_network_process_correct_preserves_supported_profile_sele
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (ST.server_network_consumed_prefix resp input) /\
@@ -757,7 +757,7 @@ let lemma_server_network_wire_accounting
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -967,7 +967,7 @@ let lemma_server_network_zero_consumed_raw_received_unchanged
     assert (ST.server_network_step_ok_received_decode_projection
       st0 st1 buffer_resp input network_out app_out);
     assert (exists msg.
-      CT.received_tls_raw_delta_legal
+      CT.received_tls_raw_delta_legal_unbuffered
         st0
         msg
         (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -990,7 +990,7 @@ let lemma_server_network_zero_consumed_raw_received_unchanged
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal
+          CT.received_tls_raw_delta_legal_unbuffered
             st0
             msg
             (ST.server_network_consumed_prefix buffer_resp input) /\

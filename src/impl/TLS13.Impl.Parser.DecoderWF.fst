@@ -261,7 +261,7 @@ let lemma_mk_cleartext_network_input_wf
   lemma_mk_cleartext_decoder_fragment_relation st0 content_type outer_ct fragment raw;
   introduce forall msg.
     CT.wire_parse_success content_type fragment msg ==>
-    CT.received_tls_raw_delta_legal st0 msg raw
+    CT.received_tls_raw_delta_legal_unbuffered st0 msg raw
   with introduce _ ==> _
   with (
     lemma_wire_parse_unique content_type fragment msg m;
@@ -303,7 +303,7 @@ let lemma_mk_cleartext_network_input_wf_none
   lemma_mk_cleartext_decoder_fragment_relation st0 content_type outer_ct fragment raw;
   introduce forall msg.
     CT.wire_parse_success content_type fragment msg ==>
-    CT.received_tls_raw_delta_legal st0 msg raw
+    CT.received_tls_raw_delta_legal_unbuffered st0 msg raw
   with introduce _ ==> _
   with (
     assert (exists ct.
@@ -351,7 +351,7 @@ let lemma_mk_protected_network_input_wf
   assert (CT.decoder_fragment_relation st0 content_type fragment raw);
   introduce forall msg.
     CT.wire_parse_success content_type fragment msg ==>
-    CT.received_tls_raw_delta_legal st0 msg raw
+    CT.received_tls_raw_delta_legal_unbuffered st0 msg raw
   with introduce _ ==> _
   with (
     lemma_wire_parse_unique content_type fragment msg m;
@@ -371,7 +371,7 @@ let lemma_mk_protected_network_input_wf_none
   assert (CT.decoder_fragment_relation st0 content_type fragment raw);
   introduce forall msg.
     CT.wire_parse_success content_type fragment msg ==>
-    CT.received_tls_raw_delta_legal st0 msg raw
+    CT.received_tls_raw_delta_legal_unbuffered st0 msg raw
   with introduce _ ==> _
   with (
     assert (exists ct.

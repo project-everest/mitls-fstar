@@ -2672,20 +2672,25 @@ let lemma_server_finished_sent_recv_eq0
 (** A received cleartext record (ServerHello / HelloRetryRequest /
     ChangeCipherSpec / ClientHello) has appdata-count 0. **)
 #push-options "--fuel 2 --ifuel 3 --z3rlimit 30"
-let lemma_received_cleartext_count_zero (msg:M.tls_message) (raw:B.bytes)
+let lemma_received_cleartext_count_zero
+  (m:CS.connection_model) (msg:M.tls_message) (raw:B.bytes)
   : Lemma
       (requires
         CS.network_message_is_cleartext CL.Received msg /\
         (forall (sh:GSH.serverHello).
            msg == M.TlsHandshake (M.ServerHello sh) ==>
            B.length (W.serialize_handshake (M.ServerHello sh)) <= 16640) /\
-        CS.received_cleartext_tls_message_raw msg raw)
+        CS.received_cleartext_tls_message_raw_buffered m msg raw)
       (ensures raw_appdata_count raw == 0)
   = match msg with
     | M.TlsHandshake (M.ClientHello _) ->
+      (* Reassembly only changes which bytes the message is parsed from; the
+         delta is still exactly one cleartext Handshake record. *)
       eliminate exists (fragment:M.sealed_record).
         W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
-        W.parse_tls_message T.Handshake fragment == Some msg
+        W.parse_tls_message
+          T.Handshake
+          (B.append (CS.pending_cleartext_handshake m) fragment) == Some msg
       with
         lemma_single_full_record_count raw T.Handshake
     | M.TlsHandshake (M.ServerHello _) ->
@@ -2779,7 +2784,7 @@ let lemma_client_recv_potential_step
          lemma_raw_appdata_count_seq_equal raw_received B.empty
        | CL.Received ->
          if CS.network_message_is_cleartext CL.Received dm.CL.message_value
-         then lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         then lemma_received_cleartext_count_zero m dm.CL.message_value raw_received
          else
            (assert (CS.protected_record_count CL.Received dm.CL.message_value == 1);
             lemma_protected_raw_count_one raw_received))
@@ -3698,7 +3703,7 @@ let lemma_server_cf_region_step
          lemma_raw_appdata_count_seq_equal raw_received B.empty
        | CL.Received ->
          if CS.network_message_is_cleartext CL.Received dm.CL.message_value
-         then lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         then lemma_received_cleartext_count_zero m dm.CL.message_value raw_received
          else
            (assert (CS.protected_record_count CL.Received dm.CL.message_value == 1);
             lemma_protected_raw_count_one raw_received))
@@ -4340,7 +4345,7 @@ let lemma_client_recv_upper_step
          lemma_raw_appdata_count_seq_equal raw_received B.empty
        | CL.Received ->
          if CS.network_message_is_cleartext CL.Received dm.CL.message_value
-         then lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         then lemma_received_cleartext_count_zero m dm.CL.message_value raw_received
          else
            (assert (CS.protected_record_count CL.Received dm.CL.message_value == 1);
             lemma_protected_raw_count_one raw_received))
@@ -5068,7 +5073,7 @@ let lemma_server_recv_upper_step
          lemma_raw_appdata_count_seq_equal raw_received B.empty
        | CL.Received ->
          if CS.network_message_is_cleartext CL.Received dm.CL.message_value
-         then lemma_received_cleartext_count_zero dm.CL.message_value raw_received
+         then lemma_received_cleartext_count_zero m dm.CL.message_value raw_received
          else
            (* A protected receive delivers the client Finished and lands at
               ControlApplicationData, leaving the region: m' is NOT in-region,
