@@ -45,6 +45,10 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
 module L = FStar.List.Tot
+module SM = Common.StateMachine
+module CW = TLS13.Spec.Endpoint.Wire
+module CTy = TLS13.Impl.CanonicalTypes
+module EAPI = TLS13.Spec.Endpoint.API
 
 (* ------------------------------------------------------------------ *)
 (* Helpers                                                             *)
@@ -122,17 +126,40 @@ let is_server_hs_install_dir (d:CS.traffic_direction) (ev:CS.conn_event) : bool 
 (* Top lemma                                                           *)
 (* ------------------------------------------------------------------ *)
 
-(** STAGING DISCHARGE.  [WStep.server_sm] is currently built over
-    [ES.server_step_nonbuffering], so no reachable server log contains a
-    cleartext-handshake buffering step and every
-    [no_cleartext_buffering_steps] gate above is derivable from reachability
-    alone.  This val is DELETED together with [ES.server_step_nonbuffering];
-    at that point those gates stop being derivable and start carrying real
-    content, exactly as the client's [no_buffering_steps] gates do. *)
-val lemma_server_reachable_no_cleartext_buffering
-  (cfg:CS.connection_config) (s:CS.connection_state)
-  : Lemma (requires WStep.server_reachable (CS.initial cfg) s)
-          (ensures no_cleartext_buffering_steps s.CS.cs_event_log)
+(** A server step appends exactly one canonical event to the log.  Exported so
+    that the system layer can invert a step into that event and push the
+    buffering gate through it. *)
+val lemma_server_step_facts
+  (st0 s':CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires ES.server_step st0 ev s' out)
+      (ensures
+        (exists (conn_ev:CS.conn_event).
+          s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
+          CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
+          CS.legal_event st0.CS.cs_model conn_ev))
+
+(** A legal model step that leaves the pending cleartext-handshake buffer EMPTY
+    is not a buffering step: [legal_cleartext_handshake_step] requires a
+    non-empty fragment, so buffering always leaves a non-empty buffer. *)
+val lemma_step_not_buffering (m0 m1:CS.connection_model) (conn_ev:CS.conn_event)
+  : Lemma (requires CS.step_model m0 conn_ev == Some m1 /\
+                    CS.cleartext_handshake_buffer_empty m1)
+          (ensures is_cleartext_buffering_step conn_ev == false)
+
+(** Extending a buffering-free log by a non-buffering event keeps it
+    buffering-free.  Together with [lemma_server_step_facts] and
+    [lemma_step_not_buffering] this makes [no_cleartext_buffering_steps] an
+    INDUCTIVE invariant of any run built from buffer-emptying server steps --
+    which is exactly the paired system's step relation
+    ([ES.server_step_nonbuffering]). *)
+val lemma_no_cleartext_buffering_snoc (log:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma (requires no_cleartext_buffering_steps log /\
+                    is_cleartext_buffering_step ev == false)
+          (ensures no_cleartext_buffering_steps (L.append log [ev]))
+
 
 val lemma_server_canonical_appdata_exact_spine
   (cfg:CS.connection_config) (s:CS.connection_state)

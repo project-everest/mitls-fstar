@@ -924,17 +924,15 @@ let rec lemma_trace_shape
 #pop-options
 
 (* ================================================================== *)
-(* STAGING: no reachable server log contains a buffering step.         *)
+(* Inverting the buffering gate across a single step.                  *)
 (*                                                                     *)
-(* [no_cleartext_buffering_steps] is stated as a HYPOTHESIS wherever it *)
-(* is needed, mirroring the client's [no_buffering_steps], because that *)
-(* is where it belongs once the server really does reassemble.  TODAY,  *)
-(* however, [WStep.server_sm] is built over                             *)
-(* [ES.server_step_nonbuffering], so a buffering step is not reachable  *)
-(* at all and the hypothesis is DISCHARGEABLE from reachability alone.  *)
-(* This block is the discharge; it is DELETED together with             *)
-(* [ES.server_step_nonbuffering], at which point every gate above stops *)
-(* being derivable and starts carrying real content.                    *)
+(* [no_cleartext_buffering_steps] is a HYPOTHESIS wherever it is        *)
+(* needed, mirroring the client's [no_buffering_steps].  Since          *)
+(* [WStep.server_sm] is built over the GENERAL [ES.server_step], a      *)
+(* buffering step IS reachable, so the gate carries real content: what  *)
+(* the system layer needs is not a discharge but an INVERSION -- if the *)
+(* gate holds of a log extended by one event, it held before and that   *)
+(* event was not a buffering step.                                      *)
 (* ================================================================== *)
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
@@ -965,47 +963,6 @@ let rec lemma_no_cleartext_buffering_snoc (log:list CS.conn_event) (ev:CS.conn_e
     | [] -> ()
     | _hd :: tl -> lemma_no_cleartext_buffering_snoc tl ev
 #pop-options
-
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
-let rec lemma_trace_no_cleartext_buffering
-  (init st0 st1:CS.connection_state)
-  (trace:list (SM.transition CS.connection_state CW.wire_message
-                             CTy.server_local_event EAPI.local_output))
-  : Lemma
-      (requires
-        SM.trace_reaches (WStep.server_sm init) st0 trace st1 /\
-        no_cleartext_buffering_steps st0.CS.cs_event_log)
-      (ensures no_cleartext_buffering_steps st1.CS.cs_event_log)
-      (decreases trace)
-  = match trace with
-    | [] -> ()
-    | tr :: rest ->
-        let s' = tr.SM.tr_next_state in
-        lemma_server_step_facts st0 s' tr.SM.tr_event tr.SM.tr_output;
-        eliminate exists (conn_ev:CS.conn_event).
-          (s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
-           CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
-           CS.legal_event st0.CS.cs_model conn_ev /\
-           is_server_canonical_event conn_ev)
-        with
-        (
-          lemma_step_not_buffering st0.CS.cs_model s'.CS.cs_model conn_ev;
-          lemma_no_cleartext_buffering_snoc st0.CS.cs_event_log conn_ev;
-          lemma_trace_no_cleartext_buffering init s' st1 rest
-        )
-#pop-options
-
-let lemma_server_reachable_no_cleartext_buffering
-  (cfg:CS.connection_config) (s:CS.connection_state)
-  : Lemma (requires WStep.server_reachable (CS.initial cfg) s)
-          (ensures no_cleartext_buffering_steps s.CS.cs_event_log)
-  = let init = CS.initial cfg in
-    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
-                                                 CTy.server_local_event EAPI.local_output)).
-      SM.trace_reaches (WStep.server_sm init) init trace s
-    with
-    ( lemma_trace_no_cleartext_buffering init init s trace )
-
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 let lemma_server_canonical_appdata_exact_spine

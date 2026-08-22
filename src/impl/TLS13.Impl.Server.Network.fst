@@ -1768,13 +1768,19 @@ fn process_network_bytes
                   assert (pure (SZ.v decoded_buffer.IM.decoded_buffer_fragment_len <=
                     Bounds.max_client_hello_len));
                   unfold (connection_exactly s 'st0);
-                  let ready =
+                  let can_receive =
                     CQ.can_receive_client_hello
                       s
                       decoded_buffer.IM.decoded_buffer_fragment_len
                       #ch
                       #'st0;
+                  // The model's received-ClientHello raw-delta rule is
+                  // buffer-relative: this record reads as the WHOLE message
+                  // only when nothing is set aside.  A non-empty buffer means
+                  // the record continues a message still being assembled.
+                  let buffer_empty = CQ.cleartext_handshake_buffer_empty_runtime s;
                   fold (connection_exactly s 'st0);
+                  let ready = can_receive && buffer_empty;
                   if ready {
                     let resp =
                       process_client_hello

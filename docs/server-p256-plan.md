@@ -2199,3 +2199,124 @@ Total fallout across the tree: two errors. One was the missing drain above; the
 other was a pure timeout in
 `Impl.Client.Driver.State.lemma_client_receive_observation_network_correct_from_buffered`,
 fixed with `--z3rlimit 100` (the file previously carried no options at all).
+
+## G3 commit B7 -- un-restricting the server step relation
+
+With the concrete buffer in place (B6), the server's step relation can finally
+be generalised.  The commit does three things.
+
+**1. The server e2e invariant stops pinning the buffer empty.**
+`Impl.Server.Types.server_end_to_end_invariant` carried
+`CS.cleartext_handshake_buffer_empty st.cs_model` as a conjunct in its own
+right.  That is what let the server's ClientHello delivery site bridge from the
+decoder's state-free promise to the model's buffer-relative raw-delta rule -- and
+it is falsified outright by a buffering step, so it had to go.  The bridge is
+recovered exactly as the client's was in B6: `Impl.Server.Network.fst`'s
+ClientHello site now reads
+
+```
+let can_receive   = CQ.can_receive_client_hello ... in
+let buffer_empty  = CQ.cleartext_handshake_buffer_empty_runtime s in
+let ready         = can_receive && buffer_empty in
+```
+
+so a record arriving on a non-empty buffer fails CLOSED (routes to the existing
+`IllegalTransition` branch).  Dead code today; it becomes the reassembly path in
+the buffering-branch step.  `Impl.Server.Send.fst` had one `assert_norm` that
+spelled the invariant's conjuncts out by hand and needed the matching edit.
+
+**2. The canonical / reachability / refinement layers move onto `ES.server_step`.**
+`server_state_machine.sm_step`, `server_canonical_step_rel`, `WStep.server_sm`
+and the 15 `server_step_nonbuffering` asserts in
+`Impl.Server.CanonicalProtocol.fst` all point at the general relation.  Two
+vestigial `assert (cleartext_handshake_buffer_empty st1.cs_model)` lines in
+`CanonicalProtocol` (which existed only to feed the restricted relation) are
+gone, as is `lemma_server_step_nonbuffering_wire_event`, which had no callers.
+`WStep.lemma_server_reachable_step` drops its emptiness `requires` for the same
+reason.  This is the point of the whole exercise: the IMPLEMENTATION is now free
+to emit a `ConnCleartextHandshake` step and still refine the canonical machine.
+
+**3. The exclusion moves from reachability into the system invariant.**
+`SCShape.lemma_server_reachable_no_cleartext_buffering` is deleted -- with
+`WStep.server_sm` general it is simply false.  Its four consumers
+(`Temporal.fst:78`, `HsMaterialFamilies.fst:669,796`, `AppSeqPairing.fst:2692`)
+instead read `SCShape.no_cleartext_buffering_steps s.server.cs_event_log` off
+`tls_system_inv`, which gains it as a conjunct beside the two emptiness
+conjuncts.  Three lemmas are exported from `ServerCanonicalShape.fsti` to make
+that conjunct inductive: `lemma_server_step_facts` (a step appends exactly one
+event), `lemma_step_not_buffering` (an empty post-state buffer refutes
+buffering, since a legal buffering step has a non-empty fragment) and
+`lemma_no_cleartext_buffering_snoc`.  They compose into the new
+`System.lemma_server_no_cleartext_buffering_pres`, called from the three
+server-changing preservation lemmas; the three client-changing ones freeze
+`s.server`, so the conjunct transfers for free.
+
+### Why the PRODUCT keeps a restricted step -- the correction to the plan
+
+The ordering-correction section above predicted that the system product could be
+generalised too, with `tls_system_inv`'s emptiness conjunct GATED
+(`no_cleartext_buffering_steps ... ==> cleartext_handshake_buffer_empty ...`).
+That was tried and does not close.  With a fully general `sstep`, everything in
+the tree verifies EXCEPT one assertion, in
+`System.lemma_wire_facts_deliver_to_server`:
+
+```
+assert (CS.received_cleartext_tls_message_raw (M.TlsHandshake (M.ClientHello server_ch)) raw)
+```
+
+The delivery only supplies the BUFFER-RELATIVE reading
+(`received_cleartext_tls_message_raw_buffered`), which collapses to the exact one
+only on an empty pre-state buffer.  Recovering that needs the gate on
+`a.server`'s log -- but this lemma's job is to establish `ch_wire_equiv b` and
+`hello_coupling b`, which are UNGATED conjuncts of `tls_system_inv`, so gating
+the lemma just pushes the gate into those two conjuncts and from there into
+every consumer of the invariant.  And the gate cannot be an unconditional
+conjunct of `tls_system_inv` while the product can buffer, because a buffering
+step falsifies it.
+
+The resolution is to notice that the product is a DIFFERENT ARTIFACT from the
+canonical machine.  `tls_machine_iface` models the verified client facing the
+verified server; that client emits each cleartext handshake message as exactly
+one record, so the paired server never has cause to buffer.  Cross-record
+ClientHellos arise only against a third-party client, which the paired-system
+theorems do not model -- and this is precisely the scoping the product ALREADY
+uses for the client's own protected-handshake buffering (`CCShape.no_buffering_steps`).
+So `ES.server_step_nonbuffering` survives, but ONLY as
+`tls_machine_iface.sstep`, and its doc comment now says so.  Because a legal
+buffering step always leaves a non-empty buffer, "post-state buffer empty" IS
+"this step did not buffer", which is exactly what makes the log-level gate
+inductive.
+
+Consequence: the ~18 conjunct deletions predicted by the ordering correction do
+NOT happen.  Those conjuncts are the unfolding of the product's step relation,
+which is still restricted, so `System.fst`'s shapes and the
+`eliminate exists` sites in `AppExtrasInv` / `AppStreamInv` / `HsSeqPairing` /
+`AppSeqPairing` / `HsMaterialFamilies` are untouched.  The whole system-layer
+diff is: one new conjunct, one new preservation lemma wired into three call
+sites, and four discharge calls deleted.
+
+### Published-guarantee consequence
+
+The paired-system theorems are now explicitly scoped to runs in which the server
+took no cleartext-handshake buffering step, alongside the existing client-side
+scope.  `Temporal.record_material_agrees_when_ready_scoped` is UNAFFECTED -- the
+gate is discharged from the invariant, not added to its antecedent -- so the
+flagship statement does not weaken.  What changes is the meaning of the product
+itself, and that belongs in `docs/server-client-parity.md` P2b when the ledger
+flips.
+
+### Remaining steps
+
+1. ~~Concrete pending cleartext buffer~~ -- DONE (B6).
+2. ~~Un-restrict the server step relation~~ -- DONE (B7).
+3. New shared `endpoint_status` constructor ("record consumed, buffered, keep
+   reading").
+4. Buffering branch + coalescing parse at `Impl.Server.Network.fst:1630-1650`
+   (the `ready` gate added here is where the `else` branch grows the buffering
+   path), client equivalent beside `try_buffer_protected_handshake_record`.
+   ALSO: the model's received-ServerHello arm still does not drain
+   `hb_cleartext_handshake_bytes` (`StateMachine.fst:903`), and
+   `mark_received_server_hello` needs the matching concrete reset.
+5. `ES.client_step` WireEvent generalisation (`client_wire_received_event`'s
+   `ConnCleartextHandshake` arm is still `False`).
+6. Ledger flip + scope statement in `docs/server-client-parity.md` P2b.

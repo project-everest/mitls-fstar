@@ -250,33 +250,34 @@ type server_initial_state =
 
 noextract
 
-(** STAGING RESTRICTION — a server step that leaves the pending cleartext
-    handshake buffer EMPTY.
+(** THE PAIRED-SYSTEM SERVER STEP -- [server_step] restricted to steps that
+    leave the pending cleartext-handshake buffer EMPTY.
 
-    [server_step] now admits a [ConnCleartextHandshake] buffering step, which is
-    the generality the server needs in order to reassemble a ClientHello split
-    across records.  Two layers, however, still read the model as though a
-    cleartext handshake message always arrives in exactly one record:
+    [server_step] itself admits a [ConnCleartextHandshake] buffering step: that
+    is the generality the SERVER IMPLEMENTATION needs in order to reassemble a
+    ClientHello split across records, and the canonical state machine
+    ([server_state_machine]), the reachability relation ([WStep.server_sm]) and
+    the refinement relation ([server_canonical_step_rel]) are all built over the
+    general step.
 
-      * the SYSTEM product ([TLS13.System.tls_machine_iface]), whose wire bridges
-        read "the delivered raw bytes ARE the ClientHello" straight off a
-        delivery; and
-      * the server SHAPE invariant ([TLS13.ConnectionState.ServerCanonicalShape]),
-        whose [log_shape] pins the event log to an EXACT list of milestone events
-        per control state -- a buffering step appends to that log without moving
-        the control, so it shifts every arm.
+    The PAIRED SYSTEM ([TLS13.System.tls_machine_iface]) is a different artifact:
+    a closed world in which the verified client faces the verified server.  That
+    client emits each cleartext handshake message as exactly one record, so the
+    paired server never has cause to buffer -- cross-record ClientHellos arise
+    only against a THIRD-PARTY client, which the paired-system theorems do not
+    model.  Proving "the paired client never splits" needs the cross-endpoint
+    record-material agreement, which lives above [TLS13.System]; so the product
+    takes it as its scope rather than as a theorem, exactly as it already does
+    for the client's own protected-handshake buffering
+    ([CCShape.no_buffering_steps]).
 
-    Both layers are therefore built over THIS step relation rather than over
-    [server_step] itself.  Because a buffering step always leaves a NON-empty
-    buffer ([legal_cleartext_handshake_step] requires a non-empty fragment), this
-    is EXACTLY the pre-generalisation relation: every step the old [server_step]
-    admitted satisfies it, and no buffering step does.  So nothing downstream is
-    weakened, and the whole staging debt of the generalisation is concentrated in
-    this one definition.
-
-    Discharging it is the property-layer half of threading a concrete pending
-    buffer through the server: the bridges become buffer-relative, [log_shape]
-    moves onto a buffering-filtered view of the log, and this wrapper is deleted. **)
+    Because a buffering step always leaves a NON-EMPTY buffer
+    ([legal_cleartext_handshake_step] requires a non-empty fragment), pinning the
+    post-state buffer empty is EXACTLY "this step did not buffer".  That is what
+    makes [SCShape.no_cleartext_buffering_steps s.server.cs_event_log] an
+    INDUCTIVE conjunct of [TLS13.System.tls_system_inv], which is in turn what
+    lets the system-level wire bridges keep reading "the delivered raw bytes ARE
+    the ClientHello" off a delivery. **)
 let server_step_nonbuffering
   (#local_event_repr:Type0)
   {| server_event_representation local_event_repr |}
@@ -287,30 +288,6 @@ let server_step_nonbuffering
   : GTot prop =
   server_step #local_event_repr st0 ev st1 out /\
   CS.cleartext_handshake_buffer_empty st1.CS.cs_model
-
-(** A NON-BUFFERING wire step's event is a received network message: the
-    buffering case is ruled out by the empty post-state buffer. **)
-let lemma_server_step_nonbuffering_wire_event
-  (#local_event_repr:Type0)
-  {| server_event_representation local_event_repr |}
-  (st0:CS.connection_state)
-  (wire:W.wire_message)
-  (st1:CS.connection_state)
-  (out:SM.step_output W.wire_message API.local_output)
-  (conn_ev:CS.conn_event)
-  : Lemma
-      (requires
-        server_step_nonbuffering #local_event_repr st0 (SM.WireEvent wire) st1 out /\
-        server_wire_received_event conn_ev /\
-        SMCan.canonical_wire_step
-          st0 st1 conn_ev
-          (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
-          (W.wire_serialize wire))
-      (ensures
-        CS.ConnNetworkEvent? conn_ev /\
-        (CS.ConnNetworkEvent?._0 conn_ev).CL.message_direction == CL.Received)
-  = lemma_wire_received_event_empty_buffer_not_buffering
-      st0.CS.cs_model conn_ev st1.CS.cs_model
 
 (** THE RECEIVED-MESSAGE BRIDGE for a server wire step whose post-state pending
     buffer is empty.
@@ -408,10 +385,7 @@ let server_state_machine
   =
   {
     SM.sm_initial_state = initial;
-    (* STAGING: see [server_step_nonbuffering].  Keeping the canonical server
-       state machine on the non-buffering step is what lets the reachability and
-       shape layers keep their pre-generalisation reading of the event log. *)
-    SM.sm_step = server_step_nonbuffering;
+    SM.sm_step = server_step;
   }
 
 noextract
@@ -438,7 +412,7 @@ let server_canonical_step_rel
   exists
     (ev:SM.event W.wire_message local_event_repr)
     (out:SM.step_output W.wire_message API.local_output).
-      server_step_nonbuffering st0 ev st1 out
+      server_step st0 ev st1 out
 
 let server_progress_preorder
   (#local_event_repr:Type0)

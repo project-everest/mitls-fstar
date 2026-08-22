@@ -850,8 +850,7 @@ let lemma_server_handshake_write_seal_some
 =
   assert_norm (ST.server_end_to_end_invariant st ==
     (ST.server_state_correct st /\
-     ST.server_raw_to_message_replay_consistent st /\
-     CS.cleartext_handshake_buffer_empty st.CS.cs_model));
+     ST.server_raw_to_message_replay_consistent st));
   assert (ST.server_state_correct st);
   assert_norm (ST.server_state_correct st ==
     (ST.server_state_core_correct st /\

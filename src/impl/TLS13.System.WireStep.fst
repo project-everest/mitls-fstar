@@ -427,7 +427,7 @@ let client_sm (init:CS.connection_state)
 let server_sm (init:CS.connection_state)
   : SM.state_machine CS.connection_state CW.wire_message CTy.server_local_event EAPI.local_output
   = { SM.sm_initial_state = init;
-      SM.sm_step = ES.server_step_nonbuffering #CTy.server_local_event }
+      SM.sm_step = ES.server_step #CTy.server_local_event }
 
 let client_sys (init:CS.connection_state)
   : WFSM.wire_format_state_machine CS.connection_state CW.wire_message CTy.client_local_event EAPI.local_output
@@ -461,8 +461,7 @@ let lemma_server_reachable_step
   (ev:SM.event CW.wire_message CTy.server_local_event)
   (out:SM.step_output CW.wire_message EAPI.local_output)
   : Lemma
-      (requires server_reachable init st0 /\ ES.server_step st0 ev st1 out /\
-                CS.cleartext_handshake_buffer_empty st1.CS.cs_model)
+      (requires server_reachable init st0 /\ ES.server_step st0 ev st1 out)
       (ensures server_reachable init st1)
   = SM.lemma_valid_state_after_step (server_sm init) st0 ev st1 out
 

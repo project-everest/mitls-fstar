@@ -665,10 +665,7 @@ let lemma_hma_client_local (a b:SY.tls_system_state)
             Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
           ==> ks_agree b.client b.server
         with
-          ( (* STAGING: the server-side gate is discharged from reachability while
-               [ES.server_step_nonbuffering] still restricts [WStep.server_sm]. *)
-            SCS.lemma_server_reachable_no_cleartext_buffering
-              b.server.CS.cs_model.CS.model_config b.server;
+          ( (* The server-side gate is a conjunct of [SY.tls_system_inv b]. *)
             lemma_establish_cf b )
     )
 #pop-options
@@ -793,9 +790,7 @@ let lemma_hma_deliver_to_client_flip (a b:SY.tls_system_state)
         assert (MP.Quiet? b.channel);
         // Both slots present (antecedent) + client@SFV ⇒ ks_agree, with the
         // server's shared secret recovered control-independently from its slot.
-        // STAGING: server-side gate discharged from reachability.
-        SCS.lemma_server_reachable_no_cleartext_buffering
-          b.server.CS.cs_model.CS.model_config b.server;
+        // The server-side gate is a conjunct of [SY.tls_system_inv b].
         lemma_establish_cf b
       )
     )

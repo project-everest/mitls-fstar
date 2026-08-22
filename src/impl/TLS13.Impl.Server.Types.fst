@@ -768,17 +768,7 @@ let server_end_to_end_invariant
   (st:CS.connection_state)
   : prop =
   server_state_correct st /\
-  server_raw_to_message_replay_consistent st /\
-  (* Staging invariant for cleartext handshake reassembly.
-
-     The model now carries a pending cleartext-handshake buffer, and the
-     ClientHello raw-delta rule is relative to it.  No implementation emits a
-     [ConnCleartextHandshake] step yet, so the buffer is provably always empty;
-     pinning that here is what lets the server's ClientHello delivery site
-     bridge from the decoder's state-free promise to the model's buffer-relative
-     rule.  When the concrete pending buffer is threaded through the server, this
-     conjunct is replaced by "the model buffer equals the concrete buffer". *)
-  CS.cleartext_handshake_buffer_empty st.CS.cs_model
+  server_raw_to_message_replay_consistent st
 
 let lemma_initial_server_state_correct
   (cfg:CS.connection_config)

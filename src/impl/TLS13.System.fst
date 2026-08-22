@@ -648,15 +648,28 @@ let tls_system_inv (s:tls_system_state) : prop =
   client_clean s /\
   app_pending_empty s /\
   protected_witnesses_ok s /\
-  (* Staging conjunct for cleartext handshake reassembly: the model now carries
-     a pending cleartext-handshake buffer and the ClientHello raw-delta rule is
-     relative to it, but no endpoint emits a [ConnCleartextHandshake] step yet,
-     so both buffers are provably always empty.  This is what lets the
-     system-level wire bridges keep reading "the raw bytes ARE the ClientHello"
-     off a delivery.  It is replaced by a buffer-agreement conjunct once the
-     server threads a concrete pending buffer. *)
+  (* CLEARTEXT REASSEMBLY SCOPE.  The model carries a pending
+     cleartext-handshake buffer and the hello raw-delta rules are relative to
+     it, so the system-level wire bridges may only read "the delivered raw bytes
+     ARE the ClientHello" off a delivery when nothing is set aside.
+
+     CLIENT: [ES.client_wire_received_event]'s [ConnCleartextHandshake] arm is
+     still [False], so no client step can buffer and the emptiness is outright.
+
+     SERVER: [ES.server_step] DOES admit a buffering step -- that is the
+     generality the server implementation needs in order to reassemble a
+     ClientHello split across records.  The PAIRED SYSTEM, however, runs the
+     verified client against the verified server, and that client emits each
+     cleartext handshake message as exactly one record; the product therefore
+     steps by [ES.server_step_nonbuffering] and carries the resulting log-level
+     scope explicitly.  The gate is inductive by
+     [lemma_server_no_cleartext_buffering_pres], and it is what the layers above
+     ([TLS13.System.Temporal], [TLS13.System.HsMaterialFamilies],
+     [TLS13.System.AppSeqPairing]) read off the invariant instead of deriving it
+     from reachability -- reachability no longer excludes buffering. *)
   CS.cleartext_handshake_buffer_empty s.client.CS.cs_model /\
-  CS.cleartext_handshake_buffer_empty s.server.CS.cs_model
+  CS.cleartext_handshake_buffer_empty s.server.CS.cs_model /\
+  SCShape.no_cleartext_buffering_steps s.server.CS.cs_event_log
 
 (** Application record-epoch reachable-shape bridge (sub-goal (a)).  The
     orphaned-but-inductive shapes from `TLS13.ConnectionState.Lemmas` have been
@@ -3307,6 +3320,39 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_pw_pres_client_send a b local c' out w sent)
 #pop-options
 
+(** The cleartext-reassembly SCOPE conjunct of [tls_system_inv] is inductive
+    across a PRODUCT server step.  The product steps by
+    [ES.server_step_nonbuffering], whose post-state pending buffer is empty, and
+    a buffering step always leaves a NON-empty buffer -- so the single event the
+    step appends to the log is never a [ConnCleartextHandshake].
+
+    This is the replacement for the retired
+    [SCShape.lemma_server_reachable_no_cleartext_buffering]: reachability is now
+    stated over the GENERAL [ES.server_step] (the implementation must be free to
+    buffer), so the exclusion can no longer be read off a reachable state and is
+    carried here instead. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_server_no_cleartext_buffering_pres
+  (a:tls_system_state)
+  (s':CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.server_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires
+        SCShape.no_cleartext_buffering_steps a.server.CS.cs_event_log /\
+        ES.server_step #CTy.server_local_event a.server ev s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model)
+      (ensures SCShape.no_cleartext_buffering_steps s'.CS.cs_event_log)
+  = SCShape.lemma_server_step_facts a.server s' ev out;
+    eliminate exists (conn_ev:CS.conn_event).
+      (s'.CS.cs_event_log == L.append a.server.CS.cs_event_log [conn_ev] /\
+       CS.step_model a.server.CS.cs_model conn_ev == Some s'.CS.cs_model /\
+       CS.legal_event a.server.CS.cs_model conn_ev)
+    with
+    ( SCShape.lemma_step_not_buffering a.server.CS.cs_model s'.CS.cs_model conn_ev;
+      SCShape.lemma_no_cleartext_buffering_snoc a.server.CS.cs_event_log conn_ev )
+#pop-options
+
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_server_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ MP.Quiet? a.channel /\ tls_step_server_send a b /\ tls_no_rekeying b)
@@ -3327,6 +3373,7 @@ let lemma_pres_server_send (a b:tls_system_state)
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;
        lemma_server_step_ksp a.server s' (SM.LocalEvent local) out;
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
+       lemma_server_no_cleartext_buffering_pres a s' (SM.LocalEvent local) out;
        lemma_bp_server_send a local s' out w sent;
        lemma_wire_facts_server_send a b;
        lemma_server_step_preserves_pending a.server s' (SM.LocalEvent local) out;
@@ -3380,6 +3427,7 @@ let lemma_pres_deliver_to_server (a b:tls_system_state)
        lemma_server_reach_pres a s' (SM.WireEvent wire) out;
        lemma_server_step_ksp a.server s' (SM.WireEvent wire) out;
        lemma_server_step_e2e a.server s' (SM.WireEvent wire) out;
+       lemma_server_no_cleartext_buffering_pres a s' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_server a wire s' out raw snap sent;
        lemma_wire_facts_deliver_to_server a b;
        lemma_server_step_preserves_pending a.server s' (SM.WireEvent wire) out;
@@ -3464,6 +3512,7 @@ let lemma_pres_server_local (a b:tls_system_state)
        lemma_server_reach_pres a s' (SM.LocalEvent local) out;
        lemma_server_step_ksp a.server s' (SM.LocalEvent local) out;
        lemma_server_step_e2e a.server s' (SM.LocalEvent local) out;
+       lemma_server_no_cleartext_buffering_pres a s' (SM.LocalEvent local) out;
        lemma_bp_server_local a local s' out;
        lemma_wire_facts_server_local a b;
        lemma_server_step_preserves_pending a.server s' (SM.LocalEvent local) out;

@@ -2691,8 +2691,6 @@ let lemma_ama_deliver_to_server
           lemma_client_send_installs_app_write_pins snap a.client.CS.cs_model sent;
           SY.lemma_appdata_implies_client_ready b;
           SY.lemma_appdata_implies_server_ready b;
-          SCShape.lemma_server_reachable_no_cleartext_buffering
-            b.server.CS.cs_model.CS.model_config b.server;
           SY.lemma_ready_quiescent_agrees b
         )
       )

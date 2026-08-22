@@ -916,7 +916,7 @@ let lemma_server_network_step_ok_process_correct
     st0.CS.cs_model
     (ST.received_message_event msg)
     consumed);
-  assert (server_step_nonbuffering #CTypes.server_local_event
+  assert (server_step #CTypes.server_local_event
     st0
     (SM.WireEvent wire)
     st1
@@ -3266,7 +3266,7 @@ let lemma_server_wire_network_error_refines_state_machine
           wire
           consumed
           residual /\
-        server_step_nonbuffering #CTypes.server_local_event
+        server_step #CTypes.server_local_event
           st0
           (SM.WireEvent wire)
           st1
@@ -3301,7 +3301,7 @@ let lemma_server_wire_network_error_refines_state_machine
       wire
       consumed
       residual' /\
-    server_step_nonbuffering #CTypes.server_local_event
+    server_step #CTypes.server_local_event
       st0
       (SM.WireEvent wire)
       st1
@@ -3313,7 +3313,7 @@ let lemma_server_wire_network_error_refines_state_machine
       msg
       consumed
       residual' /\
-    server_step_nonbuffering #CTypes.server_local_event
+    server_step #CTypes.server_local_event
       st0
       (SM.WireEvent msg)
       st1
@@ -3808,7 +3808,7 @@ let lemma_server_network_connection_failed_bridge_result
     CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format [];
     CS.delta_raw_received = CW.wire_serialize wire;
   } st1);
-  assert (server_step_nonbuffering #CTypes.server_local_event
+  assert (server_step #CTypes.server_local_event
     st0
     (SM.WireEvent wire)
     st1
@@ -5323,10 +5323,6 @@ let lemma_server_network_nonstep_canonical_step
         server_canonical_step_rel #CTypes.server_local_event st0 st1)
   =
   let resp = buffer_resp.ST.response in
-  (* [server_canonical_step_rel] is stated over [server_step_nonbuffering] (see
-     [ES.server_step_nonbuffering]); the post-state emptiness it additionally
-     demands is already a conjunct of [server_end_to_end_invariant st1]. *)
-  assert (CS.cleartext_handshake_buffer_empty st1.CS.cs_model);
   // Inner helper: construct a LocalFail canonical step from a legal_connection_delta.
   let lemma_localfail_step
     (err:T.tls_error)
@@ -5367,7 +5363,7 @@ let lemma_server_network_nonstep_canonical_step
       conn_ev
       B.empty);
     assert (server_step st0 (SM.LocalEvent (CTypes.ServerAPI api)) st1 (CPI.step_output [] []));
-    assert (server_step_nonbuffering st0 (SM.LocalEvent (CTypes.ServerAPI api)) st1
+    assert (server_step st0 (SM.LocalEvent (CTypes.ServerAPI api)) st1
               (CPI.step_output [] []))
   in
   if resp.ST.status = ST.DecodeError then (
@@ -5465,7 +5461,7 @@ let lemma_server_network_nonstep_canonical_step
       st0.CS.cs_model
       conn_ev
       (CW.wire_serialize wire));
-    assert (server_step_nonbuffering #CTypes.server_local_event
+    assert (server_step #CTypes.server_local_event
       st0 (SM.WireEvent wire) st1 (CPI.step_output [] local_outputs));
     assert (server_canonical_step_rel #CTypes.server_local_event st0 st1)
   )
@@ -5550,7 +5546,7 @@ let lemma_server_network_event_progress
       consumed
       wire_outputs
       local_outputs;
-    assert (server_step_nonbuffering #CTypes.server_local_event
+    assert (server_step #CTypes.server_local_event
       st0
       (SM.WireEvent
         (ID.indefinite_description_ghost
@@ -5563,7 +5559,7 @@ let lemma_server_network_event_progress
               consumed
               residual /\
             SZ.v result.CPI.process_consumed_len == Seq.length consumed /\
-            server_step_nonbuffering #CTypes.server_local_event
+            server_step #CTypes.server_local_event
               st0
               (SM.WireEvent msg)
               st1
@@ -5685,7 +5681,7 @@ let lemma_server_network_common_witness_progress
           CPI.output_written network_out result.CPI.process_produced_len produced /\
           Seq.equal st1.CS.cs_wire_log.CL.raw_received (Seq.append received0 consumed) /\
           Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced)) in
-    assert (server_step_nonbuffering #CTypes.server_local_event
+    assert (server_step #CTypes.server_local_event
       st0
       (SM.WireEvent msg)
       st1
@@ -5741,9 +5737,6 @@ let lemma_server_local_event_progress
     payload
     network_out
     app_out;
-  (* [server_canonical_step_rel] is stated over [server_step_nonbuffering]; the
-     post-state emptiness it demands is a conjunct of the e2e invariant. *)
-  assert (CS.cleartext_handshake_buffer_empty st1.CS.cs_model);
   let api : CTypes.server_api_event = {
     CTypes.server_local_kind = kind;
     CTypes.server_local_payload = payload;
@@ -5807,7 +5800,7 @@ let lemma_server_local_event_progress
       st0.CS.cs_model ev raw_sent);
     lemma_server_step_from_local_witness
       st0 st1 local_ev ev raw_sent wire_outputs local_outputs;
-    assert (server_step_nonbuffering st0 (SM.LocalEvent local_ev) st1
+    assert (server_step st0 (SM.LocalEvent local_ev) st1
               (CPI.step_output wire_outputs local_outputs));
     assert (server_canonical_step_rel #CTypes.server_local_event st0 st1);
     RTC.closure_step
@@ -5843,7 +5836,7 @@ let lemma_server_local_event_progress
         (SM.LocalEvent (CTypes.ServerAPI api_fail))
         st1
         (CPI.step_output [] []));
-      assert (server_step_nonbuffering
+      assert (server_step
         st0
         (SM.LocalEvent (CTypes.ServerAPI api_fail))
         st1
