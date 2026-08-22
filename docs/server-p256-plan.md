@@ -2428,3 +2428,50 @@ Three layers, each a deliberate simplification of its protected twin:
 - **B15** the ledger: flip the three `refused` cells, add three-record and
   over-cap cells, and state the unsplit-runs scope limit in
   `docs/server-client-parity.md` P2b.
+
+
+## G3 commit B10: the cleartext buffering runtime queries
+
+The two reads a decode path needs before it may take a buffering step, both
+additive and both mirroring an existing protected-path query.
+
+- `Repr.fsti`: `pending_cleartext_handshake_snapshot` (a vec plus its length).
+  The protected twin carries a third field, `pending_protected_parsed`; the
+  cleartext one does not, because a cleartext buffering step never delivers, so
+  the whole buffer is always still pending.
+- `Queries.copy_pending_cleartext_handshake` -- twin of
+  `copy_pending_protected_handshake`.  `None` means exactly
+  "`CS.cleartext_handshake_buffer_empty`", and a `Some` always carries the whole
+  pending stream with `0 < len`.
+- `Queries.can_buffer_cleartext_handshake` -- twin of
+  `can_buffer_protected_handshake`, establishing
+  `CS.cleartext_handshake_buffering_allowed`.  Two differences: it admits BOTH
+  roles (server at stage tag 12 = `HsAwaitingClientHello`, client at stage tag 2
+  = `HsClientHelloSent`), and it reads no sequence number, because a cleartext
+  record has none.
+
+### The shape of the remaining work, read off the client's protected path
+
+The protected-buffering precedent is `CT.coalesced_network_bytes_end_to_end_correct`
+(`Impl.Client.Types.fst:3645`): a NEW predicate that is
+`network_bytes_end_to_end_correct \/ (exists step. protected_handshake_step_correct ...)`.
+The original predicate is left untouched; the top-level `fn` weakens its
+`ensures` to the coalesced form, and every consumer absorbs the new disjunct.
+On the client that cost roughly fifteen lemmas in
+`Impl.Client.CanonicalProtocol.fst` (`lemma_client_coalesced_not_step_ok_is_strong`,
+`lemma_client_coalesced_head_step`, `lemma_client_network_protected_head_bridge_result`,
+and the `lemma_client_network_bridge_obligation` case split at `:5165`).
+
+The server mirror is:
+
+- `Endpoint.Server`: `lemma_server_wire_step_from_cleartext_witness`, the twin of
+  `lemma_client_wire_step_from_protected_head_witness`.  This one is cheap --
+  B7 already made `server_wire_received_event` accept `ConnCleartextHandshake`.
+- `Server.Types`: `cleartext_handshake_step_correct` + intro/preservation
+  lemmas + `coalesced_server_network_correct`.
+- `Server.Network`: `try_buffer_cleartext_handshake_record`, called from the
+  `decoded_buffer_parsed == None` arm of `process_network_bytes` BEFORE
+  `process_decode_error` -- a split hello fails to PARSE, it does not fail the
+  transition guard, so the B7 `ready` gate is not the right place.
+- `Server.CanonicalProtocol`, `Server.Driver.BufferedNetwork`, `Server.fst/.fsti`:
+  absorb the new disjunct.

@@ -463,6 +463,15 @@ type pending_protected_handshake_snapshot = {
   pending_protected_parsed: SZ.t;
 }
 
+(* Cleartext twin of [pending_protected_handshake_snapshot].  There is no
+   `parsed` cursor: a cleartext buffering step never delivers, so the whole
+   buffer is always still pending. *)
+noeq
+type pending_cleartext_handshake_snapshot = {
+  pending_cleartext_fragment: V.vec U8.t;
+  pending_cleartext_fragment_len: SZ.t;
+}
+
 type key_schedule_snapshot = {
   snapshot_shared_secret_present: bool;
   snapshot_handshake_secret_present: bool;

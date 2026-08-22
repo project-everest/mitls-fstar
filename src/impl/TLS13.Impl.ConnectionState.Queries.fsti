@@ -141,6 +141,54 @@ fn cleartext_handshake_buffer_empty_runtime
           pure (empty ==>
             CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
 
+(** Copy out the pending CLEARTEXT handshake reassembly buffer.
+
+    Cleartext twin of [copy_pending_protected_handshake], and simpler for the
+    same reason its model is: there is no `parsed` cursor, so `None` means
+    exactly "the buffer is empty" and a `Some` always carries the whole
+    pending stream. **)
+fn copy_pending_cleartext_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:option pending_cleartext_handshake_snapshot
+  ensures connection_exactly c st0 **
+          (match snapshot with
+           | None ->
+             pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
+           | Some pending ->
+             exists* fragment.
+               V.pts_to pending.pending_cleartext_fragment fragment **
+               pure (
+                 V.is_full_vec pending.pending_cleartext_fragment /\
+                 V.length pending.pending_cleartext_fragment ==
+                   SZ.v pending.pending_cleartext_fragment_len /\
+                 B.length fragment ==
+                   SZ.v pending.pending_cleartext_fragment_len /\
+                 Seq.equal
+                   fragment
+                   (CS.pending_cleartext_handshake st0.CS.cs_model) /\
+                 SZ.v pending.pending_cleartext_fragment_len ==
+                   B.length (CS.pending_cleartext_handshake st0.CS.cs_model) /\
+                 SZ.v pending.pending_cleartext_fragment_len <=
+                   max_handshake_flight_len /\
+                 0 < SZ.v pending.pending_cleartext_fragment_len))
+
+(** The runtime gate for setting a cleartext record's fragment aside instead of
+    interpreting it: exactly the (role, control) half of
+    [CS.legal_cleartext_handshake_step]'s buffering guard, which the caller
+    cannot discharge from the bytes it has in hand.  Unlike
+    [can_buffer_protected_handshake] this admits BOTH roles -- the server
+    awaiting a ClientHello and the client awaiting a ServerHello -- and reads no
+    sequence number, because a cleartext record has none. **)
+fn can_buffer_cleartext_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==> CS.cleartext_handshake_buffering_allowed st0.CS.cs_model)
+
 fn get_key_schedule_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)

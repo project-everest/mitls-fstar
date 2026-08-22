@@ -388,6 +388,157 @@ fn cleartext_handshake_buffer_empty_runtime
   empty
 }
 
+(** Copy out the pending CLEARTEXT handshake reassembly buffer.
+
+    Cleartext twin of [copy_pending_protected_handshake], and simpler for the
+    same reason its model is: there is no `parsed` cursor, so `None` means
+    exactly "the buffer is empty" and a `Some` always carries the whole
+    pending stream. **)
+fn copy_pending_cleartext_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:option pending_cleartext_handshake_snapshot
+  ensures connection_exactly c st0 **
+          (match snapshot with
+           | None ->
+             pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
+           | Some pending ->
+             exists* fragment.
+               V.pts_to pending.pending_cleartext_fragment fragment **
+               pure (
+                 V.is_full_vec pending.pending_cleartext_fragment /\
+                 V.length pending.pending_cleartext_fragment ==
+                   SZ.v pending.pending_cleartext_fragment_len /\
+                 B.length fragment ==
+                   SZ.v pending.pending_cleartext_fragment_len /\
+                 Seq.equal
+                   fragment
+                   (CS.pending_cleartext_handshake st0.CS.cs_model) /\
+                 SZ.v pending.pending_cleartext_fragment_len ==
+                   B.length (CS.pending_cleartext_handshake st0.CS.cs_model) /\
+                 SZ.v pending.pending_cleartext_fragment_len <=
+                   max_handshake_flight_len /\
+                 0 < SZ.v pending.pending_cleartext_fragment_len))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  with parsed. _;
+  unfold (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+  with storage stored_len. _;
+
+  let fragment_len = !c.handshake.buffers.cleartext_handshake_bytes.len;
+  assert (pure (fragment_len == stored_len));
+  lemma_cleartext_handshake_buffer_empty_from_length st0.CS.cs_model fragment_len;
+
+  if SZ.gt fragment_len 0sz {
+    let fragment = V.alloc 0uy fragment_len;
+    V.to_array_pts_to c.handshake.buffers.cleartext_handshake_bytes.bytes;
+    V.to_array_pts_to fragment;
+    Arr.memcpy_l
+      fragment_len
+      (V.vec_to_array c.handshake.buffers.cleartext_handshake_bytes.bytes)
+      (V.vec_to_array fragment);
+    V.to_vec_pts_to fragment;
+    V.to_vec_pts_to c.handshake.buffers.cleartext_handshake_bytes.bytes;
+    with fragment_bytes. assert (V.pts_to fragment fragment_bytes);
+    assert (pure (B.length fragment_bytes == SZ.v fragment_len));
+    Seq.lemma_eq_intro
+      fragment_bytes
+      (Seq.slice fragment_bytes 0 (SZ.v fragment_len));
+    assert (pure (Seq.equal
+      fragment_bytes
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes));
+    let pending = {
+      pending_cleartext_fragment = fragment;
+      pending_cleartext_fragment_len = fragment_len;
+    };
+    rewrite (V.pts_to fragment fragment_bytes) as
+      (V.pts_to pending.pending_cleartext_fragment fragment_bytes);
+    fold (sized_bytes_exactly
+      c.handshake.buffers.cleartext_handshake_bytes
+      max_handshake_flight_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+    fold (handshake_buffers_exactly
+      c.handshake.buffers
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+    fold (handshake_exactly
+      c.handshake
+      st0.CS.cs_model.CS.model_handshake);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    Some pending
+  } else {
+    assert (pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model));
+    fold (sized_bytes_exactly
+      c.handshake.buffers.cleartext_handshake_bytes
+      max_handshake_flight_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+    fold (handshake_buffers_exactly
+      c.handshake.buffers
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+    fold (handshake_exactly
+      c.handshake
+      st0.CS.cs_model.CS.model_handshake);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    None #pending_cleartext_handshake_snapshot
+  }
+}
+
+(** The runtime gate for setting a cleartext record's fragment aside instead of
+    interpreting it: exactly the (role, control) half of
+    [CS.legal_cleartext_handshake_step]'s buffering guard, which the caller
+    cannot discharge from the bytes it has in hand.  Unlike
+    [can_buffer_protected_handshake] this admits BOTH roles -- the server
+    awaiting a ClientHello and the client awaiting a ServerHello -- and reads no
+    sequence number, because a cleartext record has none. **)
+fn can_buffer_cleartext_handshake
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==> CS.cleartext_handshake_buffering_allowed st0.CS.cs_model)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+
+  let is_server = config_role_is_server c.config;
+  let is_client = config_role_is_client c.config;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+
+  let server_ok = is_server && (stage = 12uy);
+  let client_ok = is_client && (stage = 2uy);
+  let ok = tag_ok && (server_ok || client_ok);
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> CS.cleartext_handshake_buffering_allowed st0.CS.cs_model));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn get_key_schedule_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
