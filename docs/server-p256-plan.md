@@ -1945,3 +1945,66 @@ already are.  That is a genuine scope limit, not an accounting trick, and it mus
 be stated plainly in `docs/server-client-parity.md` alongside the ledger flip --
 the interop cell will say `ok` (a split ClientHello is accepted) while the paired
 theorems continue to cover only unsplit runs.
+
+### Commit B3: the shape layer absorbs buffering (the mirror, built)
+
+The mirror described above is now built and green, and it went in almost exactly
+as the client's does.
+
+**In `ServerCanonicalShape`:** `is_cleartext_buffering_step` /
+`no_cleartext_buffering_steps` beside `log_has_no_received_ccs`;
+`is_server_canonical_event` now classifies `ConnCleartextHandshake` as `True`;
+`step_pre` / `hpre` gained `is_cleartext_buffering_step conn_ev == false`; both
+trace inductions (`lemma_trace_shape`, `lemma_trace_hellos`) carry the hypothesis
+and discharge it per step with the same `L.append_memP` pair already used for CCS.
+`log_shape` and all seven per-control helpers are **untouched**, and
+`lemma_server_step_facts` is back over the general `ES.server_step`.
+
+**Outside it:** the three exported shape lemmas, both flagship inversion input
+bundles, and `System.protected_witnesses_ok` plus its six transport gates carry
+the server conjunct beside the client one, with
+`lemma_no_cleartext_buffering_steps_prefix` mirroring the client's prefix
+transport.
+
+**The wall was much smaller than B2 estimated.** Only four external call sites
+exist for the three shape lemmas, so the whole tree needed four files touched
+beyond `ServerCanonicalShape` itself. The `visible_log` work and the flagship
+restatement are both permanently unnecessary.
+
+**Staging, fenced:** `WStep.server_sm` is still over `ES.server_step_nonbuffering`,
+so no buffering step is reachable and every new gate is currently DERIVABLE.
+`lemma_server_reachable_no_cleartext_buffering` does that discharge by trace
+induction and is called at four upper-layer sites (`Temporal`, `AppSeqPairing`,
+`HsMaterialFamilies` x2) so the flagship temporal theorems are not scoped down
+before the capability exists. It is deleted together with
+`server_step_nonbuffering`.
+
+### What is actually left, and in what order
+
+1. **Un-restrict the step relation.** Delete `ES.server_step_nonbuffering` and
+   `lemma_server_reachable_no_cleartext_buffering` together; point
+   `server_state_machine`, `server_canonical_step_rel`, `WStep.server_sm` and
+   `tls_machine_iface` at `ES.server_step`. The gates built in B3 then start
+   carrying real content, and the four discharge calls become the four places
+   that must instead RECEIVE the hypothesis.
+2. **Untie the emptiness knot** -- `cleartext_handshake_buffer_empty` has ~70
+   occurrences across 16 files, the two structural ones being `tls_system_inv`'s
+   pair of conjuncts and the 16 system-layer lemma requires added in B2. Follow
+   the client: make these HYPOTHESES on the theorems that need them, not
+   invariants. The `ProtectedWireSegmentation` occurrences are the published
+   guarantee's pairing lemmas and need a fresh-server corollary so the guarantee
+   is not net-weakened.
+3. **Concrete pending buffer** through `Repr.fsti`/`.fst` and ~20 dependent files,
+   mirroring `encrypted_server_handshake_bytes`.
+4. **New `endpoint_status` constructor** for "record consumed, buffered, keep
+   reading" (`NeedMoreInput` pins `consumed_len == 0sz`; `StepOk` pins `st1` to a
+   "received X" state). 14 exhaustive match arms.
+5. **The buffering branch AND a coalescing parse** at `Impl.Server.Network.fst`
+   `:1630-1650`; the decoder parses the fragment alone, so even the final record
+   of a split hello yields `parsed == None` today.
+6. **Ledger**: flip `clienthello-across-two-records` + the aes128 twin to `ok`,
+   add a three-record cell and an over-cap cell, and state plainly in
+   `docs/server-client-parity.md` that the paired theorems remain scoped to
+   unsplit runs. **The client half (`serverhello-across-two-records`) stays
+   `refused`** until the client gains cleartext reassembly -- G3 is symmetric and
+   only the server half is in scope here.
