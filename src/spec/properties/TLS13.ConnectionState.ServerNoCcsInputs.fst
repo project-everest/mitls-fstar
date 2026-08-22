@@ -124,19 +124,14 @@ let lemma_server_step_appends_non_ccs
 =
   match ev with
   | SM.WireEvent wire ->
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev =
-         CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received; CL.message_value = msg; } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (ES.server_wire_received_event conn_ev /\
        SMCan.canonical_wire_step st0 st1 conn_ev
          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
          (CW.wire_serialize wire) /\
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
     with
     (
-      let conn_ev =
-        CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received; CL.message_value = msg; } in
       // canonical_wire_step (unfold) gives legal_connection_delta, hence the log
       // append and the received raw-delta legality.
       assert (CS.legal_connection_delta st0
@@ -146,12 +141,16 @@ let lemma_server_step_appends_non_ccs
                   CS.delta_raw_received = CW.wire_serialize wire; } st1);
       assert (st1.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev]);
       assert (L.memP wire (WFSM.event_input_messages ev));
-      // rule out a received CCS
-      (match msg with
+      // rule out a received CCS (a buffering event is never one, by definition)
+      (match conn_ev with
+       | CS.ConnCleartextHandshake _ -> ()
+       | CS.ConnNetworkEvent dm ->
+       match dm.CL.message_value with
        | M.TlsChangeCipherSpec ->
          // event_raw_delta_legal (Received) => network_message_raw_delta_legal
          assert (CS.network_message_raw_delta_legal st0.CS.cs_model
-                   { CL.message_direction = CL.Received; CL.message_value = msg; }
+                   { CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsChangeCipherSpec; }
                    (CW.wire_serialize wire));
          assert (Seq.equal (CW.wire_serialize wire)
                    (CS.serialized_cleartext_tls_message M.TlsChangeCipherSpec));

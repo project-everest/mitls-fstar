@@ -99,12 +99,8 @@ let lemma_server_step_recv_pot_lower
              + server_recv_pot st0.CS.cs_model)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev =
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value = msg;
-           } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (ES.server_wire_received_event conn_ev /\
          CS.legal_connection_delta
            st0
            {
@@ -122,11 +118,6 @@ let lemma_server_step_recv_pot_lower
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
       with
       (
-        let conn_ev =
-          CS.ConnNetworkEvent {
-            CL.message_direction = CL.Received;
-            CL.message_value = msg;
-          } in
         let raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs in
         WStep.lemma_list_appdata_count_single_wire wire;
         lemma_server_recv_pot_step

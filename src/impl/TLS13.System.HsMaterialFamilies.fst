@@ -581,6 +581,7 @@ let lemma_hma_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     (

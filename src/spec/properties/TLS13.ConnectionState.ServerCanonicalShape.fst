@@ -307,7 +307,7 @@ let lemma_server_step_facts
   (out:SM.step_output CW.wire_message EAPI.local_output)
   : Lemma
       (requires
-        ES.server_step st0 ev s' out)
+        ES.server_step_nonbuffering st0 ev s' out)
       (ensures
         (exists (conn_ev:CS.conn_event).
           s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
@@ -316,6 +316,10 @@ let lemma_server_step_facts
           is_server_canonical_event conn_ev))
   = match ev with
     | SM.WireEvent wire ->
+      (* [server_step] admits a cleartext BUFFERING step, which is not a
+         canonical shape event; the non-buffering post-state emptiness rules it
+         out and recovers the received-message reading. *)
+      ES.lemma_server_wire_step_received_msg #CTy.server_local_event st0 wire s' out;
       eliminate exists (msg:M.tls_message).
         (let conn_ev =
            CS.ConnNetworkEvent {
@@ -797,14 +801,27 @@ let lemma_server_step_config
       (requires ES.server_step st0 ev s' out)
       (ensures
         s'.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
-  = lemma_server_step_facts st0 s' ev out;
-    eliminate exists (conn_ev:CS.conn_event).
-      (s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
-       CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
-       CS.legal_event st0.CS.cs_model conn_ev /\
-       is_server_canonical_event conn_ev)
-    with
-      CLem.lemma_step_model_preserves_config st0.CS.cs_model conn_ev s'.CS.cs_model
+  (* Config preservation holds for EVERY server step, buffering included (a
+     buffering step is inert on the config), so this one does not go through
+     [lemma_server_step_facts]'s canonical-event classification. *)
+  = match ev with
+    | SM.WireEvent wire ->
+      eliminate exists (conn_ev:CS.conn_event).
+        (ES.server_wire_received_event conn_ev /\
+         SMCan.canonical_wire_step st0 s' conn_ev
+           (Common.WireFormat.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (CW.wire_serialize wire) /\
+         ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      with
+        CLem.lemma_step_model_preserves_config st0.CS.cs_model conn_ev s'.CS.cs_model
+    | SM.LocalEvent local ->
+      eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
+        (ES.server_representation_matches local conn_ev /\
+         ES.server_wire_outputs_match raw_sent out.SM.so_wire_outputs /\
+         ES.server_local_outputs_match conn_ev out.SM.so_local_outputs /\
+         SMCan.canonical_wire_step st0 s' conn_ev raw_sent B.empty)
+      with
+        CLem.lemma_step_model_preserves_config st0.CS.cs_model conn_ev s'.CS.cs_model
 #pop-options
 
 (* ================================================================== *)

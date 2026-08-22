@@ -730,7 +730,8 @@ let lemma_asi_deliver_to_server_raw
         SY.tls_system_inv a /\ ASP.app_extras a /\ app_stream_pairing a /\
         a.channel == SY.tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
-        ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out)
+        ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model)
       (ensures app_stream_pairing ({ a with server = s'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
@@ -740,6 +741,7 @@ let lemma_asi_deliver_to_server_raw
     // hypothesis `ASP.lemma_recv_msg_not_cleartext` (LOAD-BEARING below) needs; if
     // ifuel ever drops, the inline re-derivation goes away and this becomes the fix.
     ASP.lemma_server_reachable_ctrl_ok a.server.CS.cs_model.CS.model_config a.server;
+    ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
     eliminate exists (msg:M.tls_message).
       (let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -972,6 +974,7 @@ let lemma_asi_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with lemma_asi_deliver_to_server_raw a wire s' out raw snap sent
 

@@ -150,6 +150,37 @@ let lemma_pwrite_received
 #pop-options
 
 (** ─────────────────────────────────────────────────────────────────────────
+    A CLEARTEXT BUFFERING step preserves `pwrite_ok`, for the same reason a
+    `Received` network event does, only more simply: its `event_raw_delta_legal`
+    arm pins `delta_raw_sent` to empty, and `step_cleartext_handshake` leaves
+    `model_record` and `model_control` alone entirely (it writes exactly one
+    field, `hb_cleartext_handshake_bytes`).  So both sides of `pwrite_ok` --
+    the write schedule and the sent-byte appdata count -- are literally
+    unchanged, and no forward-closure argument is needed.  Same for `pread_ok`:
+    nothing was opened, so the read schedule does not move either.
+    ───────────────────────────────────────────────────────────────────────── **)
+#push-options "--fuel 2 --ifuel 3 --z3rlimit 40"
+let lemma_pwrite_cleartext
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  (step:CS.cleartext_handshake_step)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st0 d st1 /\
+        d.CS.delta_event == CS.ConnCleartextHandshake step /\
+        pwrite_ok st0)
+      (ensures pwrite_ok st1)
+  = assert_norm (CS.step_model st0.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                 CS.step_cleartext_handshake st0.CS.cs_model step);
+    CS.lemma_step_cleartext_handshake_inert st0.CS.cs_model step;
+    assert (CS.event_raw_delta_legal st0.CS.cs_model d.CS.delta_event
+              d.CS.delta_raw_sent d.CS.delta_raw_received);
+    assert (Seq.equal d.CS.delta_raw_sent B.empty);
+    assert (Seq.equal st1.CS.cs_wire_log.CL.raw_sent st0.CS.cs_wire_log.CL.raw_sent);
+    WStep.lemma_raw_appdata_count_seq_equal
+      st1.CS.cs_wire_log.CL.raw_sent st0.CS.cs_wire_log.CL.raw_sent
+#pop-options
+
+(** ─────────────────────────────────────────────────────────────────────────
     COUNTING-ALGEBRA CORE (write side).
 
     `pwrite_ok` is preserved by any legal delta, GIVEN three per-event facts that

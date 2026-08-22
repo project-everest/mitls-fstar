@@ -155,6 +155,63 @@ let server_wire_outputs_match
     (WF.serialize_all W.tls_record_wire_format outs)
     raw_sent
 
+(**
+  The connection events a SERVER may attribute to taking delivery of one wire
+  record.  Two shapes, exactly as on the client (see
+  [TLS13.Spec.Endpoint.Client.client_wire_received_event]):
+
+  - [ConnNetworkEvent] with [Received] direction -- the record carried a whole
+    TLS message, which the server interprets;
+  - [ConnCleartextHandshake] -- the record carried a cleartext handshake
+    fragment that does NOT yet complete a message, so its bytes are set aside
+    and reassembled with those of later records.  This is what lets a server
+    accept a ClientHello split across several records, which real clients do
+    whenever the hello exceeds the peer's record size (large key shares, long
+    SNI/ALPN lists, GREASE).
+
+  A server never receives a [ConnProtectedHandshake] step: that is the CLIENT's
+  reassembly of protected handshake records, driven by a different
+  [conn_event], and admitting it here would let the server bypass its own
+  cleartext-handshake rules.
+ **)
+let server_wire_received_event
+  (conn_ev:CS.conn_event)
+  : GTot prop =
+  match conn_ev with
+  | CS.ConnNetworkEvent tm -> tm.CL.message_direction == CL.Received
+  | CS.ConnCleartextHandshake _ -> True
+  | CS.ConnProtectedHandshake _ -> False
+  | CS.ConnLocalEvent _ -> False
+
+(** A wire step whose POST-state buffer is EMPTY cannot have been a buffering
+    step: [legal_cleartext_handshake_step] insists the buffered fragment is
+    non-empty, so the post-state stream [pending ++ fragment] is non-empty too.
+
+    This is the vacuity argument every site that still pins the buffer empty
+    needs in order to recover the old "the event is a received network message"
+    reading of a wire step. **)
+let lemma_wire_received_event_empty_buffer_not_buffering
+  (m0:CS.connection_model)
+  (conn_ev:CS.conn_event)
+  (m1:CS.connection_model)
+  : Lemma
+      (requires
+        server_wire_received_event conn_ev /\
+        CS.step_model m0 conn_ev == Some m1 /\
+        CS.cleartext_handshake_buffer_empty m1)
+      (ensures
+        CS.ConnNetworkEvent? conn_ev /\
+        (CS.ConnNetworkEvent?._0 conn_ev).CL.message_direction == CL.Received)
+  = match conn_ev with
+    | CS.ConnCleartextHandshake step ->
+      Seq.lemma_len_append
+        (CS.pending_cleartext_handshake m0)
+        step.CS.cleartext_handshake_fragment;
+      assert (0 < B.length (CS.cleartext_handshake_stream m0 step));
+      assert (Seq.equal (CS.pending_cleartext_handshake m1)
+                        (CS.cleartext_handshake_stream m0 step))
+    | _ -> ()
+
 let server_step
   (#local_event_repr:Type0)
   {| server_event_representation local_event_repr |}
@@ -165,12 +222,8 @@ let server_step
   : GTot prop =
   match ev with
   | SM.WireEvent wire ->
-    exists msg.
-      let conn_ev =
-        CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = msg;
-        } in
+    exists conn_ev.
+      server_wire_received_event conn_ev /\
       SMCan.canonical_wire_step
         st0
         st1
@@ -196,6 +249,153 @@ type server_initial_state =
   }
 
 noextract
+
+(** STAGING RESTRICTION — a server step that leaves the pending cleartext
+    handshake buffer EMPTY.
+
+    [server_step] now admits a [ConnCleartextHandshake] buffering step, which is
+    the generality the server needs in order to reassemble a ClientHello split
+    across records.  Two layers, however, still read the model as though a
+    cleartext handshake message always arrives in exactly one record:
+
+      * the SYSTEM product ([TLS13.System.tls_machine_iface]), whose wire bridges
+        read "the delivered raw bytes ARE the ClientHello" straight off a
+        delivery; and
+      * the server SHAPE invariant ([TLS13.ConnectionState.ServerCanonicalShape]),
+        whose [log_shape] pins the event log to an EXACT list of milestone events
+        per control state -- a buffering step appends to that log without moving
+        the control, so it shifts every arm.
+
+    Both layers are therefore built over THIS step relation rather than over
+    [server_step] itself.  Because a buffering step always leaves a NON-empty
+    buffer ([legal_cleartext_handshake_step] requires a non-empty fragment), this
+    is EXACTLY the pre-generalisation relation: every step the old [server_step]
+    admitted satisfies it, and no buffering step does.  So nothing downstream is
+    weakened, and the whole staging debt of the generalisation is concentrated in
+    this one definition.
+
+    Discharging it is the property-layer half of threading a concrete pending
+    buffer through the server: the bridges become buffer-relative, [log_shape]
+    moves onto a buffering-filtered view of the log, and this wrapper is deleted. **)
+let server_step_nonbuffering
+  (#local_event_repr:Type0)
+  {| server_event_representation local_event_repr |}
+  (st0:CS.connection_state)
+  (ev:SM.event W.wire_message local_event_repr)
+  (st1:CS.connection_state)
+  (out:SM.step_output W.wire_message API.local_output)
+  : GTot prop =
+  server_step #local_event_repr st0 ev st1 out /\
+  CS.cleartext_handshake_buffer_empty st1.CS.cs_model
+
+(** A NON-BUFFERING wire step's event is a received network message: the
+    buffering case is ruled out by the empty post-state buffer. **)
+let lemma_server_step_nonbuffering_wire_event
+  (#local_event_repr:Type0)
+  {| server_event_representation local_event_repr |}
+  (st0:CS.connection_state)
+  (wire:W.wire_message)
+  (st1:CS.connection_state)
+  (out:SM.step_output W.wire_message API.local_output)
+  (conn_ev:CS.conn_event)
+  : Lemma
+      (requires
+        server_step_nonbuffering #local_event_repr st0 (SM.WireEvent wire) st1 out /\
+        server_wire_received_event conn_ev /\
+        SMCan.canonical_wire_step
+          st0 st1 conn_ev
+          (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+          (W.wire_serialize wire))
+      (ensures
+        CS.ConnNetworkEvent? conn_ev /\
+        (CS.ConnNetworkEvent?._0 conn_ev).CL.message_direction == CL.Received)
+  = lemma_wire_received_event_empty_buffer_not_buffering
+      st0.CS.cs_model conn_ev st1.CS.cs_model
+
+(** THE RECEIVED-MESSAGE BRIDGE for a server wire step whose post-state pending
+    buffer is empty.
+
+    [server_step] now quantifies over a [conn_event] satisfying
+    [server_wire_received_event], which admits a [ConnCleartextHandshake]
+    buffering step as well as a received network message.  Every site that still
+    pins the pending buffer empty on the post-state can rule the buffering case
+    out (a buffering step always leaves a NON-empty buffer) and recover the
+    original "there is a received [tls_message]" reading.  This lemma performs
+    that recovery once, so those sites need only a single call in front of their
+    existing [eliminate exists (msg:M.tls_message)]. **)
+let lemma_server_wire_step_received_msg
+  (#local_event_repr:Type0)
+  {| server_event_representation local_event_repr |}
+  (st0:CS.connection_state)
+  (wire:W.wire_message)
+  (st1:CS.connection_state)
+  (out:SM.step_output W.wire_message API.local_output)
+  : Lemma
+      (requires
+        server_step #local_event_repr st0 (SM.WireEvent wire) st1 out /\
+        CS.cleartext_handshake_buffer_empty st1.CS.cs_model)
+      (ensures
+        (exists (msg:M.tls_message).
+          (let conn_ev =
+             CS.ConnNetworkEvent {
+               CL.message_direction = CL.Received;
+               CL.message_value = msg;
+             } in
+           CS.legal_connection_delta
+             st0
+             {
+               CS.delta_event = conn_ev;
+               CS.delta_raw_sent =
+                 WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs;
+               CS.delta_raw_received = W.wire_serialize wire;
+             }
+             st1 /\
+           SMCan.sent_event_nonempty_seal_projection
+             st0.CS.cs_model conn_ev
+             (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs) /\
+           SMCan.received_event_nonempty_decode_projection
+             st0.CS.cs_model conn_ev (W.wire_serialize wire) /\
+           server_local_outputs_match conn_ev out.SM.so_local_outputs)))
+  = eliminate exists (conn_ev:CS.conn_event).
+      (server_wire_received_event conn_ev /\
+       SMCan.canonical_wire_step
+         st0 st1 conn_ev
+         (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+         (W.wire_serialize wire) /\
+       server_local_outputs_match conn_ev out.SM.so_local_outputs)
+    with
+    (
+      lemma_wire_received_event_empty_buffer_not_buffering
+        st0.CS.cs_model conn_ev st1.CS.cs_model;
+      let dm = CS.ConnNetworkEvent?._0 conn_ev in
+      assert (conn_ev ==
+              CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = dm.CL.message_value;
+              });
+      introduce exists (msg:M.tls_message).
+        (let conn_ev =
+           CS.ConnNetworkEvent {
+             CL.message_direction = CL.Received;
+             CL.message_value = msg;
+           } in
+         CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = W.wire_serialize wire;
+           }
+           st1 /\
+         SMCan.sent_event_nonempty_seal_projection
+           st0.CS.cs_model conn_ev
+           (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs) /\
+         SMCan.received_event_nonempty_decode_projection
+           st0.CS.cs_model conn_ev (W.wire_serialize wire) /\
+         server_local_outputs_match conn_ev out.SM.so_local_outputs)
+      with dm.CL.message_value and ()
+    )
 let server_state_machine
   (#local_event_repr:Type0)
   {| server_event_representation local_event_repr |}
@@ -208,7 +408,10 @@ let server_state_machine
   =
   {
     SM.sm_initial_state = initial;
-    SM.sm_step = server_step;
+    (* STAGING: see [server_step_nonbuffering].  Keeping the canonical server
+       state machine on the non-buffering step is what lets the reachability and
+       shape layers keep their pre-generalisation reading of the event log. *)
+    SM.sm_step = server_step_nonbuffering;
   }
 
 noextract
@@ -235,7 +438,7 @@ let server_canonical_step_rel
   exists
     (ev:SM.event W.wire_message local_event_repr)
     (out:SM.step_output W.wire_message API.local_output).
-      server_step st0 ev st1 out
+      server_step_nonbuffering st0 ev st1 out
 
 let server_progress_preorder
   (#local_event_repr:Type0)

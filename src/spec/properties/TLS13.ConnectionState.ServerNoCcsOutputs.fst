@@ -191,10 +191,11 @@ let lemma_server_step_outputs_no_ccs
 =
   match ev with
   | SM.WireEvent wire ->
-    // received event: raw_sent (= serialize_all so) forced empty
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent {
-           CL.message_direction = CL.Received; CL.message_value = msg; } in
+    (* Received events force raw_sent empty; so does a cleartext buffering
+       step (see [event_raw_delta_legal]'s [ConnCleartextHandshake] arm), so
+       the witness can be eliminated in its general form. *)
+    eliminate exists (conn_ev:CS.conn_event).
+      (ES.server_wire_received_event conn_ev /\
        CS.legal_connection_delta st0
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent =

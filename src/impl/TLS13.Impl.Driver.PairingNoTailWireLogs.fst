@@ -469,12 +469,11 @@ let lemma_server_step_wire_log_delta
 =
   match ev with
   | SM.WireEvent wire ->
-    eliminate exists msg.
-      (let conn_ev =
-        CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = msg;
-        } in
+    (* Generalised with [server_step]: a wire record may be attributed to a
+       cleartext buffering step as well as to a delivered message, and the
+       wire-log conclusion is the same either way. *)
+    eliminate exists conn_ev.
+      (ES.server_wire_received_event conn_ev /\
       CS.legal_connection_delta
         st0
         {

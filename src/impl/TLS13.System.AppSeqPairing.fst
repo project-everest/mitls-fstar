@@ -2022,6 +2022,7 @@ let lemma_asp_deliver_to_server
         a.channel == SY.tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         SY.tls_no_rekeying ({ a with server = s'; channel = MP.Quiet }))
       (ensures app_seq_pairing ({ a with server = s'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with server = s'; channel = MP.Quiet } in
@@ -2033,6 +2034,7 @@ let lemma_asp_deliver_to_server
     // Reachable server -> server_ctrl_ok (grounds the SH/HRR exclusion in the
     // not-cleartext helper).
     lemma_server_reachable_ctrl_ok a.server.CS.cs_model.CS.model_config a.server;
+    ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
     eliminate exists (msg:M.tls_message).
       (let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -2628,6 +2630,7 @@ let lemma_ama_deliver_to_server
         a.channel == SY.tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         SY.tls_system_inv ({ a with server = s'; channel = MP.Quiet }) /\
         SY.server_config_valid_e2e s' /\
         (* CROSS-RECORD REASSEMBLY GATE, threaded from the caller: the readiness
@@ -2650,6 +2653,7 @@ let lemma_ama_deliver_to_server
                 SMKM.supported_profile_application_record_material_agrees b.client b.server
     with
     (
+      ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
       eliminate exists (msg:M.tls_message).
         (let conn_ev = CS.ConnNetworkEvent
             { CL.message_direction = CL.Received; CL.message_value = msg } in

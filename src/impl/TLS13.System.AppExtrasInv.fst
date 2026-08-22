@@ -1602,9 +1602,11 @@ let lemma_deliver_to_server_hs_seq_exact_preserved
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     (
+      ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
       eliminate exists (msg:M.tls_message).
         SMCan.canonical_wire_step a.server s'
           (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = msg })
@@ -1637,6 +1639,7 @@ let lemma_deliver_to_server_no_buffering_steps_preserved
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     ()
@@ -2257,23 +2260,31 @@ let lemma_fdac_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     (
       let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
       assert (a.channel == MP.ToServer p);
+      ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
       eliminate exists (msg:M.tls_message).
         (let conn_ev = CS.ConnNetworkEvent
             { CL.message_direction = CL.Received; CL.message_value = msg } in
-         SMCan.canonical_wire_step a.server s' conn_ev
-           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+         CS.legal_connection_delta a.server
+           { CS.delta_event = conn_ev;
+             CS.delta_raw_sent =
+               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
+             CS.delta_raw_received = CW.wire_serialize wire } s' /\
+         SMCan.sent_event_nonempty_seal_projection a.server.CS.cs_model conn_ev
+           (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs) /\
+         SMCan.received_event_nonempty_decode_projection a.server.CS.cs_model conn_ev
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
       with
       (
+        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
         let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in
-        Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
         assert (CS.step_tls_message a.server.CS.cs_model CL.Received msg == Some s'.CS.cs_model);
         // FIRST half (passive): a server RECEIVE preserves `hs_server_finished`.
         assert (a.server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
@@ -2991,11 +3002,13 @@ let lemma_awc_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     (
       let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
       assert (a.channel == MP.ToServer p);
+      ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
       eliminate exists (msg:M.tls_message).
         (let conn_ev = CS.ConnNetworkEvent
             { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -3169,6 +3182,7 @@ let lemma_sfif_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with (assert (MP.Quiet? b.channel))
 #pop-options
@@ -3311,6 +3325,7 @@ let lemma_cfif_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with (assert (MP.Quiet? b.channel))
 #pop-options
@@ -4002,6 +4017,7 @@ let lemma_ae_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     (
@@ -4275,6 +4291,7 @@ let lemma_s2_deliver_to_server (a b:SY.tls_system_state)
       a.channel == SY.tls_to_server raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == { a with server = s'; channel = MP.Quiet }
     with
     (

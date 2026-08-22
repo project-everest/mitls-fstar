@@ -1807,3 +1807,77 @@ accompanied by a fresh-server corollary that discharges the hypothesis from
 State after this commit: `make -k -j48 verify` clean, `make check-admits` 0,
 `make -j48 test` 34/34 MATCH.  Behaviour is unchanged — the model *permits*
 reassembly now, and no implementation performs it yet.
+
+### Commit B2: generalising `server_step`, and the second structural wall
+
+The un-fusing above made the *model* permit reassembly.  This commit makes the
+server's **state-machine relation** permit it: `ES.server_step`'s `WireEvent` arm
+no longer says "there exists a received `tls_message`" but "there exists a
+`conn_event` satisfying `ES.server_wire_received_event`", which admits a
+`ConnCleartextHandshake` buffering step alongside a received network message.
+This is a prerequisite for any implementation of reassembly — the impl must
+produce a legal `server_step` — and it is capability-neutral: no code buffers yet.
+
+**Generalising a step relation is a weakening, so only *inversion* sites break.**
+Every break has the identical shape: a lemma does
+`eliminate exists (msg:M.tls_message). (let conn_ev = ConnNetworkEvent {Received; msg} in …)`.
+Twelve such sites were found across eight files (`WireStep` ×8, plus
+`Impl.Server.CanonicalProtocol`, `ServerNoCcsInputs`, `ServerNoCcsOutputs`,
+`PairingNoTailWireLogs`, `ServerReadRecvCount`, `ServerSfsRecovery`,
+`TLS13.System`).  Commit A had already added `ConnCleartextHandshake` arms to the
+generic per-event lemmas, so most needed only the `eliminate` generalised.
+
+**The wall the plan did not anticipate.**  Two layers read the model as though a
+cleartext handshake message always arrives in exactly one record, and neither
+survives a buffering step:
+
+1. **The system product** (`TLS13.System.tls_machine_iface`).  Its wire bridges
+   read "the delivered raw bytes ARE the ClientHello" straight off a delivery, and
+   `tls_system_inv` carries the staging emptiness conjunct.  A buffering step makes
+   the buffer non-empty, so `tls_system_inv` is not preserved.
+2. **The server shape invariant** (`ServerCanonicalShape.log_shape`).  It pins the
+   event log to an EXACT list of milestone events per control state
+   (`log == [ev_start]` at `HsAwaitingClientHello`,
+   `log == [ev_start; ev_recv_ch ch]` at `HsClientHelloReceived`, …).  A buffering
+   step *appends* to the log without moving the control, so it violates the
+   awaiting arm and shifts every later arm.  Two flagship inversion lemmas
+   (`ProtectedWireServerFlightInversion`, `ProtectedWireClientFinishedInversion`)
+   consume the exact-list conclusion, so widening the arms — or filtering the log
+   through a `visible_log` projection, the server counterpart of the client's
+   `canonical_log` normalisation — weakens facts they depend on.  Both were tried;
+   both push the existential all the way into the flagship theorems.
+
+**The repair: one shared staging wrapper.**
+`ES.server_step_nonbuffering st0 ev st1 out = server_step … /\ cleartext_handshake_buffer_empty st1.cs_model`.
+Because `legal_cleartext_handshake_step` requires a NON-empty fragment, a buffering
+step always leaves a non-empty buffer, so this relation is **exactly** the
+pre-generalisation `server_step`: it admits every step the old one did and no
+buffering step.  Nothing downstream is weakened, and the entire staging debt of the
+generalisation is concentrated in one definition.  It is installed at four places —
+`ES.server_state_machine`, `ES.server_canonical_step_rel`, `WStep.server_sm`, and
+`TLS13.System.tls_machine_iface` — which is precisely the reachability + shape +
+product layer.
+
+Two reusable lemmas do the recovery work at the sites that still pin emptiness:
+
+* `ES.lemma_wire_received_event_empty_buffer_not_buffering` — the vacuity argument
+  (empty post-state buffer ⇒ the event was a received network message);
+* `ES.lemma_server_wire_step_received_msg` — packages that into the exact existential
+  the old inversion sites already `eliminate`, so each such site needs a single
+  extra call in front of its unchanged body.
+
+Sixteen system-layer lemmas gained a `cleartext_handshake_buffer_empty s'.cs_model`
+requires; the three server shapes in `TLS13.System` (`server_send_shape`,
+`deliver_to_server_shape`, and the `mp_*_intro` converses) now expose it, so callers
+get it for free off a delivery.
+
+**Lifting this is the whole of the remaining work.**  When the concrete pending
+buffer is threaded through the server, `server_step_nonbuffering` is deleted, the
+system bridges become buffer-relative, and `log_shape` moves onto a
+buffering-filtered view of the log — at which point the two flagship inversion
+lemmas must be restated over that view.  That restatement is the largest single
+piece of G3 that remains, and it was not visible from the model layer at all.
+
+State after this commit: `make -k -j48 verify` clean, `make check-admits` 0,
+`make -j48 test` green (34/34 server matrix, 2/2 client record-split, all interop).
+Behaviour is unchanged.

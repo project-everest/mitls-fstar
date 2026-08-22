@@ -1027,23 +1027,14 @@ let lemma_server_step_single_step
       (ensures SMR.connection_state_single_step st0 st1)
   = match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev =
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value = msg;
-           } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (ES.server_wire_received_event conn_ev /\
          SMCan.canonical_wire_step st0 st1 conn_ev
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
       with
       (
-        let conn_ev =
-          CS.ConnNetworkEvent {
-            CL.message_direction = CL.Received;
-            CL.message_value = msg;
-          } in
         let d : CS.connection_delta =
           { CS.delta_event = conn_ev;
             CS.delta_raw_sent =
@@ -1155,29 +1146,24 @@ let lemma_server_step_pwrite
     SCB.lemma_consistent_app_slots_none_shape st0;
     match ev with
     | SM.WireEvent wire ->
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev =
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value = msg;
-           } in
+      eliminate exists (conn_ev:CS.conn_event).
+        (ES.server_wire_received_event conn_ev /\
          SMCan.canonical_wire_step st0 st1 conn_ev
            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
       with
       (
-        let conn_ev =
-          CS.ConnNetworkEvent {
-            CL.message_direction = CL.Received;
-            CL.message_value = msg;
-          } in
         let d : CS.connection_delta =
           { CS.delta_event = conn_ev;
             CS.delta_raw_sent =
               WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
             CS.delta_raw_received = CW.wire_serialize wire } in
-        SCB.lemma_pwrite_received st0 d st1 msg
+        match conn_ev with
+        | CS.ConnNetworkEvent dm ->
+          SCB.lemma_pwrite_received st0 d st1 dm.CL.message_value
+        | CS.ConnCleartextHandshake step ->
+          SCB.lemma_pwrite_cleartext st0 d st1 step
       )
     | SM.LocalEvent local ->
       eliminate exists (conn_ev:CS.conn_event) (raw_sent:B.bytes).
@@ -4240,6 +4226,7 @@ let lemma_hsp_deliver_to_server
         a.channel == SY.tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         hs_channel_seal_ok a /\
         SY.tls_no_rekeying ({ a with server = s'; channel = MP.Quiet }))
       (ensures hs_seq_pairing ({ a with server = s'; channel = MP.Quiet }))
@@ -4247,6 +4234,7 @@ let lemma_hsp_deliver_to_server
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
     assert (cs_hs_seq_ok a /\ sc_hs_seq_ok a);
     assert (a.channel == MP.ToServer p);
+    ES.lemma_server_wire_step_received_msg #CTy.server_local_event a.server wire s' out;
     eliminate exists (msg:M.tls_message).
       (let conn_ev = CS.ConnNetworkEvent
           { CL.message_direction = CL.Received; CL.message_value = msg } in
@@ -4735,6 +4723,7 @@ let lemma_hscs_deliver_to_server
         a.channel == SY.tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         SY.tls_no_rekeying ({ a with server = s'; channel = MP.Quiet }))
       (ensures hs_channel_seal_ok ({ a with server = s'; channel = MP.Quiet }))
   = ()

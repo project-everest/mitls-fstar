@@ -801,7 +801,9 @@ let tls_machine_iface
       CS.connection_state CS.connection_state tls_payload
       CW.wire_message CTy.client_local_event CTy.server_local_event EAPI.local_output = {
   cstep   = EC.client_step #CTy.client_local_event;
-  sstep   = ES.server_step #CTy.server_local_event;
+  (* STAGING: the product takes only NON-BUFFERING server steps -- see
+     [ES.server_step_nonbuffering] for why, and for what lifting it entails. *)
+  sstep   = ES.server_step_nonbuffering #CTy.server_local_event;
   emit_c  = tls_emit;
   emit_s  = tls_emit;
   carries = tls_carries;
@@ -876,6 +878,7 @@ let server_send_shape (a b:tls_system_state) : prop =
          (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
          (sent:M.tls_message).
     ES.server_step a.server (SM.LocalEvent local) s' out /\
+    CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
     out.SM.so_wire_outputs == [w] /\
     s'.CS.cs_event_log == a.server.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
     b == { a with server = s'; channel = tls_to_client (emitted_raw out) a.server.CS.cs_model sent }
@@ -909,6 +912,7 @@ let lemma_server_send_shape (a b:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output)
                      (p:tls_payload).
       ES.server_step a.server (SM.LocalEvent local) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       Cons? out.SM.so_wire_outputs /\
       tls_emit a.server s' out p /\
       b == ({ a with server = s'; channel = MP.ToClient p } <: tls_system_state)
@@ -934,6 +938,7 @@ let deliver_to_server_shape (a b:tls_system_state) : prop =
     a.channel == tls_to_server raw snap sent /\
     Seq.equal (CW.wire_serialize wire) raw /\
     ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+    CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
     b == { a with server = s'; channel = MP.Quiet }
 
 let deliver_to_client_shape (a b:tls_system_state) : prop =
@@ -954,6 +959,7 @@ let lemma_deliver_to_server_shape (a b:tls_system_state)
       a.channel == MP.ToServer p /\
       tls_carries p w /\
       ES.server_step #CTy.server_local_event a.server (SM.WireEvent w) s' out /\
+      CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
       b == ({ a with server = s'; channel = MP.Quiet } <: tls_system_state)
     with
       (assert (p == ({ pl_raw = p.pl_raw; pl_snap = p.pl_snap; pl_sent = p.pl_sent }
@@ -987,6 +993,7 @@ let lemma_deliver_to_server_intro
         a.channel == tls_to_server raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         ES.server_step #CTy.server_local_event a.server (SM.WireEvent wire) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         b == { a with server = s'; channel = MP.Quiet })
       (ensures tls_step_deliver_to_server a b)
   = let pl : tls_payload = { pl_raw = raw; pl_snap = snap; pl_sent = sent } in
@@ -1001,6 +1008,7 @@ let lemma_server_local_intro
   : Lemma
       (requires
         ES.server_step a.server (SM.LocalEvent local) s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         out.SM.so_wire_outputs == [] /\
         b == { a with server = s' })
       (ensures tls_step_server_local a b)
@@ -1567,9 +1575,8 @@ let lemma_wire_facts_deliver_to_server a b =
   with (
     lemma_server_step_shape a.server s' (SM.WireEvent wire) out;
     Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
-    eliminate exists (msg:M.tls_message).
-      (let conn_ev = CS.ConnNetworkEvent
-          { CL.message_direction = CL.Received; CL.message_value = msg } in
+    eliminate exists (conn_ev:CS.conn_event).
+      (ES.server_wire_received_event conn_ev /\
        CS.legal_connection_delta a.server
          { CS.delta_event = conn_ev;
            CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs;
@@ -1581,9 +1588,15 @@ let lemma_wire_facts_deliver_to_server a b =
        ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
     with (
       assert (WStep.hs_hellos_stable a.server.CS.cs_model s'.CS.cs_model);
-      let conn_ev = CS.ConnNetworkEvent
-        { CL.message_direction = CL.Received; CL.message_value = msg } in
-      (match msg with
+      (match conn_ev with
+       | CS.ConnCleartextHandshake _ ->
+         (* Buffering is inert: no handshake field moves, so every FACT
+            transfers from [a] verbatim. *)
+         lemma_step_preserves_client_hello_legal a.server.CS.cs_model conn_ev s'.CS.cs_model;
+         assert (ch_wire_equiv b);
+         assert (hello_coupling b)
+       | CS.ConnNetworkEvent dm ->
+       (match dm.CL.message_value with
        | M.TlsHandshake (M.ClientHello server_ch) ->
          // server receives CH: the raw is a received cleartext CH, which fires
          // channel_consistent a to supply the client's stored CH + profile + cleartext.
@@ -1600,7 +1613,7 @@ let lemma_wire_facts_deliver_to_server a b =
                        CL.message_value = M.TlsHandshake (M.ClientHello ch) }));
          lemma_step_preserves_client_hello_legal a.server.CS.cs_model conn_ev s'.CS.cs_model;
          assert (ch_wire_equiv b);
-         assert (hello_coupling b));
+         assert (hello_coupling b)));
       assert (sh_wire_equiv b);
       assert (hello_key_shares_ok b)))
 #pop-options
@@ -1881,6 +1894,7 @@ let lemma_server_reach_pres
   : Lemma
       (requires
         server_byte_reachable a /\ ES.server_step a.server ev s' out /\
+        CS.cleartext_handshake_buffer_empty s'.CS.cs_model /\
         s'.CS.cs_model.CS.model_config == a.server.CS.cs_model.CS.model_config)
       (ensures
         WStep.server_reachable (CS.initial s'.CS.cs_model.CS.model_config) s')
@@ -1947,6 +1961,7 @@ let lemma_server_step_e2e
   : Lemma
       (requires
         ES.server_step st0 e st1 out /\
+        CS.cleartext_handshake_buffer_empty st1.CS.cs_model /\
         st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
         (server_config_valid_e2e st0 ==> ST.server_end_to_end_invariant st0))
       (ensures
