@@ -1307,6 +1307,134 @@ fn store_pending_protected_handshake
     (Ghost.reveal target_model))
 }
 
+// Cleartext twin of [store_pending_protected_handshake].  Two differences: the
+// cleartext buffer carries no `parsed` cursor, and there is no saturation
+// branch -- a cleartext buffering step never delivers, so the whole coalesced
+// stream is retained verbatim until the delivery arm drains it.
+fn store_pending_cleartext_handshake
+  (c:connection_state)
+  (stream:array U8.t)
+  (stream_len:SZ.t)
+  (#model:erased CS.connection_model)
+  requires connection_model_exactly c model **
+           ArrPts.pts_to stream 'stream_bytes **
+           pure (
+             B.length (Ghost.reveal 'stream_bytes) == SZ.v stream_len /\
+             SZ.v stream_len <= max_handshake_flight_len)
+  ensures connection_model_exactly
+            c
+            (CS.set_pending_cleartext_handshake
+              (Ghost.reveal model)
+              (Ghost.reveal 'stream_bytes)) **
+          ArrPts.pts_to stream 'stream_bytes
+{
+  let target_model = Ghost.hide (
+    CS.set_pending_cleartext_handshake
+      (Ghost.reveal model)
+      (Ghost.reveal 'stream_bytes));
+  unfold (connection_model_exactly c (Ghost.reveal model));
+  unfold (handshake_exactly
+    c.handshake
+    (Ghost.reveal model).CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    (Ghost.reveal model).CS.model_handshake.CS.hs_buffers);
+  with old_parsed. _;
+  unfold (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    (Ghost.reveal model).CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+  fold (sized_bytes_allocated
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len);
+  copy_array_to_sized_bytes
+    stream
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len_sz
+    stream_len;
+  rewrite (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    (Ghost.reveal 'stream_bytes))
+    as (sized_bytes_exactly
+      c.handshake.buffers.cleartext_handshake_bytes
+      max_handshake_flight_len
+      (Ghost.reveal target_model).CS.model_handshake
+        .CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_start ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_start));
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_server_selection ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_server_selection));
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_server_hello ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_validated_peer ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_transcript ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_transcript));
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_keys ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_keys));
+  rewrite (handshake_start_exactly
+    c.handshake.start
+    (Ghost.reveal model).CS.model_handshake.CS.hs_start)
+    as (handshake_start_exactly
+      c.handshake.start
+      (Ghost.reveal target_model).CS.model_handshake.CS.hs_start);
+  rewrite (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    (Ghost.reveal model).CS.model_handshake.CS.hs_server_selection)
+    as (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      (Ghost.reveal target_model).CS.model_handshake.CS.hs_server_selection);
+  unfold (server_key_share_exactly
+    c.handshake.server_key_share
+    (Ghost.reveal model).CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (Ghost.reveal target_model).CS.model_handshake);
+  assert (pure ((Ghost.reveal target_model).CS.model_handshake.CS.hs_server_selection ==
+    (Ghost.reveal model).CS.model_handshake.CS.hs_server_selection));
+  call_ghost
+    (reframe_server_key_share_private
+      c.handshake.server_key_share_private
+      #(Ghost.hide (Ghost.reveal model).CS.model_handshake))
+    (Ghost.hide (Ghost.reveal target_model).CS.model_handshake);
+  rewrite (peer_exactly
+    c.handshake.validated_peer
+    (Ghost.reveal model).CS.model_handshake.CS.hs_validated_peer)
+    as (peer_exactly
+      c.handshake.validated_peer
+      (Ghost.reveal target_model).CS.model_handshake.CS.hs_validated_peer);
+  rewrite (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    (Ghost.reveal model).CS.model_handshake.CS.hs_transcript)
+    as (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      (Ghost.reveal target_model).CS.model_handshake.CS.hs_transcript);
+  rewrite (key_schedule_exactly
+    c.handshake.keys
+    (Ghost.reveal model).CS.model_handshake.CS.hs_keys)
+    as (key_schedule_exactly
+      c.handshake.keys
+      (Ghost.reveal target_model).CS.model_handshake.CS.hs_keys);
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    (Ghost.reveal target_model).CS.model_handshake.CS.hs_buffers);
+  call_ghost
+    (reframe_handshake_messages
+      c.handshake.messages
+      #(Ghost.hide (Ghost.reveal model).CS.model_handshake))
+    (Ghost.hide (Ghost.reveal target_model).CS.model_handshake);
+  fold (handshake_exactly
+    c.handshake
+    (Ghost.reveal target_model).CS.model_handshake);
+  fold (connection_model_exactly
+    c
+    (Ghost.reveal target_model))
+}
+
 fn advance_pending_protected_handshake_storage
   (c:connection_state)
   (parsed:SZ.t)
@@ -1709,6 +1837,95 @@ fn buffer_protected_handshake_record
   fold (connection_exactly
     c
     (protected_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes)))
+}
+
+(* Cleartext twin of [buffer_protected_handshake_record]: take delivery of a
+   cleartext handshake record WITHOUT interpreting it, setting the coalesced
+   stream aside for the next record to complete.  Unlike the protected twin
+   this advances NOTHING else -- no AEAD sequence, no key schedule, no control
+   state -- because a cleartext record carries no sequence number.
+
+   [stream] must already hold `pending ++ this record's fragment`; the caller
+   builds it, since only it has the record fragment to hand. *)
+fn buffer_cleartext_handshake_record
+  (c:connection_state)
+  (raw:array U8.t)
+  (stream:array U8.t)
+  (stream_len:SZ.t)
+  (#step:erased CS.cleartext_handshake_step)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to stream 'stream_bytes **
+           pure (
+             B.length (Ghost.reveal 'stream_bytes) == SZ.v stream_len /\
+             SZ.v stream_len <= max_handshake_flight_len /\
+             Seq.equal
+               (Ghost.reveal 'stream_bytes)
+               (CS.cleartext_handshake_stream
+                 st0.CS.cs_model
+                 (Ghost.reveal step)) /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnCleartextHandshake (Ghost.reveal step)) /\
+             Some? (CS.step_cleartext_handshake
+                     st0.CS.cs_model
+                     (Ghost.reveal step)) /\
+             CS.event_raw_delta_legal
+               st0.CS.cs_model
+               (CS.ConnCleartextHandshake (Ghost.reveal step))
+               B.empty
+               (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (cleartext_handshake_state
+              st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to stream 'stream_bytes
+{
+  unfold (connection_exactly c st0);
+  store_pending_cleartext_handshake
+    c
+    stream
+    stream_len
+    #(Ghost.hide st0.CS.cs_model);
+  assert (pure (
+    (cleartext_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes)).CS.cs_model ==
+      CS.set_pending_cleartext_handshake
+        st0.CS.cs_model
+        (Ghost.reveal 'stream_bytes)));
+  lemma_cleartext_handshake_state_evolves
+    st0
+    (Ghost.reveal step)
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (cleartext_handshake_state
+      st0
+      (Ghost.reveal step)
+      (Ghost.reveal 'raw_bytes));
+  rewrite (connection_model_exactly
+    c
+    (CS.set_pending_cleartext_handshake
+      st0.CS.cs_model
+      (Ghost.reveal 'stream_bytes)))
+    as (connection_model_exactly
+      c
+      (cleartext_handshake_state
+        st0
+        (Ghost.reveal step)
+        (Ghost.reveal 'raw_bytes)).CS.cs_model);
+  fold (connection_exactly
+    c
+    (cleartext_handshake_state
       st0
       (Ghost.reveal step)
       (Ghost.reveal 'raw_bytes)))

@@ -1920,6 +1920,30 @@ let protected_handshake_state
         st.CS.cs_event_log @ [CS.ConnProtectedHandshake step];
     }
 
+(** The post-state of a CLEARTEXT handshake buffering step: the cleartext twin
+    of [protected_handshake_state].  A cleartext buffering step touches nothing
+    but the reassembly buffer -- no key schedule, no read sequence, no control --
+    so the only interesting component is the model [CS.step_cleartext_handshake]
+    produces. *)
+let cleartext_handshake_state
+  (st:CS.connection_state)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  match CS.step_cleartext_handshake st.CS.cs_model step with
+  | None -> st
+  | Some model1 ->
+    {
+      CS.cs_model = model1;
+      CS.cs_wire_log = {
+        CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+        CL.raw_received =
+          B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+      };
+      CS.cs_event_log =
+        st.CS.cs_event_log @ [CS.ConnCleartextHandshake step];
+    }
+
 let verified_server_finished_state
   (st:CS.connection_state)
   (fin:GFin.finished)
@@ -3647,6 +3671,36 @@ val lemma_protected_handshake_state_evolves
             CS.delta_raw_received = raw_received;
           }
           (protected_handshake_state st step raw_received))
+
+(** Cleartext twin of [lemma_protected_handshake_state_evolves]. *)
+val lemma_cleartext_handshake_state_evolves
+  (st:CS.connection_state)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnCleartextHandshake step) /\
+        Some? (CS.step_cleartext_handshake st.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st.CS.cs_model
+          (CS.ConnCleartextHandshake step)
+          B.empty
+          raw_received)
+      (ensures
+        TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+          st
+          (cleartext_handshake_state st step raw_received) /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+          (cleartext_handshake_state st step raw_received) /\
+        CS.legal_connection_delta
+          st
+          {
+            CS.delta_event = CS.ConnCleartextHandshake step;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = raw_received;
+          }
+          (cleartext_handshake_state st step raw_received))
 
 val lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)

@@ -1552,6 +1552,23 @@ let legal_cleartext_handshake_step
   B.length (cleartext_handshake_stream model step) <= max_pending_cleartext_handshake /\
   W.parse_tls_message T.Handshake (cleartext_handshake_stream model step) == None
 
+(* Cleartext twin of [set_pending_protected_handshake].  There is no `parsed`
+   counter and hence no saturation case: a cleartext buffering step never
+   delivers, so the whole stream stays set aside until the message completes and
+   the delivery arm drains it. *)
+let set_pending_cleartext_handshake
+  (model:connection_model)
+  (stream:B.bytes)
+  : connection_model =
+  let hs = model.model_handshake in
+  { model with
+      model_handshake =
+        { hs with
+            hs_buffers =
+              { hs.hs_buffers with hb_cleartext_handshake_bytes = stream };
+        };
+  }
+
 (* A cleartext buffering step advances no key schedule and no read sequence:
    nothing was opened, the bytes were merely set aside.  The ONLY model change
    is the buffer itself. *)
@@ -1561,18 +1578,7 @@ let step_cleartext_handshake
   : GTot (option connection_model) =
   if legal_cleartext_handshake_step model step
   then
-    let hs = model.model_handshake in
-    Some
-      { model with
-          model_handshake =
-            { hs with
-                hs_buffers =
-                  { hs.hs_buffers with
-                      hb_cleartext_handshake_bytes =
-                        cleartext_handshake_stream model step;
-                  };
-            };
-      }
+    Some (set_pending_cleartext_handshake model (cleartext_handshake_stream model step))
   else None
 
 (* Everything a cleartext buffering step leaves alone -- which is everything

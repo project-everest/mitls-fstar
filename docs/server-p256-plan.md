@@ -2368,3 +2368,63 @@ than add a fourteen-arm-wide constructor.
    `ConnCleartextHandshake` arm is still `False`), plus the
    `ClientCanonicalShape` cleartext-exclusion mirror.
 6. Ledger flip + scope statement in `docs/server-client-parity.md` P2b.
+
+
+## G3 commit B9: the cleartext buffering primitive
+
+The concrete write that a buffering step performs, all the way down to the
+`sized_bytes` slot, plus the ghost bookkeeping that lets the implementation
+claim it took a `ConnCleartextHandshake` step.  Nothing calls it yet -- the
+decode paths are wired up in the next increments -- so the tree is unchanged
+behaviourally and stays green.
+
+Three layers, each a deliberate simplification of its protected twin:
+
+1. **Spec** (`TLS13.Spec.StateMachine.fst`) -- new
+   `set_pending_cleartext_handshake model stream`, and `step_cleartext_handshake`
+   is re-expressed through it.  Unlike `set_pending_protected_handshake` there is
+   **no `parsed` cursor and hence no saturation case**: a cleartext buffering step
+   never delivers, so the whole coalesced stream is retained verbatim until the
+   ClientHello/ServerHello delivery arm drains it (commits B6 and B8).
+
+2. **Model mirror** (`TLS13.Impl.ConnectionState.Model.fsti/.fst`) -- new
+   `cleartext_handshake_state st step raw_received`, the GTot post-state the
+   implementation proves it computes, and `lemma_cleartext_handshake_state_evolves`,
+   which discharges `connection_state_evolves` / `connection_state_consistent` /
+   `legal_connection_delta` for it.  Simpler than the protected twin because the
+   step touches no key schedule, no control state and no read sequence.
+
+3. **Concrete** (`TLS13.Impl.ConnectionState.Network.fst/.fsti`) --
+   `store_pending_cleartext_handshake` (unfold `connection_model_exactly` ->
+   `handshake_exactly` -> `handshake_buffers_exactly` -> the cleartext
+   `sized_bytes_exactly`, `copy_array_to_sized_bytes`, re-fold, reframing every
+   sibling handshake component), and the exported
+   `buffer_cleartext_handshake_record`, which wraps it with the
+   `lemma_cleartext_handshake_state_evolves` + `MR.update c.ghost_state` pair.
+
+   Note how much shorter `buffer_cleartext_handshake_record` is than
+   `buffer_protected_handshake_record`: the protected twin must first advance the
+   AEAD read sequence (opening the record consumed a sequence number
+   irreversibly) and re-fold `record_layer_exactly` around the advanced model.  A
+   cleartext record carries no sequence number, so the cleartext twin advances
+   **nothing** -- it only moves the byte buffer.
+
+### Remaining G3 increments
+
+- **B10** runtime queries `can_buffer_cleartext_handshake` /
+  `copy_pending_cleartext_handshake`, mirroring `CQ.can_buffer_protected_handshake`
+  / `CQ.copy_pending_protected_handshake`.
+- **B11** the server's buffering branch, in the `decoded_buffer_parsed == None`
+  arm of `Impl.Server.Network.fst` (NOT the `ready` else-branch -- a split hello
+  fails to *parse*, it does not fail the transition guard), plus the
+  `ST.*_step_correct` spec that the branch must satisfy.
+- **B12** the server's coalescing parse: decode `pending ++ fragment`, not the
+  fragment alone, so the record that completes a split hello actually yields a
+  `Some`.
+- **B13** the same two for the client's ServerHello path
+  (`Impl.Handle.Handshake.fst`).
+- **B14** `ES.client_step`'s `client_wire_received_event` `ConnCleartextHandshake`
+  arm off `False`, plus a `ClientCanonicalShape` cleartext-exclusion mirror.
+- **B15** the ledger: flip the three `refused` cells, add three-record and
+  over-cap cells, and state the unsplit-runs scope limit in
+  `docs/server-client-parity.md` P2b.

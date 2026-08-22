@@ -2297,6 +2297,65 @@ let lemma_protected_handshake_state_evolves
     assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
       (protected_handshake_state st step raw_received))
 
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 200"
+let lemma_cleartext_handshake_state_evolves
+  (st:CS.connection_state)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st /\
+        CS.legal_event st.CS.cs_model (CS.ConnCleartextHandshake step) /\
+        Some? (CS.step_cleartext_handshake st.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st.CS.cs_model
+          (CS.ConnCleartextHandshake step)
+          B.empty
+          raw_received)
+      (ensures
+        TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+          st
+          (cleartext_handshake_state st step raw_received) /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+          (cleartext_handshake_state st step raw_received) /\
+        CS.legal_connection_delta
+          st
+          {
+            CS.delta_event = CS.ConnCleartextHandshake step;
+            CS.delta_raw_sent = B.empty;
+            CS.delta_raw_received = raw_received;
+          }
+          (cleartext_handshake_state st step raw_received))
+=
+  let ev = CS.ConnCleartextHandshake step in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  match CS.step_cleartext_handshake st.CS.cs_model step with
+  | None -> assert False
+  | Some model1 ->
+    assert (CS.step_model st.CS.cs_model ev ==
+      Some (cleartext_handshake_state st step raw_received).CS.cs_model);
+    assert (CS.legal_connection_delta
+      st
+      delta
+      (cleartext_handshake_state st step raw_received));
+    assert (TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+      st
+      (cleartext_handshake_state st step raw_received));
+    FStar.ReflexiveTransitiveClosure.closure_step
+      TLS13.Spec.StateMachine.Reachability.connection_state_single_step
+      st
+      (cleartext_handshake_state st step raw_received);
+    assert (TLS13.Spec.StateMachine.Reachability.connection_state_evolves
+      st
+      (cleartext_handshake_state st step raw_received));
+    assert (TLS13.Spec.StateMachine.Reachability.connection_state_consistent
+      (cleartext_handshake_state st step raw_received))
+#pop-options
+
 let lemma_verified_server_finished_state_evolves
   (st:CS.connection_state)
   (fin:GFin.finished)

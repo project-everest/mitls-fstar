@@ -311,6 +311,52 @@ fn buffer_protected_handshake_record
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
           Pulse.Lib.Array.PtsTo.pts_to stream 'stream_bytes
 
+(* Cleartext twin of [buffer_protected_handshake_record]: take delivery of a
+   cleartext handshake record WITHOUT interpreting it, setting the coalesced
+   stream aside for the next record to complete.  Unlike the protected twin
+   this advances NOTHING else -- no AEAD sequence, no key schedule, no control
+   state -- because a cleartext record carries no sequence number.
+
+   [stream] must already hold `pending ++ this record's fragment`; the caller
+   builds it, since only it has the record fragment to hand. *)
+fn buffer_cleartext_handshake_record
+  (c:connection_state)
+  (raw:array U8.t)
+  (stream:array U8.t)
+  (stream_len:SZ.t)
+  (#step:erased CS.cleartext_handshake_step)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           Pulse.Lib.Array.PtsTo.pts_to stream 'stream_bytes **
+           pure (
+             B.length (Ghost.reveal 'stream_bytes) == SZ.v stream_len /\
+             SZ.v stream_len <= max_handshake_flight_len /\
+             Seq.equal
+               (Ghost.reveal 'stream_bytes)
+               (CS.cleartext_handshake_stream
+                 st0.CS.cs_model
+                 (Ghost.reveal step)) /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnCleartextHandshake (Ghost.reveal step)) /\
+             Some? (CS.step_cleartext_handshake
+                     st0.CS.cs_model
+                     (Ghost.reveal step)) /\
+             CS.event_raw_delta_legal
+               st0.CS.cs_model
+               (CS.ConnCleartextHandshake (Ghost.reveal step))
+               B.empty
+               (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (cleartext_handshake_state
+              st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to stream 'stream_bytes
+
 fn mark_received_encrypted_extensions
   (c:connection_state)
   (raw:array U8.t)
