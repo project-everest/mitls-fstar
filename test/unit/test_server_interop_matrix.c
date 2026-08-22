@@ -41,51 +41,60 @@
  *                         guards that loop against regression.
  *
  *   FRAMING_RECORD_SPLIT  one handshake message delivered as two TLS records.
- *                         Refused today (gap G3).  It is tempting to call this
- *                         "the server-side mirror of the reassembly the client
- *                         gained for the top-100 sweep", but that overstates
- *                         what the client has.  `protected_handshake_buffering`
- *                         is confined to the PROTECTED path and to stages after
- *                         ServerHello (`protected_handshake_buffering_stage` =
- *                         HsServerHelloReceived, HsEncryptedExtensionsReceived,
- *                         HsCertificateValidated, HsCertificateVerifyVerified),
- *                         so a ServerHello split across two records would be
- *                         refused by the CLIENT just as a ClientHello is by the
- *                         server.  There is no cleartext reassembly in the tree
- *                         for either role.  The client-side half of that
- *                         statement is not left as a claim in this comment: it
- *                         is executed as a ledger row of its own, by
+ *                         ACCEPTED as of G3.  The ClientHello arrives as a
+ *                         cleartext record that does not parse on its own; the
+ *                         server buffers it (`try_buffer_cleartext_handshake_
+ *                         record`), and the record that completes the message
+ *                         is coalesced with the pending bytes and delivered by
+ *                         `try_deliver_reassembled_client_hello`, both in
+ *                         TLS13.Impl.Server.Network.fst.
+ *
+ *   FRAMING_RECORD_SPLIT3 the same message delivered as THREE TLS records.
+ *                         This is not redundant with the two-record cell: two
+ *                         records only ever buffer onto an EMPTY pending
+ *                         buffer and then deliver, whereas three records make
+ *                         the middle one coalesce onto an ALREADY NON-EMPTY
+ *                         buffer, which is a distinct branch of the buffering
+ *                         step (added in commit B12a).
+ *
+ *                         WHAT THE OBSTRUCTION WAS, and why it was in the
+ *                         SHAPE OF THE DELIVERY PREDICATE rather than in the
+ *                         events or in encryption.  An earlier version of this
+ *                         comment called it structural -- "`ConnProtectedHand-
+ *                         shake` carries bytes (fragment, offset, consumed)
+ *                         whereas `ConnNetworkEvent` carries an already-PARSED
+ *                         tls_message, so there is nowhere to put a partial
+ *                         one" -- and that reading was shown to be wrong.  The
+ *                         real asymmetry is which side of the decoder/driver
+ *                         boundary each obligation sits on.  On the protected
+ *                         path the two obligations are SPLIT: record shape
+ *                         (`event_raw_delta_legal` = `raw_records_exactly raw
+ *                         Application_data 1`) is state-free and the decoder
+ *                         proves it, while message identity
+ *                         (`received_event_decode_projection`) is state-aware
+ *                         and the DRIVER proves it.  On the cleartext path they
+ *                         were FUSED: `event_raw_delta_legal` demanded record
+ *                         shape AND `parse_tls_message` success together, while
+ *                         the driver-side slot was literally `True`.  A
+ *                         buffer-relative claim therefore landed on the
+ *                         role-agnostic, state-blind decoder, which cannot see
+ *                         a pending buffer.  Un-fusing the two -- an
+ *                         `_unbuffered` rule for the decoder
+ *                         (`received_tls_raw_delta_legal_unbuffered`), the
+ *                         buffer-relative rule for the driver
+ *                         (`server_received_raw_delta_legal_decoded`) -- removed
+ *                         the obstruction without touching a single decoder
+ *                         proof.  See docs/server-client-parity.md, G3, and the
+ *                         G3 commit sections of docs/server-p256-plan.md.
+ *
+ *                         THE CLIENT HALF IS STILL OPEN.  `protected_handshake_
+ *                         buffering` on the client is confined to the PROTECTED
+ *                         path and to stages after ServerHello, so a ServerHello
+ *                         split across two records is still refused by the
+ *                         CLIENT.  That is not left as a claim in this comment:
+ *                         it is executed as a ledger row of its own, by
  *                         test/unit/test_client_record_split.c, which re-frames
  *                         the ServerHello in the server->client direction.
- *
- *                         The obstruction is in the SHAPE OF THE DELIVERY
- *                         PREDICATE, not in the events and not in encryption.
- *                         An earlier version of this comment called it
- *                         structural -- "`ConnProtectedHandshake` carries bytes
- *                         (fragment, offset, consumed) whereas
- *                         `ConnNetworkEvent` carries an already-PARSED
- *                         tls_message, so there is nowhere to put a partial
- *                         one" -- and that reading has since been shown to be
- *                         wrong.  The real asymmetry is which side of the
- *                         decoder/driver boundary each obligation sits on.  On
- *                         the protected path the two obligations are SPLIT:
- *                         record shape (`event_raw_delta_legal` =
- *                         `raw_records_exactly raw Application_data 1`) is
- *                         state-free and the decoder proves it, while message
- *                         identity (`received_event_decode_projection`) is
- *                         state-aware and the DRIVER proves it.  On the
- *                         cleartext path they were FUSED: `event_raw_delta_legal`
- *                         demanded record shape AND `parse_tls_message` success
- *                         together, while the driver-side slot was literally
- *                         `True`.  A buffer-relative claim therefore landed on
- *                         the role-agnostic, state-blind decoder, which cannot
- *                         see a pending buffer.  Un-fusing the two -- an
- *                         `_unbuffered` rule for the decoder, the
- *                         buffer-relative rule for the driver -- removed the
- *                         obstruction without touching a single decoder proof.
- *                         See docs/server-client-parity.md, G3, and the
- *                         "Commit B, unblocked" section of
- *                         docs/server-p256-plan.md.
  *
  * The split is performed by an in-process TCP proxy that re-frames the
  * client->server byte stream at the record layer.  It only ever re-frames
@@ -152,6 +161,7 @@ typedef enum {
   FRAMING_NORMAL = 0,
   FRAMING_TCP_DRIBBLE,
   FRAMING_RECORD_SPLIT,
+  FRAMING_RECORD_SPLIT3,
 } framing_mode;
 
 struct case_spec {
@@ -406,15 +416,26 @@ static const struct case_spec k_cases[] = {
      "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "one record split across many TCP segments: the NeedMoreInput retry loop", TLS13_ONLY},
     {"clienthello-across-two-records", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
-     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT, FAIL, NULL, NULL,
-     "GAP (G3): no cleartext cross-record handshake reassembly, either role",
+     "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT, OK,
+     "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "G3: the ClientHello is reassembled out of the cleartext buffer -- the "
+     "first record is consumed by a ConnCleartextHandshake buffering step and "
+     "the second completes the message",
      TLS13_ONLY},
-    /* G3 is a record-layer gap, so it must not depend on the suite axis
+    /* G3 is a record-layer property, so it must not depend on the suite axis
        either.  Same reasoning as ecdsa-credential-p256-only above. */
     {"aes128-clienthello-across-two-records", "TLS_AES_128_GCM_SHA256",
      "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT,
-     FAIL, NULL, NULL,
-     "GAP (G3): the reassembly gap is independent of the cipher-suite axis", TLS13_ONLY},
+     OK, "TLS_AES_128_GCM_SHA256", "X25519",
+     "G3: cleartext reassembly is independent of the cipher-suite axis", TLS13_ONLY},
+    /* Three records, not two: the middle record is buffered onto an ALREADY
+       NON-EMPTY pending buffer, which is the coalescing step that a two-record
+       split never reaches. */
+    {"clienthello-across-three-records", "TLS_CHACHA20_POLY1305_SHA256",
+     "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT3,
+     OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "G3: two buffering steps then a delivery -- the middle record coalesces "
+     "onto a non-empty buffer", TLS13_ONLY},
 
     /* --- Protocol-version axis. ------------------------------------------
      *
@@ -607,7 +628,46 @@ static int run_proxy(uint16_t listen_port, uint16_t server_port, framing_mode fr
     goto done;
   }
 
-  if (framing == FRAMING_RECORD_SPLIT && header[0] == 22 /* handshake */ &&
+  if (framing == FRAMING_RECORD_SPLIT3 && header[0] == 22 /* handshake */ &&
+      frag_len >= 3) {
+    /* THREE records, not two.  Two records only ever exercise buffering onto
+       an EMPTY pending buffer followed by delivery; three additionally
+       exercise the coalescing buffering step, where the middle record is
+       appended to a buffer that is already non-empty and the combined stream
+       still does not parse. */
+    size_t thirds[3];
+    thirds[0] = frag_len / 3;
+    if (thirds[0] < 8) {
+      thirds[0] = frag_len > 8 ? 8 : 1;
+    }
+    thirds[1] = (frag_len - thirds[0]) / 2;
+    if (thirds[1] == 0) {
+      thirds[1] = 1;
+    }
+    thirds[2] = frag_len - thirds[0] - thirds[1];
+    size_t off = 0;
+    bool failed = false;
+    for (size_t i = 0; i < 3; ++i) {
+      uint8_t part[5];
+      memcpy(part, header, 5);
+      part[3] = (uint8_t)((thirds[i] >> 8) & 0xffu);
+      part[4] = (uint8_t)(thirds[i] & 0xffu);
+      if (write_all(server_fd, part, 5) != 0 ||
+          write_all(server_fd, fragment + off, thirds[i]) != 0) {
+        failed = true;
+        break;
+      }
+      off += thirds[i];
+      /* A pause between records so the receiver genuinely sees each one on
+         its own and cannot accidentally succeed by having them all buffered
+         when it first parses. */
+      usleep(50000);
+    }
+    if (failed) {
+      free(fragment);
+      goto done;
+    }
+  } else if (framing == FRAMING_RECORD_SPLIT && header[0] == 22 /* handshake */ &&
       frag_len >= 2) {
     /* Emit the same fragment as TWO handshake records.  The split point is
        deliberately inside the ClientHello body rather than on a message

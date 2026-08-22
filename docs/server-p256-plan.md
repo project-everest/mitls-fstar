@@ -2630,3 +2630,66 @@ to the ungeneralised rule everywhere else.  Two new lemmas carry that:
 `lemma_server_driver_network_process_correct_preserves_supported_profile_selection`
 needed `--z3rlimit 400 --fuel 2 --ifuel 2`: its goals are unchanged, but the
 extra definition layer pushed the witness-existence query over the old limit.
+
+## G3 commit B12b-2 + B15 (server half): delivering the reassembled ClientHello
+
+B12a made the coalesced stream, B12b-1 made the SPEC admit a message read off
+that stream.  B12b-2 is the code that actually delivers one.
+
+`fn try_deliver_reassembled_client_hello` (`TLS13.Impl.Server.Network.fst`,
+just above the buffering function) does four things: coalesce
+`pending ++ fragment` into a fresh `V.alloc` stream, run
+`P.parse_tls_message content_type stream stream_len`, and on
+`Some (LTlsHandshake (LClientHello lch))` -- gated by `CQ.can_receive_client_hello`
+-- call `process_client_hello` with THE STREAM, not the record's fragment, as
+the message fragment.  Anything else frees the parse and declines.
+
+The non-obvious part is WHERE it is called from.  It hangs off the
+`decoded_buffer_parsed == None` arm of `process_network_bytes`, not the
+`Some l` arm, because THE RECORD THAT COMPLETES A SPLIT HELLO ALSO FAILS TO
+PARSE ON ITS OWN FRAGMENT -- it is only the tail.  The `None` arm is therefore
+a three-way chain, in this order:
+
+    delivery  ->  buffering  ->  process_decode_error
+
+Draining the buffer is free.  `CM.received_client_hello_state` already resets
+`hb_cleartext_handshake_bytes` (Model.fsti:1122/1684) and
+`CN.mark_received_client_hello` already resets the concrete buffer
+(`ConnectionState.Network.fst:1099`); B6/B8 put those there.  So delivery needs
+no explicit drain, and the two cannot get out of step.
+
+`server_network_bytes_end_to_end_correct`'s escape hatch fires for delivery for
+the same reason it fires for buffering: `process_client_hello` returns
+`{network_out_len = 0sz; app_out_len = 0sz; status = StepOk}` unconditionally,
+so `resp.response.network_out_len == 0sz` discharges the disjunct.  Three
+asserts (`status == StepOk`, `network_out_len == 0sz`, `app_out_len == 0sz`)
+were needed to put that in front of the SMT solver at the projection site.
+
+### The reassembly cap
+
+The model allows `max_pending_cleartext_handshake = 32768`; the implementation
+caps the coalesced stream at `Bounds.max_client_hello_len_sz = 8192sz`.  That
+is sound because it is only ever a REFUSAL TO BUFFER: a cleartext buffer can
+only ever be drained by a ClientHello or a ServerHello, `process_client_hello`
+requires `fragment_len <= max_client_hello_len` anyway, and 8192 is below
+`P.parse_tls_message`'s `L.max_record_fragment_len` (16640) precondition.  Both
+the pending length and the sum are range-checked at runtime, because the
+representation invariant only bounds the buffer by `max_handshake_flight_len`.
+
+### The ledger (B15, server half)
+
+Both `*-clienthello-across-two-records` cells in
+`test/unit/test_server_interop_matrix.c` flipped `FAIL` -> `OK`.  Before the
+flip they reported `*** MISMATCH ***` with "expected the server to refuse this
+offer but it accepted it", which is the strongest form of evidence available
+here: the ledger predicted refusal and the running server disagreed.
+
+A third cell, `clienthello-across-three-records` (`FRAMING_RECORD_SPLIT3`), was
+added.  It is NOT redundant with the two-record cell.  A two-record split only
+ever buffers onto an EMPTY pending buffer and then delivers; three records make
+the middle record coalesce onto an ALREADY NON-EMPTY buffer, which is B12a's
+other branch and was otherwise unexercised by any test.  35/35 server cells and
+3/3 client cells now match.
+
+The client half of B15 (`serverhello-across-two-records`) stays `false`: the
+client cannot yet reassemble a ServerHello.  That is B13/B14.
