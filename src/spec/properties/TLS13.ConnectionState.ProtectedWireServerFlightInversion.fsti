@@ -107,7 +107,15 @@ let server_flight_bridge_inputs (client server : CS.connection_state) : prop =
      verified ATLAS client, which emits its ClientHello as exactly ONE record,
      so the server never has cause to buffer; cross-record ClientHellos arise
      only against a FOREIGN client, which this bridge does not describe. *)
-  SCShape.no_cleartext_buffering_steps server.CS.cs_event_log
+  SCShape.no_cleartext_buffering_steps server.CS.cs_event_log /\
+  (* And the CLIENT-side cleartext sibling, for the same reason: the client can
+     now buffer too ([EC.client_wire_received_event] admits a
+     [ConnCleartextHandshake] step so a ServerHello split across records can be
+     reassembled), and such a step has no slot in the exact client spine that
+     [CCShape.lemma_client_canonical_appdata_exact_spine] reconstructs.  In the
+     PAIRED system the peer is the verified server, which emits its ServerHello
+     as exactly ONE record. *)
+  CCShape.no_cleartext_buffering_steps client.CS.cs_event_log
 
 (* ------------------------------------------------------------------ *)
 (* The bridge's conclusion, in FLAGSHIP-COMPOSABLE shape.              *)

@@ -202,11 +202,53 @@ let client_wire_received_event
     network_input_message_projection st0 wire tm.CL.message_value
   | CS.ConnProtectedHandshake step ->
     step.CS.protected_handshake_head == true
-  (* A CLIENT never buffers cleartext handshake bytes: the only cleartext
-     handshake record it receives is the ServerHello, and a server never
-     splits it.  Cleartext reassembly is a SERVER-side rule. *)
-  | CS.ConnCleartextHandshake _ -> False
+  (* A CLIENT buffers cleartext handshake bytes for exactly one message: the
+     ServerHello.  A server that sizes its records below the hello -- a large
+     key share, a long cookie, HelloRetryRequest material -- splits it, and a
+     client that refuses the split cannot talk to that server at all.  The rule
+     is therefore the same one the server has for the ClientHello
+     ([TLS13.Spec.Endpoint.Server.server_wire_received_event]); the asymmetry
+     that used to be recorded here was an implementation gap, not a protocol
+     fact. *)
+  | CS.ConnCleartextHandshake _ -> True
   | CS.ConnLocalEvent _ -> False
+
+(** A client wire step whose POST-state buffer is EMPTY cannot have been a
+    cleartext buffering step: [legal_cleartext_handshake_step] insists the
+    buffered fragment is non-empty, so the post-state stream
+    [pending ++ fragment] is non-empty too.
+
+    The exact mirror of
+    [TLS13.Spec.Endpoint.Server.lemma_wire_received_event_empty_buffer_not_buffering],
+    except that the client has a THIRD shape to leave standing: a protected
+    handshake head.  So the conclusion is a disjunction rather than a single
+    case. **)
+let lemma_client_wire_received_event_empty_buffer_not_buffering
+  (st0:CS.connection_state)
+  (wire:W.wire_message)
+  (conn_ev:CS.conn_event)
+  (m1:CS.connection_model)
+  : Lemma
+      (requires
+        client_wire_received_event st0 wire conn_ev /\
+        CS.step_model st0.CS.cs_model conn_ev == Some m1 /\
+        CS.cleartext_handshake_buffer_empty m1)
+      (ensures
+        (CS.ConnNetworkEvent? conn_ev /\
+         (CS.ConnNetworkEvent?._0 conn_ev).CL.message_direction == CL.Received /\
+         network_input_message_projection
+           st0 wire (CS.ConnNetworkEvent?._0 conn_ev).CL.message_value) \/
+        (CS.ConnProtectedHandshake? conn_ev /\
+         (CS.ConnProtectedHandshake?._0 conn_ev).CS.protected_handshake_head == true))
+  = match conn_ev with
+    | CS.ConnCleartextHandshake step ->
+      Seq.lemma_len_append
+        (CS.pending_cleartext_handshake st0.CS.cs_model)
+        step.CS.cleartext_handshake_fragment;
+      assert (0 < B.length (CS.cleartext_handshake_stream st0.CS.cs_model step));
+      assert (Seq.equal (CS.pending_cleartext_handshake m1)
+                        (CS.cleartext_handshake_stream st0.CS.cs_model step))
+    | _ -> ()
 
 let client_step
   (#local_event_repr:Type0)
@@ -238,6 +280,32 @@ let client_step
         conn_ev
         raw_sent
         B.empty
+
+(** THE REUSABLE VACUITY HOOK.  Every site that inverts a client wire step into
+    its [conn_event] and pins the POST-state cleartext buffer empty can dispose
+    of the [ConnCleartextHandshake] arm with a single call to this lemma.
+
+    Stated over [SMCan.canonical_wire_step] rather than over [client_step] so
+    that it applies inside an already-eliminated existential, which is the shape
+    all those sites are in. **)
+let lemma_client_wire_step_not_cleartext_buffering
+  (st0 st1:CS.connection_state)
+  (conn_ev:CS.conn_event)
+  (raw_sent raw_received:B.bytes)
+  : Lemma
+      (requires
+        SMCan.canonical_wire_step st0 st1 conn_ev raw_sent raw_received /\
+        CS.cleartext_handshake_buffer_empty st1.CS.cs_model)
+      (ensures ~(CS.ConnCleartextHandshake? conn_ev))
+  = match conn_ev with
+    | CS.ConnCleartextHandshake step ->
+      Seq.lemma_len_append
+        (CS.pending_cleartext_handshake st0.CS.cs_model)
+        step.CS.cleartext_handshake_fragment;
+      assert (0 < B.length (CS.cleartext_handshake_stream st0.CS.cs_model step));
+      assert (Seq.equal (CS.pending_cleartext_handshake st1.CS.cs_model)
+                        (CS.cleartext_handshake_stream st0.CS.cs_model step))
+    | _ -> ()
 
 (**
   Introduction: a received-network-message witness yields a client wire step.
@@ -301,6 +369,36 @@ let lemma_client_wire_step_from_protected_head_witness
   assert (client_wire_received_event st0 wire (CS.ConnProtectedHandshake step))
 
 (**
+  Introduction: a cleartext handshake BUFFERING step yields a client wire step.
+
+  The twin of [lemma_client_wire_step_from_protected_head_witness] and of
+  [TLS13.Spec.Endpoint.Server.lemma_server_wire_step_from_cleartext_witness],
+  and cheaper than either: [client_wire_received_event] accepts
+  [ConnCleartextHandshake] outright, with no side condition -- a cleartext
+  buffering step never delivers, so there is no [head] flag to set.
+ **)
+let lemma_client_wire_step_from_cleartext_witness
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0 st1:CS.connection_state)
+  (wire:W.wire_message)
+  (step:CS.cleartext_handshake_step)
+  (out:SM.step_output W.wire_message API.local_output)
+  : Lemma
+      (requires
+        SMCan.canonical_wire_step
+          st0 st1 (CS.ConnCleartextHandshake step)
+          (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+          (W.wire_serialize wire) /\
+        client_local_outputs_match
+          (CS.ConnCleartextHandshake step)
+          out.SM.so_local_outputs)
+      (ensures
+        client_step #local_event_repr st0 (SM.WireEvent wire) st1 out)
+  =
+  assert (client_wire_received_event st0 wire (CS.ConnCleartextHandshake step))
+
+(**
   Elimination: a client wire step is described by exactly one connection event,
   which is either a received network message or a protected-handshake head.
  **)
@@ -322,6 +420,34 @@ let lemma_client_wire_step_inversion
             (W.wire_serialize wire) /\
           client_local_outputs_match conn_ev out.SM.so_local_outputs)
   = ()
+
+(** THE PAIRED-SYSTEM CLIENT STEP -- [client_step] restricted to steps that
+    leave the pending cleartext-handshake buffer EMPTY.  The exact mirror of
+    [TLS13.Spec.Endpoint.Server.server_step_nonbuffering], and carried for the
+    same reason.
+
+    [client_step] itself admits a [ConnCleartextHandshake] buffering step: that
+    is the generality the CLIENT IMPLEMENTATION needs in order to reassemble a
+    ServerHello split across records.  The PAIRED SYSTEM
+    ([TLS13.System.tls_machine_iface]) is a different artifact -- a closed world
+    in which the verified client faces the verified server -- and that server
+    emits its ServerHello as exactly one record, so the paired client never has
+    cause to buffer.  Cross-record ServerHellos arise only against a THIRD-PARTY
+    server, which the paired-system theorems do not model.
+
+    Because a buffering step always leaves a NON-EMPTY buffer
+    ([legal_cleartext_handshake_step] requires a non-empty fragment), pinning the
+    post-state buffer empty is EXACTLY "this step did not buffer". **)
+let client_step_nonbuffering
+  (#local_event_repr:Type0)
+  {| client_event_representation local_event_repr |}
+  (st0:CS.connection_state)
+  (ev:SM.event W.wire_message local_event_repr)
+  (st1:CS.connection_state)
+  (out:SM.step_output W.wire_message API.local_output)
+  : GTot prop =
+  client_step #local_event_repr st0 ev st1 out /\
+  CS.cleartext_handshake_buffer_empty st1.CS.cs_model
 
 type client_initial_state =
   st:CS.connection_state{

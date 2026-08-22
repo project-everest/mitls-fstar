@@ -1850,6 +1850,7 @@ let lemma_deliver_to_client_all3
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with
     (
@@ -1866,8 +1867,12 @@ let lemma_deliver_to_client_all3
         assert (c'.CS.cs_event_log == a.client.CS.cs_event_log @ [conn_ev0]);
         match conn_ev0 with
         | CS.ConnLocalEvent _ -> ()   (* client_wire_received_event is False here *)
-        (* [client_wire_received_event] is False on a cleartext buffering step. *)
-        | CS.ConnCleartextHandshake _ -> ()
+        (* Vacuous: a buffering step leaves the cleartext buffer non-empty, but
+           the product steps the client by [EC.client_step_nonbuffering]. *)
+        | CS.ConnCleartextHandshake _ ->
+          EC.lemma_client_wire_step_not_cleartext_buffering a.client c' conn_ev0
+            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+            (CW.wire_serialize wire)
         | CS.ConnProtectedHandshake step ->
           Seq.lemma_eq_elim (CW.wire_serialize wire) raw;
           assert (step.CS.protected_handshake_head);
@@ -2013,6 +2018,7 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with
     (
@@ -2031,8 +2037,12 @@ let lemma_fdac_deliver_to_client (a b:SY.tls_system_state)
         | CS.ConnLocalEvent _ ->
           (* `EC.client_wire_received_event` is `False` on a local event. *)
           ()
-        (* [client_wire_received_event] is False on a cleartext buffering step. *)
-        | CS.ConnCleartextHandshake _ -> ()
+        (* Vacuous: a buffering step leaves the cleartext buffer non-empty, but
+           the product steps the client by [EC.client_step_nonbuffering]. *)
+        | CS.ConnCleartextHandshake _ ->
+          EC.lemma_client_wire_step_not_cleartext_buffering a.client c' conn_ev0
+            (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+            (CW.wire_serialize wire)
         | CS.ConnProtectedHandshake step ->
           (* NEW ARM.  The delivered record is consumed by a HEAD protected-handshake
              step.  SECOND half is passive (H5).  FIRST half splits on the PRE-state
@@ -2905,6 +2915,7 @@ let lemma_awc_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with
     (
@@ -2933,8 +2944,12 @@ let lemma_awc_deliver_to_client (a b:SY.tls_system_state)
         (
           match conn_ev0 with
           | CS.ConnLocalEvent _ -> ()
-          (* [client_wire_received_event] is False on a cleartext buffering step. *)
-          | CS.ConnCleartextHandshake _ -> ()
+          (* Vacuous: a buffering step leaves the cleartext buffer non-empty, but
+             the product steps the client by [EC.client_step_nonbuffering]. *)
+          | CS.ConnCleartextHandshake _ ->
+            EC.lemma_client_wire_step_not_cleartext_buffering a.client c' conn_ev0
+              (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+              (CW.wire_serialize wire)
           | CS.ConnProtectedHandshake step ->
             HSP.lemma_protected_preserves_wr_full
               a.client.CS.cs_model c'.CS.cs_model step
@@ -3163,6 +3178,7 @@ let lemma_sfif_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with (assert (MP.Quiet? b.channel))
 #pop-options
@@ -3306,6 +3322,7 @@ let lemma_cfif_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with (assert (MP.Quiet? b.channel))
 #pop-options
@@ -3971,6 +3988,7 @@ let lemma_ae_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with
     (
@@ -4259,6 +4277,7 @@ let lemma_s2_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with
     (

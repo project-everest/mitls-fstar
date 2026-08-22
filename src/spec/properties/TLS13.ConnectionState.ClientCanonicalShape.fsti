@@ -116,6 +116,36 @@ let is_protected_buffering_step (ev:CS.conn_event) : bool =
 let no_buffering_steps (log:list CS.conn_event) : prop =
   forall (ev:CS.conn_event). L.memP ev log ==> is_protected_buffering_step ev == false
 
+(** A CLEARTEXT-handshake buffering step: takes delivery of one cleartext
+    record, appends its fragment to the pending cleartext reassembly buffer,
+    and delivers NO message.  This is how a client accepts a ServerHello split
+    across records.
+
+    The exact mirror of [ServerCanonicalShape.is_cleartext_buffering_step]; the
+    two are separate definitions only because the two shape modules are
+    independent. *)
+let is_cleartext_buffering_step (ev:CS.conn_event) : bool =
+  match ev with
+  | CS.ConnCleartextHandshake _ -> true
+  | _ -> false
+
+(** No cleartext-handshake buffering step anywhere in the log.
+
+    Threaded through the forward induction ([lemma_trace_shape]) by the SAME
+    per-step membership argument already used to exclude received CCS and
+    protected buffering.  The reason it must be excluded is identical to the
+    protected case: the exact-log-SHAPE invariant this file maintains pins the
+    event log to an EXACT list of milestone events per control state, and a
+    buffering step appends to that log WITHOUT moving the control.
+
+    In the PAIRED SYSTEM this hypothesis holds, because the verified SERVER
+    emits its ServerHello as exactly one record; cross-record ServerHellos
+    arise only against a THIRD-PARTY server, which the paired-system theorems
+    do not model. *)
+let no_cleartext_buffering_steps (log:list CS.conn_event) : prop =
+  forall (ev:CS.conn_event). L.memP ev log ==> is_cleartext_buffering_step ev == false
+
+
 (** A ClientEndpoint TrafficHandshake key install event (either direction).
     The client uses the PLAIN [LocalInstallTrafficKeys] constructor. *)
 let is_client_hs_install (ev:CS.conn_event) : bool =
@@ -201,6 +231,7 @@ let delivers_handshake (grp:list CS.conn_event) (msg:M.handshake_msg) : prop =
   match grp with
   | [ev] -> canonical_event ev == recv_handshake_ev msg
   | _ -> False
+
 
 (** A CLIENT LOCAL step (no wire output) as ONE existential witness exposing
     BOTH the underlying `conn_event`'s legality/step facts AND its exact
@@ -315,6 +346,40 @@ val lemma_client_raw_suffix_flight_spine
 (* Top lemma                                                           *)
 (* ------------------------------------------------------------------ *)
 
+(** A client step appends exactly one event to the log.  Exported so that the
+    system layer can invert a step into that event and push the cleartext
+    buffering gate through it; the exact mirror of
+    [ServerCanonicalShape.lemma_server_step_facts]. *)
+val lemma_client_step_facts
+  (st0 s':CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires EC.client_step st0 ev s' out)
+      (ensures
+        (exists (conn_ev:CS.conn_event).
+          s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
+          CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
+          CS.legal_event st0.CS.cs_model conn_ev))
+
+(** A legal model step that leaves the pending cleartext-handshake buffer EMPTY
+    is not a cleartext buffering step: [legal_cleartext_handshake_step] requires
+    a non-empty fragment, so buffering always leaves a non-empty buffer. *)
+val lemma_step_not_cleartext_buffering (m0 m1:CS.connection_model) (conn_ev:CS.conn_event)
+  : Lemma (requires CS.step_model m0 conn_ev == Some m1 /\
+                    CS.cleartext_handshake_buffer_empty m1)
+          (ensures is_cleartext_buffering_step conn_ev == false)
+
+(** Extending a cleartext-buffering-free log by a non-buffering event keeps it
+    free.  Together with [lemma_client_step_facts] and
+    [lemma_step_not_cleartext_buffering] this makes
+    [no_cleartext_buffering_steps] an INDUCTIVE invariant of any run built from
+    buffer-emptying client steps. *)
+val lemma_no_cleartext_buffering_snoc (log:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma (requires no_cleartext_buffering_steps log /\
+                    is_cleartext_buffering_step ev == false)
+          (ensures no_cleartext_buffering_steps (L.append log [ev]))
+
 val lemma_client_canonical_appdata_exact_spine
   (cfg:CS.connection_config) (s:CS.connection_state)
   : Lemma
@@ -330,7 +395,8 @@ val lemma_client_canonical_appdata_exact_spine
           no room for one (see [no_buffering_steps]'s docstring).  In the
           PAIRED SYSTEM this is always true, dischargeable from
           [SY.tls_system_inv]. *)
-       no_buffering_steps s.CS.cs_event_log)
+       no_buffering_steps s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures
        (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
           (client_shared:C.x25519_shared_secret)
@@ -375,5 +441,6 @@ val lemma_client_reachable_sfv_shared_secret_present
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
        log_has_no_received_ccs s.CS.cs_event_log /\
-       no_buffering_steps s.CS.cs_event_log)
+       no_buffering_steps s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)

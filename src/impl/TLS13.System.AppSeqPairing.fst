@@ -2290,6 +2290,11 @@ let lemma_asp_deliver_to_client
         a.channel == SY.tls_to_client raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
         EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+        (* The product steps the client by [EC.client_step_nonbuffering], so the
+           delivered record never merely BUFFERS cleartext handshake bytes.  That
+           is what keeps the [ConnCleartextHandshake] arm below vacuous now that
+           [client_wire_received_event] admits one. *)
+        CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
         SY.tls_no_rekeying ({ a with client = c'; channel = MP.Quiet }))
       (ensures app_seq_pairing ({ a with client = c'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with client = c'; channel = MP.Quiet } in
@@ -2311,8 +2316,13 @@ let lemma_asp_deliver_to_client
       | CS.ConnLocalEvent _ ->
         // `EC.client_wire_received_event` is `False` on a local event.
         ()
-      (* [client_wire_received_event] is False on a cleartext buffering step. *)
-      | CS.ConnCleartextHandshake _ -> ()
+      (* A cleartext BUFFERING step leaves a non-empty pending buffer, and the
+         post-state buffer is empty by hypothesis.  VACUOUS. *)
+      | CS.ConnCleartextHandshake _ ->
+        EC.lemma_client_wire_step_not_cleartext_buffering
+          a.client c' conn_ev0
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+          (CW.wire_serialize wire)
       | CS.ConnProtectedHandshake step ->
         (* NEW ARM (coalesced protected handshake).  `origin/agentic` extended the
            client's WIRE receive path so that a wire record may be consumed by a

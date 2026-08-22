@@ -855,7 +855,12 @@ let lemma_asi_deliver_to_client_raw
         SY.tls_system_inv a /\ ASP.app_extras a /\ app_stream_pairing a /\
         a.channel == SY.tls_to_client raw snap sent /\
         Seq.equal (CW.wire_serialize wire) raw /\
-        EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out)
+        EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+        (* The product steps the client by [EC.client_step_nonbuffering], so a
+           DELIVERED record never merely buffers cleartext handshake bytes.  That
+           keeps the [ConnCleartextHandshake] arm below vacuous even though
+           [EC.client_wire_received_event] now admits one. *)
+        CS.cleartext_handshake_buffer_empty c'.CS.cs_model)
       (ensures app_stream_pairing ({ a with client = c'; channel = MP.Quiet }))
   = let b : SY.tls_system_state = { a with client = c'; channel = MP.Quiet } in
     let p : SY.tls_payload = { SY.pl_raw = raw; SY.pl_snap = snap; SY.pl_sent = sent } in
@@ -873,8 +878,12 @@ let lemma_asi_deliver_to_client_raw
       | CS.ConnLocalEvent _ ->
         (* `EC.client_wire_received_event` is `False` on a local event. *)
         ()
-      (* [client_wire_received_event] is False on a cleartext buffering step. *)
-      | CS.ConnCleartextHandshake _ -> ()
+      (* Vacuous: a buffering step leaves the cleartext buffer NON-empty, but the
+         product's client step is non-buffering. *)
+      | CS.ConnCleartextHandshake _ ->
+        EC.lemma_client_wire_step_not_cleartext_buffering a.client c' conn_ev0
+          (WF.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+          (CW.wire_serialize wire)
       | CS.ConnProtectedHandshake step ->
         (* NEW ARM (coalesced protected handshake).  The delivered record is consumed
            by a HEAD protected-handshake step, which moves NO application bytes
@@ -991,6 +1000,7 @@ let lemma_asi_deliver_to_client (a b:SY.tls_system_state)
       a.channel == SY.tls_to_client raw snap sent /\
       Seq.equal (CW.wire_serialize wire) raw /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       b == { a with client = c'; channel = MP.Quiet }
     with lemma_asi_deliver_to_client_raw a wire c' out raw snap sent
 #pop-options

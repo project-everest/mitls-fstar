@@ -1362,6 +1362,43 @@ let lemma_client_recv_pread
     SCB.lemma_pre_appdata_back st0 d st1
 #pop-options
 
+(** READ-side counting preserved by a CLIENT CLEARTEXT BUFFERING step.
+
+    The simplest of the three receive-side cases.  A buffering step's
+    `event_raw_delta_legal` pins its received bytes to exactly ONE record whose
+    outer content type is `T.Handshake`, so it contributes ZERO to
+    `raw_appdata_count`; and `CS.step_cleartext_handshake` writes exactly one
+    model field (`hb_cleartext_handshake_bytes`), leaving `record_read`
+    untouched.  So +0 records matches +0 seq, with no forward-closure argument.
+
+    The client mirror of `SCB.lemma_pwrite_cleartext`, on the READ side. **)
+#push-options "--fuel 2 --ifuel 5 --z3rlimit 100"
+let lemma_client_cleartext_pread
+  (st0:CS.connection_state) (d:CS.connection_delta) (st1:CS.connection_state)
+  (step:CS.cleartext_handshake_step) (msgs:list CW.wire_message)
+  : Lemma
+      (requires
+        CS.legal_connection_delta st0 d st1 /\
+        d.CS.delta_event == CS.ConnCleartextHandshake step /\
+        SCB.pread_ok st0 /\
+        st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+        WF.parses_as CW.tls_record_wire_format
+          st0.CS.cs_wire_log.CL.raw_received msgs Seq.empty)
+      (ensures SCB.pread_ok st1)
+  = assert_norm (CS.step_model st0.CS.cs_model (CS.ConnCleartextHandshake step) ==
+                 CS.step_cleartext_handshake st0.CS.cs_model step);
+    CS.lemma_step_cleartext_handshake_inert st0.CS.cs_model step;
+    assert (CS.event_raw_delta_legal st0.CS.cs_model d.CS.delta_event
+              d.CS.delta_raw_sent d.CS.delta_raw_received);
+    WStep.lemma_single_full_record_count d.CS.delta_raw_received T.Handshake;
+    WStep.lemma_raw_appdata_count_append
+      st0.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received msgs;
+    WStep.lemma_raw_appdata_count_seq_equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received d.CS.delta_raw_received);
+    SCB.lemma_pre_appdata_back st0 d st1
+#pop-options
+
 (** MODEL-LEVEL read/count facts for a `CS.ConnProtectedHandshake` step -- the
     exact analogue of `SCB.lemma_recv_read_model_facts`, for the coalesced
     protected-handshake event `origin/agentic` added.
@@ -1490,8 +1527,10 @@ let lemma_client_step_pread
         (
           match conn_ev with
           | CS.ConnLocalEvent _ -> ()   // `client_wire_received_event` is False here
-          (* [client_wire_received_event] is False on a cleartext buffering step. *)
-          | CS.ConnCleartextHandshake _ -> ()
+          (* A cleartext BUFFERING step: one Handshake record, zero appdata,
+             and no movement of the read schedule. *)
+          | CS.ConnCleartextHandshake step ->
+            lemma_client_cleartext_pread st0 d st1 step msgs
           | CS.ConnProtectedHandshake step ->
             lemma_client_protected_pread st0 d st1 step msgs
           | CS.ConnNetworkEvent dm ->

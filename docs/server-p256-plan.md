@@ -2693,3 +2693,102 @@ other branch and was otherwise unexercised by any test.  35/35 server cells and
 
 The client half of B15 (`serverhello-across-two-records`) stays `false`: the
 client cannot yet reassemble a ServerHello.  That is B13/B14.
+
+## G3 commit B14 — flipping the CLIENT's cleartext buffering event
+
+B14 is the client mirror of B9's spec flip.  It is purely spec-and-proof: no
+implementation and no test changes, and by itself it enables nothing.  It had to
+land BEFORE B13 (the client implementation) because until the client's step
+relation ADMITS a cleartext buffering step, no client implementation could ever
+be proved to take one.
+
+### The one-line change, and its blast radius
+
+`EC.client_wire_received_event`'s `CS.ConnCleartextHandshake` arm in
+`src/spec/core/TLS13.Spec.Endpoint.Client.fst` went from `False` to `True`
+(guarded, as on the server, by the usual legality/derivation conditions).
+
+That one flip made roughly twenty previously-VACUOUS match arms across the
+system layer become reachable.  Every one of them carried the comment
+`(* [client_wire_received_event] is False on a cleartext buffering step. *)`
+and a body of `()`.  Closing them took exactly three shapes of argument.
+
+### Shape 1 — re-establish vacuity from the PRODUCT, not from the spec
+
+Most sites are about the PAIRED system, where a record is delivered to the
+client from the channel.  The paired product does not step the client by
+`EC.client_step`; it steps it by the new
+
+```
+EC.client_step_nonbuffering st0 ev st1 out =
+  client_step st0 ev st1 out /\ CS.cleartext_handshake_buffer_empty st1.cs_model
+```
+
+exactly mirroring `ES.server_step_nonbuffering`.  So at the product level the
+arm really is still vacuous — it just needs a WITNESS, which is the new reusable
+hook
+
+```
+EC.lemma_client_wire_step_not_cleartext_buffering st0 st1 conn_ev raw_sent raw_received
+  : Lemma (requires SMCan.canonical_wire_step st0 st1 conn_ev raw_sent raw_received /\
+                    CS.cleartext_handshake_buffer_empty st1.cs_model)
+          (ensures ~(CS.ConnCleartextHandshake? conn_ev))
+```
+
+To make the hypothesis available at each use site, `deliver_to_client_shape`,
+`client_send_shape` and their two shape lemmas in `TLS13.System.fst` gained the
+`CS.cleartext_handshake_buffer_empty c'.CS.cs_model` conjunct their SERVER
+counterparts already carried.  It then flows for free into every
+`eliminate exists ... with` that recovers a delivery's components — one extra
+conjunct in the witness, one lemma call in the arm, nothing else.
+
+`TLS13.System.AppSeqPairing.fst`, `TLS13.System.AppStreamInv.fst` and seven
+sites in `TLS13.System.AppExtrasInv.fst` were closed this way.
+
+### Shape 2 — actually PROVE the arm
+
+`TLS13.System.HsSeqPairing.lemma_client_step_pread` is not about the product; it
+is a REACHABILITY invariant over the general `EC.client_step`, so no buffer-empty
+hypothesis can be threaded in.  The arm had to be discharged.
+
+New `lemma_client_cleartext_pread` does it, and it is the easiest of the three
+receive-side cases:
+
+* `CS.event_raw_delta_legal` pins a buffering step's received bytes to EXACTLY
+  ONE record with outer content type `T.Handshake`, so
+  `WStep.lemma_single_full_record_count` gives `raw_appdata_count == 0`;
+* `CS.lemma_step_cleartext_handshake_inert` says the step writes exactly one
+  model field (`hb_cleartext_handshake_bytes`) and leaves `record_read` alone.
+
++0 records against +0 sequence numbers, with no forward-closure argument at all.
+It is the READ-side twin of the server's `SCB.lemma_pwrite_cleartext`.
+
+### Shape 3 — scope it at the LOG level
+
+`TLS13.ConnectionState.ClientCanonicalShape` classifies every event in a
+client's trace.  Flipping `is_client_canonical_event`'s cleartext arm to `True`
+is necessary (a buffering step IS canonical), but the canonical-shape SPINE
+lemmas — which say the appdata trace has an exact shape — are false in the
+presence of buffering steps.  So the module gained the server's machinery,
+mirrored: `is_cleartext_buffering_step`, `no_cleartext_buffering_steps`,
+`lemma_step_not_cleartext_buffering`, `lemma_no_cleartext_buffering_snoc`, plus
+an exported `lemma_client_step_facts`; and the two spine lemmas now REQUIRE
+`no_cleartext_buffering_steps`.
+
+`tls_system_inv` carries `CCShape.no_cleartext_buffering_steps
+s.client.CS.cs_event_log` as an invariant conjunct (next to the server's), made
+inductive by `lemma_client_no_cleartext_buffering_pres` +
+`lemma_client_no_cleartext_buffering_steps_prefix`, and it is threaded through
+`protected_witnesses_ok`, `server_flight_bridge_inputs` and
+`client_finished_bridge_inputs`.
+
+### What this does and does not buy
+
+It buys the RIGHT to write a buffering client.  It does not make the paired
+system tolerate one: `tls_system_inv` still pins both endpoints' cleartext
+buffers empty, exactly as it did for the server after B9.  The buffering only
+ever happens INSIDE one endpoint's `process_network_bytes`, between two
+system-visible states, which is why the system layer can keep the strong
+invariant while the implementation reassembles.
+
+`make -k -j48 verify` is EXIT 0.

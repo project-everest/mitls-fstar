@@ -601,7 +601,8 @@ let server_ready (s:tls_system_state) : prop =
 let protected_witnesses_ok (s:tls_system_state) : prop =
   (client_ready s /\ server_ready s /\
    CCShape.no_buffering_steps s.client.CS.cs_event_log /\
-   SCShape.no_cleartext_buffering_steps s.server.CS.cs_event_log) ==>
+   SCShape.no_cleartext_buffering_steps s.server.CS.cs_event_log /\
+   CCShape.no_cleartext_buffering_steps s.client.CS.cs_event_log) ==>
     P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server
 
 (** Client control at application data (weaker than `client_ready`). **)
@@ -653,22 +654,24 @@ let tls_system_inv (s:tls_system_state) : prop =
      it, so the system-level wire bridges may only read "the delivered raw bytes
      ARE the ClientHello" off a delivery when nothing is set aside.
 
-     CLIENT: [ES.client_wire_received_event]'s [ConnCleartextHandshake] arm is
-     still [False], so no client step can buffer and the emptiness is outright.
+     BOTH ROLES now admit a buffering step: [ES.server_step] so the server can
+     reassemble a ClientHello split across records, and [EC.client_step] so the
+     client can reassemble a ServerHello.  That is the generality each
+     IMPLEMENTATION needs against a third-party peer.
 
-     SERVER: [ES.server_step] DOES admit a buffering step -- that is the
-     generality the server implementation needs in order to reassemble a
-     ClientHello split across records.  The PAIRED SYSTEM, however, runs the
-     verified client against the verified server, and that client emits each
-     cleartext handshake message as exactly one record; the product therefore
-     steps by [ES.server_step_nonbuffering] and carries the resulting log-level
-     scope explicitly.  The gate is inductive by
-     [lemma_server_no_cleartext_buffering_pres], and it is what the layers above
-     ([TLS13.System.Temporal], [TLS13.System.HsMaterialFamilies],
-     [TLS13.System.AppSeqPairing]) read off the invariant instead of deriving it
+     The PAIRED SYSTEM, however, runs the verified client against the verified
+     server, and each of them emits every cleartext handshake message as exactly
+     one record; the product therefore steps by [EC.client_step_nonbuffering]
+     and [ES.server_step_nonbuffering] and carries the resulting log-level scope
+     explicitly.  The gates are inductive by
+     [lemma_client_no_cleartext_buffering_pres] and
+     [lemma_server_no_cleartext_buffering_pres], and they are what the layers
+     above ([TLS13.System.Temporal], [TLS13.System.HsMaterialFamilies],
+     [TLS13.System.AppSeqPairing]) read off the invariant instead of deriving
      from reachability -- reachability no longer excludes buffering. *)
   CS.cleartext_handshake_buffer_empty s.client.CS.cs_model /\
   CS.cleartext_handshake_buffer_empty s.server.CS.cs_model /\
+  CCShape.no_cleartext_buffering_steps s.client.CS.cs_event_log /\
   SCShape.no_cleartext_buffering_steps s.server.CS.cs_event_log
 
 (** Application record-epoch reachable-shape bridge (sub-goal (a)).  The
@@ -815,9 +818,12 @@ let tls_machine_iface
   : MP.machine_iface
       CS.connection_state CS.connection_state tls_payload
       CW.wire_message CTy.client_local_event CTy.server_local_event EAPI.local_output = {
-  cstep   = EC.client_step #CTy.client_local_event;
-  (* STAGING: the product takes only NON-BUFFERING server steps -- see
-     [ES.server_step_nonbuffering] for why, and for what lifting it entails. *)
+  (* The product takes only NON-BUFFERING steps on BOTH sides -- see
+     [EC.client_step_nonbuffering] / [ES.server_step_nonbuffering] for why, and
+     for what lifting it entails.  Each endpoint's own implementation is free to
+     reassemble a hello split across records; the paired system is a closed
+     world in which neither verified endpoint ever splits one. *)
+  cstep   = EC.client_step_nonbuffering #CTy.client_local_event;
   sstep   = ES.server_step_nonbuffering #CTy.server_local_event;
   emit_c  = tls_emit;
   emit_s  = tls_emit;
@@ -884,6 +890,7 @@ let client_send_shape (a b:tls_system_state) : prop =
          (out:SM.step_output CW.wire_message EAPI.local_output) (w:CW.wire_message)
          (sent:M.tls_message).
     EC.client_step a.client (SM.LocalEvent local) c' out /\
+    CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
     out.SM.so_wire_outputs == [w] /\
     c'.CS.cs_event_log == a.client.CS.cs_event_log @ [SMKM.sent_tls_event sent] /\
     b == { a with client = c'; channel = tls_to_server (emitted_raw out) a.client.CS.cs_model sent }
@@ -906,6 +913,7 @@ let lemma_client_send_shape (a b:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output)
                      (p:tls_payload).
       EC.client_step a.client (SM.LocalEvent local) c' out /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       Cons? out.SM.so_wire_outputs /\
       tls_emit a.client c' out p /\
       b == ({ a with client = c'; channel = MP.ToServer p } <: tls_system_state)
@@ -963,6 +971,7 @@ let deliver_to_client_shape (a b:tls_system_state) : prop =
     a.channel == tls_to_client raw snap sent /\
     Seq.equal (CW.wire_serialize wire) raw /\
     EC.client_step #CTy.client_local_event a.client (SM.WireEvent wire) c' out /\
+    CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
     b == { a with client = c'; channel = MP.Quiet }
 
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
@@ -988,6 +997,7 @@ let lemma_deliver_to_client_shape (a b:tls_system_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       a.channel == MP.ToClient p /\
       tls_carries p w /\
+      CS.cleartext_handshake_buffer_empty c'.CS.cs_model /\
       EC.client_step #CTy.client_local_event a.client (SM.WireEvent w) c' out /\
       b == ({ a with client = c'; channel = MP.Quiet } <: tls_system_state)
     with
@@ -2769,7 +2779,8 @@ let lemma_pw_establish (s:tls_system_state)
         client_ready s /\
         server_ready s /\
         CCShape.no_buffering_steps s.client.CS.cs_event_log /\
-        SCShape.no_cleartext_buffering_steps s.server.CS.cs_event_log)
+        SCShape.no_cleartext_buffering_steps s.server.CS.cs_event_log /\
+        CCShape.no_cleartext_buffering_steps s.client.CS.cs_event_log)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses s.client s.server)
   =
@@ -2850,6 +2861,17 @@ let lemma_no_buffering_steps_prefix (l1 l2:list CS.conn_event)
     with L.append_memP l1 l2 ev
 #pop-options
 
+(** The CLIENT sibling of the above, for the cleartext-handshake exclusion. **)
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 20"
+let lemma_client_no_cleartext_buffering_steps_prefix (l1 l2:list CS.conn_event)
+  : Lemma (requires CCShape.no_cleartext_buffering_steps (l1 @ l2))
+          (ensures CCShape.no_cleartext_buffering_steps l1)
+  = introduce forall (ev:CS.conn_event).
+      L.memP ev l1 ==> CCShape.is_cleartext_buffering_step ev == false
+    with introduce _ ==> _
+    with L.append_memP l1 l2 ev
+#pop-options
+
 (** The SERVER sibling of the above, for the cleartext-handshake exclusion. **)
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 20"
 let lemma_no_cleartext_buffering_steps_prefix (l1 l2:list CS.conn_event)
@@ -2877,7 +2899,8 @@ let lemma_pw_pres_client_appdata_route_a
         a.client.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
         client_ready b /\ server_ready b /\
         CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-        SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log)
+        SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+        CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.client d c');
@@ -2895,6 +2918,9 @@ let lemma_pw_pres_client_appdata_route_a
       assert (c'.CS.cs_event_log == a.client.CS.cs_event_log @ [d.CS.delta_event]);
       lemma_no_buffering_steps_prefix a.client.CS.cs_event_log [d.CS.delta_event];
       assert (CCShape.no_buffering_steps a.client.CS.cs_event_log);
+      lemma_client_no_cleartext_buffering_steps_prefix
+        a.client.CS.cs_event_log [d.CS.delta_event];
+      assert (CCShape.no_cleartext_buffering_steps a.client.CS.cs_event_log);
       // client-changing step: b.server == a.server, so the server gate is unmoved.
       assert (SCShape.no_cleartext_buffering_steps a.server.CS.cs_event_log);
       reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok a);
@@ -2920,7 +2946,8 @@ let lemma_pw_pres_server_appdata_route_a
         a.server.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
         client_ready b /\ server_ready b /\
         CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-        SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log)
+        SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+        CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log)
       (ensures
         P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server)
   = assert (exists (d:CS.connection_delta). CS.legal_connection_delta a.server d s');
@@ -2944,6 +2971,7 @@ let lemma_pw_pres_server_appdata_route_a
       // server-changing step: b.client == a.client, so the post-state gate IS
       // the pre-state gate.
       assert (CCShape.no_buffering_steps a.client.CS.cs_event_log);
+      assert (CCShape.no_cleartext_buffering_steps a.client.CS.cs_event_log);
       assert (s'.CS.cs_event_log == a.server.CS.cs_event_log @ [d.CS.delta_event]);
       lemma_no_cleartext_buffering_steps_prefix a.server.CS.cs_event_log [d.CS.delta_event];
       assert (SCShape.no_cleartext_buffering_steps a.server.CS.cs_event_log);
@@ -2972,7 +3000,8 @@ let lemma_pw_pres_client_local
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b /\
                CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log) ==>
+               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+               CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
     with
     (
@@ -2998,7 +3027,8 @@ let lemma_pw_pres_deliver_to_client
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b /\
                CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log) ==>
+               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+               CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
     with
     (
@@ -3025,7 +3055,8 @@ let lemma_pw_pres_server_send
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b /\
                CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log) ==>
+               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+               CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
     with
     (
@@ -3079,7 +3110,8 @@ let lemma_pw_pres_deliver_to_server
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b /\
                CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log) ==>
+               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+               CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
     with
     (
@@ -3137,7 +3169,8 @@ let lemma_pw_pres_server_local
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b /\
                CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log) ==>
+               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+               CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
     with
     (
@@ -3195,7 +3228,8 @@ let lemma_pw_pres_client_send
   = reveal_opaque (`%protected_witnesses_ok) (protected_witnesses_ok b);
     introduce (client_ready b /\ server_ready b /\
                CCShape.no_buffering_steps b.client.CS.cs_event_log /\
-               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log) ==>
+               SCShape.no_cleartext_buffering_steps b.server.CS.cs_event_log /\
+               CCShape.no_cleartext_buffering_steps b.client.CS.cs_event_log) ==>
       P.paired_protected_handshake_event_projection_pair_witnesses b.client b.server
     with
     (
@@ -3294,6 +3328,33 @@ let lemma_server_step_preserves_stage_ok
     WStep.lemma_connection_state_consistent_server_stage_shape st1
 #pop-options
 
+(** The CLIENT mirror of [lemma_server_no_cleartext_buffering_pres].  The
+    product steps the client by [EC.client_step_nonbuffering], whose post-state
+    pending buffer is empty, and a buffering step always leaves a NON-empty
+    buffer -- so the single event the step appends to the log is never a
+    [ConnCleartextHandshake]. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_client_no_cleartext_buffering_pres
+  (a:tls_system_state)
+  (c':CS.connection_state)
+  (ev:SM.event CW.wire_message CTy.client_local_event)
+  (out:SM.step_output CW.wire_message EAPI.local_output)
+  : Lemma
+      (requires
+        CCShape.no_cleartext_buffering_steps a.client.CS.cs_event_log /\
+        EC.client_step #CTy.client_local_event a.client ev c' out /\
+        CS.cleartext_handshake_buffer_empty c'.CS.cs_model)
+      (ensures CCShape.no_cleartext_buffering_steps c'.CS.cs_event_log)
+  = CCShape.lemma_client_step_facts a.client c' ev out;
+    eliminate exists (conn_ev:CS.conn_event).
+      (c'.CS.cs_event_log == L.append a.client.CS.cs_event_log [conn_ev] /\
+       CS.step_model a.client.CS.cs_model conn_ev == Some c'.CS.cs_model /\
+       CS.legal_event a.client.CS.cs_model conn_ev)
+    with
+    ( CCShape.lemma_step_not_cleartext_buffering a.client.CS.cs_model c'.CS.cs_model conn_ev;
+      CCShape.lemma_no_cleartext_buffering_snoc a.client.CS.cs_event_log conn_ev )
+#pop-options
+
 #push-options "--fuel 1 --ifuel 3 --z3rlimit 40"
 let lemma_pres_client_send (a b:tls_system_state)
   : Lemma (requires tls_system_inv a /\ MP.Quiet? a.channel /\ tls_step_client_send a b /\ tls_no_rekeying b)
@@ -3314,6 +3375,7 @@ let lemma_pres_client_send (a b:tls_system_state)
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
        lemma_client_step_ksp a.client c' (SM.LocalEvent local) out;
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
+       lemma_client_no_cleartext_buffering_pres a c' (SM.LocalEvent local) out;
        lemma_bp_client_send a local c' out w sent;
        lemma_wire_facts_client_send a b;
        lemma_client_step_preserves_pending a.client c' (SM.LocalEvent local) out;
@@ -3458,6 +3520,7 @@ let lemma_pres_deliver_to_client (a b:tls_system_state)
        lemma_client_reach_pres a c' (SM.WireEvent wire) out;
        lemma_client_step_ksp a.client c' (SM.WireEvent wire) out;
        lemma_client_step_e2e a.client c' (SM.WireEvent wire) out;
+       lemma_client_no_cleartext_buffering_pres a c' (SM.WireEvent wire) out;
        lemma_bp_deliver_to_client a wire c' out raw snap sent;
        lemma_wire_facts_deliver_to_client a b;
        lemma_client_step_preserves_pending a.client c' (SM.WireEvent wire) out;
@@ -3485,6 +3548,7 @@ let lemma_pres_client_local (a b:tls_system_state)
        lemma_client_reach_pres a c' (SM.LocalEvent local) out;
        lemma_client_step_ksp a.client c' (SM.LocalEvent local) out;
        lemma_client_step_e2e a.client c' (SM.LocalEvent local) out;
+       lemma_client_no_cleartext_buffering_pres a c' (SM.LocalEvent local) out;
        lemma_bp_client_local a local c' out;
        lemma_wire_facts_client_local a b;
        lemma_client_step_preserves_pending a.client c' (SM.LocalEvent local) out;

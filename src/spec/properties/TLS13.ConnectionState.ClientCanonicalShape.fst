@@ -22,6 +22,7 @@ module CTy = TLS13.Impl.CanonicalTypes
 module EAPI = TLS13.Spec.Endpoint.API
 module B = TLS13.Bytes
 module L = FStar.List.Tot
+module Seq = FStar.Seq
 module CLem = TLS13.ConnectionState.Lemmas
 
 (* ================================================================== *)
@@ -602,9 +603,14 @@ let is_client_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsKeyUpdate _ -> True
         | _ -> False))
   | CS.ConnProtectedHandshake _ -> True
-  (* Server-only: a cleartext reassembly step is legal only for a
-     [ServerEndpoint], so it is never a canonical CLIENT event. *)
-  | CS.ConnCleartextHandshake _ -> False
+  (* A cleartext reassembly step IS a canonical client event -- [client_step]
+     admits one, so this classification must cover it or
+     [lemma_client_step_facts] could not be stated over the general step
+     relation.  It carries no shape obligation: [lemma_step_preserves_shape]
+     separately requires the event to be non-buffering, and that hypothesis is
+     supplied by the membership argument in [lemma_trace_shape] from
+     [no_cleartext_buffering_steps]. *)
+  | CS.ConnCleartextHandshake _ -> True
   | CS.ConnLocalEvent le ->
     (match le with
      | CS.LocalStartHandshake _ -> True
@@ -681,7 +687,9 @@ let step_pre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
      Threaded per-step from [no_buffering_steps] exactly as CCS-exclusion is
      (see [lemma_trace_shape]), so the region-shape invariant below never has
      to accommodate one. *)
-  is_protected_buffering_step conn_ev == false
+  is_protected_buffering_step conn_ev == false /\
+  (* And the same for the CLEARTEXT reassembly buffer, for the same reason. *)
+  is_cleartext_buffering_step conn_ev == false
 
 unfold
 let hpre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
@@ -692,7 +700,8 @@ let hpre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
   CS.legal_event st0.CS.cs_model conn_ev /\
   is_client_canonical_event conn_ev /\
   is_received_ccs conn_ev == false /\
-  is_protected_buffering_step conn_ev == false
+  is_protected_buffering_step conn_ev == false /\
+  is_cleartext_buffering_step conn_ev == false
 
 (* ------------------------------------------------------------------ *)
 (* Append / region snoc lemmas                                         *)
@@ -1557,7 +1566,8 @@ let rec lemma_trace_shape
         client_canonical_shape st0 /\
         st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
         log_has_no_received_ccs st1.CS.cs_event_log /\
-        no_buffering_steps st1.CS.cs_event_log)
+        no_buffering_steps st1.CS.cs_event_log /\
+        no_cleartext_buffering_steps st1.CS.cs_event_log)
       (ensures client_canonical_shape st1)
       (decreases trace)
   = match trace with
@@ -1585,9 +1595,49 @@ let rec lemma_trace_shape
                facts just established), so [no_buffering_steps
                st1.cs_event_log] rules it out as a buffering step too. *)
             assert (is_protected_buffering_step conn_ev == false);
+            (* Same membership argument, third exclusion. *)
+            assert (is_cleartext_buffering_step conn_ev == false);
             lemma_step_preserves_shape st0 s' conn_ev;
             lemma_trace_shape init s' st1 rest
           )
+#pop-options
+
+(* ================================================================== *)
+(* Inverting the CLEARTEXT buffering gate across a single step.        *)
+(*                                                                    *)
+(* The exact mirror of                                                *)
+(* [ServerCanonicalShape.lemma_step_not_buffering] /                  *)
+(* [lemma_no_cleartext_buffering_snoc].  Since [WStep.client_sm] is   *)
+(* built over the GENERAL [EC.client_step], a cleartext buffering     *)
+(* step IS reachable, so the gate carries real content: what the      *)
+(* system layer needs is not a discharge but an INVERSION.            *)
+(* ================================================================== *)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_step_not_cleartext_buffering (m0 m1:CS.connection_model) (conn_ev:CS.conn_event)
+  : Lemma (requires CS.step_model m0 conn_ev == Some m1 /\
+                    CS.cleartext_handshake_buffer_empty m1)
+          (ensures is_cleartext_buffering_step conn_ev == false)
+  = match conn_ev with
+    | CS.ConnCleartextHandshake step ->
+      Seq.lemma_len_append
+        (CS.pending_cleartext_handshake m0)
+        step.CS.cleartext_handshake_fragment;
+      assert (0 < B.length (CS.cleartext_handshake_stream m0 step));
+      assert (Seq.equal (CS.pending_cleartext_handshake m1)
+                        (CS.cleartext_handshake_stream m0 step))
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let rec lemma_no_cleartext_buffering_snoc (log:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma (requires no_cleartext_buffering_steps log /\
+                    is_cleartext_buffering_step ev == false)
+          (ensures no_cleartext_buffering_steps (L.append log [ev]))
+          (decreases log)
+  = match log with
+    | [] -> ()
+    | _hd :: tl -> lemma_no_cleartext_buffering_snoc tl ev
 #pop-options
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
@@ -1599,7 +1649,8 @@ let lemma_client_canonical_appdata_exact_spine
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
        log_has_no_received_ccs s.CS.cs_event_log /\
-       no_buffering_steps s.CS.cs_event_log)
+       no_buffering_steps s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures
        (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
           (client_shared:C.x25519_shared_secret)
@@ -1712,7 +1763,8 @@ let lemma_client_reachable_sfv_shared_secret_present
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedVerified /\
        log_has_no_received_ccs s.CS.cs_event_log /\
-       no_buffering_steps s.CS.cs_event_log)
+       no_buffering_steps s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
   = let init = CS.initial cfg in
     lemma_shape_initial cfg;
