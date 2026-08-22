@@ -199,6 +199,7 @@ let lemma_received_server_hello_raw_from_received_replay_single
   (final_model:connection_model)
   : Lemma
       (requires
+        cleartext_handshake_buffer_empty model /\
         conn_events_received_decode_replay
           model
           [ConnNetworkEvent {
@@ -1462,16 +1463,18 @@ let lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
   (raw_received:B.bytes)
   (final_model:connection_model)
   : Lemma
-      (same_endpoint_replay_split_prefixes_equal
-        model
-        [ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }]
-        suffix
-        raw_sent
-        raw_received
-        final_model)
+      (requires cleartext_handshake_buffer_empty model)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal
+          model
+          [ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }]
+          suffix
+          raw_sent
+          raw_received
+          final_model)
 =
   introduce forall
     (sent_mid:connection_model)
@@ -1546,6 +1549,7 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
   (post_model:connection_model)
   : Lemma
       (requires
+        cleartext_handshake_buffer_empty model /\
         step_model
           model
           (ConnNetworkEvent {
@@ -3333,6 +3337,9 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
   (client_post:connection_model)
   : Lemma
       (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative, so
+           the client must not have buffered anything before this record. *)
+        cleartext_handshake_buffer_empty client_model /\
         step_model
           server_model
           (ConnNetworkEvent {
@@ -3733,6 +3740,8 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
       (requires
         (* Reassembly makes the ClientHello raw-delta rule buffer-relative. *)
         cleartext_handshake_buffer_empty server_model0 /\
+        (* ...and on the CLIENT, the ServerHello rule is buffer-relative too. *)
+        cleartext_handshake_buffer_empty client_model0 /\
         step_model
           server_model0
           (ConnLocalEvent LocalStartServer) == Some server_model1 /\
@@ -3911,6 +3920,9 @@ let lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello_normalize
   (client_sh_raw:B.bytes)
   : Lemma
       (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative, so
+           the client must not have buffered anything before this record. *)
+        cleartext_handshake_buffer_empty client_model /\
         step_model
           server_model
           (ConnNetworkEvent {
@@ -4730,6 +4742,8 @@ let lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handsh
       (requires
         (* Reassembly makes the ClientHello raw-delta rule buffer-relative. *)
         cleartext_handshake_buffer_empty server_model0 /\
+        (* ...and the client must not have buffered before the ServerHello. *)
+        cleartext_handshake_buffer_empty client_model0 /\
         step_model
           server_model0
           (ConnLocalEvent LocalStartServer) == Some server_model1 /\
@@ -5024,6 +5038,8 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_han
   (client_model4:connection_model)
   : Lemma
       (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative. *)
+        cleartext_handshake_buffer_empty client_model0 /\
         step_model
           client_model0
           (ConnLocalEvent (LocalStartHandshake start)) ==
@@ -5063,6 +5079,8 @@ let lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_han
     CL.message_value = M.TlsHandshake (M.ServerHello sh);
   } in
   let client_derive = ConnLocalEvent (LocalDeriveSharedSecret client_shared) in
+  assert (cleartext_handshake_buffer_empty client_model1);
+  assert (cleartext_handshake_buffer_empty client_model2);
   lemma_same_endpoint_replay_split_prefixes_equal_uniform_empty
     client_model4
     client_suffix;
@@ -5445,7 +5463,11 @@ let lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_final:connection_model)
   (client_final:connection_model)
   : Lemma
-      (paired_replay_split_prefixes_equal
+      (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative. *)
+        cleartext_handshake_buffer_empty client_model)
+      (ensures
+       paired_replay_split_prefixes_equal
         server_model
         client_model
         [ConnNetworkEvent {
@@ -6405,7 +6427,9 @@ let lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   : Lemma
       (requires (
         (* Reassembly makes the ClientHello raw-delta rule buffer-relative. *)
-        cleartext_handshake_buffer_empty server_model0 /\ (
+        cleartext_handshake_buffer_empty server_model0 /\
+        (* ...and the client must not have buffered before the ServerHello. *)
+        cleartext_handshake_buffer_empty client_model0 /\ (
         let server_suffix =
           PWL.server_protected_handshake_contiguous_replay_events
             server_material

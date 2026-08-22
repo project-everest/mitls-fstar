@@ -293,7 +293,7 @@ let lemma_ama_server_send (a b:SY.tls_system_state)
     so `cf_delivered b` lifts to `cf_delivered a`; the material carries across either
     by record-unchanged (empty-delta network) or by the client congruence engine
     (a genuine local event, where `~KeyUpdate` is immediate). **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200"
 let lemma_ama_client_local (a b:SY.tls_system_state)
   : Lemma
       (requires

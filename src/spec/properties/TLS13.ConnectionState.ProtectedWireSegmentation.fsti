@@ -575,16 +575,23 @@ val lemma_same_endpoint_replay_split_prefixes_equal_single_received_server_hello
   (raw_received:B.bytes)
   (final_model:CS.connection_model)
   : Lemma
-      (same_endpoint_replay_split_prefixes_equal
-        model
-        [CS.ConnNetworkEvent {
-          CL.message_direction = CL.Received;
-          CL.message_value = M.TlsHandshake (M.ServerHello sh);
-        }]
-        suffix
-        raw_sent
-        raw_received
-        final_model)
+      (requires
+        (* Cleartext reassembly makes the ServerHello record-level rule
+           buffer-relative on the CLIENT too, exactly as it already was for the
+           server's ClientHello: "the raw bytes ARE the ServerHello" only holds
+           when nothing had been buffered before the delivering record. *)
+        CS.cleartext_handshake_buffer_empty model)
+      (ensures
+        same_endpoint_replay_split_prefixes_equal
+          model
+          [CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = M.TlsHandshake (M.ServerHello sh);
+          }]
+          suffix
+          raw_sent
+          raw_received
+          final_model)
 
 val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server_hello
   (model:CS.connection_model)
@@ -594,6 +601,8 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_cons_received_server
   (post_model:CS.connection_model)
   : Lemma
       (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative. *)
+        CS.cleartext_handshake_buffer_empty model /\
         CS.step_model
         model
         (CS.ConnNetworkEvent {
@@ -934,6 +943,9 @@ val lemma_paired_replay_split_prefixes_equal_uniform_cons_server_hello
   (client_post:CS.connection_model)
   : Lemma
       (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative, so
+           the client must not have buffered anything before this record. *)
+        CS.cleartext_handshake_buffer_empty client_model /\
         CS.step_model
           server_model
           (CS.ConnNetworkEvent {
@@ -992,6 +1004,8 @@ val lemma_paired_replay_split_prefixes_equal_uniform_cleartext_handshake_prefix
       (requires
         (* Reassembly makes the ClientHello raw-delta rule buffer-relative. *)
         CS.cleartext_handshake_buffer_empty server_model0 /\
+        (* ...and on the CLIENT, the ServerHello rule is buffer-relative too. *)
+        CS.cleartext_handshake_buffer_empty client_model0 /\
         CS.step_model
           server_model0
           (CS.ConnLocalEvent CS.LocalStartServer) == Some server_model1 /\
@@ -1082,6 +1096,8 @@ val lemma_paired_replay_split_prefixes_equal_uniform_normalized_cleartext_handsh
       (requires
         (* Reassembly makes the ClientHello raw-delta rule buffer-relative. *)
         CS.cleartext_handshake_buffer_empty server_model0 /\
+        (* ...and the client must not have buffered before the ServerHello. *)
+        CS.cleartext_handshake_buffer_empty client_model0 /\
         CS.step_model
             server_model0
             (CS.ConnLocalEvent CS.LocalStartServer) == Some server_model1 /\
@@ -1218,6 +1234,8 @@ val lemma_same_endpoint_replay_split_prefixes_equal_uniform_client_cleartext_han
   (client_model4:CS.connection_model)
   : Lemma
       (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative. *)
+        CS.cleartext_handshake_buffer_empty client_model0 /\
         CS.step_model
           client_model0
           (CS.ConnLocalEvent (CS.LocalStartHandshake start)) ==
@@ -1361,7 +1379,11 @@ val lemma_paired_replay_split_prefixes_equal_single_server_hello
   (server_final:CS.connection_model)
   (client_final:CS.connection_model)
   : Lemma
-      (paired_replay_split_prefixes_equal
+      (requires
+        (* Reassembly makes the ServerHello raw-delta rule buffer-relative. *)
+        CS.cleartext_handshake_buffer_empty client_model)
+      (ensures
+       paired_replay_split_prefixes_equal
         server_model
         client_model
         [CS.ConnNetworkEvent {
@@ -1755,7 +1777,9 @@ val lemma_paired_protected_handshake_contiguous_replay_views_from_cleartext_pref
   : Lemma
       (requires (
         (* Reassembly makes the ClientHello raw-delta rule buffer-relative. *)
-        CS.cleartext_handshake_buffer_empty server_model0 /\ (
+        CS.cleartext_handshake_buffer_empty server_model0 /\
+        (* ...and the client must not have buffered before the ServerHello. *)
+        CS.cleartext_handshake_buffer_empty client_model0 /\ (
         let server_suffix =
           PWL.server_protected_handshake_contiguous_replay_events
             server_material

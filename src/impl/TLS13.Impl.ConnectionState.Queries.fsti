@@ -123,6 +123,23 @@ fn protected_handshake_buffer_empty_runtime
           pure (empty ==>
             CS.protected_handshake_buffer_empty st0.CS.cs_model)
 
+(** STAGING for cleartext handshake reassembly.
+
+    The connection representation has no concrete pending cleartext-handshake
+    buffer yet, so [Repr.handshake_buffers_exactly] pins the model's buffer
+    empty.  This ghost step surfaces that pure fact, which is what a cleartext
+    delivery site needs in order to read the model's buffer-relative raw-delta
+    rule ([CS.received_cleartext_tls_message_raw_buffered]) as the
+    ungeneralised one.  It disappears once the concrete buffer is threaded
+    through and the delivery sites become buffer-relative for real. **)
+ghost
+fn cleartext_handshake_buffer_empty_fact
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  ensures connection_exactly c st0 **
+          pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
+
 fn get_key_schedule_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)

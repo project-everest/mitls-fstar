@@ -326,6 +326,33 @@ fn protected_handshake_buffer_empty_runtime
   empty
 }
 
+ghost
+fn cleartext_handshake_buffer_empty_fact
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  ensures connection_exactly c st0 **
+          pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  with parsed. _;
+  assert (pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model));
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  fold (handshake_exactly
+    c.handshake
+    st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+}
+
 fn get_key_schedule_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)

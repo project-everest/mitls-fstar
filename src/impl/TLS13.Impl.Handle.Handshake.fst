@@ -345,6 +345,7 @@ fn handle_handshake_message
           assert (pure (B.length (WS.serialize_handshake (M.ServerHello sh)) ==
             SZ.v fragment_len));
           let ready = CQ.can_receive_server_hello c fragment_len #sh;
+          CQ.cleartext_handshake_buffer_empty_fact c;
           if ready {
             // can_receive_server_hello (with ready==true) established
             //   SZ.v fragment_len <= max_server_hello_len  and

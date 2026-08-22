@@ -2450,6 +2450,46 @@ let received_cleartext_tls_message_raw_buffered
       W.parse_tls_message
         T.Handshake
         (B.append (pending_cleartext_handshake model) fragment) == Some msg
+  (* SERVERHELLO -- the client's mirror, and the reason it is shaped
+     differently from the ClientHello arm above.
+
+     A received ServerHello is pinned by [received_cleartext_tls_message_raw]
+     to EXACT equality with this codec's canonical serialization, not to a
+     parse.  That is not an oversight: [W.parse_record_wire] deliberately
+     tolerates a legacy record version byte that [W.parse_record] rejects, so
+     "the record parses and its fragment parses to [sh]" does NOT recover the
+     record bytes.  Byte equality is therefore genuinely stronger here, and a
+     great deal downstream -- the whole sent/received hello pairing argument --
+     consumes it.
+
+     A REASSEMBLED ServerHello cannot satisfy that equality, because its bytes
+     are spread over several records.  So this arm ADDS the parse-based
+     reading as a second disjunct, guarded by the buffer being non-empty.
+
+     It is an [if] on the buffer, and NOT a disjunction of the two readings,
+     because the replay machinery needs this rule to be FUNCTIONAL in the raw
+     bytes: [ProtectedWireSegmentation]'s split-prefix determinism argument
+     replays the same event from the same model twice and concludes the two
+     raw prefixes agree.  A disjunction would let one replay take the
+     whole-record reading and the other the reassembled one, and those have
+     different lengths.
+
+     With an empty buffer this is LITERALLY the ungeneralised rule, which is
+     what [lemma_received_cleartext_tls_message_raw_buffered_of_empty] needs
+     in order to keep carrying every earlier property across the change.  The
+     price is that the client's ServerHello delivery site must now know its
+     buffer is empty; that fact is pinned in the connection REPRESENTATION
+     ([Repr.handshake_buffers_exactly]) and surfaced by
+     [Queries.can_receive_server_hello]. *)
+  | M.TlsHandshake (M.ServerHello _) ->
+    if B.length (pending_cleartext_handshake model) = 0
+    then received_cleartext_tls_message_raw msg raw
+    else
+      (exists fragment.
+        W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+        W.parse_tls_message
+          T.Handshake
+          (B.append (pending_cleartext_handshake model) fragment) == Some msg)
   | _ -> received_cleartext_tls_message_raw msg raw
 
 let lemma_received_cleartext_tls_message_raw_buffered_of_empty
@@ -2464,6 +2504,12 @@ let lemma_received_cleartext_tls_message_raw_buffered_of_empty
       [SMTPat (received_cleartext_tls_message_raw_buffered model msg raw)]
   =
   match msg with
+  | M.TlsHandshake (M.ServerHello _) ->
+    (* The [ServerHello] arm is BY CONSTRUCTION the ungeneralised rule when the
+       buffer is empty; all that is needed is that [Seq.equal buf B.empty]
+       forces [B.length buf == 0]. *)
+    assert (Seq.equal (pending_cleartext_handshake model) B.empty);
+    assert (B.length (pending_cleartext_handshake model) == 0)
   | M.TlsHandshake (M.ClientHello _) ->
     (* The buffer is empty, so [buffer ++ f] IS [f] for every fragment; the
        two rules then have literally the same body. *)

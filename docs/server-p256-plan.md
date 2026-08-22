@@ -2008,3 +2008,96 @@ before the capability exists. It is deleted together with
    unsplit runs. **The client half (`serverhello-across-two-records`) stays
    `refused`** until the client gains cleartext reassembly -- G3 is symmetric and
    only the server half is in scope here.
+
+## G3 commit B5 -- the ServerHello raw rule becomes buffer-relative
+
+B4 admitted the client to `cleartext_handshake_buffering_allowed`, but left the
+client unable to ever *deliver* a reassembled ServerHello: the model's
+received-ServerHello raw rule still demanded byte-exact equality with
+`serialized_cleartext_tls_message`. B5 relaxes that rule -- but only in the
+buffered layer, and only when the buffer is non-empty.
+
+### Why `received_cleartext_tls_message_raw` itself could not be relaxed
+
+The obvious move -- give ServerHello the same parse-based existential ClientHello
+already has -- was tried, measured (only 4 errors full-tree) and **reverted**.
+The asymmetry is load-bearing:
+
+* `W.parse_record_wire` deliberately tolerates a legacy record-version byte
+  (`b1==0x03 /\ (b2==0x03 \/ (b0==0x16 /\ b2==0x01))`) that `W.parse_record`
+  rejects.
+* `WRD.lemma_parse_record_wire_serialized_length` therefore only concludes
+  `consumed == B.length (serialize_record ct fragment)` -- a **length**, never
+  bytes. `DecoderWF.lemma_parse_record_full_eq_serialize` does recover byte
+  equality, but needs `parse_record`, not `parse_record_wire`.
+* So a parse-based ServerHello rule irrecoverably loses the sent/received hello
+  pairing argument. The tell was already in the tree: the ClientHello sibling
+  `WFL.lemma_received_client_hello_raw_length` concludes only a length equality.
+
+`received_cleartext_tls_message_raw` is therefore **unchanged**; only
+`received_cleartext_tls_message_raw_buffered` moved.
+
+### Why the new arm is an `if`, not a disjunction
+
+The buffered ServerHello arm reads
+
+```
+if B.length (pending_cleartext_handshake model) = 0
+then received_cleartext_tls_message_raw msg raw
+else <parse-based reading over (buffer ++ fragment)>
+```
+
+so it degenerates *literally* to the old rule on an empty buffer. The
+attractive alternative -- a disjunction, which would have spared the
+implementation from ever proving emptiness -- is **unsound for the replay
+proofs**. `ProtectedWireSegmentation`'s `same_endpoint_replay_split_prefixes_equal`
+family replays the same event from the same model twice and concludes the two
+raw prefixes are equal, via "same length + both prefixes of the same
+`raw_received`". A disjunctive rule lets one replay take the whole-record
+reading and the other the reassembled one, at different lengths. **The raw-delta
+rule must be functional in the raw bytes.**
+
+### How the implementation obtains buffer emptiness
+
+Three layers, all mirroring existing protected-buffer machinery:
+
+1. `Repr.handshake_buffers_exactly`'s trailing `pure` gained
+   `Seq.equal spec.hb_cleartext_handshake_bytes B.empty`. The representation has
+   no concrete cleartext field yet, so this is a pin, not a view -- and it cost
+   **zero fallout**: no allocation or free site broke. This is exactly where
+   step 3 (concrete pending buffer) will replace it with a
+   `sized_bytes_exactly` conjunct.
+2. A new Pulse `ghost fn CQ.cleartext_handshake_buffer_empty_fact`, modelled
+   verbatim on `Queries.protected_handshake_buffer_empty_runtime`, unfolds
+   `connection_exactly` -> `connection_model_exactly` -> `handshake_exactly`
+   -> `handshake_buffers_exactly`, surfaces the pure fact, and refolds.
+3. One call at the client's ServerHello delivery site in
+   `Impl.Handle.Handshake.fst`, just before `CN.mark_received_server_hello`.
+   `can_receive_server_hello` was deliberately **not** extended -- it is long and
+   branchy, and re-folding in every branch would have been error-prone.
+
+### Fallout, and what it means for the published guarantee
+
+`WireStep.lemma_received_cleartext_count_zero`'s ServerHello arm became the same
+`if` case split. In `ProtectedWireSegmentation`, the ServerHello replay family
+gained `cleartext_handshake_buffer_empty` hypotheses on the *client* model,
+exactly mirroring the ClientHello siblings' server-model hypotheses added in B2:
+`..._raw_from_received_replay_single`, `..._single_received_server_hello`,
+`..._uniform_cons_received_server_hello`, `..._single_server_hello`, the two
+paired `..._uniform_cons_server_hello` forms, the client cleartext-prefix
+lemma, both `..._cleartext_handshake_prefix` forms and the outermost
+`..._from_cleartext_prefix_full_replays`. `AppMaterialFamilies.fst:296` needed
+rlimit 100 -> 200 (pure timeout).
+
+**Consequence to state in `docs/server-client-parity.md` §P2b when the ledger
+flips:** the paired-system theorems are now explicitly scoped to runs in which
+**neither** endpoint buffered a cleartext hello. That is precisely what the new
+`cleartext_handshake_buffer_empty client_model0` conjuncts mean, and it is the
+client-side twin of the server-side scoping B2 introduced.
+
+### Still fenced
+
+`ES.client_wire_received_event`'s `ConnCleartextHandshake` arm is still `False`,
+so no client buffering step is reachable and the client half of `tls_system_inv`'s
+emptiness pair remains trivially inductive. Only the **server** half of that
+invariant has to be untied in step 1 below -- which halves the estimate B3 made.

@@ -2692,7 +2692,20 @@ let lemma_received_cleartext_count_zero
       with
         lemma_single_full_record_count raw T.Handshake
     | M.TlsHandshake (M.ServerHello _) ->
-      lemma_cleartext_raw_count_zero msg raw
+      (* Mirror of the ClientHello arm: with an empty buffer the ServerHello
+         rule IS the ungeneralised one; with a non-empty buffer it is the
+         parse-based reading, and reassembly again only changes which bytes the
+         message is parsed from, not that the delta is one Handshake record. *)
+      if B.length (CS.pending_cleartext_handshake m) = 0
+      then lemma_cleartext_raw_count_zero msg raw
+      else
+        eliminate exists (fragment:M.sealed_record).
+          W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+          W.parse_tls_message
+            T.Handshake
+            (B.append (CS.pending_cleartext_handshake m) fragment) == Some msg
+        with
+          lemma_single_full_record_count raw T.Handshake
     | M.TlsHandshake M.HelloRetryRequest ->
       lemma_cleartext_raw_count_zero msg raw
     | M.TlsChangeCipherSpec ->
