@@ -2562,3 +2562,35 @@ only reports `parse_tls_message ct fragment == None` for the fragment alone.
 Coalescing needs the decoder to parse `pending ++ fragment`, which is B12.  So
 after B11 a split hello still ultimately fails -- the first record is absorbed,
 the second still errors.  That is a green-at-every-step increment, not a bug.
+
+## G3 commit B12a: the coalescing decode
+
+B11 buffered only onto an EMPTY pending buffer, because
+`CS.legal_cleartext_handshake_step` demands that the COMBINED stream
+`pending ++ fragment` fail to parse, and the record decoder only reports the
+fragment's own parse.  B12a supplies the missing decode: on a non-empty buffer
+`try_buffer_cleartext_handshake_record` now materialises the coalesced stream
+and runs `P.parse_tls_message` over it.
+
+- `parse_tls_message` returns `None` -> the stream is still incomplete, so the
+  buffering step is legal and the whole stream is set aside.  A hello split
+  over three or more records now absorbs every record but the last.
+- `parse_tls_message` returns `Some` -> the record COMPLETES a message.
+  Buffering would be illegal, so the function declines; delivering a
+  reassembled ClientHello is B12b.
+
+### The reassembly cap is `max_client_hello_len`, not the model's cap
+
+The model allows a pending stream up to `max_pending_cleartext_handshake`
+(32768).  The implementation caps it at `Bounds.max_client_hello_len` (8192),
+which is sound because it is only ever a REFUSAL to buffer:
+
+- a cleartext buffer can only ever be drained by a ClientHello (server) or a
+  ServerHello (client), and `process_client_hello` already requires
+  `fragment_len <= max_client_hello_len`, so a longer stream could never be
+  delivered anyway;
+- 8192 is inside `parse_tls_message`'s `max_record_fragment_len` (16640)
+  precondition, so no change to `TLS13.Impl.Parser` was needed.
+
+Both the pending length and the sum are range-checked at runtime, because the
+representation invariant only bounds the buffer by `max_handshake_flight_len`.
