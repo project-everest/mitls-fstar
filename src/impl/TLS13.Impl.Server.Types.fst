@@ -1927,6 +1927,48 @@ let lemma_server_received_message_event_decode_projection
       raw_received)
   )
 
+(* ---------------------------------------------------------------------------
+   G3: THE DECODER-FACING RAW-DELTA RULE, GENERALISED TO A REASSEMBLED MESSAGE
+
+   [CT.received_tls_raw_delta_legal_unbuffered] is deliberately state-free: it
+   is what the shared record decoder can prove, and it reads a cleartext
+   received message off THIS RECORD'S FRAGMENT ALONE.  A ClientHello that
+   arrived over several records cannot satisfy it -- the completing record's
+   fragment is only the tail.
+
+   What such a record does satisfy is the model's buffer-relative rule,
+   [CS.received_cleartext_tls_message_raw_buffered], and that rule is no weaker
+   where the projection's consumers actually use it: both readings pin the raw
+   bytes to exactly one well-formed cleartext record
+   ([CT.raw_record_parse_success], see the lemma below), which is all the
+   canonical-protocol bridge takes from this conjunct.  Message identity comes
+   from [server_decoded_message_event_projection], which is unchanged.
+
+   As with the buffering disjunct, this is a widening IN PLACE rather than a
+   new wrapper predicate, so no signature downstream of the projection moves.
+   ------------------------------------------------------------------------- *)
+let server_received_raw_delta_legal_decoded
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : prop =
+  CT.received_tls_raw_delta_legal_unbuffered st0 msg raw_received \/
+  (CS.network_message_is_cleartext CL.Received msg /\
+   CS.received_cleartext_tls_message_raw_buffered
+     st0.CS.cs_model
+     msg
+     raw_received)
+
+let lemma_server_received_raw_delta_legal_decoded_of_unbuffered
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CT.received_tls_raw_delta_legal_unbuffered st0 msg raw_received)
+      (ensures server_received_raw_delta_legal_decoded st0 msg raw_received)
+      [SMTPat (CT.received_tls_raw_delta_legal_unbuffered st0 msg raw_received)]
+  = ()
+
 let server_network_step_ok_received_decode_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1937,7 +1979,7 @@ let server_network_step_ok_received_decode_projection
   : prop =
   resp.response.status == StepOk ==>
     (exists msg.
-      CT.received_tls_raw_delta_legal_unbuffered
+      server_received_raw_delta_legal_decoded
         st0
         msg
         (server_network_consumed_prefix resp input) /\
@@ -2210,7 +2252,7 @@ let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_acc
         then ()
         else (
         assert (exists msg.
-          CT.received_tls_raw_delta_legal_unbuffered
+          server_received_raw_delta_legal_decoded
             st0
             msg
             (server_network_consumed_prefix resp input) /\
@@ -2233,7 +2275,7 @@ let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_acc
           ID.indefinite_description_ghost
             M.tls_message
             (fun msg ->
-              CT.received_tls_raw_delta_legal_unbuffered
+              server_received_raw_delta_legal_decoded
                 st0
                 msg
                 (server_network_consumed_prefix resp input) /\
@@ -2509,7 +2551,7 @@ let lemma_server_network_bytes_end_to_end_nonfailed_previous
         app_out
     ) else (
     assert (exists msg.
-      CT.received_tls_raw_delta_legal_unbuffered
+      server_received_raw_delta_legal_decoded
         st0
         msg
         (server_network_consumed_prefix resp input) /\
@@ -2532,7 +2574,7 @@ let lemma_server_network_bytes_end_to_end_nonfailed_previous
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal_unbuffered
+          server_received_raw_delta_legal_decoded
             st0
             msg
             (server_network_consumed_prefix resp input) /\
@@ -3090,7 +3132,7 @@ let lemma_server_network_bytes_preserves_config
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal_unbuffered
+          server_received_raw_delta_legal_decoded
             st0
             msg
             (server_network_consumed_prefix resp input) /\

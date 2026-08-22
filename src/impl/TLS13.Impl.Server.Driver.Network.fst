@@ -436,6 +436,7 @@ let lemma_legal_network_response_preserves_supported_profile_selection
     app_out
     credential_identity
 
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
 let lemma_server_driver_network_process_correct_preserves_supported_profile_selection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -618,7 +619,7 @@ let lemma_server_driver_network_process_correct_preserves_supported_profile_sele
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal_unbuffered
+          ST.server_received_raw_delta_legal_decoded
             st0
             msg
             (ST.server_network_consumed_prefix resp input) /\
@@ -673,6 +674,7 @@ let lemma_server_driver_network_process_correct_preserves_supported_profile_sele
       assert (resp.ST.response.ST.status == ST.IllegalTransition);
       assert False
     ))
+#pop-options
 
 let lemma_slice_append_full
   (s:B.bytes)
@@ -853,7 +855,7 @@ let lemma_server_network_wire_accounting
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal_unbuffered
+          ST.server_received_raw_delta_legal_decoded
             st0
             msg
             (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -1102,7 +1104,7 @@ let lemma_server_network_zero_consumed_raw_received_unchanged
       Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
     ) else (
     assert (exists msg.
-      CT.received_tls_raw_delta_legal_unbuffered
+      ST.server_received_raw_delta_legal_decoded
         st0
         msg
         (ST.server_network_consumed_prefix buffer_resp input) /\
@@ -1125,7 +1127,7 @@ let lemma_server_network_zero_consumed_raw_received_unchanged
       ID.indefinite_description_ghost
         M.tls_message
         (fun msg ->
-          CT.received_tls_raw_delta_legal_unbuffered
+          ST.server_received_raw_delta_legal_decoded
             st0
             msg
             (ST.server_network_consumed_prefix buffer_resp input) /\

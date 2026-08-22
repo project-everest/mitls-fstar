@@ -2594,3 +2594,39 @@ which is sound because it is only ever a REFUSAL to buffer:
 
 Both the pending length and the sum are range-checked at runtime, because the
 representation invariant only bounds the buffer by `max_handshake_flight_len`.
+
+## G3 commit B12b-1: admitting a REASSEMBLED message into the decode projection
+
+Delivering a ClientHello assembled out of the pending cleartext buffer was
+blocked by one conjunct: `server_network_step_ok_received_decode_projection`
+required `CT.received_tls_raw_delta_legal_unbuffered`, which reads a cleartext
+received message off THIS RECORD'S FRAGMENT ALONE.  The completing record's
+fragment is only the tail, so no reassembled delivery can satisfy it.
+
+`ST.server_received_raw_delta_legal_decoded` is the widened rule:
+
+```fstar
+CT.received_tls_raw_delta_legal_unbuffered st0 msg raw \/
+(CS.network_message_is_cleartext CL.Received msg /\
+ CS.received_cleartext_tls_message_raw_buffered st0.cs_model msg raw)
+```
+
+It is a widening IN PLACE, like B11's, so no signature moves.  An SMT-patterned
+`lemma_server_received_raw_delta_legal_decoded_of_unbuffered` means every
+existing producer keeps discharging it for free; the fourteen sites that
+RESTATE the projection's first disjunct were a mechanical rename.
+
+The only place the conjunct is genuinely CONSUMED is
+`lemma_received_tls_raw_delta_legal_raw_record_parse_success`, which turns it
+into `CT.raw_record_parse_success` -- "the raw bytes are exactly one
+well-formed record".  That conclusion survives the widening unchanged, because
+`received_cleartext_tls_message_raw_buffered` pins
+`parse_record_wire raw == Some (T.Handshake, fragment, len)` in both its
+ClientHello arm and the non-empty half of its ServerHello arm, and falls back
+to the ungeneralised rule everywhere else.  Two new lemmas carry that:
+`lemma_received_cleartext_buffered_raw_record_parse_success` and
+`lemma_server_received_raw_delta_legal_decoded_raw_record_parse_success`.
+
+`lemma_server_driver_network_process_correct_preserves_supported_profile_selection`
+needed `--z3rlimit 400 --fuel 2 --ifuel 2`: its goals are unchanged, but the
+extra definition layer pushed the witness-existence query over the old limit.
