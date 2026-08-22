@@ -336,6 +336,10 @@ let lemma_establish (s:SY.tls_system_state)
            cross-endpoint record-material agreement, which lives ABOVE `TLS13.System`.
            Taken as an input; discharged by callers at that layer. *)
         CCS.no_buffering_steps s.client.CS.cs_event_log /\
+        (* SERVER-side sibling, same reason and same discharge: the server's exact
+           spine has no slot for a cleartext-handshake BUFFERING step, and in the
+           paired system the ATLAS client sends its ClientHello as one record. *)
+        SCS.no_cleartext_buffering_steps s.server.CS.cs_event_log /\
         Some? s.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
         Some? s.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
       (ensures ks_agree s.client s.server)
@@ -401,6 +405,10 @@ let lemma_establish_cf (s:SY.tls_system_state)
            cross-endpoint record-material agreement, which lives ABOVE `TLS13.System`.
            Taken as an input; discharged by callers at that layer. *)
         CCS.no_buffering_steps s.client.CS.cs_event_log /\
+        (* SERVER-side sibling, same reason and same discharge: the server's exact
+           spine has no slot for a cleartext-handshake BUFFERING step, and in the
+           paired system the ATLAS client sends its ClientHello as one record. *)
+        SCS.no_cleartext_buffering_steps s.server.CS.cs_event_log /\
         Some? s.client.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
         Some? s.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
       (ensures ks_agree s.client s.server)
@@ -657,7 +665,11 @@ let lemma_hma_client_local (a b:SY.tls_system_state)
             Some? b.server.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic )
           ==> ks_agree b.client b.server
         with
-          lemma_establish_cf b
+          ( (* STAGING: the server-side gate is discharged from reachability while
+               [ES.server_step_nonbuffering] still restricts [WStep.server_sm]. *)
+            SCS.lemma_server_reachable_no_cleartext_buffering
+              b.server.CS.cs_model.CS.model_config b.server;
+            lemma_establish_cf b )
     )
 #pop-options
 
@@ -781,6 +793,9 @@ let lemma_hma_deliver_to_client_flip (a b:SY.tls_system_state)
         assert (MP.Quiet? b.channel);
         // Both slots present (antecedent) + client@SFV ⇒ ks_agree, with the
         // server's shared secret recovered control-independently from its slot.
+        // STAGING: server-side gate discharged from reachability.
+        SCS.lemma_server_reachable_no_cleartext_buffering
+          b.server.CS.cs_model.CS.model_config b.server;
         lemma_establish_cf b
       )
     )

@@ -35,6 +35,7 @@ module SD  = TLS13.Impl.Server.Driver
 module WFL = TLS13.Spec.WireFormatLemmas
 module MP  = Common.MachineProduct
 module CCShape = TLS13.ConnectionState.ClientCanonicalShape
+module SCShape = TLS13.ConnectionState.ServerCanonicalShape
 
 open TLS13.System
 
@@ -71,6 +72,11 @@ let lemma_inv_implies_agreement s =
        SMKM.peer_record_material_agrees
          (SMKI.traffic_id CS.TrafficApplication CS.ServerTraffic) s.client s.server)
   with begin
+    (* STAGING: no reachable server log has a buffering step, so the server-side
+       gate on [lemma_ready_quiescent_agrees] is discharged here rather than
+       carried by this flagship theorem's scoping. *)
+    SCShape.lemma_server_reachable_no_cleartext_buffering
+      s.server.CS.cs_model.CS.model_config s.server;
     lemma_ready_quiescent_agrees s;
     // SMKM.supported_profile_application_record_material_agrees s.client s.server
     // unfolds definitionally to the two peer_record_material_agrees conjuncts.

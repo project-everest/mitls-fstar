@@ -278,9 +278,13 @@ let is_server_canonical_event (ev:CS.conn_event) : prop =
         | M.TlsAlert T.Close_notify -> True
         | _ -> False))
   | CS.ConnProtectedHandshake _ -> False
-  (* Cleartext reassembly steps are not yet emitted by [server_step]; see the
-     staging note on [ConnCleartextHandshake] in TLS13.Spec.StateMachine. *)
-  | CS.ConnCleartextHandshake _ -> False
+  (* A cleartext reassembly step IS a canonical event -- [server_step] admits
+     one, so this classification must cover it or [lemma_server_step_facts]
+     could not be stated over the general step relation.  It carries no shape
+     obligation: [lemma_step_preserves_shape] separately requires the event to
+     be non-buffering, and that hypothesis is supplied by the membership
+     argument in [lemma_trace_shape] from [no_cleartext_buffering_steps]. *)
+  | CS.ConnCleartextHandshake _ -> True
   | CS.ConnLocalEvent le ->
     (match le with
      | CS.LocalStartServer -> True
@@ -307,7 +311,7 @@ let lemma_server_step_facts
   (out:SM.step_output CW.wire_message EAPI.local_output)
   : Lemma
       (requires
-        ES.server_step_nonbuffering st0 ev s' out)
+        ES.server_step st0 ev s' out)
       (ensures
         (exists (conn_ev:CS.conn_event).
           s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
@@ -316,27 +320,16 @@ let lemma_server_step_facts
           is_server_canonical_event conn_ev))
   = match ev with
     | SM.WireEvent wire ->
-      (* [server_step] admits a cleartext BUFFERING step, which is not a
-         canonical shape event; the non-buffering post-state emptiness rules it
-         out and recovers the received-message reading. *)
-      ES.lemma_server_wire_step_received_msg #CTy.server_local_event st0 wire s' out;
-      eliminate exists (msg:M.tls_message).
-        (let conn_ev =
-           CS.ConnNetworkEvent {
-             CL.message_direction = CL.Received;
-             CL.message_value = msg;
-           } in
+      (* [server_wire_received_event] is either a received network message or a
+         cleartext buffering step, and [is_server_canonical_event] admits both. *)
+      eliminate exists (conn_ev:CS.conn_event).
+        (ES.server_wire_received_event conn_ev /\
          SMCan.canonical_wire_step st0 s' conn_ev
            (Common.WireFormat.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
       with
       (
-        let conn_ev =
-          CS.ConnNetworkEvent {
-            CL.message_direction = CL.Received;
-            CL.message_value = msg;
-          } in
         assert (is_server_canonical_event conn_ev)
       )
     | SM.LocalEvent local ->
@@ -363,7 +356,8 @@ let step_pre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
   CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
   CS.legal_event st0.CS.cs_model conn_ev /\
   is_server_canonical_event conn_ev /\
-  is_received_ccs conn_ev == false
+  is_received_ccs conn_ev == false /\
+  is_cleartext_buffering_step conn_ev == false
 
 (* Precondition of the per-control helpers (step_pre with [log_shape st0]
    already exposed instead of the [server_canonical_shape] wrapper). *)
@@ -375,7 +369,8 @@ let hpre (st0 s':CS.connection_state) (conn_ev:CS.conn_event) : prop =
   CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
   CS.legal_event st0.CS.cs_model conn_ev /\
   is_server_canonical_event conn_ev /\
-  is_received_ccs conn_ev == false
+  is_received_ccs conn_ev == false /\
+  is_cleartext_buffering_step conn_ev == false
 
 (* ------------------------------------------------------------------ *)
 (* Append / region snoc lemmas                                         *)
@@ -896,7 +891,8 @@ let rec lemma_trace_shape
         SM.trace_reaches (WStep.server_sm init) st0 trace st1 /\
         server_canonical_shape st0 /\
         st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-        log_has_no_received_ccs st1.CS.cs_event_log)
+        log_has_no_received_ccs st1.CS.cs_event_log /\
+        no_cleartext_buffering_steps st1.CS.cs_event_log)
       (ensures server_canonical_shape st1)
       (decreases trace)
   = match trace with
@@ -919,10 +915,97 @@ let rec lemma_trace_shape
             L.append_memP st0.CS.cs_event_log [conn_ev] conn_ev;
             L.append_memP s'.CS.cs_event_log ext' conn_ev;
             assert (is_received_ccs conn_ev == false);
+            (* Same membership argument, second exclusion: [conn_ev] is in the
+               final log, which contains no buffering step. *)
+            assert (is_cleartext_buffering_step conn_ev == false);
             lemma_step_preserves_shape st0 s' conn_ev;
             lemma_trace_shape init s' st1 rest
           )
 #pop-options
+
+(* ================================================================== *)
+(* STAGING: no reachable server log contains a buffering step.         *)
+(*                                                                     *)
+(* [no_cleartext_buffering_steps] is stated as a HYPOTHESIS wherever it *)
+(* is needed, mirroring the client's [no_buffering_steps], because that *)
+(* is where it belongs once the server really does reassemble.  TODAY,  *)
+(* however, [WStep.server_sm] is built over                             *)
+(* [ES.server_step_nonbuffering], so a buffering step is not reachable  *)
+(* at all and the hypothesis is DISCHARGEABLE from reachability alone.  *)
+(* This block is the discharge; it is DELETED together with             *)
+(* [ES.server_step_nonbuffering], at which point every gate above stops *)
+(* being derivable and starts carrying real content.                    *)
+(* ================================================================== *)
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 20"
+let lemma_step_not_buffering (m0 m1:CS.connection_model) (conn_ev:CS.conn_event)
+  : Lemma (requires CS.step_model m0 conn_ev == Some m1 /\
+                    CS.cleartext_handshake_buffer_empty m1)
+          (ensures is_cleartext_buffering_step conn_ev == false)
+  = match conn_ev with
+    | CS.ConnCleartextHandshake step ->
+      (* A legal buffering step has a NON-empty fragment, so it always leaves a
+         non-empty buffer -- an empty post-state buffer refutes it outright. *)
+      Seq.lemma_len_append
+        (CS.pending_cleartext_handshake m0)
+        step.CS.cleartext_handshake_fragment;
+      assert (0 < B.length (CS.cleartext_handshake_stream m0 step));
+      assert (Seq.equal (CS.pending_cleartext_handshake m1)
+                        (CS.cleartext_handshake_stream m0 step))
+    | _ -> ()
+#pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let rec lemma_no_cleartext_buffering_snoc (log:list CS.conn_event) (ev:CS.conn_event)
+  : Lemma (requires no_cleartext_buffering_steps log /\
+                    is_cleartext_buffering_step ev == false)
+          (ensures no_cleartext_buffering_steps (L.append log [ev]))
+          (decreases log)
+  = match log with
+    | [] -> ()
+    | _hd :: tl -> lemma_no_cleartext_buffering_snoc tl ev
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
+let rec lemma_trace_no_cleartext_buffering
+  (init st0 st1:CS.connection_state)
+  (trace:list (SM.transition CS.connection_state CW.wire_message
+                             CTy.server_local_event EAPI.local_output))
+  : Lemma
+      (requires
+        SM.trace_reaches (WStep.server_sm init) st0 trace st1 /\
+        no_cleartext_buffering_steps st0.CS.cs_event_log)
+      (ensures no_cleartext_buffering_steps st1.CS.cs_event_log)
+      (decreases trace)
+  = match trace with
+    | [] -> ()
+    | tr :: rest ->
+        let s' = tr.SM.tr_next_state in
+        lemma_server_step_facts st0 s' tr.SM.tr_event tr.SM.tr_output;
+        eliminate exists (conn_ev:CS.conn_event).
+          (s'.CS.cs_event_log == L.append st0.CS.cs_event_log [conn_ev] /\
+           CS.step_model st0.CS.cs_model conn_ev == Some s'.CS.cs_model /\
+           CS.legal_event st0.CS.cs_model conn_ev /\
+           is_server_canonical_event conn_ev)
+        with
+        (
+          lemma_step_not_buffering st0.CS.cs_model s'.CS.cs_model conn_ev;
+          lemma_no_cleartext_buffering_snoc st0.CS.cs_event_log conn_ev;
+          lemma_trace_no_cleartext_buffering init s' st1 rest
+        )
+#pop-options
+
+let lemma_server_reachable_no_cleartext_buffering
+  (cfg:CS.connection_config) (s:CS.connection_state)
+  : Lemma (requires WStep.server_reachable (CS.initial cfg) s)
+          (ensures no_cleartext_buffering_steps s.CS.cs_event_log)
+  = let init = CS.initial cfg in
+    eliminate exists (trace:list (SM.transition CS.connection_state CW.wire_message
+                                                 CTy.server_local_event EAPI.local_output)).
+      SM.trace_reaches (WStep.server_sm init) init trace s
+    with
+    ( lemma_trace_no_cleartext_buffering init init s trace )
+
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 let lemma_server_canonical_appdata_exact_spine
@@ -932,7 +1015,8 @@ let lemma_server_canonical_appdata_exact_spine
        WStep.server_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures
        (exists (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
           (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
@@ -1021,7 +1105,8 @@ let lemma_server_reachable_sfs_shared_secret_present
        WStep.server_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
   = let init = CS.initial cfg in
     lemma_shape_initial cfg;
@@ -1100,7 +1185,8 @@ let rec lemma_trace_hellos
         server_canonical_shape st0 /\
         hellos_inv st0.CS.cs_model /\
         st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
-        log_has_no_received_ccs st1.CS.cs_event_log)
+        log_has_no_received_ccs st1.CS.cs_event_log /\
+        no_cleartext_buffering_steps st1.CS.cs_event_log)
       (ensures hellos_inv st1.CS.cs_model)
       (decreases trace)
   = match trace with
@@ -1123,6 +1209,7 @@ let rec lemma_trace_hellos
             L.append_memP st0.CS.cs_event_log [conn_ev] conn_ev;
             L.append_memP s'.CS.cs_event_log ext' conn_ev;
             assert (is_received_ccs conn_ev == false);
+            assert (is_cleartext_buffering_step conn_ev == false);
             lemma_step_preserves_shape st0 s' conn_ev;
             lemma_step_preserves_hellos st0 s' conn_ev;
             lemma_trace_hellos init s' st1 rest
@@ -1137,7 +1224,8 @@ let lemma_server_reachable_traffic_slot_hellos_present
        WStep.server_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
        Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures
        Some? s.CS.cs_model.CS.model_handshake.CS.hs_server_hello /\
        Some? s.CS.cs_model.CS.model_handshake.CS.hs_client_hello)

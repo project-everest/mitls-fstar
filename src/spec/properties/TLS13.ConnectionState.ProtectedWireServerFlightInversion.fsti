@@ -39,6 +39,7 @@ module SMReplay = TLS13.Spec.StateMachine.Replay
 module CD = TLS13.Impl.Client.Driver
 module SD = TLS13.Impl.Server.Driver
 module CCShape = TLS13.ConnectionState.ClientCanonicalShape
+module SCShape = TLS13.ConnectionState.ServerCanonicalShape
 module PWHead = TLS13.ConnectionState.ProtectedWireHead
 module PWSeg = TLS13.ConnectionState.ProtectedWireSegmentation
 module WStep = TLS13.System.WireStep
@@ -97,7 +98,16 @@ let server_flight_bridge_inputs (client server : CS.connection_state) : prop =
      server, which this bridge does not describe.  Proving that here would need
      the cross-endpoint record-material agreement, which lives ABOVE
      [TLS13.System]; so it is taken as an input and discharged by the caller. *)
-  CCShape.no_buffering_steps client.CS.cs_event_log
+  CCShape.no_buffering_steps client.CS.cs_event_log /\
+  (* The SERVER-side sibling, for the SAME reason and with the same discharge.
+     A cleartext-handshake BUFFERING step takes delivery of a record without
+     delivering any message, so it has no slot in the exact server spine that
+     [SCShape.lemma_server_canonical_appdata_exact_spine] reconstructs, and that
+     lemma now requires its absence.  In the PAIRED system the peer is the
+     verified ATLAS client, which emits its ClientHello as exactly ONE record,
+     so the server never has cause to buffer; cross-record ClientHellos arise
+     only against a FOREIGN client, which this bridge does not describe. *)
+  SCShape.no_cleartext_buffering_steps server.CS.cs_event_log
 
 (* ------------------------------------------------------------------ *)
 (* The bridge's conclusion, in FLAGSHIP-COMPOSABLE shape.              *)

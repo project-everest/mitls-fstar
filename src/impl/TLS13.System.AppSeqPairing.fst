@@ -66,6 +66,7 @@ module WFL  = TLS13.Spec.WireFormatLemmas
 module SLM  = TLS13.System.SlotMono
 module RKE  = TLS13.ConnectionState.RecordKeyEpoch
 module CCShape = TLS13.ConnectionState.ClientCanonicalShape
+module SCShape = TLS13.ConnectionState.ServerCanonicalShape
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 
@@ -2690,6 +2691,8 @@ let lemma_ama_deliver_to_server
           lemma_client_send_installs_app_write_pins snap a.client.CS.cs_model sent;
           SY.lemma_appdata_implies_client_ready b;
           SY.lemma_appdata_implies_server_ready b;
+          SCShape.lemma_server_reachable_no_cleartext_buffering
+            b.server.CS.cs_model.CS.model_config b.server;
           SY.lemma_ready_quiescent_agrees b
         )
       )

@@ -62,6 +62,41 @@ let is_received_ccs (ev:CS.conn_event) : bool =
 let log_has_no_received_ccs (log:list CS.conn_event) : prop =
   forall (ev:CS.conn_event). L.memP ev log ==> is_received_ccs ev == false
 
+(** A cleartext-handshake BUFFERING step: takes delivery of one record, appends
+    its fragment to the pending cleartext reassembly buffer, and delivers NO
+    message. *)
+let is_cleartext_buffering_step (ev:CS.conn_event) : bool =
+  match ev with
+  | CS.ConnCleartextHandshake _ -> true
+  | _ -> false
+
+(** No cleartext-handshake BUFFERING step anywhere in the log.
+
+    Server mirror of [ClientCanonicalShape.no_buffering_steps], and threaded
+    through the forward induction ([lemma_trace_shape]) by the SAME per-step
+    membership argument already used here to exclude received CCS.
+
+    The exact-log-SHAPE invariant this file maintains ([log_shape] /
+    [*_region_ok]) pins the event log to an EXACT list of milestone events per
+    control state.  A buffering step appends to that log WITHOUT moving the
+    control, so it violates the [HsAwaitingClientHello] arm outright and shifts
+    every later arm.  Rather than move [log_shape] onto a filtered view of the
+    log -- which would push an existential all the way into the flagship
+    inversion lemmas that consume its exact-list conclusion
+    ([ProtectedWireServerFlightInversion], [ProtectedWireClientFinishedInversion])
+    -- the shape lemmas simply do not speak about logs that contain buffering.
+    This is exactly the scoping the client already uses for its own
+    cross-record reassembly, and those two flagship lemmas ALREADY carry the
+    client's version of this hypothesis as a [requires].
+
+    In the PAIRED SYSTEM this hypothesis holds: the verified client emits each
+    cleartext handshake message as exactly one record, so the server never has
+    cause to buffer.  Cross-record ClientHellos arise only against a THIRD-PARTY
+    client that really does split them, which the paired-system theorems do not
+    model. *)
+let no_cleartext_buffering_steps (log:list CS.conn_event) : prop =
+  forall (ev:CS.conn_event). L.memP ev log ==> is_cleartext_buffering_step ev == false
+
 (** A ServerEndpoint TrafficHandshake key install event (either direction). *)
 let is_server_hs_install (ev:CS.conn_event) : bool =
   match ev with
@@ -87,6 +122,18 @@ let is_server_hs_install_dir (d:CS.traffic_direction) (ev:CS.conn_event) : bool 
 (* Top lemma                                                           *)
 (* ------------------------------------------------------------------ *)
 
+(** STAGING DISCHARGE.  [WStep.server_sm] is currently built over
+    [ES.server_step_nonbuffering], so no reachable server log contains a
+    cleartext-handshake buffering step and every
+    [no_cleartext_buffering_steps] gate above is derivable from reachability
+    alone.  This val is DELETED together with [ES.server_step_nonbuffering];
+    at that point those gates stop being derivable and start carrying real
+    content, exactly as the client's [no_buffering_steps] gates do. *)
+val lemma_server_reachable_no_cleartext_buffering
+  (cfg:CS.connection_config) (s:CS.connection_state)
+  : Lemma (requires WStep.server_reachable (CS.initial cfg) s)
+          (ensures no_cleartext_buffering_steps s.CS.cs_event_log)
+
 val lemma_server_canonical_appdata_exact_spine
   (cfg:CS.connection_config) (s:CS.connection_state)
   : Lemma
@@ -94,7 +141,8 @@ val lemma_server_canonical_appdata_exact_spine
        WStep.server_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures
        (exists (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
           (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
@@ -126,7 +174,8 @@ val lemma_server_reachable_sfs_shared_secret_present
        WStep.server_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
        s.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsServerFinishedSent /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret)
 
 (** The server's client-handshake-traffic (READ) key slot is installed only at
@@ -144,7 +193,9 @@ val lemma_server_reachable_traffic_slot_hellos_present
        WStep.server_reachable (CS.initial cfg) s /\
        s.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
        Some? s.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
-       log_has_no_received_ccs s.CS.cs_event_log)
+       log_has_no_received_ccs s.CS.cs_event_log /\
+       no_cleartext_buffering_steps s.CS.cs_event_log)
     (ensures
        Some? s.CS.cs_model.CS.model_handshake.CS.hs_server_hello /\
        Some? s.CS.cs_model.CS.model_handshake.CS.hs_client_hello)
+
