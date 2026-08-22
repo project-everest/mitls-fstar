@@ -657,6 +657,7 @@ fn free_handshake_buffers_exactly (buffers:handshake_buffer_storage)
   free_sized_bytes_exactly buffers.server_hello_bytes;
   free_sized_bytes_exactly buffers.encrypted_server_handshake_bytes;
   Box.free buffers.encrypted_server_handshake_parsed;
+  free_sized_bytes_exactly buffers.cleartext_handshake_bytes;
   free_optional_sized_bytes_exactly buffers.certificate_leaf_der;
   free_optional_sized_bytes_exactly buffers.certificate_verify_input;
 }
@@ -1784,6 +1785,7 @@ fn alloc_handshake_buffers_empty ()
   let server_hello_bytes = alloc_empty_sized_bytes max_server_hello_len_sz #max_server_hello_len;
   let encrypted_server_handshake_bytes = alloc_empty_sized_bytes max_handshake_flight_len_sz #max_handshake_flight_len;
   let encrypted_server_handshake_parsed = Box.alloc 0sz;
+  let cleartext_handshake_bytes = alloc_empty_sized_bytes max_handshake_flight_len_sz #max_handshake_flight_len;
   let certificate_leaf_der = alloc_empty_optional_sized_bytes max_handshake_flight_len_sz #max_handshake_flight_len;
   let certificate_verify_input = alloc_empty_optional_sized_bytes max_certificate_verify_input_len_sz #max_certificate_verify_input_len;
   let buffers = {
@@ -1791,6 +1793,7 @@ fn alloc_handshake_buffers_empty ()
     server_hello_bytes;
     encrypted_server_handshake_bytes;
     encrypted_server_handshake_parsed;
+    cleartext_handshake_bytes;
     certificate_leaf_der;
     certificate_verify_input;
   };
@@ -1802,6 +1805,8 @@ fn alloc_handshake_buffers_empty ()
     (sized_bytes_exactly buffers.encrypted_server_handshake_bytes max_handshake_flight_len CS.empty_handshake_buffer_state.CS.hb_encrypted_server_handshake_bytes);
   rewrite (Box.pts_to encrypted_server_handshake_parsed 0sz) as
     (Box.pts_to buffers.encrypted_server_handshake_parsed 0sz);
+  rewrite (sized_bytes_exactly cleartext_handshake_bytes max_handshake_flight_len B.empty) as
+    (sized_bytes_exactly buffers.cleartext_handshake_bytes max_handshake_flight_len CS.empty_handshake_buffer_state.CS.hb_cleartext_handshake_bytes);
   rewrite (optional_sized_bytes_exactly certificate_leaf_der max_handshake_flight_len None) as
     (optional_sized_bytes_exactly buffers.certificate_leaf_der max_handshake_flight_len CS.empty_handshake_buffer_state.CS.hb_certificate_leaf_der);
   rewrite (optional_sized_bytes_exactly certificate_verify_input max_certificate_verify_input_len None) as

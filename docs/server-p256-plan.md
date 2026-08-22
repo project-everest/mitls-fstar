@@ -2158,3 +2158,44 @@ relation and the system invariant. Revised ordering:
    equivalent beside `try_buffer_protected_handshake_record`.
 5. `ES.client_step` WireEvent generalisation.
 6. Ledger flip + scope statement in `docs/server-client-parity.md` P2b.
+
+## G3 commit B6 -- the concrete pending cleartext buffer
+
+Per the ordering correction above, this lands first. `handshake_buffer_storage`
+gains a `cleartext_handshake_bytes : sized_bytes` field, capped by
+`Bounds.max_handshake_flight_len` (32768), which is exactly the model's
+`CS.max_pending_cleartext_handshake`. `Repr.handshake_buffers_exactly` swaps
+B5's `pure (Seq.equal spec.hb_cleartext_handshake_bytes B.empty)` pin for a real
+`sized_bytes_exactly` conjunct; alloc and free mirror
+`encrypted_server_handshake_bytes` line for line.
+
+**The emptiness fact becomes a runtime read.** B5's ghost
+`cleartext_handshake_buffer_empty_fact` could only exist because the
+representation pinned emptiness; with a real buffer there is nothing to pin. It
+is replaced by `CQ.cleartext_handshake_buffer_empty_runtime`, the cleartext twin
+of `protected_handshake_buffer_empty_runtime`: it reads the concrete length and
+returns `empty ==> CS.cleartext_handshake_buffer_empty`. The client's
+ServerHello delivery site now computes
+`ready = can_receive_server_hello && buffer_empty`, so a record arriving while
+something is set aside is not treated as a delivery. That branch is dead today
+(no endpoint takes a buffering step yet) and fails closed, which is the right
+default; it becomes the reassembly path in the buffering-branch step.
+
+**The drain had to become real.** The model's received-ClientHello arm resets
+`hb_cleartext_handshake_bytes` to `B.empty` ("delivering the message drains
+whatever cleartext records were set aside"). With only a pin that was
+invisible; with a concrete buffer, `Impl.ConnectionState.Network`'s
+`mark_received_client_hello` must reset the concrete length too, and the proof
+fails loudly if it does not. That is the first place the buffer has actual
+operational content.
+
+**Known gap, deliberately deferred.** The model does NOT drain the buffer on
+received-ServerHello -- only ClientHello has the reset. The client's reassembly
+step must add that arm, and the corresponding concrete reset in the client's
+`mark_received_server_hello`. Doing it here would have widened the commit for no
+present gain, since no client buffering step is reachable yet.
+
+Total fallout across the tree: two errors. One was the missing drain above; the
+other was a pure timeout in
+`Impl.Client.Driver.State.lemma_client_receive_observation_network_correct_from_buffered`,
+fixed with `--z3rlimit 100` (the file previously carried no options at all).

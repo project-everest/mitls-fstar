@@ -204,6 +204,12 @@ type handshake_buffer_storage = {
   server_hello_bytes: sized_bytes;
   encrypted_server_handshake_bytes: sized_bytes;
   encrypted_server_handshake_parsed: box SZ.t;
+  (* Cross-record reassembly of a CLEARTEXT handshake message: the server's
+     ClientHello and the client's ServerHello are the only two, and both arrive
+     before any keys are installed.  Bounded by the same flight cap as the
+     protected buffer, which is exactly the model's
+     [CS.max_pending_cleartext_handshake]. *)
+  cleartext_handshake_bytes: sized_bytes;
   certificate_leaf_der: optional_sized_bytes;
   certificate_verify_input: optional_sized_bytes;
 }
@@ -1295,6 +1301,10 @@ let handshake_buffers_exactly
       max_handshake_flight_len
       spec.CS.hb_encrypted_server_handshake_bytes **
     Box.pts_to buffers.encrypted_server_handshake_parsed parsed **
+    sized_bytes_exactly
+      buffers.cleartext_handshake_bytes
+      max_handshake_flight_len
+      spec.CS.hb_cleartext_handshake_bytes **
     optional_sized_bytes_exactly
       buffers.certificate_leaf_der
       max_handshake_flight_len
@@ -1303,18 +1313,7 @@ let handshake_buffers_exactly
       buffers.certificate_verify_input
       max_certificate_verify_input_len
       spec.CS.hb_certificate_verify_input **
-    pure (SZ.v parsed == spec.CS.hb_encrypted_server_handshake_parsed /\
-          (* STAGING for cleartext handshake reassembly.  The model carries a
-             pending cleartext-handshake buffer but this representation has no
-             concrete field for it yet, so it is pinned empty here.  Holding it
-             at the REPRESENTATION level (rather than in either role's
-             end-to-end invariant) is what lets a role's cleartext delivery
-             site bridge from the decoder's state-free promise
-             ([received_tls_raw_delta_legal_unbuffered]) to the model's
-             buffer-relative rule.  It is replaced by
-             `sized_bytes_exactly ... spec.CS.hb_cleartext_handshake_bytes`
-             once the concrete buffer is threaded through. *)
-          Seq.equal spec.CS.hb_cleartext_handshake_bytes B.empty)
+    pure (SZ.v parsed == spec.CS.hb_encrypted_server_handshake_parsed)
 
 let handshake_exactly
   ([@@@mkey] handshake:handshake_storage)

@@ -344,8 +344,13 @@ fn handle_handshake_message
           // SZ.v fragment_len, hence the serialized-length equation.
           assert (pure (B.length (WS.serialize_handshake (M.ServerHello sh)) ==
             SZ.v fragment_len));
-          let ready = CQ.can_receive_server_hello c fragment_len #sh;
-          CQ.cleartext_handshake_buffer_empty_fact c;
+          let can_receive = CQ.can_receive_server_hello c fragment_len #sh;
+          // The model's received-ServerHello raw-delta rule is buffer-relative:
+          // it reads the record in hand as the WHOLE message only when nothing
+          // is set aside.  A non-empty buffer means this record continues a
+          // message still being assembled, so it is not a delivery.
+          let buffer_empty = CQ.cleartext_handshake_buffer_empty_runtime c;
+          let ready = can_receive && buffer_empty;
           if ready {
             // can_receive_server_hello (with ready==true) established
             //   SZ.v fragment_len <= max_server_hello_len  and

@@ -326,13 +326,33 @@ fn protected_handshake_buffer_empty_runtime
   empty
 }
 
-ghost
-fn cleartext_handshake_buffer_empty_fact
+let lemma_cleartext_handshake_buffer_empty_from_length
+  (model:CS.connection_model)
+  (fragment_len:SZ.t)
+  : Lemma
+      (requires
+        B.length
+          model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes ==
+            SZ.v fragment_len)
+      (ensures
+        SZ.eq fragment_len 0sz ==>
+          CS.cleartext_handshake_buffer_empty model)
+=
+  if SZ.eq fragment_len 0sz
+  then
+    Seq.lemma_eq_intro
+      model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes
+      B.empty
+  else ()
+
+fn cleartext_handshake_buffer_empty_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0
+  returns empty:bool
   ensures connection_exactly c st0 **
-          pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
+          pure (empty ==>
+            CS.cleartext_handshake_buffer_empty st0.CS.cs_model)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -342,7 +362,21 @@ fn cleartext_handshake_buffer_empty_fact
     c.handshake.buffers
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
   with parsed. _;
-  assert (pure (CS.cleartext_handshake_buffer_empty st0.CS.cs_model));
+  unfold (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+  with storage stored_len. _;
+
+  let fragment_len = !c.handshake.buffers.cleartext_handshake_bytes.len;
+  let empty = SZ.eq fragment_len 0sz;
+  lemma_cleartext_handshake_buffer_empty_from_length st0.CS.cs_model fragment_len;
+  assert (pure (empty ==>
+    CS.cleartext_handshake_buffer_empty st0.CS.cs_model));
+  fold (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
   fold (handshake_buffers_exactly
     c.handshake.buffers
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
@@ -351,6 +385,7 @@ fn cleartext_handshake_buffer_empty_fact
     st0.CS.cs_model.CS.model_handshake);
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
+  empty
 }
 
 fn get_key_schedule_snapshot

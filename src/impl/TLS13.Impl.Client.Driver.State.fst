@@ -1414,6 +1414,7 @@ let client_buffered_network_io_step_correct
       old_app_out
       app_out_bytes
 
+#push-options "--z3rlimit 100"
 let lemma_client_receive_observation_network_correct_from_buffered
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1537,6 +1538,7 @@ let lemma_client_receive_observation_network_correct_from_buffered
       st_network == st1 /\
       st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
       (client_driver_workflow_observation result).client_receive_observed_response.CT.response.CT.app_out_len == 0sz))
+#pop-options
 
 noextract
 let internal_local_action_kind
