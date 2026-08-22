@@ -1881,3 +1881,46 @@ piece of G3 that remains, and it was not visible from the model layer at all.
 State after this commit: `make -k -j48 verify` clean, `make check-admits` 0,
 `make -j48 test` green (34/34 server matrix, 2/2 client record-split, all interop).
 Behaviour is unchanged.
+
+### A design fork worth weighing before commit B3
+
+Landing B2 exposed a cheaper alternative that was not visible when commit A was
+designed, and it is worth deciding deliberately rather than by inertia.
+
+**Route B (what is built).**  Buffering is a MODEL event: `ConnCleartextHandshake`
+is a `conn_event`, each partial record is a `step_cleartext_handshake`, and the
+delivery rule is buffer-relative (`received_cleartext_tls_message_raw_buffered`,
+`raw` = the LAST record, message = `pending ++ fragment`).  Cost: every buffering
+step appends to `cs_event_log`, which is what collides with
+`ServerCanonicalShape.log_shape`'s exact-list-per-control-state invariant and
+forces the two flagship inversion lemmas to be restated over a filtered log.
+
+**Route C (not built).**  Buffering is INVISIBLE to the model: the partial records
+are held only in the concrete server representation, the model takes NO step while
+buffering, and on completion the server takes a single ordinary
+`ConnNetworkEvent Received (ClientHello ch)` step whose `delta_raw_received` is the
+concatenation of ALL the records that carried the message.  No new `conn_event`, no
+new log entry, `log_shape` untouched, both flagship inversion lemmas untouched.
+
+What Route C needs instead:
+
+* `received_cleartext_tls_message_raw`'s ClientHello arm widened from "`raw` parses
+  as ONE Handshake record whose fragment is the message" to "`raw` parses as a
+  SEQUENCE of Handshake records whose fragments concatenate to the message".  A
+  local model change with no new constructor.
+* The byte-pairing invariant relaxed from "model `raw_received` == everything the
+  driver consumed" to "model `raw_received` ++ concrete pending == everything
+  consumed".  This is the real cost, and it is not obviously smaller than Route B's
+  flagship restatement — `cs_wire_log.raw_received` is coupled to the event log by
+  `legal_connection_delta`, so the lag has to be carried explicitly.
+* The same new `endpoint_status` constructor Route B needs (`NeedMoreInput` pins
+  `consumed_len == 0sz`, `StepOk` pins `st1` to a "received X" state), so that is a
+  wash.
+
+Neither route avoids the concrete pending buffer, and both need the new status
+constructor; the fork is purely about WHERE the lag is recorded — in the model's
+event log (B) or in the impl/model byte-pairing (C).  Route B is already built and
+green through the spec and step layers; Route C would mean reverting commit A's
+`ConnCleartextHandshake` machinery.  Recommendation: measure the flagship
+restatement (todo `g3-flagship`) FIRST — it is the only unquantified piece of
+Route B, and it is the one thing Route C buys outright.
