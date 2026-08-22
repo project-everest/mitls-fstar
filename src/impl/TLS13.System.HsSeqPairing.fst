@@ -606,12 +606,20 @@ let sr_shape (model:CS.connection_model) : prop =
     model.CS.model_record.CS.record_read.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_step_sr_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sr_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
       (ensures sr_shape model')
-  = ()
+  = match ev with
+    | CS.ConnCleartextHandshake step ->
+      (* Cleartext buffering is now legal for the client as well; it is inert on
+         both the control and the record read state, which is all this reads. *)
+      CS.lemma_step_cleartext_handshake_inert model step;
+      assert (model' == Some?.v (CS.step_cleartext_handshake model step));
+      assert (model'.CS.model_control == model.CS.model_control);
+      assert (model'.CS.model_record == model.CS.model_record)
+    | _ -> ()
 #pop-options
 
 let conn_sr_shape (st:CS.connection_state) : prop = sr_shape st.CS.cs_model
@@ -680,12 +688,19 @@ let sw_shape (model:CS.connection_model) : prop =
     model.CS.model_record.CS.record_write.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_step_sw_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sw_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
       (ensures sw_shape model')
-  = ()
+  = match ev with
+    | CS.ConnCleartextHandshake step ->
+      (* Cleartext buffering is inert on control and record state. *)
+      CS.lemma_step_cleartext_handshake_inert model step;
+      assert (model' == Some?.v (CS.step_cleartext_handshake model step));
+      assert (model'.CS.model_control == model.CS.model_control);
+      assert (model'.CS.model_record == model.CS.model_record)
+    | _ -> ()
 #pop-options
 
 let conn_sw_shape (st:CS.connection_state) : prop = sw_shape st.CS.cs_model

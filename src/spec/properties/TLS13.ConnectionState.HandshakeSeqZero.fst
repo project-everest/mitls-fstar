@@ -97,7 +97,7 @@ let client_hs_write_seq_shape (model:connection_model) : prop =
     model.model_record.record_write.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_step_model_client_hs_write_seq_shape
   (model:connection_model) (ev:conn_event) (model':connection_model)
   : Lemma
@@ -106,7 +106,16 @@ let lemma_step_model_client_hs_write_seq_shape
         legal_event model ev /\
         step_model model ev == Some model')
       (ensures client_hs_write_seq_shape model')
-  = ()
+  = match ev with
+    | ConnCleartextHandshake step ->
+      (* Buffering is now legal for the CLIENT too (awaiting ServerHello), so
+         this arm is reachable in a client-shaped lemma; it is inert on both
+         the control and the record write state, which is all the shape reads. *)
+      lemma_step_cleartext_handshake_inert model step;
+      assert (model' == Some?.v (step_cleartext_handshake model step));
+      assert (model'.model_control == model.model_control);
+      assert (model'.model_record == model.model_record)
+    | _ -> ()
 #pop-options
 
 let conn_client_hs_write_seq_shape (st:connection_state) : prop =
@@ -189,7 +198,7 @@ let server_hs_read_seq_shape (model:connection_model) : prop =
     model.model_record.record_read.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 100"
 let lemma_step_model_server_hs_read_seq_shape
   (model:connection_model) (ev:conn_event) (model':connection_model)
   : Lemma
@@ -198,7 +207,14 @@ let lemma_step_model_server_hs_read_seq_shape
         legal_event model ev /\
         step_model model ev == Some model')
       (ensures server_hs_read_seq_shape model')
-  = ()
+  = match ev with
+    | ConnCleartextHandshake step ->
+      (* Cleartext buffering is inert on control and record state. *)
+      lemma_step_cleartext_handshake_inert model step;
+      assert (model' == Some?.v (step_cleartext_handshake model step));
+      assert (model'.model_control == model.model_control);
+      assert (model'.model_record == model.model_record)
+    | _ -> ()
 #pop-options
 
 let conn_server_hs_read_seq_shape (st:connection_state) : prop =

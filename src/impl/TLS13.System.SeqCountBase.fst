@@ -1205,7 +1205,8 @@ let lemma_step_record_app_epoch_coupling
   = match ev with
     | CS.ConnNetworkEvent _ -> ()
     | CS.ConnProtectedHandshake _ -> ()
-    | CS.ConnCleartextHandshake _ -> ()
+    | CS.ConnCleartextHandshake step ->
+      CS.lemma_step_cleartext_handshake_inert m step
     | CS.ConnLocalEvent local ->
       (match local with
        | CS.LocalInstallTrafficKeys install -> ()

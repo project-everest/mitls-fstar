@@ -1104,6 +1104,18 @@ let lemma_client_application_progress_rank_step
            | _, _ ->
              assert (CS.step_local_event model local == None);
              assert False))
+     | CS.ConnCleartextHandshake step ->
+       (* A CLEARTEXT buffering step is now legal for the client too (awaiting
+          its ServerHello).  Like the protected buffering arm below it delivers
+          no message and moves only the pending buffer, so the control and the
+          key schedule -- the only things the rank reads -- are untouched and
+          the rank is unchanged. *)
+       CS.lemma_step_cleartext_handshake_inert model step;
+       assert (model'.CS.model_control == model.CS.model_control);
+       assert (model'.CS.model_handshake.CS.hs_keys ==
+                 model.CS.model_handshake.CS.hs_keys);
+       assert (client_application_progress_rank model ==
+                 client_application_progress_rank model')
      | CS.ConnProtectedHandshake step ->
        assert (CS.legal_protected_handshake_step model step);
        assert (CS.step_protected_handshake model step == Some model');

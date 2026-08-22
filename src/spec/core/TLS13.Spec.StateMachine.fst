@@ -1523,14 +1523,27 @@ let lemma_cleartext_handshake_stream_of_buffer_empty
    record that already carries a whole message instead of delivering it,
    which would otherwise let a peer feed records indefinitely without ever
    advancing the handshake. *)
+(** Which (role, control) pairs may buffer a CLEARTEXT handshake message.
+
+    Cleartext reassembly is needed exactly where an endpoint is waiting for a
+    handshake message that arrives BEFORE any keys are installed, and there is
+    exactly one such message per role: the server's ClientHello and the client's
+    ServerHello.  Anywhere else the buffer could never be drained, so admitting
+    it would be a way to wedge the endpoint while still consuming records --
+    the same reasoning that pins [protected_handshake_buffering_stage]. *)
+let cleartext_handshake_buffering_allowed (model:connection_model) : prop =
+  (model.model_config.config_role == ServerEndpoint /\
+   model.model_control == ControlHandshaking HsAwaitingClientHello) \/
+  (model.model_config.config_role == ClientEndpoint /\
+   model.model_control == ControlHandshaking HsClientHelloSent)
+
 let legal_cleartext_handshake_step
   (model:connection_model)
   (step:cleartext_handshake_step)
   : GTot prop =
-  model.model_config.config_role == ServerEndpoint /\
+  cleartext_handshake_buffering_allowed model /\
   0 < B.length step.cleartext_handshake_fragment /\
   B.length (cleartext_handshake_stream model step) <= max_pending_cleartext_handshake /\
-  model.model_control == ControlHandshaking HsAwaitingClientHello /\
   W.parse_tls_message T.Handshake (cleartext_handshake_stream model step) == None
 
 (* A cleartext buffering step advances no key schedule and no read sequence:

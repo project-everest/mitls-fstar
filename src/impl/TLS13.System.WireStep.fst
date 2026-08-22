@@ -2248,14 +2248,13 @@ let lemma_client_marker_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
-    (* Cleartext reassembly is a SERVER-side event, so this arm is
-       unreachable in a client-role lemma. *)
-    | CS.ConnCleartextHandshake step ->
-      assert_norm (
-        CS.legal_event m (CS.ConnCleartextHandshake step) ==
-        CS.legal_cleartext_handshake_step m step);
-      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
-      assert False
+    (* A cleartext buffering step sends nothing and takes delivery of exactly
+       one Handshake record, so it is inert for these counts -- exactly like the
+       protected buffering arm beside it. *)
+    | CS.ConnCleartextHandshake _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
@@ -2757,14 +2756,11 @@ let lemma_client_recv_potential_step
       Seq.lemma_eq_elim raw_received B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_received B.empty
-    (* Cleartext reassembly is a SERVER-side event, so this arm is
-       unreachable in a client-role lemma. *)
+    (* A cleartext buffering step sends nothing and takes delivery of exactly
+       one Handshake record, so it is inert for these counts -- exactly like the
+       protected buffering arm beside it. *)
     | CS.ConnCleartextHandshake step ->
-      assert_norm (
-        CS.legal_event m (CS.ConnCleartextHandshake step) ==
-        CS.legal_cleartext_handshake_step m step);
-      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
-      assert False
+      lemma_cleartext_handshake_count_zero m step raw_received
     | CS.ConnProtectedHandshake step ->
       if step.CS.protected_handshake_head
       then lemma_protected_raw_count_one raw_received
@@ -2951,14 +2947,13 @@ let lemma_client_sent_potential_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
-    (* Cleartext reassembly is a SERVER-side event, so this arm is
-       unreachable in a client-role lemma. *)
-    | CS.ConnCleartextHandshake step ->
-      assert_norm (
-        CS.legal_event m (CS.ConnCleartextHandshake step) ==
-        CS.legal_cleartext_handshake_step m step);
-      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
-      assert False
+    (* A cleartext buffering step sends nothing and takes delivery of exactly
+       one Handshake record, so it is inert for these counts -- exactly like the
+       protected buffering arm beside it. *)
+    | CS.ConnCleartextHandshake _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
@@ -3337,14 +3332,11 @@ let lemma_client_stay_appdata_raw_sent_first_appdata
   = match conn_ev with
     | CS.ConnLocalEvent _ ->
       Seq.lemma_eq_elim raw_sent B.empty
-    (* Cleartext reassembly is a SERVER-side event, so this arm is
-       unreachable in a client-role lemma. *)
-    | CS.ConnCleartextHandshake step ->
-      assert_norm (
-        CS.legal_event m (CS.ConnCleartextHandshake step) ==
-        CS.legal_cleartext_handshake_step m step);
-      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
-      assert False
+    (* A cleartext buffering step sends nothing and takes delivery of exactly
+       one Handshake record, so it is inert for these counts -- exactly like the
+       protected buffering arm beside it. *)
+    | CS.ConnCleartextHandshake _ ->
+      Seq.lemma_eq_elim raw_sent B.empty
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty
     | CS.ConnNetworkEvent dm ->
@@ -4303,14 +4295,11 @@ let lemma_client_recv_upper_step
       Seq.lemma_eq_elim raw_received B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_received B.empty
-    (* Cleartext reassembly is a SERVER-side event, so this arm is
-       unreachable in a client-role lemma. *)
+    (* A cleartext buffering step sends nothing and takes delivery of exactly
+       one Handshake record, so it is inert for these counts -- exactly like the
+       protected buffering arm beside it. *)
     | CS.ConnCleartextHandshake step ->
-      assert_norm (
-        CS.legal_event m (CS.ConnCleartextHandshake step) ==
-        CS.legal_cleartext_handshake_step m step);
-      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
-      assert False
+      lemma_cleartext_handshake_count_zero m step raw_received
     | CS.ConnProtectedHandshake step ->
       if step.CS.protected_handshake_head
       then begin
@@ -4803,14 +4792,13 @@ let lemma_client_finished_flag_step
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
       lemma_raw_appdata_count_seq_equal raw_sent B.empty
-    (* Cleartext reassembly is a SERVER-side event, so this arm is
-       unreachable in a client-role lemma. *)
-    | CS.ConnCleartextHandshake step ->
-      assert_norm (
-        CS.legal_event m (CS.ConnCleartextHandshake step) ==
-        CS.legal_cleartext_handshake_step m step);
-      assert (m.CS.model_config.CS.config_role == CS.ServerEndpoint);
-      assert False
+    (* A cleartext buffering step sends nothing and takes delivery of exactly
+       one Handshake record, so it is inert for these counts -- exactly like the
+       protected buffering arm beside it. *)
+    | CS.ConnCleartextHandshake _ ->
+      Seq.lemma_eq_elim raw_sent B.empty;
+      lemma_raw_appdata_count_empty ();
+      lemma_raw_appdata_count_seq_equal raw_sent B.empty
     | CS.ConnProtectedHandshake _ ->
       Seq.lemma_eq_elim raw_sent B.empty;
       lemma_raw_appdata_count_empty ();
