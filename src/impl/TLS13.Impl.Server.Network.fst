@@ -1495,6 +1495,356 @@ let lemma_cleartext_record_raw_delta_legal
           Some (T.Handshake, fragment, B.length raw_received))
 = ()
 
+(** G3: deliver a ClientHello REASSEMBLED out of the pending cleartext buffer.
+
+    This is the drain half of cleartext reassembly, and it is reached from the
+    same place as the buffering half -- the record decoder's "this fragment
+    parses as no message" arm -- because the record that COMPLETES a split
+    hello carries only the message's tail.  What completes it is
+    `pending ++ fragment`, and that is what is parsed here.
+
+    Returns [None], meaning "not my business, try buffering and then the decode
+    error", whenever the record cannot be the last one of a split hello:
+    nothing is set aside, the record is not a cleartext handshake record, the
+    coalesced stream is over [max_client_hello_len], it still does not parse,
+    it parses as something other than a ClientHello, or the connection is not
+    in a state that can receive one.
+
+    Delivery drains the buffer: [CM.received_client_hello_state] resets
+    [hb_cleartext_handshake_bytes], and [CN.mark_received_client_hello] resets
+    the concrete buffer to match. *)
+fn try_deliver_reassembled_client_hello
+  (s:server)
+  (protected:bool)
+  (content_type:U8.t)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to fragment 'fragment_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (
+             B.length 'raw_bytes == SZ.v raw_len /\
+             B.length 'fragment_bytes == SZ.v fragment_len /\
+             B.length 'old_network_out == SZ.v network_out_len /\
+             B.length 'old_app_out == SZ.v app_out_len /\
+             SZ.v fragment_len <= Bounds.max_handshake_flight_len /\
+             ST.server_end_to_end_invariant 'st0 /\
+             (~protected ==>
+               (exists outer_ct.
+                 IM.content_type_matches content_type outer_ct /\
+                 W.parse_record_wire (Ghost.reveal 'raw_bytes) ==
+                   Some
+                     (outer_ct,
+                      Ghost.reveal 'fragment_bytes,
+                      B.length (Ghost.reveal 'raw_bytes)))))
+  returns handled:option ST.server_response
+  ensures
+    (match handled with
+    | None ->
+      connection_exactly s 'st0 **
+      pts_to raw 'raw_bytes **
+      pts_to fragment 'fragment_bytes **
+      pts_to network_out 'old_network_out **
+      pts_to app_out 'old_app_out
+    | Some resp ->
+      exists* st1 network_out_bytes app_out_bytes.
+        connection_exactly s st1 **
+        pts_to raw 'raw_bytes **
+        pts_to fragment 'fragment_bytes **
+        pts_to network_out network_out_bytes **
+        pts_to app_out app_out_bytes **
+        pure (
+          B.length network_out_bytes == SZ.v network_out_len /\
+          B.length app_out_bytes == SZ.v app_out_len /\
+          (exists ch.
+            st1 ==
+              CM.received_client_hello_state
+                'st0
+                ch
+                (Ghost.reveal 'raw_bytes) /\
+            ST.server_network_event_end_to_end_correct
+              'st0
+              st1
+              resp
+              (M.TlsHandshake (M.ClientHello ch))
+              (Ghost.reveal 'raw_bytes)
+              network_out_bytes
+              app_out_bytes)))
+{
+  let is_cleartext_handshake = ((not protected) && content_type = 0x16uy);
+  if (not is_cleartext_handshake) {
+    None #ST.server_response
+  } else {
+    unfold (connection_exactly s 'st0);
+    let pending = CQ.copy_pending_cleartext_handshake s;
+    match pending {
+      None -> {
+        fold (connection_exactly s 'st0);
+        None #ST.server_response
+      }
+      Some p -> {
+        with pending_bytes. assert (
+          V.pts_to p.CR.pending_cleartext_fragment pending_bytes);
+        let pending_fits =
+          SZ.lte
+            p.CR.pending_cleartext_fragment_len
+            Bounds.max_client_hello_len_sz;
+        if (not pending_fits) {
+          V.free p.CR.pending_cleartext_fragment;
+          fold (connection_exactly s 'st0);
+          None #ST.server_response
+        } else {
+          let room =
+            SZ.sub
+              Bounds.max_client_hello_len_sz
+              p.CR.pending_cleartext_fragment_len;
+          let fits = SZ.lte fragment_len room;
+          if (not fits) {
+            V.free p.CR.pending_cleartext_fragment;
+            fold (connection_exactly s 'st0);
+            None #ST.server_response
+          } else {
+            let stream_len =
+              SZ.add p.CR.pending_cleartext_fragment_len fragment_len;
+            let stream = V.alloc 0uy stream_len;
+            V.to_array_pts_to stream;
+            V.to_array_pts_to p.CR.pending_cleartext_fragment;
+            SC.copy_array_slice_to_array
+              (V.vec_to_array p.CR.pending_cleartext_fragment)
+              p.CR.pending_cleartext_fragment_len
+              0sz
+              p.CR.pending_cleartext_fragment_len
+              (V.vec_to_array stream)
+              stream_len
+              0sz;
+            SC.copy_array_slice_to_array
+              fragment
+              fragment_len
+              0sz
+              fragment_len
+              (V.vec_to_array stream)
+              stream_len
+              p.CR.pending_cleartext_fragment_len;
+            V.to_vec_pts_to p.CR.pending_cleartext_fragment;
+            V.free p.CR.pending_cleartext_fragment;
+            with stream_bytes. assert (
+              pts_to (V.vec_to_array stream) stream_bytes);
+            assert (pure (Seq.equal
+              (Ghost.reveal stream_bytes)
+              (B.append
+                (CS.pending_cleartext_handshake 'st0.CS.cs_model)
+                (Ghost.reveal 'fragment_bytes))));
+            let coalesced =
+              P.parse_tls_message
+                content_type
+                (V.vec_to_array stream)
+                stream_len;
+            match coalesced {
+              None -> {
+                V.to_vec_pts_to stream;
+                V.free stream;
+                fold (connection_exactly s 'st0);
+                None #ST.server_response
+              }
+              Some l -> {
+                match l {
+                  IM.LTlsHandshake lhs -> {
+                    match lhs {
+                      IM.LClientHello lch -> {
+                        with m. assert (pure True);
+                        unfold (IM.is_valid_tls_message
+                          (IM.LTlsHandshake (IM.LClientHello lch))
+                          m);
+                        with mhs. _;
+                        unfold (IM.is_valid_handshake_msg
+                          (IM.LClientHello lch)
+                          mhs);
+                        with ch. _;
+                        assert (pure (m == M.TlsHandshake (M.ClientHello ch)));
+                        assert (pure (CT.wire_parse_success
+                          content_type
+                          (Ghost.reveal stream_bytes)
+                          (M.TlsHandshake (M.ClientHello ch))));
+                        assert (pure (IM.content_type_matches
+                          content_type
+                          T.Handshake));
+                        assert (pure (W.parse_tls_message
+                          T.Handshake
+                          (Ghost.reveal stream_bytes) ==
+                            Some (M.TlsHandshake (M.ClientHello ch))));
+                        (* The record's own shape: exactly one cleartext
+                           Handshake record whose fragment is this tail. *)
+                        lemma_cleartext_record_raw_delta_legal
+                          content_type
+                          (Ghost.reveal 'fragment_bytes)
+                          (Ghost.reveal 'raw_bytes);
+                        assert (pure (CS.received_cleartext_tls_message_raw_buffered
+                          'st0.CS.cs_model
+                          (M.TlsHandshake (M.ClientHello ch))
+                          (Ghost.reveal 'raw_bytes)));
+                        assert (pure (CS.event_raw_delta_legal
+                          'st0.CS.cs_model
+                          (CS.ConnNetworkEvent {
+                            CL.message_direction = CL.Received;
+                            CL.message_value =
+                              M.TlsHandshake (M.ClientHello ch);
+                          })
+                          B.empty
+                          (Ghost.reveal 'raw_bytes)));
+                        unfold (IM.is_valid_client_hello lch ch);
+                        with random session_id server_name key_share p256_key_share cipher_suites signature_schemes. _;
+                        CM.lemma_cipher_suites_match_length
+                          cipher_suites
+                          (SZ.v lch.IM.client_hello_cipher_suites_len)
+                          (Sem.clientHello_cipher_suites ch);
+                        CM.lemma_bounded_u16_sizet_of_sizet
+                          (List.length (Sem.clientHello_cipher_suites ch))
+                          lch.IM.client_hello_cipher_suites_len;
+                        CM.lemma_signature_schemes_match_length
+                          signature_schemes
+                          (SZ.v lch.IM.client_hello_signature_schemes_len)
+                          (Some?.v (Sem.clientHello_sig_algs ch));
+                        CM.lemma_bounded_u16_sizet_of_sizet
+                          (List.length (Some?.v (Sem.clientHello_sig_algs ch)))
+                          lch.IM.client_hello_signature_schemes_len;
+                        lemma_client_hello_sni_len_for
+                          lch.IM.client_hello_has_server_name
+                          server_name
+                          lch.IM.client_hello_server_name_len
+                          ch;
+                        fold (IM.is_valid_client_hello lch ch);
+                        let can_receive =
+                          CQ.can_receive_client_hello
+                            s
+                            stream_len
+                            #ch
+                            #'st0;
+                        fold (connection_exactly s 'st0);
+                        if can_receive {
+                          Trace.emit Trace.server_cleartext_buffer
+                            (SZ.sizet_to_uint64 stream_len)
+                            (SZ.sizet_to_uint64 fragment_len)
+                            (SZ.sizet_to_uint64 raw_len);
+                          let resp =
+                            process_client_hello
+                              s
+                              raw
+                              raw_len
+                              (V.vec_to_array stream)
+                              stream_len
+                              lch
+                              #ch
+                              network_out
+                              network_out_len
+                              app_out
+                              app_out_len;
+                          V.to_vec_pts_to stream;
+                          V.free stream;
+                          Some resp
+                        } else {
+                          IM.free_client_hello lch;
+                          V.to_vec_pts_to stream;
+                          V.free stream;
+                          None #ST.server_response
+                        }
+                      }
+                      IM.LServerHello lsh -> {
+                        IM.free_tls_message (IM.LTlsHandshake (IM.LServerHello lsh));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        fold (connection_exactly s 'st0);
+                        None #ST.server_response
+                      }
+                      IM.LEncryptedExtensions lee -> {
+                        IM.free_tls_message (IM.LTlsHandshake (IM.LEncryptedExtensions lee));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        fold (connection_exactly s 'st0);
+                        None #ST.server_response
+                      }
+                      IM.LCertificate lcert -> {
+                        IM.free_tls_message (IM.LTlsHandshake (IM.LCertificate lcert));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        fold (connection_exactly s 'st0);
+                        None #ST.server_response
+                      }
+                      IM.LCertificateVerify lcv -> {
+                        IM.free_tls_message (IM.LTlsHandshake (IM.LCertificateVerify lcv));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        fold (connection_exactly s 'st0);
+                        None #ST.server_response
+                      }
+                      IM.LFinished lfin -> {
+                        IM.free_tls_message (IM.LTlsHandshake (IM.LFinished lfin));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        fold (connection_exactly s 'st0);
+                        None #ST.server_response
+                      }
+                      IM.LHelloRetryRequest -> {
+                        IM.free_tls_message (IM.LTlsHandshake IM.LHelloRetryRequest);
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        fold (connection_exactly s 'st0);
+                        None #ST.server_response
+                      }
+                    }
+                  }
+                  IM.LTlsChangeCipherSpec -> {
+                    IM.free_tls_message IM.LTlsChangeCipherSpec;
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    fold (connection_exactly s 'st0);
+                    None #ST.server_response
+                  }
+                  IM.LTlsAlert la -> {
+                    IM.free_tls_message (IM.LTlsAlert la);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    fold (connection_exactly s 'st0);
+                    None #ST.server_response
+                  }
+                  IM.LTlsApplicationData lad -> {
+                    IM.free_tls_message (IM.LTlsApplicationData lad);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    fold (connection_exactly s 'st0);
+                    None #ST.server_response
+                  }
+                  IM.LTlsIgnoredPostHandshake lph -> {
+                    IM.free_tls_message (IM.LTlsIgnoredPostHandshake lph);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    fold (connection_exactly s 'st0);
+                    None #ST.server_response
+                  }
+                  IM.LTlsKeyUpdate lku -> {
+                    IM.free_tls_message (IM.LTlsKeyUpdate lku);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    fold (connection_exactly s 'st0);
+                    None #ST.server_response
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 (** G3: set a cleartext handshake record's fragment aside instead of failing.
 
     A ClientHello can be larger than one record's fragment, in which case the
@@ -1989,8 +2339,94 @@ fn process_network_bytes
         None -> {
           (* G3: a record whose fragment parses as no message is not
              necessarily malformed -- it may be one piece of a handshake
-             message split across records.  Try to set it aside before
+             message split across records.  Try to COMPLETE a message out of
+             the pending buffer, then to set this record aside, before
              treating it as a decode error. *)
+          let delivered =
+            try_deliver_reassembled_client_hello
+              s
+              decoded_buffer.IM.decoded_buffer_protected
+              decoded_buffer.IM.decoded_buffer_content_type
+              (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record)
+              decoded_buffer.IM.decoded_buffer_raw_record_len
+              (V.vec_to_array decoded_buffer.IM.decoded_buffer_fragment)
+              decoded_buffer.IM.decoded_buffer_fragment_len
+              network_out
+              network_out_len
+              app_out
+              app_out_len;
+          match delivered {
+          Some reassembled -> {
+            let buffer_resp = {
+              ST.response = reassembled;
+              ST.consumed_len = decoded_buffer.IM.decoded_buffer_consumed_len;
+            };
+            with st1 network_out_bytes app_out_bytes.
+              assert (connection_exactly s st1 **
+                      pts_to network_out network_out_bytes **
+                      pts_to app_out app_out_bytes);
+            assert (pure (exists ch.
+              st1 ==
+                CM.received_client_hello_state
+                  'st0
+                  ch
+                  (Ghost.reveal raw_record_bytes) /\
+              ST.server_network_event_end_to_end_correct
+                'st0
+                st1
+                reassembled
+                (M.TlsHandshake (M.ClientHello ch))
+                (Ghost.reveal raw_record_bytes)
+                network_out_bytes
+                app_out_bytes));
+            assert (pure (Seq.equal
+              (Ghost.reveal raw_record_bytes)
+              (ST.server_network_consumed_prefix
+                buffer_resp
+                (Ghost.reveal 'raw_bytes))));
+            assert (pure (ST.server_network_bytes_end_to_end_correct
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              network_out_bytes
+              app_out_bytes));
+            assert (pure (ST.server_network_step_ok_consumed_prefix
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)));
+            assert (pure (ST.server_network_step_ok_received_decode_projection
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              network_out_bytes
+              app_out_bytes));
+            assert (pure (ST.server_network_connection_failed_consumed_prefix
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              network_out_bytes
+              app_out_bytes));
+            assert (pure (buffer_resp.ST.response.ST.status == ST.StepOk));
+            assert (pure (buffer_resp.ST.response.ST.network_out_len == 0sz));
+            assert (pure (buffer_resp.ST.response.ST.app_out_len == 0sz));
+            assert (pure (ST.server_network_consumed_input_projection
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              network_out_bytes
+              app_out_bytes));
+            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+            V.free decoded_buffer.IM.decoded_buffer_fragment;
+            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+            V.free decoded_buffer.IM.decoded_buffer_raw_record;
+            buffer_resp
+          }
+          None -> {
           let handled =
             try_buffer_cleartext_handshake_record
               s
@@ -2121,6 +2557,8 @@ fn process_network_bytes
           V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
           V.free decoded_buffer.IM.decoded_buffer_raw_record;
           buffer_resp
+          }
+          }
           }
           }
         }
