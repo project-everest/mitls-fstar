@@ -2101,3 +2101,60 @@ client-side twin of the server-side scoping B2 introduced.
 so no client buffering step is reachable and the client half of `tls_system_inv`'s
 emptiness pair remains trivially inductive. Only the **server** half of that
 invariant has to be untied in step 1 below -- which halves the estimate B3 made.
+
+### Ordering correction found while attempting step 1
+
+Steps 1 and 2 (un-restricting `ES.server_step_nonbuffering` and untying
+`tls_system_inv`'s emptiness conjunct) were attempted and **reverted**, because
+they are blocked on what the plan listed as step 3.
+
+What the attempt established, all of it cheap and reusable:
+
+* Flipping `server_state_machine.sm_step`, `server_canonical_step_rel`,
+  `WStep.server_sm` and `System.tls_machine_iface.sstep` from
+  `server_step_nonbuffering` to the general `server_step` breaks **almost
+  nothing**: with the reachability discharge temporarily admitted, a full
+  `make -k verify` reported exactly **one** error, in `System.fst`. The 15
+  `server_step_nonbuffering` asserts in `Impl.Server.CanonicalProtocol.fst`
+  keep proving the stronger thing and are unaffected.
+* The fallout in `System.fst` is mechanical: `server_send_shape`,
+  `deliver_to_server_shape`, the `_intro` lemmas, `lemma_server_reach_pres` and
+  `WStep.lemma_server_reachable_step` all carried a
+  `cleartext_handshake_buffer_empty` conjunct that was simply the unfolding of
+  the restricted step; ~18 such conjuncts across seven system modules just go
+  away.
+* The gated invariant works. Replacing the unconditional conjunct with
+  `no_cleartext_buffering_steps s.server.cs_event_log ==>
+  cleartext_handshake_buffer_empty s.server.cs_model` is inductive with two
+  ingredients only: a new one-event log inversion
+  (`ServerCanonicalShape.lemma_no_cleartext_buffering_steps_append_inv`) and the
+  already-existing
+  `CS.lemma_step_model_preserves_cleartext_handshake_buffer_empty`. A buffering
+  step appends a `ConnCleartextHandshake` event and falsifies the antecedent;
+  every other step carries the empty buffer through. `lemma_server_step_facts`
+  has to be exported from `ServerCanonicalShape.fsti` to invert the step into
+  its appended event.
+
+**The blocker.** `Impl.Server.Types.server_end_to_end_invariant` carries
+`CS.cleartext_handshake_buffer_empty st.cs_model` as a conjunct in its own right
+-- a PER-ENDPOINT invariant, not a system one. A buffering step falsifies it
+outright, and no amount of gating at the system layer helps, because the
+endpoint invariant is what the implementation maintains. That conjunct is
+exactly what step 3 replaces with "the model buffer equals the concrete
+buffer". The same is true of the B5 pin in `Repr.handshake_buffers_exactly`.
+
+**So the correct order is: concrete pending buffer FIRST**, then the step
+relation and the system invariant. Revised ordering:
+
+1. Concrete pending cleartext buffer in `Repr.handshake_buffer_storage`,
+   replacing both the B5 `pure` pin and
+   `Server.Types.server_end_to_end_invariant`'s emptiness conjunct with buffer
+   agreement.
+2. Un-restrict the server step relation + gate the system invariant (the work
+   measured above; the two new `ServerCanonicalShape` lemmas and the ~18
+   conjunct deletions are already known verbatim).
+3. New shared `endpoint_status` constructor.
+4. Buffering branch + coalescing parse in `Impl.Server.Network.fst`, client
+   equivalent beside `try_buffer_protected_handshake_record`.
+5. `ES.client_step` WireEvent generalisation.
+6. Ledger flip + scope statement in `docs/server-client-parity.md` P2b.
