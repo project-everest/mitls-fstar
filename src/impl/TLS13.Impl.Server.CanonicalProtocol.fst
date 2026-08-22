@@ -417,6 +417,63 @@ let lemma_received_tls_raw_delta_legal_raw_record_parse_success
         Some (outer_ct, outer_fragment, B.length raw_received))
   )
 
+(* G3: "this StepOk was a cleartext handshake BUFFERING step" -- the record was
+   consumed but delivered no message, because its fragment does not yet complete
+   a handshake message.  The [StepOk] arm of every projection-inversion lemma
+   below splits on this: the negative side recovers the pre-G3 "there is a
+   received message" reading, and the positive side takes the
+   [ConnCleartextHandshake] route to the same canonical wire step. *)
+let server_network_is_cleartext_buffering
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  exists step.
+    ST.cleartext_handshake_step_correct
+      st0
+      st1
+      buffer_resp.ST.response
+      step
+      (ST.server_network_consumed_prefix buffer_resp input)
+      network_out
+      app_out
+
+let server_network_cleartext_buffering_step
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Ghost CS.cleartext_handshake_step
+      (requires
+        server_network_is_cleartext_buffering
+          st0 st1 buffer_resp input network_out app_out)
+      (ensures fun step ->
+        ST.cleartext_handshake_step_correct
+          st0
+          st1
+          buffer_resp.ST.response
+          step
+          (ST.server_network_consumed_prefix buffer_resp input)
+          network_out
+          app_out)
+=
+  ID.indefinite_description_ghost
+    CS.cleartext_handshake_step
+    (fun step ->
+      ST.cleartext_handshake_step_correct
+        st0
+        st1
+        buffer_resp.ST.response
+        step
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out)
+
 let lemma_server_network_step_ok_legal_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -433,7 +490,9 @@ let lemma_server_network_step_ok_legal_response
           input
           network_out
           app_out /\
-        buffer_resp.ST.response.ST.status == ST.StepOk)
+        buffer_resp.ST.response.ST.status == ST.StepOk /\
+        ~ (server_network_is_cleartext_buffering
+             st0 st1 buffer_resp input network_out app_out))
       (ensures
         exists msg.
           ST.legal_network_response
@@ -548,7 +607,9 @@ let lemma_server_network_step_ok_received_decode_legal_response
           input
           network_out
           app_out /\
-        buffer_resp.ST.response.ST.status == ST.StepOk)
+        buffer_resp.ST.response.ST.status == ST.StepOk /\
+        ~ (server_network_is_cleartext_buffering
+             st0 st1 buffer_resp input network_out app_out))
       (ensures
         exists msg.
           CT.received_tls_raw_delta_legal_unbuffered
@@ -718,6 +779,7 @@ let lemma_server_received_msg_bound_server_hello
   | _ -> ()
 #pop-options
 
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 4"
 let lemma_server_network_step_ok_process_correct
   (initial:server_initial_state)
   (st0:CS.connection_state)
@@ -752,7 +814,9 @@ let lemma_server_network_step_ok_process_correct
           input
           network_out
           app_out /\
-        buffer_resp.ST.response.ST.status == ST.StepOk)
+        buffer_resp.ST.response.ST.status == ST.StepOk /\
+        ~ (server_network_is_cleartext_buffering
+             st0 st1 buffer_resp input network_out app_out))
       (ensures
         CPI.network_process_correct
           (server_system #CTypes.server_local_event initial)
@@ -1044,6 +1108,221 @@ let lemma_server_network_step_ok_process_correct
       local_outputs)
   | _ ->
     assert False
+
+#pop-options
+
+(* G3: the cleartext-buffering twin of [lemma_server_network_step_ok_process_correct].
+
+   Structurally identical, with three substitutions: the connection event is
+   [ConnCleartextHandshake step] rather than a received network message; the
+   record's shape comes from [event_raw_delta_legal]'s cleartext arm (one
+   Handshake record whose fragment is the step's) rather than from a message
+   decode; and the wire step is witnessed by
+   [ES.lemma_server_wire_step_from_cleartext_witness].  The outputs are identical
+   -- both produce nothing -- because a buffering step writes neither network
+   nor application bytes. *)
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 4"
+let lemma_server_network_cleartext_process_correct
+  (initial:server_initial_state)
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (app_out:B.bytes)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (step:CS.cleartext_handshake_step)
+  : Lemma
+      (requires
+        CPI.buffers_wf input input_len old_network_out out_len /\
+        B.length input == SZ.v input_len /\
+        B.length network_out == B.length old_network_out /\
+        Seq.equal received0 st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal sent0 st0.CS.cs_wire_log.CL.raw_sent /\
+        SZ.v buffer_resp.ST.consumed_len <= B.length input /\
+        ST.cleartext_handshake_step_correct
+          st0
+          st1
+          buffer_resp.ST.response
+          step
+          (ST.server_network_consumed_prefix buffer_resp input)
+          network_out
+          app_out)
+      (ensures
+        CPI.network_process_correct
+          (server_system #CTypes.server_local_event initial)
+          input
+          input_len
+          old_network_out
+          network_out
+          out_len
+          received0
+          sent0
+          st0
+          (CTypes.server_process_result buffer_resp)
+          st1.CS.cs_wire_log.CL.raw_received
+          st1.CS.cs_wire_log.CL.raw_sent
+          st1
+          (ST.server_network_consumed_prefix buffer_resp input)
+          (server_response_wire_outputs buffer_resp.ST.response network_out)
+          (server_response_local_outputs buffer_resp.ST.response app_out))
+=
+  let resp = buffer_resp.ST.response in
+  let consumed = ST.server_network_consumed_prefix buffer_resp input in
+  let wire_outputs = server_response_wire_outputs resp network_out in
+  let local_outputs = server_response_local_outputs resp app_out in
+  let conn_ev = CS.ConnCleartextHandshake step in
+  assert (resp.ST.status == ST.StepOk);
+  assert (ST.legal_response_for_event
+    st0 st1 resp conn_ev B.empty consumed network_out app_out);
+  assert (CS.legal_connection_delta
+    st0
+    {
+      CS.delta_event = conn_ev;
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = consumed;
+    }
+    st1);
+  // The record's shape comes straight off the cleartext arm of
+  // [event_raw_delta_legal]: exactly one Handshake record.
+  assert (CS.event_raw_delta_legal st0.CS.cs_model conn_ev B.empty consumed);
+  assert (WS.parse_record_wire consumed ==
+    Some (T.Handshake, step.CS.cleartext_handshake_fragment, B.length consumed));
+  assert (CT.raw_record_parse_success consumed);
+  lemma_server_consumed_prefix_parse input buffer_resp;
+  let wire =
+    ID.indefinite_description_ghost
+      CW.wire_message
+      (fun wire -> exists residual.
+        CPI.consumed_by_parse
+          CW.tls_record_wire_format
+          input
+          wire
+          consumed
+          residual /\
+        Seq.equal (CW.wire_serialize wire) consumed) in
+  let residual =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun residual ->
+        CPI.consumed_by_parse
+          CW.tls_record_wire_format
+          input
+          wire
+          consumed
+          residual /\
+        Seq.equal (CW.wire_serialize wire) consumed) in
+  assert (Seq.equal (CW.wire_serialize wire) consumed);
+  assert (resp.ST.network_out_len == 0sz);
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro (ST.response_network_out resp network_out) B.empty;
+  CW.lemma_wire_outputs_of_empty ();
+  assert (wire_outputs == []);
+  lemma_server_response_local_outputs_match resp conn_ev app_out;
+  assert (server_local_outputs_match conn_ev local_outputs);
+  assert (B.length (WF.serialize_all CW.tls_record_wire_format wire_outputs) == 0);
+  assert (SMRep.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    conn_ev
+    (WF.serialize_all CW.tls_record_wire_format wire_outputs));
+  assert (SMRep.received_event_nonempty_decode_projection
+    st0.CS.cs_model conn_ev consumed);
+  Seq.lemma_eq_elim consumed (CW.wire_serialize wire);
+  assert (SMCan.canonical_wire_step
+    st0 st1 conn_ev
+    (WF.serialize_all CW.tls_record_wire_format wire_outputs)
+    (CW.wire_serialize wire));
+  ES.lemma_server_wire_step_from_cleartext_witness
+    #CTypes.server_local_event
+    st0 st1 wire step (CPI.step_output wire_outputs local_outputs);
+  Seq.lemma_eq_elim received0 st0.CS.cs_wire_log.CL.raw_received;
+  Seq.lemma_eq_elim sent0 st0.CS.cs_wire_log.CL.raw_sent;
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    (Seq.append received0 consumed));
+  CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_sent;
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (Seq.append sent0 B.empty));
+  Seq.lemma_len_slice input 0 (B.length input);
+  Seq.lemma_eq_elim (CPI.input_bytes input input_len) input;
+  assert (CPI.output_written network_out resp.ST.network_out_len B.empty);
+  assert ((CTypes.server_process_result buffer_resp).CPI.process_status == CPI.StepOk);
+  Seq.lemma_len_slice input 0 (SZ.v buffer_resp.ST.consumed_len);
+  assert (B.length consumed == SZ.v buffer_resp.ST.consumed_len);
+  let produced = B.empty in
+  assert (Seq.equal
+    produced
+    (WF.serialize_all CW.tls_record_wire_format wire_outputs));
+  assert (CPI.output_written
+    network_out
+    (CTypes.server_process_result buffer_resp).CPI.process_produced_len
+    produced);
+  assert (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (Seq.append sent0 produced));
+  assert (CPI.consumed_by_parse
+    (server_system #CTypes.server_local_event initial).WFSM.wfsm_wire_format
+    (CPI.input_bytes input input_len)
+    wire
+    consumed
+    residual);
+  assert (Seq.equal
+    produced
+    (WF.serialize_all
+      (server_system #CTypes.server_local_event initial).WFSM.wfsm_wire_format
+      wire_outputs));
+  assert (exists msg' residual' produced.
+    CPI.consumed_by_parse
+      CW.tls_record_wire_format
+      (CPI.input_bytes input input_len)
+      msg'
+      consumed
+      residual' /\
+    SZ.v (CTypes.server_process_result buffer_resp).CPI.process_consumed_len ==
+      B.length consumed /\
+    (server_system #CTypes.server_local_event initial).WFSM.wfsm_state_machine.SM.sm_step
+      st0
+      (SM.WireEvent msg')
+      st1
+      (CPI.step_output wire_outputs local_outputs) /\
+    Seq.equal
+      produced
+      (WF.serialize_all CW.tls_record_wire_format wire_outputs) /\
+    CPI.output_written
+      network_out
+      (CTypes.server_process_result buffer_resp).CPI.process_produced_len
+      produced /\
+    Seq.equal st1.CS.cs_wire_log.CL.raw_received (Seq.append received0 consumed) /\
+    Seq.equal st1.CS.cs_wire_log.CL.raw_sent (Seq.append sent0 produced));
+  match (CTypes.server_process_result buffer_resp).CPI.process_status with
+  | CPI.StepOk ->
+    assert (CPI.buffers_wf input input_len old_network_out out_len);
+    assert (Seq.length network_out == Seq.length old_network_out);
+    assert (CPI.network_process_correct
+      (server_system #CTypes.server_local_event initial)
+      input
+      input_len
+      old_network_out
+      network_out
+      out_len
+      received0
+      sent0
+      st0
+      (CTypes.server_process_result buffer_resp)
+      st1.CS.cs_wire_log.CL.raw_received
+      st1.CS.cs_wire_log.CL.raw_sent
+      st1
+      consumed
+      wire_outputs
+      local_outputs)
+  | _ ->
+    assert False
+#pop-options
 
 #restart-solver
 [@@pulse_unfold]
@@ -2545,7 +2824,9 @@ let lemma_server_network_step_ok_bridge_result
           input_contents
           network_out
           app_out /\
-        buffer_resp.ST.response.ST.status == ST.StepOk)
+        buffer_resp.ST.response.ST.status == ST.StepOk /\
+        ~ (server_network_is_cleartext_buffering
+             st0 st1 buffer_resp input_contents network_out app_out))
       (ensures
         server_network_bridge_result
           initial
@@ -2725,6 +3006,213 @@ let lemma_server_network_step_ok_bridge_result
     st1
     app_out
     buffer_resp)
+
+(* G3: the cleartext-buffering twin of [lemma_server_network_step_ok_bridge_result].
+   Same recipe, with the message-decode witness replaced by the cleartext step
+   witness: the canonical bridge is discharged by
+   [lemma_server_network_cleartext_process_correct], and the config-preservation
+   fact -- which the message path reads off [legal_network_response] -- comes
+   from [ST.lemma_cleartext_handshake_step_correct_preserves_config]. *)
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 4"
+let lemma_server_network_cleartext_bridge_result
+  (initial:server_initial_state)
+  (received0:B.bytes)
+  (sent0:B.bytes)
+  (st0:CS.connection_state)
+  (input_contents:B.bytes)
+  (input_len:SZ.t)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (out_len:SZ.t)
+  (base:tls_server_network_frame)
+  (st1:CS.connection_state)
+  (app_out:B.bytes)
+  (buffer_resp:ST.server_buffer_response)
+  (step:CS.cleartext_handshake_step)
+  : Lemma
+      (requires
+        server_invariant_pure initial received0 sent0 st0 /\
+        CPI.buffers_wf input_contents input_len old_network_out out_len /\
+        B.length input_contents == SZ.v input_len /\
+        B.length network_out == B.length old_network_out /\
+        B.length app_out == SZ.v base.tls_server_network_app_out_len /\
+        ST.server_network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          input_contents
+          network_out
+          app_out /\
+        ST.server_network_consumed_input_projection
+          st0
+          st1
+          buffer_resp
+          input_contents
+          network_out
+          app_out /\
+        ST.cleartext_handshake_step_correct
+          st0
+          st1
+          buffer_resp.ST.response
+          step
+          (ST.server_network_consumed_prefix buffer_resp input_contents)
+          network_out
+          app_out)
+      (ensures
+        server_network_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp)
+=
+  let consumed = ST.server_network_consumed_prefix buffer_resp input_contents in
+  let wire_outputs =
+    server_response_wire_outputs buffer_resp.ST.response network_out in
+  let local_outputs =
+    server_response_local_outputs buffer_resp.ST.response app_out in
+  lemma_server_network_cleartext_process_correct
+    initial
+    st0
+    st1
+    buffer_resp
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    app_out
+    received0
+    sent0
+    step;
+  ST.lemma_cleartext_handshake_step_correct_preserves_config
+    st0
+    st1
+    buffer_resp.ST.response
+    step
+    consumed
+    network_out
+    app_out;
+  assert (server_invariant_pure
+    initial
+    st1.CS.cs_wire_log.CL.raw_received
+    st1.CS.cs_wire_log.CL.raw_sent
+    st1);
+  assert (server_network_frame_post_fact
+    base
+    (CTypes.server_process_result buffer_resp)
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    st0
+    st1
+    consumed
+    wire_outputs
+    local_outputs
+    app_out
+    buffer_resp);
+  lemma_server_network_common_witness_from_parts
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp
+    consumed
+    wire_outputs
+    local_outputs;
+  FStar.Classical.exists_intro
+    (fun local_outputs' ->
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed
+        wire_outputs
+        local_outputs')
+    local_outputs;
+  FStar.Classical.exists_intro
+    (fun wire_outputs' -> exists local_outputs'.
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed
+        wire_outputs'
+        local_outputs')
+    wire_outputs;
+  FStar.Classical.exists_intro
+    (fun consumed' -> exists wire_outputs' local_outputs'.
+      server_network_common_witness
+        initial
+        received0
+        sent0
+        st0
+        input_contents
+        input_len
+        old_network_out
+        network_out
+        out_len
+        base
+        st1
+        app_out
+        buffer_resp
+        consumed'
+        wire_outputs'
+        local_outputs')
+    consumed;
+  assert (server_network_bridge_result
+    initial
+    received0
+    sent0
+    st0
+    input_contents
+    input_len
+    old_network_out
+    network_out
+    out_len
+    base
+    st1
+    app_out
+    buffer_resp)
+
+#pop-options
 
 // Non-StepOk bridge lemmas for stuttering and rejected network results.  The
 // DecodeError branch uses the zero-consume semantics exposed by Server.Network,
@@ -4025,20 +4513,46 @@ let lemma_server_network_bridge_obligation
     introduce _ ==> _ with
     match buffer_resp.ST.response.ST.status with
     | ST.StepOk ->
-      lemma_server_network_step_ok_bridge_result
-        initial
-        received0
-        sent0
-        st0
-        input_contents
-        input_len
-        old_network_out
-        network_out
-        out_len
-        base
-        st1
-        app_out
-        buffer_resp
+      // G3: a StepOk either delivered a handshake message (the pre-G3 reading)
+      // or merely BUFFERED a cleartext handshake fragment.  Both reach the same
+      // canonical wire step; only the witness differs.
+      if server_network_is_cleartext_buffering
+           st0 st1 buffer_resp input_contents network_out app_out
+      then begin
+        let step =
+          server_network_cleartext_buffering_step
+            st0 st1 buffer_resp input_contents network_out app_out in
+        lemma_server_network_cleartext_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp
+          step
+      end
+      else
+        lemma_server_network_step_ok_bridge_result
+          initial
+          received0
+          sent0
+          st0
+          input_contents
+          input_len
+          old_network_out
+          network_out
+          out_len
+          base
+          st1
+          app_out
+          buffer_resp
     | ST.NeedMoreInput ->
       lemma_server_network_need_more_input_bridge_result
         initial
@@ -5516,19 +6030,45 @@ let lemma_server_network_event_progress
   let local_outputs =
     server_response_local_outputs buffer_resp.ST.response app_out in
   if result.CPI.process_status = CPI.StepOk then (
-    lemma_server_network_step_ok_process_correct
-      initial
-      st0
-      st1
-      buffer_resp
-      input
-      input_len
-      old_network_out
-      network_out
-      out_len
-      app_out
-      st0.CS.cs_wire_log.CL.raw_received
-      st0.CS.cs_wire_log.CL.raw_sent;
+    // G3: same two readings of a StepOk as in the bridge obligation -- delivered
+    // a message, or buffered a cleartext handshake fragment.  Either way the
+    // canonical process-correctness fact below is the same shape, so only the
+    // lemma that establishes it differs.
+    if server_network_is_cleartext_buffering
+         st0 st1 buffer_resp input network_out app_out
+    then begin
+      let step =
+        server_network_cleartext_buffering_step
+          st0 st1 buffer_resp input network_out app_out in
+      lemma_server_network_cleartext_process_correct
+        initial
+        st0
+        st1
+        buffer_resp
+        input
+        input_len
+        old_network_out
+        network_out
+        out_len
+        app_out
+        st0.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_sent
+        step
+    end
+    else
+      lemma_server_network_step_ok_process_correct
+        initial
+        st0
+        st1
+        buffer_resp
+        input
+        input_len
+        old_network_out
+        network_out
+        out_len
+        app_out
+        st0.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_sent;
     CPI.lemma_network_process_ok_refines_transition
       (server_system #CTypes.server_local_event initial)
       input

@@ -7789,6 +7789,14 @@ fn build_decoded_buffer_ok
       CT.network_input_wf
         (Ghost.reveal st0) content_type
         (Ghost.reveal fragment_bytes) (Ghost.reveal raw_record_bytes) /\
+      (~protected ==>
+        (exists outer_ct.
+          L.content_type_matches content_type outer_ct /\
+          WS.parse_record_wire (Ghost.reveal raw_record_bytes) ==
+            Some
+              (outer_ct,
+               Ghost.reveal fragment_bytes,
+               B.length (Ghost.reveal raw_record_bytes)))) /\
       (protected ==>
         CT.protected_decoder_fragment_relation
           (Ghost.reveal st0)
@@ -7870,6 +7878,16 @@ fn build_decoded_buffer_ok
             decoded.L.decoded_buffer_content_type
             fragment_bytes2
             raw_record_bytes2 /\
+          (~ decoded.L.decoded_buffer_protected ==>
+            (exists outer_ct.
+              L.content_type_matches
+                decoded.L.decoded_buffer_content_type
+                outer_ct /\
+              WS.parse_record_wire raw_record_bytes2 ==
+                Some
+                  (outer_ct,
+                   fragment_bytes2,
+                   B.length raw_record_bytes2))) /\
           (decoded.L.decoded_buffer_protected ==>
             CT.protected_decoder_fragment_relation
               (Ghost.reveal st0)
@@ -7975,6 +7993,16 @@ fn decode_network_buffer
                   decoded.L.decoded_buffer_content_type
                   fragment_bytes
                   raw_record_bytes /\
+                (~ decoded.L.decoded_buffer_protected ==>
+                  (exists outer_ct.
+                    L.content_type_matches
+                      decoded.L.decoded_buffer_content_type
+                      outer_ct /\
+                    WS.parse_record_wire raw_record_bytes ==
+                      Some
+                        (outer_ct,
+                         Ghost.reveal fragment_bytes,
+                         B.length raw_record_bytes))) /\
                 (decoded.L.decoded_buffer_protected ==>
                   CT.protected_decoder_fragment_relation
                     'st0

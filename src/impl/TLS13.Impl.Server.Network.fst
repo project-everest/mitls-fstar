@@ -1473,6 +1473,217 @@ fn process_decode_error
   resp
 }
 
+(* G3: a CLEARTEXT record's raw bytes, viewed as a [ConnCleartextHandshake]
+   delta.  [decoder_fragment_relation] leaves the outer content type existential
+   and only says the dispatcher's [content_type] byte matches it; pinning that
+   byte to 0x16 collapses the existential to [T.Handshake] -- in particular it
+   rules out the [Application_data] arm, which is the protected reading. *)
+let lemma_cleartext_record_raw_delta_legal
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        (exists outer_ct.
+          IM.content_type_matches content_type outer_ct /\
+          W.parse_record_wire raw_received ==
+            Some (outer_ct, fragment, B.length raw_received)) /\
+        IM.content_type_matches content_type T.Handshake)
+      (ensures
+        W.parse_record_wire raw_received ==
+          Some (T.Handshake, fragment, B.length raw_received))
+= ()
+
+(** G3: set a cleartext handshake record's fragment aside instead of failing.
+
+    A ClientHello can be larger than one record's fragment, in which case the
+    first record's bytes parse as no message at all.  Before G3 that reached
+    [process_decode_error] and the connection died; here the record is instead
+    CONSUMED and its fragment stored, so a later record can complete the
+    message.  This is the cleartext twin of the client's
+    [try_buffer_protected_handshake_record], and returns [None] -- meaning
+    "not my business, carry on to the decode error" -- whenever any of the
+    conditions of [CS.legal_cleartext_handshake_step] cannot be discharged:
+
+      - the connection is not a server awaiting a ClientHello (or a client
+        awaiting a ServerHello), which [CQ.can_buffer_cleartext_handshake]
+        decides;
+      - the fragment is empty, so the step would make no progress and a peer
+        could feed empty records forever;
+      - the pending buffer is already non-empty.  Coalescing a record onto a
+        non-empty buffer additionally needs the COMBINED stream to fail to
+        parse, which this decoder -- which parsed this record's fragment
+        alone -- does not establish.  That is the coalescing decode, and it
+        is the next increment; until then reassembly covers the first record
+        of a split message only. *)
+fn try_buffer_cleartext_handshake_record
+  (s:server)
+  (protected:bool)
+  (content_type:U8.t)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to fragment 'fragment_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (
+             B.length 'raw_bytes == SZ.v raw_len /\
+             B.length 'fragment_bytes == SZ.v fragment_len /\
+             B.length 'old_network_out == SZ.v network_out_len /\
+             B.length 'old_app_out == SZ.v app_out_len /\
+             SZ.v fragment_len <= Bounds.max_handshake_flight_len /\
+             ST.server_end_to_end_invariant 'st0 /\
+             (~protected ==>
+               (exists outer_ct.
+                 IM.content_type_matches content_type outer_ct /\
+                 W.parse_record_wire (Ghost.reveal 'raw_bytes) ==
+                   Some
+                     (outer_ct,
+                      Ghost.reveal 'fragment_bytes,
+                      B.length (Ghost.reveal 'raw_bytes)))) /\
+             (forall (ct:T.content_type).
+               IM.content_type_matches content_type ct ==>
+               W.parse_tls_message ct (Ghost.reveal 'fragment_bytes) == None))
+  returns handled:option ST.server_response
+  ensures
+    (match handled with
+    | None ->
+      connection_exactly s 'st0 **
+      pts_to raw 'raw_bytes **
+      pts_to fragment 'fragment_bytes **
+      pts_to network_out 'old_network_out **
+      pts_to app_out 'old_app_out
+    | Some resp ->
+      exists* st1.
+        connection_exactly s st1 **
+        pts_to raw 'raw_bytes **
+        pts_to fragment 'fragment_bytes **
+        pts_to network_out 'old_network_out **
+        pts_to app_out 'old_app_out **
+        pure (
+          (exists step.
+            st1 ==
+              CM.cleartext_handshake_state
+                'st0
+                step
+                (Ghost.reveal 'raw_bytes) /\
+            ST.cleartext_handshake_step_correct
+              'st0
+              st1
+              resp
+              step
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out) /\
+          (ST.server_end_to_end_invariant 'st0 ==>
+           ST.server_end_to_end_invariant st1)))
+{
+  let is_cleartext_handshake = ((not protected) && content_type = 0x16uy);
+  if (not is_cleartext_handshake) {
+    None #ST.server_response
+  } else if (SZ.eq fragment_len 0sz) {
+    None #ST.server_response
+  } else {
+    unfold (connection_exactly s 'st0);
+    let ok = CQ.can_buffer_cleartext_handshake s;
+    if (not ok) {
+      fold (connection_exactly s 'st0);
+      None #ST.server_response
+    } else {
+      let pending = CQ.copy_pending_cleartext_handshake s;
+      match pending {
+        Some p -> {
+          V.free p.CR.pending_cleartext_fragment;
+          fold (connection_exactly s 'st0);
+          None #ST.server_response
+        }
+        None -> {
+          (* The buffer is empty, so the assembled stream is exactly this
+             record's fragment -- which the decoder has just told us parses
+             as no message at all, discharging the "last resort" conjunct. *)
+          assert (pure (CS.cleartext_handshake_buffer_empty 'st0.CS.cs_model));
+          let step = Ghost.hide ({
+            CS.cleartext_handshake_fragment = Ghost.reveal 'fragment_bytes;
+          } <: CS.cleartext_handshake_step);
+          assert (pure (Seq.equal
+            (CS.cleartext_handshake_stream 'st0.CS.cs_model (Ghost.reveal step))
+            (Ghost.reveal 'fragment_bytes)));
+          assert (pure (IM.content_type_matches content_type T.Handshake));
+          assert (pure (W.parse_tls_message
+            T.Handshake
+            (CS.cleartext_handshake_stream 'st0.CS.cs_model (Ghost.reveal step)) == None));
+          assert (pure (CS.legal_cleartext_handshake_step
+            'st0.CS.cs_model
+            (Ghost.reveal step)));
+          assert (pure (CS.legal_event
+            'st0.CS.cs_model
+            (CS.ConnCleartextHandshake (Ghost.reveal step))));
+          assert (pure (Some? (CS.step_cleartext_handshake
+            'st0.CS.cs_model
+            (Ghost.reveal step))));
+          (* [network_input_wf] pins the outer record: a non-Application_data
+             outer type whose fragment is the decoder's, and [content_type]
+             says that outer type is Handshake. *)
+          lemma_cleartext_record_raw_delta_legal
+            content_type
+            (Ghost.reveal 'fragment_bytes)
+            (Ghost.reveal 'raw_bytes);
+          assert (pure (CS.event_raw_delta_legal
+            'st0.CS.cs_model
+            (CS.ConnCleartextHandshake (Ghost.reveal step))
+            B.empty
+            (Ghost.reveal 'raw_bytes)));
+
+          Trace.emit Trace.server_cleartext_buffer
+            (SZ.sizet_to_uint64 fragment_len)
+            (SZ.sizet_to_uint64 raw_len)
+            0UL;
+          CN.buffer_cleartext_handshake_record
+            s raw fragment fragment_len #step;
+          fold (connection_exactly
+            s
+            (CM.cleartext_handshake_state
+              'st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes)));
+
+          let resp = {
+            ST.network_out_len = 0sz;
+            ST.app_out_len = 0sz;
+            ST.status = ST.StepOk;
+          };
+          ST.lemma_cleartext_handshake_step_correct_intro
+            'st0
+            resp
+            (Ghost.reveal step)
+            (Ghost.reveal 'raw_bytes)
+            'old_network_out
+            'old_app_out;
+          ST.lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant_conditional
+            'st0
+            (CM.cleartext_handshake_state
+              'st0
+              (Ghost.reveal step)
+              (Ghost.reveal 'raw_bytes))
+            resp
+            (Ghost.reveal step)
+            (Ghost.reveal 'raw_bytes)
+            'old_network_out
+            'old_app_out;
+          Some resp
+        }
+      }
+    }
+  }
+}
+
 (* Headroom for the per-goal SMT encoding introduced by the fstar2
    simplified effect system: the goals here are unchanged, but they are
    now discharged one at a time against the whole Pulse context. *)
@@ -1629,6 +1840,92 @@ fn process_network_bytes
       V.to_array_pts_to decoded_buffer.IM.decoded_buffer_fragment;
       match decoded_buffer.IM.decoded_buffer_parsed {
         None -> {
+          (* G3: a record whose fragment parses as no message is not
+             necessarily malformed -- it may be one piece of a handshake
+             message split across records.  Try to set it aside before
+             treating it as a decode error. *)
+          let handled =
+            try_buffer_cleartext_handshake_record
+              s
+              decoded_buffer.IM.decoded_buffer_protected
+              decoded_buffer.IM.decoded_buffer_content_type
+              (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record)
+              decoded_buffer.IM.decoded_buffer_raw_record_len
+              (V.vec_to_array decoded_buffer.IM.decoded_buffer_fragment)
+              decoded_buffer.IM.decoded_buffer_fragment_len
+              network_out
+              network_out_len
+              app_out
+              app_out_len;
+          match handled {
+          Some buffered -> {
+            let buffer_resp = {
+              ST.response = buffered;
+              ST.consumed_len = decoded_buffer.IM.decoded_buffer_consumed_len;
+            };
+            with st1. assert (connection_exactly s st1);
+            assert (pure (Seq.equal
+              (ST.server_network_consumed_prefix
+                buffer_resp
+                (Ghost.reveal 'raw_bytes))
+              (Ghost.reveal raw_record_bytes)));
+            assert (pure (exists step.
+              st1 ==
+                CM.cleartext_handshake_state
+                  'st0
+                  step
+                  (Ghost.reveal raw_record_bytes) /\
+              ST.cleartext_handshake_step_correct
+                'st0
+                st1
+                buffer_resp.ST.response
+                step
+                (ST.server_network_consumed_prefix
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes))
+                'old_network_out
+                'old_app_out));
+            assert (pure (ST.server_network_bytes_end_to_end_correct
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out));
+            assert (pure (buffer_resp.ST.response.ST.status == ST.StepOk));
+            assert (pure (ST.server_network_step_ok_consumed_prefix
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)));
+            assert (pure (ST.server_network_step_ok_received_decode_projection
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out));
+            assert (pure (ST.server_network_connection_failed_consumed_prefix
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out));
+            assert (pure (ST.server_network_consumed_input_projection
+              'st0
+              st1
+              buffer_resp
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out));
+            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+            V.free decoded_buffer.IM.decoded_buffer_fragment;
+            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+            V.free decoded_buffer.IM.decoded_buffer_raw_record;
+            buffer_resp
+          }
+          None -> {
           let resp =
             process_decode_error
               s
@@ -1677,6 +1974,8 @@ fn process_network_bytes
           V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
           V.free decoded_buffer.IM.decoded_buffer_raw_record;
           buffer_resp
+          }
+          }
         }
         Some l -> {
           match l {

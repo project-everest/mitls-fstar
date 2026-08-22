@@ -243,6 +243,36 @@ let server_step
         raw_sent
         B.empty
 
+(**
+  Introduction: a cleartext handshake BUFFERING step yields a server wire step.
+
+  The twin of [lemma_client_wire_step_from_protected_head_witness], and much
+  cheaper than it: [server_wire_received_event] already accepts
+  [ConnCleartextHandshake] outright, so there is no side condition to check --
+  no [head] flag, because a cleartext buffering step never delivers and hence is
+  never a "head".
+ **)
+let lemma_server_wire_step_from_cleartext_witness
+  (#local_event_repr:Type0)
+  {| server_event_representation local_event_repr |}
+  (st0 st1:CS.connection_state)
+  (wire:W.wire_message)
+  (step:CS.cleartext_handshake_step)
+  (out:SM.step_output W.wire_message API.local_output)
+  : Lemma
+      (requires
+        SMCan.canonical_wire_step
+          st0 st1 (CS.ConnCleartextHandshake step)
+          (WF.serialize_all W.tls_record_wire_format out.SM.so_wire_outputs)
+          (W.wire_serialize wire) /\
+        server_local_outputs_match
+          (CS.ConnCleartextHandshake step)
+          out.SM.so_local_outputs)
+      (ensures
+        server_step #local_event_repr st0 (SM.WireEvent wire) st1 out)
+  =
+  assert (server_wire_received_event (CS.ConnCleartextHandshake step))
+
 type server_initial_state =
   st:CS.connection_state{
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint

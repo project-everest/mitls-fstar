@@ -319,6 +319,16 @@ fn decode_network_buffer
                   decoded.L.decoded_buffer_content_type
                   fragment_bytes
                   raw_record_bytes /\
+                (~ decoded.L.decoded_buffer_protected ==>
+                  (exists outer_ct.
+                    L.content_type_matches
+                      decoded.L.decoded_buffer_content_type
+                      outer_ct /\
+                    WS.parse_record_wire raw_record_bytes ==
+                      Some
+                        (outer_ct,
+                         Ghost.reveal fragment_bytes,
+                         B.length raw_record_bytes))) /\
                 (decoded.L.decoded_buffer_protected ==>
                   CT.protected_decoder_fragment_relation
                     'st0

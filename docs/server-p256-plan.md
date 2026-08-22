@@ -2475,3 +2475,90 @@ The server mirror is:
   transition guard, so the B7 `ready` gate is not the right place.
 - `Server.CanonicalProtocol`, `Server.Driver.BufferedNetwork`, `Server.fst/.fsti`:
   absorb the new disjunct.
+
+## G3 commit B11: the server's cleartext buffering branch
+
+B11 makes the server actually *absorb* a ClientHello record that does not
+parse, instead of failing it.  `try_buffer_cleartext_handshake_record` sits in
+the `decoded_buffer_parsed == None` arm of `process_network_bytes`, ahead of
+`process_decode_error`; on success it returns `StepOk` with
+`consumed_len = decoded_buffer_consumed_len` and no network output.
+
+### The design decision: widen the projection in place, do not wrap it
+
+The client's protected path introduced a NEW wrapper predicate,
+`CT.coalesced_network_bytes_end_to_end_correct`, because its strong predicate
+genuinely fails for a buffering step.  The server does not need that.
+`ST.server_network_bytes_end_to_end_correct` already has an escape hatch --
+`resp.response.network_out_len == 0sz \/ ...` -- and a buffering step writes no
+network output, so it holds unchanged.  Only
+`server_network_consumed_input_projection` fails, and only via two inner
+predicates:
+
+- `server_network_step_ok_consumed_prefix` gained a 7th disjunct,
+  `exists step raw_received. st1 == CM.cleartext_handshake_state st0 step raw_received
+   /\ Seq.equal raw_received (server_network_consumed_prefix resp input)`;
+- `server_network_step_ok_received_decode_projection` and
+  `server_network_nonfailed_received_prefix_accepted` each gained an
+  `exists step. cleartext_handshake_step_correct ...` disjunct.
+
+Widening those in place keeps every signature unchanged, so the ~12 modules
+that merely pass the projection along needed no edit at all.  Only the sites
+that *invert* it broke.
+
+### The inversion-fix recipe
+
+Six sites had to be split.  Each was doing
+`ID.indefinite_description_ghost M.tls_message (fun msg -> ...)` off the
+widened projection; each becomes
+
+```fstar
+if (exists step. ST.cleartext_handshake_step_correct st0 st1 resp step
+                   (ST.server_network_consumed_prefix resp input) network_out app_out)
+then ( let step = ID.indefinite_description_ghost CS.cleartext_handshake_step ... in
+       <cleartext proof, with (CS.ConnCleartextHandshake step) as the event> )
+else ( <original message-witness proof> )
+```
+
+The sites: `Impl.Server.ChannelLog.lemma_network_step_application_log`;
+`Impl.Server.CanonicalProtocol.lemma_server_network_bridge_obligation` and
+`...event_progress` (both also needed new cleartext twins,
+`lemma_server_network_cleartext_process_correct` and
+`lemma_server_network_cleartext_bridge_result`, and a
+`~ (server_network_is_cleartext_buffering ...)` guard added to the four
+message-only lemmas they call); and in `Impl.Server.Driver.Network`,
+`lemma_server_driver_network_process_correct_preserves_supported_profile_selection`,
+`lemma_server_network_wire_accounting`,
+`lemma_server_network_zero_consumed_raw_received_unchanged`, and
+`lemma_server_network_bytes_end_to_end_raw_received_append`.
+
+### The decoder contract had to be strengthened
+
+`CS.event_raw_delta_legal ... (ConnCleartextHandshake step) B.empty raw` demands
+`W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw)`, but
+`CT.decoder_fragment_relation` leaves the OUTER content type existential.  And
+`content_type == 0x16uy` does NOT pin it: for a protected record the outer type
+is `Application_data` and the dispatcher content type is `0x16` anyway.
+
+The fix is a new clause on `build_decoded_buffer_ok` (requires and ensures) and
+on `decode_network_buffer`'s postcondition:
+
+```fstar
+~ decoded.decoded_buffer_protected ==>
+  (exists outer_ct. content_type_matches decoded.decoded_buffer_content_type outer_ct /\
+                    parse_record_wire raw_record_bytes == Some (outer_ct, fragment_bytes, len))
+```
+
+The two cleartext call sites in `TLS13.Impl.Parser.fst` already had exactly that
+fact in scope, so it verified with no proof work.  `content_type_matches 0x16uy
+outer_ct` then forces `outer_ct == T.Handshake` by exhaustion.
+
+### B11's deliberate scope limit
+
+`try_buffer_cleartext_handshake_record` buffers ONLY when the pending buffer is
+empty.  `CS.legal_cleartext_handshake_step` demands
+`W.parse_tls_message T.Handshake (pending ++ fragment) == None`, and the decoder
+only reports `parse_tls_message ct fragment == None` for the fragment alone.
+Coalescing needs the decoder to parse `pending ++ fragment`, which is B12.  So
+after B11 a split hello still ultimately fails -- the first record is absorbed,
+the second still errors.  That is a green-at-every-step increment, not a bug.

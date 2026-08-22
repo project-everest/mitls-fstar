@@ -392,6 +392,40 @@ let lemma_network_step_application_log
       network_out app_out);
     assert (Seq.equal output B.empty)
   | ST.StepOk ->
+    if (exists step.
+          ST.cleartext_handshake_step_correct
+            st0
+            st1
+            resp.ST.response
+            step
+            (ST.server_network_consumed_prefix resp input)
+            network_out
+            app_out)
+    then (
+      (* G3: a cleartext buffering step delivers no message and no application
+         bytes, so the application log is untouched. *)
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            ST.cleartext_handshake_step_correct
+              st0
+              st1
+              resp.ST.response
+              step
+              (ST.server_network_consumed_prefix resp input)
+              network_out
+              app_out) in
+      lemma_legal_response_observable_receive_log
+        st0
+        st1
+        resp.ST.response
+        (CS.ConnCleartextHandshake step)
+        B.empty
+        (ST.server_network_consumed_prefix resp input)
+        network_out
+        app_out
+    ) else (
     assert (exists msg.
       ST.server_decoded_message_event_projection
         st0
@@ -433,4 +467,5 @@ let lemma_network_step_application_log
       (ST.server_network_consumed_prefix resp input)
       network_out
       app_out
+    )
 #pop-options

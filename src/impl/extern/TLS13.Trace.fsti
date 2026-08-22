@@ -64,6 +64,7 @@ inline_for_extraction let server_network_need_more : U32.t = 3021ul
 inline_for_extraction let server_network_decode_error : U32.t = 3022ul
 inline_for_extraction let server_network_record : U32.t = 3023ul
 inline_for_extraction let server_network_end : U32.t = 3024ul
+inline_for_extraction let server_cleartext_buffer : U32.t = 3025ul
 inline_for_extraction let server_handshake_message : U32.t = 3040ul
 
 (** Runtime-only observational effect. Its empty separation-logic contract makes

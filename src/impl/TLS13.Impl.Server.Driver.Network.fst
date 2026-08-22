@@ -326,6 +326,10 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
         (match ev with
          | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received
          | CS.ConnLocalEvent (CS.LocalFail _) -> True
+         (* G3: a cleartext handshake BUFFERING step touches only the pending
+            reassembly buffer, so it leaves the config and the server's
+            credential selection exactly as they were. *)
+         | CS.ConnCleartextHandshake _ -> True
          | _ -> False))
       (ensures
         server_driver_supported_profile_selection st1 credential_identity)
@@ -345,6 +349,11 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
       st0.CS.cs_model.CS.model_config);
   match ev with
   | CS.ConnLocalEvent (CS.LocalFail _) ->
+    assert (
+      st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+        st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    assert (server_driver_selection_present_when_required st1)
+  | CS.ConnCleartextHandshake _ ->
     assert (
       st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
         st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
@@ -569,6 +578,42 @@ let lemma_server_driver_network_process_correct_preserves_supported_profile_sele
   | ST.StepOk ->
     assert (ST.server_network_step_ok_received_decode_projection
       st0 st1 resp input network_out_bytes app_out_bytes);
+    (* G3: a StepOk either delivered a message or buffered a cleartext
+       handshake fragment; only the first reading supports the message
+       witness below, and the second preserves the selection outright. *)
+    if (exists step.
+          ST.cleartext_handshake_step_correct
+            st0
+            st1
+            resp.ST.response
+            step
+            (ST.server_network_consumed_prefix resp input)
+            network_out_bytes
+            app_out_bytes)
+    then (
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            ST.cleartext_handshake_step_correct
+              st0
+              st1
+              resp.ST.response
+              step
+              (ST.server_network_consumed_prefix resp input)
+              network_out_bytes
+              app_out_bytes) in
+      lemma_legal_response_for_event_preserves_supported_profile_selection
+        st0
+        st1
+        resp.ST.response
+        (CS.ConnCleartextHandshake step)
+        B.empty
+        (ST.server_network_consumed_prefix resp input)
+        network_out_bytes
+        app_out_bytes
+        credential_identity
+    ) else (
     let msg =
       ID.indefinite_description_ghost
         M.tls_message
@@ -627,7 +672,7 @@ let lemma_server_driver_network_process_correct_preserves_supported_profile_sele
         app_out_bytes);
       assert (resp.ST.response.ST.status == ST.IllegalTransition);
       assert False
-    )
+    ))
 
 let lemma_slice_append_full
   (s:B.bytes)
@@ -753,6 +798,57 @@ let lemma_server_network_wire_accounting
   | ST.StepOk ->
     assert (ST.server_network_step_ok_received_decode_projection
       st0 st1 buffer_resp input network_out app_out);
+    (* G3: a buffering StepOk consumes the record and writes nothing, so the
+       wire accounting is the same as a delivering one -- only the event that
+       justifies it differs. *)
+    if (exists step.
+          ST.cleartext_handshake_step_correct
+            st0
+            st1
+            resp
+            step
+            (ST.server_network_consumed_prefix buffer_resp input)
+            network_out
+            app_out)
+    then (
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            ST.cleartext_handshake_step_correct
+              st0
+              st1
+              resp
+              step
+              (ST.server_network_consumed_prefix buffer_resp input)
+              network_out
+              app_out) in
+      lemma_legal_response_for_event_wire_lengths
+        st0
+        st1
+        resp
+        (CS.ConnCleartextHandshake step)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out;
+      lemma_legal_response_network_out_len
+        st0
+        st1
+        resp
+        (CS.ConnCleartextHandshake step)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out;
+      assert (Seq.equal (ST.response_network_out resp network_out) B.empty);
+      Seq.lemma_eq_elim (ST.response_network_out resp network_out) B.empty;
+      lemma_logged_received_bytes_accounted_append_delta
+        st0.CS.cs_wire_log.CL.raw_received
+        old_consumed
+        (ST.server_network_consumed_prefix buffer_resp input)
+        (ST.server_network_consumed_prefix buffer_resp input)
+    ) else (
     let msg =
       ID.indefinite_description_ghost
         M.tls_message
@@ -830,7 +926,7 @@ let lemma_server_network_wire_accounting
       assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
       assert (resp.ST.status == ST.IllegalTransition);
       assert False
-    )
+    ))
   | ST.ConnectionFailed ->
     assert (ST.server_network_connection_failed_consumed_prefix
       st0 st1 buffer_resp input network_out app_out);
@@ -966,6 +1062,45 @@ let lemma_server_network_zero_consumed_raw_received_unchanged
   | ST.StepOk ->
     assert (ST.server_network_step_ok_received_decode_projection
       st0 st1 buffer_resp input network_out app_out);
+    (* G3: the buffering reading of a StepOk.  It cannot actually occur with a
+       zero consumed length -- a buffering step consumes exactly one record --
+       but the projection alone does not say so, and the conclusion holds for
+       it regardless: the delta's received bytes are the (empty) consumed
+       prefix. *)
+    if (exists step.
+          ST.cleartext_handshake_step_correct
+            st0
+            st1
+            resp
+            step
+            (ST.server_network_consumed_prefix buffer_resp input)
+            network_out
+            app_out)
+    then (
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            ST.cleartext_handshake_step_correct
+              st0
+              st1
+              resp
+              step
+              (ST.server_network_consumed_prefix buffer_resp input)
+              network_out
+              app_out) in
+      Seq.lemma_eq_elim (ST.server_network_consumed_prefix buffer_resp input) B.empty;
+      lemma_legal_response_for_event_wire_lengths
+        st0
+        st1
+        resp
+        (CS.ConnCleartextHandshake step)
+        B.empty
+        B.empty
+        network_out
+        app_out;
+      Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+    ) else (
     assert (exists msg.
       CT.received_tls_raw_delta_legal_unbuffered
         st0
@@ -1049,7 +1184,7 @@ let lemma_server_network_zero_consumed_raw_received_unchanged
       assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
       assert (resp.ST.status == ST.IllegalTransition);
       assert False
-    )
+    ))
   | ST.ConnectionFailed ->
     assert (ST.server_network_connection_failed_consumed_prefix
       st0 st1 buffer_resp input network_out app_out);
@@ -1191,6 +1326,41 @@ let lemma_server_network_logged_received_exact_when_nonfailed
       Seq.lemma_eq_intro (ST.server_network_consumed_prefix buffer_resp input) B.empty;
       Seq.lemma_eq_elim (ST.server_network_consumed_prefix buffer_resp input) B.empty;
       Seq.append_empty_r old_consumed
+    ) else if (exists step.
+                 ST.cleartext_handshake_step_correct
+                   st0
+                   st1
+                   buffer_resp.ST.response
+                   step
+                   (ST.server_network_consumed_prefix buffer_resp input)
+                   network_out
+                   app_out)
+    then (
+      (* G3: the buffering reading of an accepted prefix.  It carries the same
+         [legal_response_for_event] as a delivering step, so the wire-length
+         accounting below is word-for-word the message case's. *)
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            ST.cleartext_handshake_step_correct
+              st0
+              st1
+              buffer_resp.ST.response
+              step
+              (ST.server_network_consumed_prefix buffer_resp input)
+              network_out
+              app_out) in
+      lemma_legal_response_for_event_wire_lengths
+        st0
+        st1
+        buffer_resp.ST.response
+        (CS.ConnCleartextHandshake step)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out;
+      Seq.lemma_eq_elim st0.CS.cs_wire_log.CL.raw_received old_consumed
     ) else (
       assert (exists msg.
         ST.legal_network_response

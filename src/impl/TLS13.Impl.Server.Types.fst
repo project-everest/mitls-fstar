@@ -1636,6 +1636,137 @@ let server_network_bytes_end_to_end_correct
         else True
       | CS.ConnLocalEvent _ -> True))
 
+(* ---------------------------------------------------------------------------
+   CLEARTEXT HANDSHAKE BUFFERING (G3)
+
+   The server's mirror of the client's protected-handshake buffering
+   ([CT.protected_handshake_step_correct] / [CT.coalesced_network_bytes_end_to_end_correct]).
+
+   A record whose cleartext fragment does not yet supply a whole handshake
+   message is not an error -- it is what happens whenever a peer splits its
+   ClientHello across records, which real clients do as soon as the hello
+   exceeds the negotiated record size (large key shares, long SNI/ALPN lists,
+   GREASE).  Such a record is CONSUMED (so the driver makes progress and does
+   not re-offer the same bytes forever) but delivers NOTHING: no message, no
+   network output, no application output.
+   --------------------------------------------------------------------------- *)
+
+let cleartext_handshake_step_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == StepOk /\
+  resp.network_out_len == 0sz /\
+  resp.app_out_len == 0sz /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnCleartextHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out /\
+  TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (CS.ConnCleartextHandshake step)
+    raw_received
+
+let lemma_cleartext_handshake_step_correct_intro
+  (st0:CS.connection_state)
+  (resp:server_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        resp.status == StepOk /\
+        resp.network_out_len == 0sz /\
+        resp.app_out_len == 0sz /\
+        CS.legal_event st0.CS.cs_model (CS.ConnCleartextHandshake step) /\
+        Some? (CS.step_cleartext_handshake st0.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnCleartextHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0)
+      (ensures
+        cleartext_handshake_step_correct
+          st0
+          (CM.cleartext_handshake_state st0 step raw_received)
+          resp
+          step
+          raw_received
+          network_out
+          app_out)
+=
+  let st1 = CM.cleartext_handshake_state st0 step raw_received in
+  CM.lemma_cleartext_handshake_state_evolves st0 step raw_received;
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice network_out 0 0);
+  Seq.lemma_len_slice app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice app_out 0 0);
+  assert (Seq.equal (response_network_out resp network_out) B.empty);
+  assert (response_app_out_matches_event resp (CS.ConnCleartextHandshake step) app_out);
+  assert (legal_response_for_event
+    st0 st1 resp (CS.ConnCleartextHandshake step) B.empty raw_received
+    network_out app_out)
+
+let lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out /\
+        server_end_to_end_invariant st0)
+      (ensures server_end_to_end_invariant st1)
+=
+  let delta = {
+    CS.delta_event = CS.ConnCleartextHandshake step;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint st0 delta st1;
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent st0 delta st1;
+  CSL.lemma_connection_state_protected_raw_segmented_replay st1;
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1;
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1;
+  CSL.lemma_legal_connection_delta_consistent st0 delta st1
+
+let lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant_conditional
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        server_end_to_end_invariant st0 ==> server_end_to_end_invariant st1)
+=
+  introduce server_end_to_end_invariant st0 ==> server_end_to_end_invariant st1
+  with
+    lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant
+      st0 st1 resp step raw_received network_out app_out
+
 noextract
 let server_network_consumed_prefix
   (resp:server_buffer_response)
@@ -1700,6 +1831,20 @@ let server_network_step_ok_consumed_prefix
        CM.server_received_key_update_state
          st0
          req
+         raw_received /\
+      Seq.equal
+       raw_received
+       (server_network_consumed_prefix resp input)) \/
+    (* G3: the record was CONSUMED but delivered nothing -- its cleartext
+       fragment does not yet complete a handshake message, so it was appended
+       to the pending reassembly buffer.  This is the server's mirror of the
+       client's protected-handshake buffering disjunct in
+       [CT.coalesced_network_bytes_end_to_end_correct]. *)
+    (exists step raw_received.
+      st1 ==
+       CM.cleartext_handshake_state
+         st0
+         step
          raw_received /\
       Seq.equal
        raw_received
@@ -1791,7 +1936,7 @@ let server_network_step_ok_received_decode_projection
   (app_out:B.bytes)
   : prop =
   resp.response.status == StepOk ==>
-    exists msg.
+    (exists msg.
       CT.received_tls_raw_delta_legal_unbuffered
         st0
         msg
@@ -1810,7 +1955,22 @@ let server_network_step_ok_received_decode_projection
          server_protected_record_decode_correct
            st0
            (server_network_consumed_prefix resp input)
-           msg)
+           msg)) \/
+    (* G3: a cleartext buffering step decodes to no message at all.  It still
+       has a canonical event -- [ConnCleartextHandshake] -- and that event's
+       decode projection is trivially true (the record was in the clear, so
+       there is nothing to unseal); what pins the record's shape instead is
+       [event_raw_delta_legal], carried inside
+       [cleartext_handshake_step_correct]'s [legal_response_for_event]. *)
+    (exists step.
+      cleartext_handshake_step_correct
+        st0
+        st1
+        resp.response
+        step
+        (server_network_consumed_prefix resp input)
+        network_out
+        app_out)
 
 let server_network_connection_failed_consumed_prefix
   (st0:CS.connection_state)
@@ -1942,6 +2102,31 @@ let lemma_legal_response_for_event_nonfailed_previous
       assert False
   )
 
+let lemma_cleartext_handshake_step_correct_nonfailed_previous
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out /\
+        server_connection_control_not_failed st1)
+      (ensures server_connection_control_not_failed st0)
+=
+  lemma_legal_response_for_event_nonfailed_previous
+    st0
+    st1
+    resp
+    (CS.ConnCleartextHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out
+
 let server_network_nonfailed_received_prefix_accepted
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1952,7 +2137,7 @@ let server_network_nonfailed_received_prefix_accepted
   : prop =
   server_connection_control_not_failed st1 ==>
     (resp.consumed_len == 0sz \/
-     exists msg.
+     (exists msg.
        legal_network_response
          st0
          st1
@@ -1960,7 +2145,21 @@ let server_network_nonfailed_received_prefix_accepted
          msg
          (server_network_consumed_prefix resp input)
          network_out
-         app_out)
+         app_out) \/
+     (* G3: a cleartext buffering step accepts the prefix too -- it just has no
+        message to show for it.  What the callers actually need from this
+        predicate is that the wire log grew by exactly the consumed prefix, and
+        [cleartext_handshake_step_correct]'s [legal_response_for_event] supplies
+        that just as [legal_network_response] does. *)
+     (exists step.
+       cleartext_handshake_step_correct
+         st0
+         st1
+         resp.response
+         step
+         (server_network_consumed_prefix resp input)
+         network_out
+         app_out))
 
 let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_accepted
   (st0:CS.connection_state)
@@ -1999,6 +2198,17 @@ let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_acc
           input
           network_out
           app_out);
+        if (exists step.
+              cleartext_handshake_step_correct
+                st0
+                st1
+                resp.response
+                step
+                (server_network_consumed_prefix resp input)
+                network_out
+                app_out)
+        then ()
+        else (
         assert (exists msg.
           CT.received_tls_raw_delta_legal_unbuffered
             st0
@@ -2077,7 +2287,7 @@ let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_acc
             app_out);
           assert (resp.response.status == IllegalTransition);
           assert False
-        )
+        ))
       | ConnectionFailed ->
         assert (server_network_connection_failed_consumed_prefix
           st0
@@ -2267,6 +2477,37 @@ let lemma_server_network_bytes_end_to_end_nonfailed_previous
       input
       network_out
       app_out);
+    if (exists step.
+          cleartext_handshake_step_correct
+            st0
+            st1
+            resp.response
+            step
+            (server_network_consumed_prefix resp input)
+            network_out
+            app_out)
+    then (
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            cleartext_handshake_step_correct
+              st0
+              st1
+              resp.response
+              step
+              (server_network_consumed_prefix resp input)
+              network_out
+              app_out) in
+      lemma_cleartext_handshake_step_correct_nonfailed_previous
+        st0
+        st1
+        resp.response
+        step
+        (server_network_consumed_prefix resp input)
+        network_out
+        app_out
+    ) else (
     assert (exists msg.
       CT.received_tls_raw_delta_legal_unbuffered
         st0
@@ -2349,7 +2590,7 @@ let lemma_server_network_bytes_end_to_end_nonfailed_previous
       assert (unexpected_message_response st0 st1 resp.response network_out app_out);
       assert (resp.response.status == IllegalTransition);
       assert False
-    )
+    ))
   | ConnectionFailed ->
     assert (server_network_connection_failed_consumed_prefix
       st0
@@ -2690,6 +2931,31 @@ let lemma_server_local_event_preserves_config
     network_out
     app_out
 
+let lemma_cleartext_handshake_step_correct_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
+=
+  lemma_legal_response_for_event_preserves_config
+    st0
+    st1
+    resp
+    (CS.ConnCleartextHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out
+
 let lemma_server_network_bytes_preserves_config
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2789,6 +3055,37 @@ let lemma_server_network_bytes_preserves_config
   | StepOk ->
     assert (server_network_step_ok_received_decode_projection
       st0 st1 resp input network_out app_out);
+    if (exists step.
+          cleartext_handshake_step_correct
+            st0
+            st1
+            resp.response
+            step
+            (server_network_consumed_prefix resp input)
+            network_out
+            app_out)
+    then (
+      let step =
+        ID.indefinite_description_ghost
+          CS.cleartext_handshake_step
+          (fun step ->
+            cleartext_handshake_step_correct
+              st0
+              st1
+              resp.response
+              step
+              (server_network_consumed_prefix resp input)
+              network_out
+              app_out) in
+      lemma_cleartext_handshake_step_correct_preserves_config
+        st0
+        st1
+        resp.response
+        step
+        (server_network_consumed_prefix resp input)
+        network_out
+        app_out
+    ) else (
     let msg =
       ID.indefinite_description_ghost
         M.tls_message
@@ -2846,4 +3143,4 @@ let lemma_server_network_bytes_preserves_config
         app_out);
       assert (resp.response.status == IllegalTransition);
       assert False
-    )
+    ))
