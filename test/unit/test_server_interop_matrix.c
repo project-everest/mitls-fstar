@@ -407,7 +407,8 @@ static const struct case_spec k_cases[] = {
      "one record split across many TCP segments: the NeedMoreInput retry loop", TLS13_ONLY},
     {"clienthello-across-two-records", "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "rsa_pss_rsae_sha256", CRED_RSA, true, FRAMING_RECORD_SPLIT, FAIL, NULL, NULL,
-     "GAP: no server-side cross-record handshake reassembly (the client has it)", TLS13_ONLY},
+     "GAP (G3): no cleartext cross-record handshake reassembly, either role",
+     TLS13_ONLY},
     /* G3 is a record-layer gap, so it must not depend on the suite axis
        either.  Same reasoning as ecdsa-credential-p256-only above. */
     {"aes128-clienthello-across-two-records", "TLS_AES_128_GCM_SHA256",
