@@ -907,7 +907,13 @@ let step_handshake_message
         { hs with
             hs_server_hello = Some sh;
             hs_buffers =
-              { hs.hs_buffers with hb_server_hello_bytes = W.serialize_handshake msg };
+              { hs.hs_buffers with
+                  hb_server_hello_bytes = W.serialize_handshake msg;
+                  (* Delivering the message drains whatever cleartext records
+                     were set aside while assembling it -- the client mirror of
+                     the received-ClientHello arm above. *)
+                  hb_cleartext_handshake_bytes = B.empty;
+              };
         }
         msg in
     Some (with_handshake_stage model hs' HsServerHelloReceived)

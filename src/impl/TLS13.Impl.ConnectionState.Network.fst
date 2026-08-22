@@ -702,6 +702,21 @@ fn mark_received_server_hello
   fold (handshake_messages_exactly
     c.handshake.messages
     (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  // Delivering the ServerHello DRAINS whatever cleartext records were set aside
+  // while assembling it -- the client mirror of [mark_received_client_hello]'s
+  // drain, matching the model's received-ServerHello arm.
+  unfold (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
+  with cleartext_storage cleartext_len. _;
+  c.handshake.buffers.cleartext_handshake_bytes.len := 0sz;
+  Seq.lemma_len_slice cleartext_storage 0 0;
+  Seq.lemma_eq_intro (Seq.slice cleartext_storage 0 0) B.empty;
+  fold (sized_bytes_exactly
+    c.handshake.buffers.cleartext_handshake_bytes
+    max_handshake_flight_len
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_cleartext_handshake_bytes);
   fold (handshake_buffers_exactly
     c.handshake.buffers
     (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers);

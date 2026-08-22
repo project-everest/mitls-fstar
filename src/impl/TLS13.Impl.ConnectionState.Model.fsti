@@ -1116,7 +1116,10 @@ let received_server_hello_state
           CS.hs_server_hello = Some sh;
           CS.hs_buffers =
             { hs0.CS.hs_buffers with
-                CS.hb_server_hello_bytes = W.serialize_handshake msg };
+                CS.hb_server_hello_bytes = W.serialize_handshake msg;
+                (* Delivering the message drains whatever cleartext records were
+                   set aside while assembling it. *)
+                CS.hb_cleartext_handshake_bytes = B.empty };
       }
       msg in
   {

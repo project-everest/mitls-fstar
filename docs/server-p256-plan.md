@@ -2320,3 +2320,51 @@ flips.
 5. `ES.client_step` WireEvent generalisation (`client_wire_received_event`'s
    `ConnCleartextHandshake` arm is still `False`).
 6. Ledger flip + scope statement in `docs/server-client-parity.md` P2b.
+
+## G3 commit B8 -- the received-ServerHello drain
+
+B6 deliberately left one asymmetry: the model drained
+`hb_cleartext_handshake_bytes` on received-ClientHello but NOT on
+received-ServerHello, so the client had no way to empty its buffer after a
+reassembled hello.  This closes it, in the three places the buffer is mirrored:
+
+* `Spec.StateMachine.step_tls_message`'s `Received, ServerHello` arm now resets
+  `hb_cleartext_handshake_bytes` to `B.empty`, exactly like the ClientHello arm;
+* `Impl.ConnectionState.Model.received_server_hello_state` (the GTot mirror the
+  implementation proves it computes) resets it too -- without this the model
+  helper stops agreeing with `step_model`, which is where the proof failed
+  first;
+* `Impl.ConnectionState.Network.mark_received_server_hello` performs the
+  concrete reset (unfold the cleartext `sized_bytes_exactly`, set `.len := 0sz`,
+  re-fold against the post-state), mirroring `mark_received_client_hello`.
+
+Fallout across the whole tree was ONE error, the model-helper mismatch above.
+
+### The `endpoint_status` step is not needed
+
+The plan called for a new shared `endpoint_status` constructor meaning "record
+consumed, buffered, keep reading".  It is unnecessary: the already-verified
+PROTECTED handshake buffering path
+(`Impl.Client.try_buffer_protected_handshake_record`, and its call site at
+`Impl.Client.fst:2594`) reports a buffering step as `StepOk` with
+`0 < consumed_len` and no output bytes.  `NeedMoreInput`'s `consumed_len == 0sz`
+pin is untouched because a buffering step is NOT `NeedMoreInput` -- it really did
+consume a record.  The cleartext path should mirror that contract exactly rather
+than add a fourteen-arm-wide constructor.
+
+### Remaining steps
+
+1. ~~Concrete pending cleartext buffer~~ -- DONE (B6).
+2. ~~Un-restrict the server step relation~~ -- DONE (B7).
+3. ~~Received-ServerHello drain~~ -- DONE (B8); the `endpoint_status`
+   constructor is dropped from the plan.
+4. Buffering branch + coalescing parse: a `try_buffer_cleartext_handshake_record`
+   modelled on `try_buffer_protected_handshake_record`, called from the `else`
+   branch of the `ready` gates added in B6 (client, `Impl.Handle.Handshake.fst`)
+   and B7 (server, `Impl.Server.Network.fst`), plus a coalescing parse over
+   `pending ++ fragment` -- today's decoder parses the fragment alone, so even
+   the final record of a split hello yields `parsed == None`.
+5. `ES.client_step` WireEvent generalisation (`client_wire_received_event`'s
+   `ConnCleartextHandshake` arm is still `False`), plus the
+   `ClientCanonicalShape` cleartext-exclusion mirror.
+6. Ledger flip + scope statement in `docs/server-client-parity.md` P2b.
