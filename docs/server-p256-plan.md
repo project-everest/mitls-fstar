@@ -1882,45 +1882,66 @@ State after this commit: `make -k -j48 verify` clean, `make check-admits` 0,
 `make -j48 test` green (34/34 server matrix, 2/2 client record-split, all interop).
 Behaviour is unchanged.
 
-### A design fork worth weighing before commit B3
+### Resolved: how the shape layer really absorbs buffering
 
-Landing B2 exposed a cheaper alternative that was not visible when commit A was
-designed, and it is worth deciding deliberately rather than by inertia.
+The "second structural wall" recorded above (that `ServerCanonicalShape.log_shape`
+pins an exact event list and a buffering step breaks it) is real, but the estimate
+attached to it -- that the two flagship inversion lemmas must be restated over a
+filtered log -- is WRONG, and the counter-evidence is already in the tree.
 
-**Route B (what is built).**  Buffering is a MODEL event: `ConnCleartextHandshake`
-is a `conn_event`, each partial record is a `step_cleartext_handshake`, and the
-delivery rule is buffer-relative (`received_cleartext_tls_message_raw_buffered`,
-`raw` = the LAST record, message = `pending ++ fragment`).  Cost: every buffering
-step appends to `cs_event_log`, which is what collides with
-`ServerCanonicalShape.log_shape`'s exact-list-per-control-state invariant and
-forces the two flagship inversion lemmas to be restated over a filtered log.
+**The client faced exactly this problem and solved it, and neither route
+considered above is what it did.**  The client DOES reassemble protected
+handshake messages across records, so `ConnProtectedHandshake` buffering steps are
+genuinely reachable for it.  `ClientCanonicalShape` handles them with a
+log-membership EXCLUSION HYPOTHESIS:
 
-**Route C (not built).**  Buffering is INVISIBLE to the model: the partial records
-are held only in the concrete server representation, the model takes NO step while
-buffering, and on completion the server takes a single ordinary
-`ConnNetworkEvent Received (ClientHello ch)` step whose `delta_raw_received` is the
-concatenation of ALL the records that carried the message.  No new `conn_event`, no
-new log entry, `log_shape` untouched, both flagship inversion lemmas untouched.
+```
+let no_buffering_steps (log:list CS.conn_event) : prop =
+  forall (ev:CS.conn_event). L.memP ev log ==> is_protected_buffering_step ev == false
+```
 
-What Route C needs instead:
+deliberately "mirror[ing] `log_has_no_received_ccs` exactly, and threaded through
+the forward induction (`lemma_trace_shape`) via the SAME per-step membership
+argument already used to exclude received CCS".  `log_shape` and every
+`*_region_ok` arm are left verbatim; the shape lemmas simply do not speak about
+logs that contain buffering.  Crucially, BOTH flagship inversion lemmas already
+carry it as a `requires` (`ProtectedWireServerFlightInversion.fsti`,
+`ProtectedWireClientFinishedInversion.fsti`), and the system product carries it as
+a HYPOTHESIS rather than an invariant -- `protected_witnesses_ok` (`System.fst:601`)
+is gated `(client_ready /\ server_ready /\ no_buffering_steps ...) ==> ...`, with
+`lemma_no_buffering_steps_prefix` (`:2828`) transporting it to prefixes.
 
-* `received_cleartext_tls_message_raw`'s ClientHello arm widened from "`raw` parses
-  as ONE Handshake record whose fragment is the message" to "`raw` parses as a
-  SEQUENCE of Handshake records whose fragments concatenate to the message".  A
-  local model change with no new constructor.
-* The byte-pairing invariant relaxed from "model `raw_received` == everything the
-  driver consumed" to "model `raw_received` ++ concrete pending == everything
-  consumed".  This is the real cost, and it is not obviously smaller than Route B's
-  flagship restatement — `cs_wire_log.raw_received` is coupled to the event log by
-  `legal_connection_delta`, so the lag has to be carried explicitly.
-* The same new `endpoint_status` constructor Route B needs (`NeedMoreInput` pins
-  `consumed_len == 0sz`, `StepOk` pins `st1` to a "received X" state), so that is a
-  wash.
+So the correct G3 route is a straight mirror, and it dissolves BOTH walls:
 
-Neither route avoids the concrete pending buffer, and both need the new status
-constructor; the fork is purely about WHERE the lag is recorded — in the model's
-event log (B) or in the impl/model byte-pairing (C).  Route B is already built and
-green through the spec and step layers; Route C would mean reverting commit A's
-`ConnCleartextHandshake` machinery.  Recommendation: measure the flagship
-restatement (todo `g3-flagship`) FIRST — it is the only unquantified piece of
-Route B, and it is the one thing Route C buys outright.
+* Add `no_cleartext_buffering_steps` to `ServerCanonicalShape` (sibling of
+  `no_buffering_steps`; the server's buffering events are `ConnCleartextHandshake`).
+* Thread it through `lemma_trace_shape` by the same per-step membership argument
+  that already excludes received CCS -- `ServerCanonicalShape` threads
+  `log_has_no_received_ccs` this way today, so the induction skeleton exists.
+* Add it as a `requires` to the server shape lemmas and to the server side of the
+  paired-system theorems, plus a prefix-transport lemma mirroring `:2828`.
+* DELETE `ES.server_step_nonbuffering`, and replace `tls_system_inv`'s two
+  `cleartext_handshake_buffer_empty` conjuncts with the hypothesis-style gate.
+
+Note the asymmetry this exposes: the client's buffering is gated by a HYPOTHESIS
+on the theorems that need it, whereas B2 staged the server's with an INVARIANT
+conjunct pinning both buffers empty.  The invariant is the anomaly.  The inline
+comment at `System.fst:654` anticipates replacing it with a "buffer-agreement
+conjunct", but that is a heavier obligation than the client ever took on: an
+agreement conjunct must be MAINTAINED by every step, while a hypothesis is merely
+DISCHARGED where the guarantee is claimed.  Against a third-party peer that really
+does split a ClientHello, the honest-run discharge is simply unavailable -- which
+is exactly why the client scoped its paired-system theorems this way.
+
+**Consequence for the Route B / Route C fork:** Route C's only selling point was
+avoiding the flagship restatement, and the restatement is not needed under Route B
+either.  Route B (already built, model-visible `ConnCleartextHandshake` steps) also
+matches the client's shape, keeping the two roles symmetric.  Proceed with Route B;
+do not revert commit A.
+
+**Consequence for the published guarantee:** the paired-system theorems become
+conditional on the server log containing no buffering, exactly as the client's
+already are.  That is a genuine scope limit, not an accounting trick, and it must
+be stated plainly in `docs/server-client-parity.md` alongside the ledger flip --
+the interop cell will say `ok` (a split ClientHello is accepted) while the paired
+theorems continue to cover only unsplit runs.
