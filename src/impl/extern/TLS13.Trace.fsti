@@ -41,6 +41,7 @@ inline_for_extraction let client_protected_drain : U32.t = 2031ul
 inline_for_extraction let client_protected_empty : U32.t = 2032ul
 inline_for_extraction let client_protected_error : U32.t = 2033ul
 inline_for_extraction let client_protected_buffer : U32.t = 2034ul
+inline_for_extraction let client_cleartext_buffer : U32.t = 2035ul
 inline_for_extraction let client_handshake_message : U32.t = 2040ul
 
 inline_for_extraction let engine_new : U32.t = 2100ul
