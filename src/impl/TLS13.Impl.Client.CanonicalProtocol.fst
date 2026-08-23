@@ -2538,6 +2538,11 @@ let lemma_client_coalesced_head_raw_record_parse_success
        exactly ONE cleartext Handshake record, so the record shape is immediate. *)
     assert (WS.parse_record_wire raw ==
       Some (T.Handshake, step.CS.cleartext_handshake_fragment, B.length raw))
+  | CS.ConnNetworkEvent _ ->
+    (* G3: a reassembled cleartext delivery carries its record shape
+       explicitly -- see [CT.coalesced_head_step_correct]. *)
+    assert (CT.raw_record_parse_success raw)
+  | CS.ConnLocalEvent _ -> ()
 
 let lemma_client_coalesced_network_bytes_step_correct
   (st0 st1:CS.connection_state)
@@ -2707,7 +2712,22 @@ let lemma_client_coalesced_network_progress
           since B14 with no side condition to discharge. *)
        EC.lemma_client_wire_step_from_cleartext_witness
          #CTypes.client_local_event
-         st0 st1 wire step (CPI.step_output wire_outputs local_outputs));
+         st0 st1 wire step (CPI.step_output wire_outputs local_outputs)
+     | CS.ConnNetworkEvent tm ->
+       (* G3: a REASSEMBLED cleartext delivery.  [client_wire_received_event]
+          asks for [EC.network_input_message_projection], whose cleartext arm
+          is the buffer-relative raw rule -- and that is literally
+          [event_raw_delta_legal]'s reading of this very event, which
+          [CT.legal_delta] already supplies. *)
+       assert (CS.event_raw_delta_legal
+         st0.CS.cs_model conn_ev B.empty (CW.wire_serialize wire));
+       assert (EC.network_input_message_projection
+         st0 wire tm.CL.message_value);
+       EC.lemma_client_wire_step_from_network_witness
+         #CTypes.client_local_event
+         st0 st1 wire tm.CL.message_value
+         (CPI.step_output wire_outputs local_outputs)
+     | CS.ConnLocalEvent _ -> assert False);
     assert (client_canonical_step_rel #CTypes.client_local_event st0 st1);
     RTC.closure_step
       (client_canonical_step_rel #CTypes.client_local_event)
@@ -5100,7 +5120,12 @@ let lemma_client_network_weak_head_bridge_result
      // one cleartext Handshake record.
      assert (WS.parse_record_wire raw_consumed ==
        Some (T.Handshake, step.CS.cleartext_handshake_fragment,
-             B.length raw_consumed)));
+             B.length raw_consumed))
+   | CS.ConnNetworkEvent _ ->
+     // G3: a reassembled cleartext delivery carries its record shape
+     // explicitly; see [CT.coalesced_head_step_correct].
+     assert (CT.raw_record_parse_success raw_consumed)
+   | CS.ConnLocalEvent _ -> ());
   assert (CT.raw_record_parse_success raw_consumed);
   lemma_client_consumed_prefix_parse input_contents consumed_len;
   let wire =
@@ -5149,7 +5174,19 @@ let lemma_client_network_weak_head_bridge_result
    | CS.ConnCleartextHandshake step ->
      EC.lemma_client_wire_step_from_cleartext_witness
        #CTypes.client_local_event
-       st0 st1 wire step (CPI.step_output wire_outputs local_outputs));
+       st0 st1 wire step (CPI.step_output wire_outputs local_outputs)
+   | CS.ConnNetworkEvent tm ->
+     // G3: a REASSEMBLED cleartext delivery.  The buffer-relative disjunct of
+     // [EC.network_input_message_projection] is literally
+     // [event_raw_delta_legal]'s reading of this event.
+     assert (CS.event_raw_delta_legal
+       st0.CS.cs_model conn_ev B.empty (CW.wire_serialize wire));
+     assert (EC.network_input_message_projection st0 wire tm.CL.message_value);
+     EC.lemma_client_wire_step_from_network_witness
+       #CTypes.client_local_event
+       st0 st1 wire tm.CL.message_value
+       (CPI.step_output wire_outputs local_outputs)
+   | CS.ConnLocalEvent _ -> assert False);
   assert (client_step #CTypes.client_local_event st0 (SM.WireEvent wire) st1
     (CPI.step_output wire_outputs local_outputs));
   let consumed = raw_consumed in

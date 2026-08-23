@@ -3762,11 +3762,30 @@ let network_bytes_end_to_end_correct
   (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st0 ==>
    TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1)
 
-(* G3.  The two WEAK receive shapes -- a protected head step and a cleartext
-   buffering step -- share every fact their consumers need, so they share one
-   predicate and the inversion machinery keeps splitting only ONCE.  What the
-   consumers use is: a legal delta for [ev] whose raw side is exactly this
-   record, a nonempty decode projection, and a response that emits nothing. *)
+(* G3.  The WEAK receive shapes share every fact their consumers need, so they
+   share one predicate and the inversion machinery keeps splitting only ONCE.
+   What the consumers use is: a legal delta for [ev] whose raw side is exactly
+   this record, a nonempty decode projection, and a response that emits
+   nothing.  Three shapes qualify:
+
+     - a protected handshake HEAD step;
+     - a cleartext handshake BUFFERING step;
+     - a REASSEMBLED cleartext delivery -- a received cleartext
+       [ConnNetworkEvent] completed out of the pending cleartext buffer.
+
+   The third is a genuine delivery, so why is it here rather than in the strong
+   [network_bytes_end_to_end_correct]?  Because that predicate projects the
+   decoded message out of THIS RECORD's fragment -- through
+   [received_tls_raw_delta_legal_unbuffered] and [decoder_fragment_relation]'s
+   `Seq.equal fragment outer_fragment` -- and a reassembled message is spread
+   over several records, so no such projection exists.  What the delivery does
+   supply is exactly what the weak disjunct asks for, and the record-shape fact
+   that the other two arms derive from their event is carried explicitly.
+
+   A reassembled delivery emits nothing, just like the other two: receiving a
+   ServerHello writes no network output and no application output.  The client
+   driver's reaction is driven by the resulting CONTROL state, not by this
+   response. *)
 let coalesced_head_step_correct
   (st0 st1:CS.connection_state)
   (resp:client_response)
@@ -3775,7 +3794,14 @@ let coalesced_head_step_correct
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  (CS.ConnProtectedHandshake? ev \/ CS.ConnCleartextHandshake? ev) /\
+  (CS.ConnProtectedHandshake? ev \/
+   CS.ConnCleartextHandshake? ev \/
+   (CS.ConnNetworkEvent? ev /\
+    (CS.ConnNetworkEvent?._0 ev).CL.message_direction == CL.Received /\
+    CS.network_message_is_cleartext
+      CL.Received
+      (CS.ConnNetworkEvent?._0 ev).CL.message_value /\
+    raw_record_parse_success raw_received)) /\
   resp.status == StepOk /\
   resp.network_out_len == 0sz /\
   resp.app_out_len == 0sz /\
@@ -3829,6 +3855,45 @@ let lemma_coalesced_head_step_correct_of_cleartext
           raw_received network_out app_out)
       [SMTPat (cleartext_handshake_step_correct
                  st0 st1 resp step raw_received network_out app_out)]
+= ()
+
+(* G3: the reassembled-delivery introduction.  Unlike the two step-shaped
+   arms this one cannot derive the record shape from its event -- the buffered
+   raw rule pins it only when the pending buffer is non-empty -- so the caller,
+   which has just decoded the record, passes it in. *)
+let lemma_coalesced_head_step_correct_of_cleartext_delivery
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires (
+        let ev =
+          CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          } in
+        CS.network_message_is_cleartext CL.Received msg /\
+        raw_record_parse_success raw_received /\
+        resp.status == StepOk /\
+        resp.network_out_len == 0sz /\
+        resp.app_out_len == 0sz /\
+        legal_response_for_event
+          st0 st1 resp ev B.empty raw_received network_out app_out))
+      (ensures
+        coalesced_head_step_correct
+          st0
+          st1
+          resp
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Received;
+            CL.message_value = msg;
+          })
+          raw_received
+          network_out
+          app_out)
 = ()
 
 let lemma_coalesced_head_step_correct_preserves_end_to_end_invariant

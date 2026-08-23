@@ -161,8 +161,27 @@ let client_wire_outputs_match
 
 (**
   Representation-independent meaning of a successfully decoded client network
-  input.  Cleartext messages are tied to their exact raw-record representation;
+  input.  Cleartext messages are tied to their raw-record representation;
   protected messages are tied to the record-layer open and inner-message decode.
+
+  G3: the cleartext arm ALSO admits the REASSEMBLY-AWARE rule
+  [CS.received_cleartext_tls_message_raw_buffered].  A ServerHello split across
+  records is completed by the LAST record's fragment together with the pending
+  cleartext buffer, and the record-local
+  [CS.received_cleartext_tls_message_raw] cannot express that.  (The server's
+  counterpart, [TLS13.Spec.Endpoint.Server.server_wire_received_event], carries
+  no projection at all and so needed no such change.)
+
+  It is a DISJUNCTION rather than a replacement so that the record decoder,
+  which knows nothing about the connection's buffer, keeps discharging the
+  record-local disjunct exactly as before.
+
+  Nothing is lost where the buffer is empty: the two rules are then literally
+  the same, by [CS.lemma_received_cleartext_tls_message_raw_buffered_of_empty],
+  whose SMT pattern fires automatically, so the disjunction collapses to the
+  record-local reading.  In particular the PAIRED SYSTEM ([TLS13.System]) pins
+  the client's buffer empty as an invariant conjunct, so every paired-system
+  property reads the record-local rule exactly as before.
  **)
 let network_input_message_projection
   (st0:CS.connection_state)
@@ -170,7 +189,12 @@ let network_input_message_projection
   (msg:M.tls_message)
   : prop =
   if CS.network_message_is_cleartext CL.Received msg
-  then CS.received_cleartext_tls_message_raw msg (W.wire_serialize wire)
+  then
+    CS.received_cleartext_tls_message_raw msg (W.wire_serialize wire) \/
+    CS.received_cleartext_tls_message_raw_buffered
+      st0.CS.cs_model
+      msg
+      (W.wire_serialize wire)
   else
     SMCan.received_single_protected_message_decode
       st0.CS.cs_model
