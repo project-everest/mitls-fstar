@@ -427,21 +427,21 @@ let lemma_coalesced_preserves_config
       st0 st1 buffer_resp network_input
       old_network_out network_out old_app_out app_out
   else (
-    let step =
+    let ev =
       ID.indefinite_description_ghost
-        CS.protected_handshake_step
-        (fun step ->
+        CS.conn_event
+        (fun ev ->
           0 < SZ.v buffer_resp.CT.consumed_len /\
           SZ.v buffer_resp.CT.consumed_len <= B.length network_input /\
-          CT.protected_handshake_step_correct
-            st0 st1 buffer_resp.CT.response step
+          CT.coalesced_head_step_correct
+            st0 st1 buffer_resp.CT.response ev
             (CT.network_consumed_prefix
               network_input buffer_resp.CT.consumed_len)
             network_out app_out /\
           Seq.equal network_out old_network_out /\
           Seq.equal app_out old_app_out) in
     CSL.lemma_step_model_preserves_config
-      st0.CS.cs_model (CS.ConnProtectedHandshake step) st1.CS.cs_model)
+      st0.CS.cs_model ev st1.CS.cs_model)
 
 /// The two facts every driver predicate needs, stated directly on the composite.
 let lemma_drained_network_preserves_config

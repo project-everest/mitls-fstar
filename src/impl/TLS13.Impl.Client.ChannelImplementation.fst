@@ -792,8 +792,9 @@ let lemma_network_bytes_application_log_undrained
             st0 st1 buffer_resp network_input
             old_network_out network_out old_app_out app_out)
   then (
-    // Head protected-handshake step: the event carries no application bytes.
-    let step =
+    // Head weak step (protected or cleartext buffering): the event carries no
+    // application bytes.
+    let ev =
       CP.lemma_client_coalesced_head_step
         st0 st1 buffer_resp network_input
         old_network_out network_out old_app_out app_out in
@@ -801,7 +802,7 @@ let lemma_network_bytes_application_log_undrained
       CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
     lemma_legal_response_observable_receive_log
       st0 st1 resp
-      (CS.ConnProtectedHandshake step)
+      ev
       B.empty raw_received network_out app_out
   ) else (
   assert (CT.network_bytes_step_correct

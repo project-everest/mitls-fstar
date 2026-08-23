@@ -2472,7 +2472,7 @@ let lemma_client_coalesced_head_step
   (network_input:B.bytes)
   (old_network_out network_out:B.bytes)
   (old_app_out app_out:B.bytes)
-  : Ghost CS.protected_handshake_step
+  : Ghost CS.conn_event
       (requires
         CT.coalesced_network_bytes_end_to_end_correct
           st0 st1 buffer_resp network_input
@@ -2480,23 +2480,23 @@ let lemma_client_coalesced_head_step
         ~ (CT.network_bytes_end_to_end_correct
              st0 st1 buffer_resp network_input
              old_network_out network_out old_app_out app_out))
-      (ensures fun step ->
+      (ensures fun ev ->
         0 < SZ.v buffer_resp.CT.consumed_len /\
         SZ.v buffer_resp.CT.consumed_len <= B.length network_input /\
-        CT.protected_handshake_step_correct
-          st0 st1 buffer_resp.CT.response step
+        CT.coalesced_head_step_correct
+          st0 st1 buffer_resp.CT.response ev
           (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
           network_out app_out /\
         Seq.equal network_out old_network_out /\
         Seq.equal app_out old_app_out)
 =
   FStar.IndefiniteDescription.indefinite_description_ghost
-    CS.protected_handshake_step
-    (fun step ->
+    CS.conn_event
+    (fun ev ->
       0 < SZ.v buffer_resp.CT.consumed_len /\
       SZ.v buffer_resp.CT.consumed_len <= B.length network_input /\
-      CT.protected_handshake_step_correct
-        st0 st1 buffer_resp.CT.response step
+      CT.coalesced_head_step_correct
+        st0 st1 buffer_resp.CT.response ev
         (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
         network_out app_out /\
       Seq.equal network_out old_network_out /\
@@ -2507,29 +2507,37 @@ let lemma_client_coalesced_head_raw_record_parse_success
   (buffer_resp:CT.client_buffer_response)
   (network_input:B.bytes)
   (network_out app_out:B.bytes)
-  (step:CS.protected_handshake_step)
+  (ev:CS.conn_event)
   : Lemma
       (requires
         0 < SZ.v buffer_resp.CT.consumed_len /\
         SZ.v buffer_resp.CT.consumed_len <= B.length network_input /\
-        CT.protected_handshake_step_correct
-          st0 st1 buffer_resp.CT.response step
+        CT.coalesced_head_step_correct
+          st0 st1 buffer_resp.CT.response ev
           (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
           network_out app_out)
       (ensures (
         let raw = CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
         B.length raw == SZ.v buffer_resp.CT.consumed_len /\
-        step.CS.protected_handshake_head == true /\
+        (CS.ConnProtectedHandshake? ev ==>
+          (CS.ConnProtectedHandshake?._0 ev).CS.protected_handshake_head == true) /\
         CT.raw_record_parse_success raw /\
-        CT.legal_delta st0 st1 (CS.ConnProtectedHandshake step) B.empty raw))
+        CT.legal_delta st0 st1 ev B.empty raw))
 =
   let raw = CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
   Seq.lemma_len_slice network_input 0 (SZ.v buffer_resp.CT.consumed_len);
-  assert (CT.legal_delta st0 st1 (CS.ConnProtectedHandshake step) B.empty raw);
-  assert (step.CS.protected_handshake_head == true);
-  assert (CS.raw_records_exactly raw T.Application_data 1);
-  CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
-  WS.lemma_parse_record_implies_parse_record_wire raw
+  assert (CT.legal_delta st0 st1 ev B.empty raw);
+  match ev with
+  | CS.ConnProtectedHandshake step ->
+    assert (step.CS.protected_handshake_head == true);
+    assert (CS.raw_records_exactly raw T.Application_data 1);
+    CSL.lemma_raw_records_exactly_one_parse_record raw T.Application_data;
+    WS.lemma_parse_record_implies_parse_record_wire raw
+  | CS.ConnCleartextHandshake step ->
+    (* G3: a buffering step's raw side is pinned by [event_raw_delta_legal] to
+       exactly ONE cleartext Handshake record, so the record shape is immediate. *)
+    assert (WS.parse_record_wire raw ==
+      Some (T.Handshake, step.CS.cleartext_handshake_fragment, B.length raw))
 
 let lemma_client_coalesced_network_bytes_step_correct
   (st0 st1:CS.connection_state)
@@ -2552,15 +2560,15 @@ let lemma_client_coalesced_network_bytes_step_correct
        old_network_out network_out old_app_out app_out
   then ()
   else (
-    let step =
+    let ev =
       lemma_client_coalesced_head_step
         st0 st1 buffer_resp network_input
         old_network_out network_out old_app_out app_out in
     lemma_client_coalesced_head_raw_record_parse_success
-      st0 st1 buffer_resp network_input network_out app_out step;
+      st0 st1 buffer_resp network_input network_out app_out ev;
     let raw = CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
     assert (CT.legal_response_for_event
-      st0 st1 buffer_resp.CT.response (CS.ConnProtectedHandshake step)
+      st0 st1 buffer_resp.CT.response ev
       B.empty raw network_out app_out);
     assert (CT.raw_received_matches_network_input raw raw);
     assert (CT.some_legal_response
@@ -2591,14 +2599,14 @@ let lemma_client_coalesced_preserves_config
       st0 st1 buffer_resp network_input
       old_network_out network_out old_app_out app_out
   else (
-    let step =
+    let ev =
       lemma_client_coalesced_head_step
         st0 st1 buffer_resp network_input
         old_network_out network_out old_app_out app_out in
     lemma_client_coalesced_head_raw_record_parse_success
-      st0 st1 buffer_resp network_input network_out app_out step;
+      st0 st1 buffer_resp network_input network_out app_out ev;
     CSL.lemma_step_model_preserves_config
-      st0.CS.cs_model (CS.ConnProtectedHandshake step) st1.CS.cs_model
+      st0.CS.cs_model ev st1.CS.cs_model
   )
 
 (**
@@ -2633,12 +2641,12 @@ let lemma_client_coalesced_head_wire_logs
           (CT.response_network_out buffer_resp.CT.response network_out)
           B.empty)
 =
-  let step =
+  let ev =
     lemma_client_coalesced_head_step
       st0 st1 buffer_resp network_input
       old_network_out network_out old_app_out app_out in
   lemma_client_coalesced_head_raw_record_parse_success
-    st0 st1 buffer_resp network_input network_out app_out step;
+    st0 st1 buffer_resp network_input network_out app_out ev;
   Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_sent
 
 let lemma_client_coalesced_network_progress
@@ -2664,12 +2672,12 @@ let lemma_client_coalesced_network_progress
       st0 st1 buffer_resp input_contents
       old_network_out network_out old_app_out app_out
   else (
-    let step =
+    let ev =
       lemma_client_coalesced_head_step
         st0 st1 buffer_resp input_contents
         old_network_out network_out old_app_out app_out in
     lemma_client_coalesced_head_raw_record_parse_success
-      st0 st1 buffer_resp input_contents network_out app_out step;
+      st0 st1 buffer_resp input_contents network_out app_out ev;
     let raw = CT.network_consumed_prefix input_contents buffer_resp.CT.consumed_len in
     lemma_client_consumed_prefix_parse input_contents buffer_resp.CT.consumed_len;
     let wire =
@@ -2679,7 +2687,7 @@ let lemma_client_coalesced_network_progress
           CPI.consumed_by_parse CW.tls_record_wire_format input_contents w raw residual /\
           Seq.equal (CW.wire_serialize w) raw) in
     assert (Seq.equal (CW.wire_serialize wire) raw);
-    let conn_ev = CS.ConnProtectedHandshake step in
+    let conn_ev = ev in
     let wire_outputs : list CW.wire_message = [] in
     let local_outputs = client_response_local_outputs buffer_resp.CT.response app_out in
     lemma_client_response_local_outputs_match buffer_resp.CT.response conn_ev app_out;
@@ -2689,9 +2697,17 @@ let lemma_client_coalesced_network_progress
       CS.delta_raw_sent = WF.serialize_all CW.tls_record_wire_format wire_outputs;
       CS.delta_raw_received = CW.wire_serialize wire;
     } st1);
-    EC.lemma_client_wire_step_from_protected_head_witness
-      #CTypes.client_local_event
-      st0 st1 wire step (CPI.step_output wire_outputs local_outputs);
+    (match ev with
+     | CS.ConnProtectedHandshake step ->
+       EC.lemma_client_wire_step_from_protected_head_witness
+         #CTypes.client_local_event
+         st0 st1 wire step (CPI.step_output wire_outputs local_outputs)
+     | CS.ConnCleartextHandshake step ->
+       (* G3: the buffering twin, admitted by [client_wire_received_event]
+          since B14 with no side condition to discharge. *)
+       EC.lemma_client_wire_step_from_cleartext_witness
+         #CTypes.client_local_event
+         st0 st1 wire step (CPI.step_output wire_outputs local_outputs));
     assert (client_canonical_step_rel #CTypes.client_local_event st0 st1);
     RTC.closure_step
       (client_canonical_step_rel #CTypes.client_local_event)
@@ -5003,13 +5019,14 @@ let lemma_client_network_wire_event_bridge_result
     consumed wire_outputs local_outputs
 
 (**
-  The head step of a protected handshake record yields the same network bridge
-  result as a received network message.  This is the second disjunct of
+  A WEAK receive step -- the head step of a protected handshake record, or (G3)
+  a cleartext handshake BUFFERING step -- yields the same network bridge result
+  as a received network message.  This is the second disjunct of
   [coalesced_network_bytes_end_to_end_correct], and the reason the canonical
   ProtocolImplementation can be pointed at the coalescing receive primitive.
  **)
 #pop-options
-let lemma_client_network_protected_head_bridge_result
+let lemma_client_network_weak_head_bridge_result
   (initial:client_initial_state)
   (received0:B.bytes)
   (sent0:B.bytes)
@@ -5023,7 +5040,7 @@ let lemma_client_network_protected_head_bridge_result
   (st1:CS.connection_state)
   (app_out:B.bytes)
   (buffer_resp:CT.client_buffer_response)
-  (step:CS.protected_handshake_step)
+  (ev:CS.conn_event)
   : Lemma
       (requires
         client_invariant_pure initial received0 sent0 st0 /\
@@ -5033,11 +5050,11 @@ let lemma_client_network_protected_head_bridge_result
         B.length app_out == SZ.v base.tls_client_network_app_out_len /\
         0 < SZ.v buffer_resp.CT.consumed_len /\
         SZ.v buffer_resp.CT.consumed_len <= B.length input_contents /\
-        CT.protected_handshake_step_correct
+        CT.coalesced_head_step_correct
           st0
           st1
           buffer_resp.CT.response
-          step
+          ev
           (CT.network_consumed_prefix input_contents buffer_resp.CT.consumed_len)
           network_out
           app_out /\
@@ -5062,7 +5079,7 @@ let lemma_client_network_protected_head_bridge_result
   let resp = buffer_resp.CT.response in
   let consumed_len = buffer_resp.CT.consumed_len in
   let raw_consumed = CT.network_consumed_prefix input_contents consumed_len in
-  let conn_ev = CS.ConnProtectedHandshake step in
+  let conn_ev = ev in
   let old_app_out = Ghost.reveal base.tls_client_network_old_app_out in
   Seq.lemma_len_slice input_contents 0 (SZ.v consumed_len);
   assert (Seq.length raw_consumed == SZ.v consumed_len);
@@ -5070,12 +5087,20 @@ let lemma_client_network_protected_head_bridge_result
   assert (CT.legal_response_for_event
     st0 st1 resp conn_ev B.empty raw_consumed network_out app_out);
   assert (CT.legal_delta st0 st1 conn_ev B.empty raw_consumed);
-  // A tail step demands an empty raw-received delta, but the consumed prefix
-  // is non-empty; hence this is the head step of the record.
-  assert (step.CS.protected_handshake_head == true);
-  assert (CS.raw_records_exactly raw_consumed T.Application_data 1);
-  CSL.lemma_raw_records_exactly_one_parse_record raw_consumed T.Application_data;
-  WS.lemma_parse_record_implies_parse_record_wire raw_consumed;
+  (match ev with
+   | CS.ConnProtectedHandshake step ->
+     // A tail step demands an empty raw-received delta, but the consumed prefix
+     // is non-empty; hence this is the head step of the record.
+     assert (step.CS.protected_handshake_head == true);
+     assert (CS.raw_records_exactly raw_consumed T.Application_data 1);
+     CSL.lemma_raw_records_exactly_one_parse_record raw_consumed T.Application_data;
+     WS.lemma_parse_record_implies_parse_record_wire raw_consumed
+   | CS.ConnCleartextHandshake step ->
+     // G3: [event_raw_delta_legal] pins a buffering step's raw side to exactly
+     // one cleartext Handshake record.
+     assert (WS.parse_record_wire raw_consumed ==
+       Some (T.Handshake, step.CS.cleartext_handshake_fragment,
+             B.length raw_consumed)));
   assert (CT.raw_record_parse_success raw_consumed);
   lemma_client_consumed_prefix_parse input_contents consumed_len;
   let wire =
@@ -5116,9 +5141,15 @@ let lemma_client_network_protected_head_bridge_result
   assert (SMCan.canonical_wire_step st0 st1 conn_ev
     (WF.serialize_all CW.tls_record_wire_format wire_outputs)
     (CW.wire_serialize wire));
-  EC.lemma_client_wire_step_from_protected_head_witness
-    #CTypes.client_local_event
-    st0 st1 wire step (CPI.step_output wire_outputs local_outputs);
+  (match ev with
+   | CS.ConnProtectedHandshake step ->
+     EC.lemma_client_wire_step_from_protected_head_witness
+       #CTypes.client_local_event
+       st0 st1 wire step (CPI.step_output wire_outputs local_outputs)
+   | CS.ConnCleartextHandshake step ->
+     EC.lemma_client_wire_step_from_cleartext_witness
+       #CTypes.client_local_event
+       st0 st1 wire step (CPI.step_output wire_outputs local_outputs));
   assert (client_step #CTypes.client_local_event st0 (SM.WireEvent wire) st1
     (CPI.step_output wire_outputs local_outputs));
   let consumed = raw_consumed in
@@ -5219,23 +5250,24 @@ let lemma_client_network_bridge_obligation
           initial received0 sent0 st0 input_contents input_len
           old_network_out network_out out_len base st1 app_out buffer_resp
       else (
-        // The coalesced predicate's second disjunct: a head protected-handshake
-        // step consuming a non-empty prefix of the input.
-        let step =
+        // The coalesced predicate's second disjunct: a WEAK step -- a head
+        // protected-handshake step, or a cleartext buffering step -- consuming
+        // a non-empty prefix of the input.
+        let ev =
           FStar.IndefiniteDescription.indefinite_description_ghost
-            CS.protected_handshake_step
-            (fun step ->
+            CS.conn_event
+            (fun ev ->
               0 < SZ.v buffer_resp.CT.consumed_len /\
               SZ.v buffer_resp.CT.consumed_len <= B.length input_contents /\
-              CT.protected_handshake_step_correct
-                st0 st1 buffer_resp.CT.response step
+              CT.coalesced_head_step_correct
+                st0 st1 buffer_resp.CT.response ev
                 (CT.network_consumed_prefix input_contents buffer_resp.CT.consumed_len)
                 network_out app_out /\
               Seq.equal network_out old_network_out /\
               Seq.equal app_out old_app_out) in
-        lemma_client_network_protected_head_bridge_result
+        lemma_client_network_weak_head_bridge_result
           initial received0 sent0 st0 input_contents input_len
-          old_network_out network_out out_len base st1 app_out buffer_resp step
+          old_network_out network_out out_len base st1 app_out buffer_resp ev
       )
     | CT.NeedMoreInput ->
       lemma_client_coalesced_not_step_ok_is_strong

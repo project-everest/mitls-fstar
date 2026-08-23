@@ -2979,6 +2979,126 @@ let lemma_protected_handshake_step_correct_preserves_end_to_end_invariant_condit
     lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
       st0 st1 resp step raw_received network_out app_out
 
+(* ---------------------------------------------------------------------------
+   CLEARTEXT HANDSHAKE BUFFERING (G3), CLIENT SIDE
+
+   The exact mirror of [ST.cleartext_handshake_step_correct].  A cleartext
+   record whose fragment does not yet supply a whole handshake message is not
+   an error -- it is what happens whenever a server splits its ServerHello
+   across records.  The record is CONSUMED (so the driver makes progress
+   instead of re-offering the same bytes forever) but delivers NOTHING: no
+   message, no network output, no application output.
+   --------------------------------------------------------------------------- *)
+
+let cleartext_handshake_step_correct
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == StepOk /\
+  resp.network_out_len == 0sz /\
+  resp.app_out_len == 0sz /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnCleartextHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out /\
+  TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    (CS.ConnCleartextHandshake step)
+    raw_received
+
+let lemma_cleartext_handshake_step_correct_intro
+  (st0:CS.connection_state)
+  (resp:client_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        resp.status == StepOk /\
+        resp.network_out_len == 0sz /\
+        resp.app_out_len == 0sz /\
+        CS.legal_event st0.CS.cs_model (CS.ConnCleartextHandshake step) /\
+        Some? (CS.step_cleartext_handshake st0.CS.cs_model step) /\
+        CS.event_raw_delta_legal
+          st0.CS.cs_model
+          (CS.ConnCleartextHandshake step)
+          B.empty
+          raw_received /\
+        TLS13.Spec.StateMachine.Reachability.connection_state_consistent st0)
+      (ensures
+        cleartext_handshake_step_correct
+          st0
+          (CM.cleartext_handshake_state st0 step raw_received)
+          resp
+          step
+          raw_received
+          network_out
+          app_out)
+=
+  CM.lemma_cleartext_handshake_state_evolves st0 step raw_received;
+  Seq.lemma_len_slice network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice network_out 0 0);
+  Seq.lemma_len_slice app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice app_out 0 0)
+
+let lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    (CS.ConnCleartextHandshake step)
+    B.empty);
+  lemma_legal_response_for_event_client_state_correct
+    st0
+    st1
+    resp
+    (CS.ConnCleartextHandshake step)
+    B.empty
+    raw_received
+    network_out
+    app_out;
+  lemma_client_state_correct_raw_to_message_replay st1
+
+let lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant_conditional
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1)
+=
+  introduce client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1
+  with
+    lemma_cleartext_handshake_step_correct_preserves_end_to_end_invariant
+      st0 st1 resp step raw_received network_out app_out
+
 let network_event_step_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3642,6 +3762,104 @@ let network_bytes_end_to_end_correct
   (TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st0 ==>
    TLS13.Spec.StateMachine.Replay.connection_state_received_decode_replay_consistent st1)
 
+(* G3.  The two WEAK receive shapes -- a protected head step and a cleartext
+   buffering step -- share every fact their consumers need, so they share one
+   predicate and the inversion machinery keeps splitting only ONCE.  What the
+   consumers use is: a legal delta for [ev] whose raw side is exactly this
+   record, a nonempty decode projection, and a response that emits nothing. *)
+let coalesced_head_step_correct
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  (CS.ConnProtectedHandshake? ev \/ CS.ConnCleartextHandshake? ev) /\
+  resp.status == StepOk /\
+  resp.network_out_len == 0sz /\
+  resp.app_out_len == 0sz /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    ev
+    B.empty
+    raw_received
+    network_out
+    app_out /\
+  TLS13.Spec.StateMachine.Canonical.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    ev
+    raw_received
+
+let lemma_coalesced_head_step_correct_of_protected
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.protected_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        protected_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        coalesced_head_step_correct
+          st0 st1 resp (CS.ConnProtectedHandshake step)
+          raw_received network_out app_out)
+      [SMTPat (protected_handshake_step_correct
+                 st0 st1 resp step raw_received network_out app_out)]
+= ()
+
+let lemma_coalesced_head_step_correct_of_cleartext
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (step:CS.cleartext_handshake_step)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        cleartext_handshake_step_correct
+          st0 st1 resp step raw_received network_out app_out)
+      (ensures
+        coalesced_head_step_correct
+          st0 st1 resp (CS.ConnCleartextHandshake step)
+          raw_received network_out app_out)
+      [SMTPat (cleartext_handshake_step_correct
+                 st0 st1 resp step raw_received network_out app_out)]
+= ()
+
+let lemma_coalesced_head_step_correct_preserves_end_to_end_invariant
+  (st0 st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        coalesced_head_step_correct
+          st0 st1 resp ev raw_received network_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (TLS13.Spec.StateMachine.Canonical.sent_event_nonempty_seal_projection
+    st0.CS.cs_model
+    ev
+    B.empty);
+  lemma_legal_response_for_event_client_state_correct
+    st0
+    st1
+    resp
+    ev
+    B.empty
+    raw_received
+    network_out
+    app_out;
+  lemma_client_state_correct_raw_to_message_replay st1
+
 let coalesced_network_bytes_end_to_end_correct
   (st0 st1:CS.connection_state)
   (buffer_resp:client_buffer_response)
@@ -3658,14 +3876,18 @@ let coalesced_network_bytes_end_to_end_correct
     network_out
     old_app_out
     app_out \/
-  (exists step.
+  (* The WEAK disjunct: the record was consumed by a step that delivers no
+     message -- a protected handshake HEAD step, or (G3) a cleartext handshake
+     BUFFERING step.  Neither satisfies [network_bytes_end_to_end_correct],
+     which projects a decoded message out of every consumed record. *)
+  (exists ev.
     0 < SZ.v buffer_resp.consumed_len /\
     SZ.v buffer_resp.consumed_len <= B.length network_input /\
-    protected_handshake_step_correct
+    coalesced_head_step_correct
       st0
       st1
       buffer_resp.response
-      step
+      ev
       (network_consumed_prefix network_input buffer_resp.consumed_len)
       network_out
       app_out /\
@@ -3697,27 +3919,27 @@ let lemma_coalesced_network_bytes_end_to_end_correct_preserves_invariant
       app_out
   then ()
   else (
-    let step =
+    let ev =
       ID.indefinite_description_ghost
-        CS.protected_handshake_step
-        (fun step ->
+        CS.conn_event
+        (fun ev ->
           0 < SZ.v buffer_resp.consumed_len /\
           SZ.v buffer_resp.consumed_len <= B.length network_input /\
-          protected_handshake_step_correct
+          coalesced_head_step_correct
             st0
             st1
             buffer_resp.response
-            step
+            ev
             (network_consumed_prefix network_input buffer_resp.consumed_len)
             network_out
             app_out /\
           Seq.equal network_out old_network_out /\
           Seq.equal app_out old_app_out) in
-    lemma_protected_handshake_step_correct_preserves_end_to_end_invariant
+    lemma_coalesced_head_step_correct_preserves_end_to_end_invariant
       st0
       st1
       buffer_resp.response
-      step
+      ev
       (network_consumed_prefix network_input buffer_resp.consumed_len)
       network_out
       app_out

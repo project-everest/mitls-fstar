@@ -2320,7 +2320,7 @@ let lemma_coalesced_logged_received_exact_when_nonfailed_undrained
       received sent old_consumed buffered buffered_len
   else (
     let prefix = CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len in
-    let step =
+    let ev =
       CP.lemma_client_coalesced_head_step
         st0 st1 buffer_resp network_input
         old_network_out network_out old_app_out app_out in
@@ -2334,7 +2334,7 @@ let lemma_coalesced_logged_received_exact_when_nonfailed_undrained
     with (
       CT.lemma_legal_response_for_event_nonfailed_previous
         st0 st1 buffer_resp.CT.response
-        (CS.ConnProtectedHandshake step)
+        ev
         B.empty prefix network_out app_out;
       assert (Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed)
     )
