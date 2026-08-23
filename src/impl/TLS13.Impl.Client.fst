@@ -14,7 +14,9 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CM = TLS13.Impl.ConnectionState.Model
 module CN = TLS13.Impl.ConnectionState.Network
 module CT = TLS13.Impl.Client.Types
+module CL = TLS13.ConnectionLog
 module FB = TLS13.Impl.Client.FragmentBound
+module H = TLS13.Handshake.Spec
 module HDispatch = TLS13.Impl.Handle.Dispatch
 module HDecodeError = TLS13.Impl.Handle.DecodeError
 module HLocal = TLS13.Impl.Handle.Local
@@ -1014,6 +1016,375 @@ let lemma_client_cleartext_record_raw_delta_legal
         WS.parse_record_wire raw_received ==
           Some (T.Handshake, fragment, B.length raw_received))
 = ()
+
+(** G3, client half: deliver a ServerHello REASSEMBLED out of the pending
+    cleartext buffer.
+
+    The drain half of cleartext reassembly, and reached from the same place as
+    the buffering half -- the record decoder's "this fragment parses as no
+    message" arm -- because the record that COMPLETES a split ServerHello
+    carries only the message's tail.  What completes it is `pending ++
+    fragment`, and that is what is parsed here.
+
+    Returns [None], meaning "not my business, try buffering and then the decode
+    error", whenever the record cannot be the last one of a split hello:
+    nothing is set aside, the record is not a cleartext handshake record, the
+    coalesced stream is over [max_client_hello_len], it still does not parse,
+    it parses as something other than a ServerHello, or the connection is not
+    in a state that can receive one.
+
+    Delivery drains the buffer: [CM.received_server_hello_state] resets
+    [hb_cleartext_handshake_bytes] and [CN.mark_received_server_hello] resets
+    the concrete buffer to match.  Note that
+    [CN.mark_received_server_hello] deliberately does NOT require the buffer to
+    be empty -- the empty-buffer gate lives in [TLS13.Impl.Handle.Handshake],
+    on the RECORD-LOCAL delivery path, precisely so that this path can take the
+    reassembled one. *)
+fn try_deliver_reassembled_server_hello
+  (c:client)
+  (protected:bool)
+  (content_type:U8.t)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires CR.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to fragment 'fragment_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (
+             B.length 'raw_bytes == SZ.v raw_len /\
+             B.length 'fragment_bytes == SZ.v fragment_len /\
+             B.length 'old_network_out == SZ.v network_out_len /\
+             B.length 'old_app_out == SZ.v app_out_len /\
+             SZ.v fragment_len <= Bounds.max_handshake_flight_len /\
+             CT.client_end_to_end_invariant 'st0 /\
+             (~protected ==>
+               (exists outer_ct.
+                 L.content_type_matches content_type outer_ct /\
+                 WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
+                   Some
+                     (outer_ct,
+                      Ghost.reveal 'fragment_bytes,
+                      B.length (Ghost.reveal 'raw_bytes)))))
+  returns handled:option CT.client_response
+  ensures
+    (match handled with
+    | None ->
+      CR.connection_exactly c 'st0 **
+      pts_to raw 'raw_bytes **
+      pts_to fragment 'fragment_bytes **
+      pts_to network_out 'old_network_out **
+      pts_to app_out 'old_app_out
+    | Some resp ->
+      exists* st1.
+        CR.connection_exactly c st1 **
+        pts_to raw 'raw_bytes **
+        pts_to fragment 'fragment_bytes **
+        pts_to network_out 'old_network_out **
+        pts_to app_out 'old_app_out **
+        pure (
+          (exists sh.
+            st1 ==
+              CM.received_server_hello_state
+                'st0
+                sh
+                (Ghost.reveal 'raw_bytes) /\
+            CT.coalesced_head_step_correct
+              'st0
+              st1
+              resp
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ServerHello sh);
+              })
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out) /\
+          (CT.client_end_to_end_invariant 'st0 ==>
+           CT.client_end_to_end_invariant st1)))
+{
+  let is_cleartext_handshake = ((not protected) && content_type = 0x16uy);
+  if (not is_cleartext_handshake) {
+    None #CT.client_response
+  } else {
+    let pending = CQ.copy_pending_cleartext_handshake c;
+    match pending {
+      None -> {
+        None #CT.client_response
+      }
+      Some p -> {
+        with pending_bytes. assert (
+          V.pts_to p.CR.pending_cleartext_fragment pending_bytes);
+        let pending_fits =
+          SZ.lte
+            p.CR.pending_cleartext_fragment_len
+            Bounds.max_client_hello_len_sz;
+        if (not pending_fits) {
+          V.free p.CR.pending_cleartext_fragment;
+          None #CT.client_response
+        } else {
+          let room =
+            SZ.sub
+              Bounds.max_client_hello_len_sz
+              p.CR.pending_cleartext_fragment_len;
+          let fits = SZ.lte fragment_len room;
+          if (not fits) {
+            V.free p.CR.pending_cleartext_fragment;
+            None #CT.client_response
+          } else {
+            let stream_len =
+              SZ.add p.CR.pending_cleartext_fragment_len fragment_len;
+            let stream = V.alloc 0uy stream_len;
+            V.to_array_pts_to stream;
+            V.to_array_pts_to p.CR.pending_cleartext_fragment;
+            SC.copy_array_slice_to_array
+              (V.vec_to_array p.CR.pending_cleartext_fragment)
+              p.CR.pending_cleartext_fragment_len
+              0sz
+              p.CR.pending_cleartext_fragment_len
+              (V.vec_to_array stream)
+              stream_len
+              0sz;
+            SC.copy_array_slice_to_array
+              fragment
+              fragment_len
+              0sz
+              fragment_len
+              (V.vec_to_array stream)
+              stream_len
+              p.CR.pending_cleartext_fragment_len;
+            V.to_vec_pts_to p.CR.pending_cleartext_fragment;
+            V.free p.CR.pending_cleartext_fragment;
+            with stream_bytes. assert (
+              pts_to (V.vec_to_array stream) stream_bytes);
+            assert (pure (Seq.equal
+              (Ghost.reveal stream_bytes)
+              (B.append
+                (CS.pending_cleartext_handshake 'st0.CS.cs_model)
+                (Ghost.reveal 'fragment_bytes))));
+            let coalesced =
+              P.parse_tls_message
+                content_type
+                (V.vec_to_array stream)
+                stream_len;
+            match coalesced {
+              None -> {
+                V.to_vec_pts_to stream;
+                V.free stream;
+                None #CT.client_response
+              }
+              Some l -> {
+                match l {
+                  L.LTlsHandshake lhs -> {
+                    match lhs {
+                      L.LServerHello lsh -> {
+                        with m. assert (pure True);
+                        unfold (L.is_valid_tls_message
+                          (L.LTlsHandshake (L.LServerHello lsh))
+                          m);
+                        with mhs. _;
+                        unfold (L.is_valid_handshake_msg
+                          (L.LServerHello lsh)
+                          mhs);
+                        with sh. _;
+                        assert (pure (m == M.TlsHandshake (M.ServerHello sh)));
+                        assert (pure (CT.wire_parse_success
+                          content_type
+                          (Ghost.reveal stream_bytes)
+                          (M.TlsHandshake (M.ServerHello sh))));
+                        assert (pure (L.content_type_matches
+                          content_type
+                          T.Handshake));
+                        assert (pure (WS.parse_tls_message
+                          T.Handshake
+                          (Ghost.reveal stream_bytes) ==
+                            Some (M.TlsHandshake (M.ServerHello sh))));
+                        assert (pure (Seq.equal
+                          (Ghost.reveal stream_bytes)
+                          (WS.serialize_handshake (M.ServerHello sh))));
+                        assert (pure (B.length
+                          (WS.serialize_handshake (M.ServerHello sh)) ==
+                            SZ.v stream_len));
+                        (* The record's own shape: exactly one cleartext
+                           Handshake record whose fragment is this tail.  With a
+                           NON-EMPTY pending buffer this is what the model's
+                           buffer-relative received rule asks for. *)
+                        lemma_client_cleartext_record_raw_delta_legal
+                          content_type
+                          (Ghost.reveal 'fragment_bytes)
+                          (Ghost.reveal 'raw_bytes);
+                        assert (pure (CS.received_cleartext_tls_message_raw_buffered
+                          'st0.CS.cs_model
+                          (M.TlsHandshake (M.ServerHello sh))
+                          (Ghost.reveal 'raw_bytes)));
+                        assert (pure (CS.event_raw_delta_legal
+                          'st0.CS.cs_model
+                          (CS.ConnNetworkEvent {
+                            CL.message_direction = CL.Received;
+                            CL.message_value =
+                              M.TlsHandshake (M.ServerHello sh);
+                          })
+                          B.empty
+                          (Ghost.reveal 'raw_bytes)));
+                        unfold (L.is_valid_server_hello lsh sh);
+                        with sh_random sh_key_share. assert (pure (
+                          exists (cs:T.cipher_suite).
+                            Sem.serverHello_cipher_suite sh == Some cs /\
+                            H.is_supported_cipher_suite cs));
+                        fold (L.is_valid_server_hello lsh sh);
+                        let can_receive =
+                          CQ.can_receive_server_hello c stream_len #sh;
+                        if can_receive {
+                          Trace.emit Trace.client_cleartext_buffer
+                            (SZ.sizet_to_uint64 stream_len)
+                            (SZ.sizet_to_uint64 fragment_len)
+                            (SZ.sizet_to_uint64 raw_len);
+                          CN.mark_received_server_hello
+                            c raw (V.vec_to_array stream) stream_len lsh #sh;
+                          V.to_vec_pts_to stream;
+                          V.free stream;
+                          let resp = {
+                            CT.network_out_len = 0sz;
+                            CT.app_out_len = 0sz;
+                            CT.status = CT.StepOk;
+                          };
+                          Seq.lemma_len_slice 'old_network_out 0 0;
+                          Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+                          Seq.lemma_len_slice 'old_app_out 0 0;
+                          Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+                          CM.lemma_received_server_hello_state_evolves
+                            'st0
+                            sh
+                            (Ghost.reveal 'raw_bytes);
+                          assert (pure (CT.legal_response_for_event
+                            'st0
+                            (CM.received_server_hello_state
+                              'st0 sh (Ghost.reveal 'raw_bytes))
+                            resp
+                            (CS.ConnNetworkEvent {
+                              CL.message_direction = CL.Received;
+                              CL.message_value =
+                                M.TlsHandshake (M.ServerHello sh);
+                            })
+                            B.empty
+                            (Ghost.reveal 'raw_bytes)
+                            'old_network_out
+                            'old_app_out));
+                          assert (pure (CT.raw_record_parse_success
+                            (Ghost.reveal 'raw_bytes)));
+                          CT.lemma_coalesced_head_step_correct_of_cleartext_delivery
+                            'st0
+                            (CM.received_server_hello_state
+                              'st0 sh (Ghost.reveal 'raw_bytes))
+                            resp
+                            (M.TlsHandshake (M.ServerHello sh))
+                            (Ghost.reveal 'raw_bytes)
+                            'old_network_out
+                            'old_app_out;
+                          CT.lemma_coalesced_head_step_correct_preserves_end_to_end_invariant_conditional
+                            'st0
+                            (CM.received_server_hello_state
+                              'st0 sh (Ghost.reveal 'raw_bytes))
+                            resp
+                            (CS.ConnNetworkEvent {
+                              CL.message_direction = CL.Received;
+                              CL.message_value =
+                                M.TlsHandshake (M.ServerHello sh);
+                            })
+                            (Ghost.reveal 'raw_bytes)
+                            'old_network_out
+                            'old_app_out;
+                          Some resp
+                        } else {
+                          L.free_server_hello lsh;
+                          V.to_vec_pts_to stream;
+                          V.free stream;
+                          None #CT.client_response
+                        }
+                      }
+                      L.LClientHello lch -> {
+                        L.free_tls_message (L.LTlsHandshake (L.LClientHello lch));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        None #CT.client_response
+                      }
+                      L.LEncryptedExtensions lee -> {
+                        L.free_tls_message (L.LTlsHandshake (L.LEncryptedExtensions lee));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        None #CT.client_response
+                      }
+                      L.LCertificate lcert -> {
+                        L.free_tls_message (L.LTlsHandshake (L.LCertificate lcert));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        None #CT.client_response
+                      }
+                      L.LCertificateVerify lcv -> {
+                        L.free_tls_message (L.LTlsHandshake (L.LCertificateVerify lcv));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        None #CT.client_response
+                      }
+                      L.LFinished lfin -> {
+                        L.free_tls_message (L.LTlsHandshake (L.LFinished lfin));
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        None #CT.client_response
+                      }
+                      L.LHelloRetryRequest -> {
+                        L.free_tls_message (L.LTlsHandshake L.LHelloRetryRequest);
+                        V.to_vec_pts_to stream;
+                        V.free stream;
+                        None #CT.client_response
+                      }
+                    }
+                  }
+                  L.LTlsChangeCipherSpec -> {
+                    L.free_tls_message L.LTlsChangeCipherSpec;
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    None #CT.client_response
+                  }
+                  L.LTlsAlert la -> {
+                    L.free_tls_message (L.LTlsAlert la);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    None #CT.client_response
+                  }
+                  L.LTlsApplicationData lad -> {
+                    L.free_tls_message (L.LTlsApplicationData lad);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    None #CT.client_response
+                  }
+                  L.LTlsIgnoredPostHandshake lph -> {
+                    L.free_tls_message (L.LTlsIgnoredPostHandshake lph);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    None #CT.client_response
+                  }
+                  L.LTlsKeyUpdate lku -> {
+                    L.free_tls_message (L.LTlsKeyUpdate lku);
+                    V.to_vec_pts_to stream;
+                    V.free stream;
+                    None #CT.client_response
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 (** G3, client half: set a CLEARTEXT handshake record's fragment aside instead
     of rejecting it.
@@ -3226,6 +3597,76 @@ fn process_coalesced_network_bytes
                treating it as a decode error. *)
             V.to_array_pts_to decoded_buffer.L.decoded_buffer_raw_record;
             V.to_array_pts_to decoded_buffer.L.decoded_buffer_fragment;
+            (* Try to COMPLETE a message out of the pending buffer first: the
+               record that finishes a split ServerHello also parses as no
+               message on its own, so it reaches this same arm. *)
+            let delivered =
+              try_deliver_reassembled_server_hello
+                c
+                decoded_buffer.L.decoded_buffer_protected
+                decoded_buffer.L.decoded_buffer_content_type
+                (V.vec_to_array decoded_buffer.L.decoded_buffer_raw_record)
+                decoded_buffer.L.decoded_buffer_raw_record_len
+                (V.vec_to_array decoded_buffer.L.decoded_buffer_fragment)
+                decoded_buffer.L.decoded_buffer_fragment_len
+                network_out network_out_len
+                app_out app_out_len;
+            match delivered {
+              Some resp -> {
+                with st1. assert (
+                  CR.connection_exactly c st1 **
+                  pure (
+                    (exists sh.
+                      CT.coalesced_head_step_correct
+                        'st0
+                        st1
+                        resp
+                        (CS.ConnNetworkEvent {
+                          CL.message_direction = CL.Received;
+                          CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                        })
+                        raw_record_bytes
+                        'old_network_out
+                        'old_app_out) /\
+                    CT.client_end_to_end_invariant st1));
+                V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+                V.free decoded_buffer.L.decoded_buffer_fragment;
+                V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+                V.free decoded_buffer.L.decoded_buffer_raw_record;
+                let buffer_resp = {
+                  CT.response = resp;
+                  CT.consumed_len =
+                    decoded_buffer.L.decoded_buffer_consumed_len;
+                };
+                assert (pure (Seq.equal
+                  raw_record_bytes
+                  (CT.network_consumed_prefix
+                    (Ghost.reveal 'raw_bytes)
+                    decoded_buffer.L.decoded_buffer_consumed_len)));
+                Seq.lemma_eq_elim
+                  raw_record_bytes
+                  (CT.network_consumed_prefix
+                    (Ghost.reveal 'raw_bytes)
+                    decoded_buffer.L.decoded_buffer_consumed_len);
+                Seq.lemma_eq_intro 'old_network_out 'old_network_out;
+                Seq.lemma_eq_intro 'old_app_out 'old_app_out;
+                assert (pure (
+                  CT.coalesced_network_bytes_end_to_end_correct
+                    'st0
+                    st1
+                    buffer_resp
+                    (Ghost.reveal 'raw_bytes)
+                    'old_network_out
+                    'old_network_out
+                    'old_app_out
+                    'old_app_out));
+                assert (pure (
+                  buffer_resp.CT.response.CT.status == CT.StepOk));
+                assert (pure (
+                  0 < SZ.v buffer_resp.CT.consumed_len));
+                buffer_resp
+              }
+              None -> {
             let buffered =
               try_buffer_cleartext_handshake_record
                 c
@@ -3296,6 +3737,8 @@ fn process_coalesced_network_bytes
                 assert (pure (
                   0 < SZ.v buffer_resp.CT.consumed_len));
                 buffer_resp
+              }
+            }
               }
             }
           }
