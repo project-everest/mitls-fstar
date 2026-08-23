@@ -2792,3 +2792,178 @@ system-visible states, which is why the system layer can keep the strong
 invariant while the implementation reassembles.
 
 `make -k -j48 verify` is EXIT 0.
+
+## G3 commit B13-1a — generalising the client's coalesced head disjunct
+
+`CT.coalesced_head_step_correct` originally named `CS.ConnProtectedHandshake`
+explicitly.  Every consumer inverted on that constructor, so a cleartext
+buffering step -- which B14 had just made legal for the client -- had nowhere to
+live in the coalesced correctness statement.
+
+The fix is one shape change: the head event became "any WEAK step", i.e.
+
+    CS.ConnProtectedHandshake? ev \/ CS.ConnCleartextHandshake? ev
+
+and the four inverters in `TLS13.Impl.Client.CanonicalProtocol.fst` grew a
+second arm each: `lemma_client_coalesced_head_step`,
+`lemma_client_coalesced_head_raw_record_parse_success`,
+`lemma_client_coalesced_network_progress` and the bridge, which was renamed
+`lemma_client_network_protected_head_bridge_result` ->
+`lemma_client_network_weak_head_bridge_result` because "protected" was no longer
+true of it.
+
+### The cascade is a rename cascade, not a proof cascade
+
+The rename surfaced two call sites that were still passing a reconstructed
+`(CS.ConnProtectedHandshake step)` where the generalised lemma wants the event
+itself -- `Client.Driver.State.fst:2337` and
+`ChannelImplementation.fst:804`.  Both are one-token fixes (`ev` for the
+reconstruction).  Nothing else broke: a disjunction that ADDS a disjunct can
+only disturb inverters, and the four above are all of them.
+
+## G3 commit B13-1b — the client's cleartext buffering branch
+
+The direct mirror of B11.  `CQ.can_buffer_cleartext_handshake` and
+`CQ.copy_pending_cleartext_handshake` were already role-agnostic (the client's
+gate is `ControlHandshaking HsClientHelloSent`, stage byte 2), so this commit is
+just the Pulse function and its raw-delta lemma:
+
+* `lemma_client_cleartext_record_raw_delta_legal` -- the client copy of the
+  server's `lemma_cleartext_record_raw_delta_legal`.
+* `fn try_buffer_cleartext_handshake_record` -- guards on
+  `(not protected) && content_type = 0x16uy`, checks the cap, calls
+  `CQ.copy_pending_cleartext_handshake`, emits `Trace.client_cleartext_buffer`.
+
+It is hooked into the non-protected, `decoded_buffer_parsed = None` arm of
+`process_coalesced_network_bytes`, ahead of the fall-through to
+`process_direct_record` -- the same position the server's occupies.
+
+`Trace.client_cleartext_buffer : U32.t = 2035ul` was added to
+`TLS13.Trace.fsti`.
+
+Verified first try.  No cell moved: buffering without a delivery just turns a
+refusal into a stall, which the harness reports identically.
+
+## G3 commit B13-2a — spec room for a reassembled ServerHello delivery
+
+This is where the client genuinely diverges from the server, and the divergence
+is worth stating precisely because the first attempt at it was wrong.
+
+### Why the STRONG disjunct cannot hold a reassembled delivery
+
+`CT.network_bytes_end_to_end_correct` projects a DECODED MESSAGE out of every
+consumed record: through `network_bytes_received_event_projection` ->
+`..._received_decode_projection` -> `..._consumed_input_projection` it demands
+`received_tls_raw_delta_legal_unbuffered`, and through
+`network_bytes_protected_record_key_schedule_projection` ->
+`EC.network_input_message_projection` it demands `decoder_fragment_relation`'s
+`Seq.equal fragment outer_fragment`.  A reassembled message is spread over
+several records, so no such projection exists.
+
+The server sidestepped this in B12b-1 because
+`ST.server_network_bytes_end_to_end_correct` simply has fewer conjuncts --
+`server_wire_received_event` carries NO projection, while the client's
+`client_wire_received_event` does.  Reproducing the server's widening on the
+client would have touched about six predicates and the role-agnostic decoder.
+
+### So it goes in the WEAK disjunct
+
+`CT.coalesced_head_step_correct` gained a third shape: a RECEIVED cleartext
+`ConnNetworkEvent`, carrying `raw_record_parse_success raw_received`
+**explicitly**.  The explicitness is necessary: the buffered raw rule
+(`CS.received_cleartext_tls_message_raw_buffered`) pins `parse_record_wire` only
+in its ClientHello arm and in the non-empty half of its ServerHello arm; the
+empty half falls back to byte-equality with the canonical serialization, from
+which the record shape is not immediate.
+
+A delivery supplies exactly the weak disjunct's four facts:
+`legal_response_for_event`, `raw_record_parse_success`,
+`received_event_nonempty_decode_projection` -- **vacuously**, because
+`received_event_decode_projection`'s guard is
+`network_message_is_cleartext ... == false` -- and a zero-output response
+(receiving a ServerHello writes nothing to `network_out` or `app_out`).
+
+### The projection widening must be a DISJUNCTION, not a replacement
+
+`EC.network_input_message_projection`'s cleartext arm is now
+
+    received_cleartext_tls_message_raw msg raw \/
+    received_cleartext_tls_message_raw_buffered st0.cs_model msg raw
+
+A straight REPLACEMENT was tried first and broke
+`Client.CanonicalProtocol.lemma_client_network_input_projection_refines_core:78`:
+the shared record decoder establishes only the record-local rule and knows
+nothing about the connection's buffer.  The disjunction costs nothing, because
+`CS.lemma_received_cleartext_tls_message_raw_buffered_of_empty` carries
+`[SMTPat (received_cleartext_tls_message_raw_buffered model msg raw)]`, so under
+`cleartext_handshake_buffer_empty` the two collapse.
+
+That is also why `TLS13.System.fst` needed **zero** changes, including the
+delicate `lemma_deliver_to_client_sh_bridge`: `tls_system_inv` already pins
+`CS.cleartext_handshake_buffer_empty s.client.cs_model`.
+
+## G3 commit B13-2b — delivering the reassembled ServerHello
+
+The mirror of B12b-2.  `fn try_deliver_reassembled_server_hello`
+(`TLS13.Impl.Client.fst`, just above the buffering function) requires a
+NON-EMPTY pending buffer, caps both `pending` and `pending + fragment` at
+`Bounds.max_client_hello_len_sz`, coalesces into a fresh vec, parses, and on
+`L.LTlsHandshake (L.LServerHello lsh)` -- gated by `CQ.can_receive_server_hello`
+-- calls `CN.mark_received_server_hello` with the STREAM.  Every other shape
+frees the scratch vec and declines, so a still-incomplete flight keeps
+buffering.
+
+It is chained AHEAD of buffering in `process_coalesced_network_bytes`:
+
+    delivery  ->  buffering  ->  process_direct_record
+
+### The delivery gate is on the OTHER path
+
+`CN.mark_received_server_hello` does NOT require the cleartext buffer to be
+empty.  The empty-buffer gate lives at `TLS13.Impl.Handle.Handshake.fst:~351`
+(`let ready = can_receive && buffer_empty;`) on the RECORD-LOCAL delivery path.
+That asymmetry is exactly what lets the reassembled path take the BUFFERED
+reading of `received_cleartext_tls_message_raw_buffered` while the record-local
+path keeps the unbuffered one, with no change to `Handle.Handshake` at all.
+Its post-state `CM.received_server_hello_state` drains
+`hb_cleartext_handshake_bytes`, so delivery needs no explicit drain.
+
+`lemma_coalesced_head_step_correct_preserves_end_to_end_invariant_conditional`
+(`TLS13.Impl.Client.Types.fst`) is the one new lemma: it wraps the existing
+preservation lemma in an `introduce ... ==> ... with`, which is the shape a
+Pulse-level `if` can consume.
+
+Verified first try, both for the function and for the chaining.
+
+## G3 commit B15 (client half) — the ledger
+
+`test/unit/test_client_record_split.c`:
+
+* `serverhello-across-two-records` flipped `false` -> `true`.  Before the flip
+  it reported `*** MISMATCH ***` with "A cell recorded as a gap now SUCCEEDS",
+  which is the same strongest-form evidence the server half produced: the ledger
+  predicted refusal and the running client disagreed.
+* A fourth cell, `serverhello-across-three-records`, was added along with
+  `FRAMING_RECORD_SPLIT3` in the client proxy -- the middle record coalesces
+  onto an ALREADY NON-EMPTY buffer, which a two-record split never reaches.  It
+  passed on its first run.
+* The file header and the mismatch diagnostics were rewritten: the two split
+  cells are no longer "the gap", so a red split cell now points at
+  `try_buffer_cleartext_handshake_record` /
+  `try_deliver_reassembled_server_hello` rather than at the harness, while the
+  two CONTROL cells keep their old diagnostic.
+
+35/35 server cells and 4/4 client cells match.  `make -k -j48 verify` is
+EXIT 0.
+
+### G3 is closed
+
+Both roles now reassemble a cleartext handshake message split across records.
+`docs/server-client-parity.md` §G3 carries the retrospective: what the
+pre-implementation scoping got right (the concrete pending buffer had to come
+first; the exhaustiveness fallout is mechanical; the pairing theorems need an
+empty-buffer hypothesis) and what it got wrong (no buffer-aware
+`network_input_wf` was needed, and no third decoder outcome either -- the
+decoder's postcondition was merely STRENGTHENED with the outer-content-type
+clause of B11, and an incomplete handshake message keeps falling through the
+existing `decoded_buffer_parsed == None` arm).

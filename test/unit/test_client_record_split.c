@@ -2,25 +2,27 @@
  * framing axis, run in the server->client direction.
  *
  * WHY THIS FILE EXISTS.  `test_server_interop_matrix` re-frames the
- * client->server byte stream and records that a ClientHello torn across two
- * records is refused (gap G3).  Nothing measured the symmetric question: what
- * does the VERIFIED CLIENT do when the SERVER's cleartext ServerHello arrives
- * as two records?  The answer was asserted in prose in
+ * client->server byte stream and records what the verified SERVER does with a
+ * ClientHello torn across records.  Nothing measured the symmetric question:
+ * what does the VERIFIED CLIENT do when the SERVER's cleartext ServerHello
+ * arrives as two records?  The answer was asserted in prose in
  * docs/server-client-parity.md and in the header of
  * test_server_interop_matrix.c -- "there is no cleartext reassembly in the
  * tree for either role" -- but never executed.  This harness executes it, so
- * the client-side half of G3 is a ledger row that fails loudly when the
- * capability lands rather than a claim in a comment that quietly goes stale.
+ * the client-side half of G3 is a ledger row rather than a claim in a comment
+ * that quietly goes stale.  The row was recorded as a GAP, failed loudly when
+ * the capability landed, and is now recorded as OK.
  *
- * WHAT IS AND IS NOT COVERED, AND WHY THE CONTROLS MATTER.  A single
- * expect-refused cell proves nothing on its own: a harness that broke the
- * connection for any reason at all would also report "refused" and would
- * look green.  So the ledger below is three cells sharing one proxy:
+ * WHAT IS AND IS NOT COVERED, AND WHY THE CONTROLS MATTER.  A single cell
+ * proves little on its own: a harness that broke the connection for any reason
+ * at all would report "refused" and, while the row expected refused, would
+ * have looked green.  So the ledger below shares one proxy across four cells:
  *
  *   FRAMING_NORMAL        the proxy relays byte for byte.  Expect OK.  This
  *                         cell exists to prove the proxy is transparent, so
- *                         that a refusal in the split cell is attributable to
- *                         the re-framing and not to the harness.
+ *                         that the behaviour of the split cells is
+ *                         attributable to the re-framing and not to the
+ *                         harness.
  *
  *   FRAMING_TCP_DRIBBLE   the ServerHello record is delivered in many small
  *                         TCP segments.  Expect OK.  This separates the two
@@ -29,23 +31,45 @@
  *                         buffer and NeedMoreInput retry loop already handle,
  *                         from RECORD-level segmentation, which is G3.  Without
  *                         this cell a reader could not tell which of the two
- *                         the split cell is actually measuring.
+ *                         the split cells are actually measuring.
  *
  *   FRAMING_RECORD_SPLIT  the ServerHello is delivered as TWO handshake
- *                         records.  Expect REFUSED today.  This is the
- *                         client-side mirror of
- *                         `clienthello-across-two-records`.
+ *                         records.  ACCEPTED as of G3.  The first record is a
+ *                         cleartext record that does not parse on its own, so
+ *                         the client buffers it
+ *                         (`try_buffer_cleartext_handshake_record`); the
+ *                         record that completes the message is coalesced with
+ *                         the pending bytes and delivered by
+ *                         `try_deliver_reassembled_server_hello`, both in
+ *                         TLS13.Impl.Client.fst.  This is the client-side
+ *                         mirror of `clienthello-across-two-records`.
  *
- * The client's `protected_handshake_buffering` does NOT cover this cell.  It
+ *   FRAMING_RECORD_SPLIT3 the same message delivered as THREE TLS records.
+ *                         This is not redundant with the two-record cell: two
+ *                         records only ever buffer onto an EMPTY pending
+ *                         buffer and then deliver, whereas three records make
+ *                         the middle one coalesce onto an ALREADY NON-EMPTY
+ *                         buffer, which is a distinct branch of the buffering
+ *                         step.
+ *
+ * WHY THE DELIVERY IS NOT ON THE RECORD-LOCAL PATH.  The record-local
+ * ServerHello delivery in TLS13.Impl.Handle.Handshake gates on
+ * `can_receive && buffer_empty`, so it deliberately declines to fire while a
+ * partial message is pending.  `CN.mark_received_server_hello` itself imposes
+ * no such gate, which is exactly what lets the reassembled path take the
+ * buffered reading of `received_cleartext_tls_message_raw_buffered` without
+ * disturbing the unbuffered one.
+ *
+ * The client's `protected_handshake_buffering` does NOT cover these cells.  It
  * is confined to the PROTECTED path and to stages at or after ServerHello
  * (`protected_handshake_buffering_stage` = HsServerHelloReceived,
  * HsEncryptedExtensionsReceived, HsCertificateValidated,
  * HsCertificateVerifyVerified).  A ServerHello is cleartext and precedes all
- * of them, so it takes the cleartext path, where the delivery rule admits only
- * a whole message per record.  That cross-record buffering IS exercised, but
- * by the real-world sweep in test/interop (Meta serves its flight in three
- * protected records, with Certificate starting at offset 6 of the first and
- * running past its end) -- not by this file.
+ * of them, so it takes the cleartext path, which is what G3 added.  That
+ * cross-record PROTECTED buffering IS exercised, but by the real-world sweep
+ * in test/interop (Meta serves its flight in three protected records, with
+ * Certificate starting at offset 6 of the first and running past its end) --
+ * not by this file.
  *
  * WHY THE SPLIT IS PLACED WHERE IT IS.  Past the 4-byte handshake header, so
  * the receiver has the message's declared length in the first record and can
@@ -57,19 +81,18 @@
  * re-framed; a protected record is a single AEAD-sealed unit, so splitting its
  * ciphertext would test nothing but the AEAD tag.
  *
- * READING A FAILURE.  If `serverhello-across-two-records` reports ok where the
- * ledger says refused, the client gained cleartext reassembly.  Flip the row
- * and update docs/server-client-parity.md in the same commit.  If a CONTROL
- * cell reports refused, the harness or the proxy is broken -- do not read the
- * split cell at all until the controls are green again.
+ * READING A FAILURE.  If a split cell reports refused where the ledger says
+ * ok, cleartext reassembly regressed -- but read the CONTROL cells first: if
+ * `passthrough` or `serverhello-tcp-dribble` also reports refused, the harness
+ * or the proxy is broken and the split cells say nothing at all.
  *
- * WHAT THE REFUSAL ACTUALLY IS.  Each cell connects with
+ * WHAT A REFUSAL ACTUALLY IS.  Each cell connects with
  * `tls13_client_driver_connect_reporting` rather than the plain `_connect`,
  * because a failed connect destroys the driver that carried the verified
- * workflow status, and a bare "refused" cannot distinguish the protocol reason
- * under test from a dead proxy.  As recorded, the split cell reports
- * "connect: verified protocol step failed" -- the verified state machine
- * rejecting a truncated ServerHello -- and not a TCP error or a timeout.
+ * workflow status, and a bare "refused" cannot distinguish a protocol reason
+ * from a dead proxy.  Before G3 the split cell reported "connect: verified
+ * protocol step failed" -- the verified state machine rejecting a truncated
+ * ServerHello -- and not a TCP error or a timeout.
  */
 
 #include "tls13_client_driver.h"
@@ -94,6 +117,7 @@ typedef enum {
   FRAMING_NORMAL = 0,
   FRAMING_TCP_DRIBBLE,
   FRAMING_RECORD_SPLIT,
+  FRAMING_RECORD_SPLIT3,
 } framing_mode;
 
 struct case_spec {
@@ -110,11 +134,20 @@ static const struct case_spec k_cases[] = {
     {"serverhello-tcp-dribble", FRAMING_TCP_DRIBBLE, true,
      "control: TCP-level segmentation of one record, absorbed by the client's "
      "retained receive buffer and NeedMoreInput retry loop"},
-    {"serverhello-across-two-records", FRAMING_RECORD_SPLIT, false,
-     "GAP: no client-side cross-record CLEARTEXT handshake reassembly; the "
-     "mirror of clienthello-across-two-records (G3).  Observed refusal is "
-     "\"connect: verified protocol step failed\" -- the verified state machine "
-     "rejecting the truncated ServerHello, not a transport failure"},
+    {"serverhello-across-two-records", FRAMING_RECORD_SPLIT, true,
+     "G3: the ServerHello is reassembled out of the cleartext buffer -- the "
+     "first record is consumed by a ConnCleartextHandshake buffering step "
+     "(try_buffer_cleartext_handshake_record) and the second is coalesced "
+     "with the pending bytes and delivered "
+     "(try_deliver_reassembled_server_hello), both in TLS13.Impl.Client.fst.  "
+     "The mirror of clienthello-across-two-records"},
+    /* Three records, not two: the middle record is buffered onto an ALREADY
+       NON-EMPTY pending buffer, which is the coalescing step that a
+       two-record split never reaches.  Mirror of
+       clienthello-across-three-records. */
+    {"serverhello-across-three-records", FRAMING_RECORD_SPLIT3, true,
+     "G3: two buffering steps then a delivery -- the middle record coalesces "
+     "onto a non-empty buffer"},
 };
 
 #define CASE_COUNT (sizeof k_cases / sizeof k_cases[0])
@@ -344,8 +377,44 @@ static int run_proxy(uint16_t listen_port, uint16_t server_port,
     }
     first_server_record_done = true;
 
-    if (framing == FRAMING_RECORD_SPLIT && header[0] == 22 /* handshake */ &&
-        frag_len >= 2) {
+    if (framing == FRAMING_RECORD_SPLIT3 && header[0] == 22 /* handshake */ &&
+        frag_len >= 3) {
+      /* THREE records, not two.  Two records only ever exercise buffering
+         onto an EMPTY pending buffer followed by delivery; three additionally
+         exercise the coalescing buffering step, where the middle record is
+         appended to a buffer that is already non-empty and the combined
+         stream still does not parse. */
+      size_t thirds[3];
+      thirds[0] = frag_len / 3;
+      if (thirds[0] < 8) {
+        thirds[0] = frag_len > 8 ? 8 : 1;
+      }
+      thirds[1] = (frag_len - thirds[0]) / 2;
+      if (thirds[1] == 0) {
+        thirds[1] = 1;
+      }
+      thirds[2] = frag_len - thirds[0] - thirds[1];
+      size_t off = 0;
+      bool failed = false;
+      for (size_t i = 0; i < 3 && !failed; ++i) {
+        uint8_t part[5];
+        memcpy(part, header, 5);
+        part[3] = (uint8_t)((thirds[i] >> 8) & 0xffu);
+        part[4] = (uint8_t)(thirds[i] & 0xffu);
+        failed = write_all(client_fd, part, 5) != 0 ||
+                 write_all(client_fd, fragment + off, thirds[i]) != 0;
+        off += thirds[i];
+        /* A pause between records so the receiver genuinely sees each one on
+           its own and cannot accidentally succeed by having them all buffered
+           when it first parses. */
+        usleep(50000);
+      }
+      if (failed) {
+        free(fragment);
+        goto done;
+      }
+    } else if (framing == FRAMING_RECORD_SPLIT &&
+               header[0] == 22 /* handshake */ && frag_len >= 2) {
       size_t first = frag_len / 2;
       if (first < 8) {
         first = frag_len > 8 ? 8 : frag_len - 1;
@@ -587,10 +656,23 @@ int main(int argc, char **argv) {
                 "    docs/server-client-parity.md in the same commit.\n");
       }
       if (!actual && spec->expect_ok) {
-        fprintf(stderr,
-                "    This is a CONTROL cell.  Its failure means the harness or\n"
-                "    the proxy is broken; the split cell's verdict cannot be\n"
-                "    trusted until this one is green again.\n");
+        if (spec->framing == FRAMING_NORMAL ||
+            spec->framing == FRAMING_TCP_DRIBBLE) {
+          fprintf(stderr,
+                  "    This is a CONTROL cell.  Its failure means the harness "
+                  "or\n"
+                  "    the proxy is broken; the split cells' verdicts cannot "
+                  "be\n"
+                  "    trusted until this one is green again.\n");
+        } else {
+          fprintf(stderr,
+                  "    Cross-record CLEARTEXT reassembly regressed (G3).  "
+                  "Check\n"
+                  "    try_buffer_cleartext_handshake_record and\n"
+                  "    try_deliver_reassembled_server_hello in\n"
+                  "    src/impl/TLS13.Impl.Client.fst -- but only after the\n"
+                  "    control cells above are green.\n");
+        }
       }
     }
   }

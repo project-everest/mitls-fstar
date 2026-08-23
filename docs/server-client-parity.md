@@ -3,12 +3,14 @@
 Status date: 2026-08-13.  Branch `interop`.
 
 **Progress:** G1 (server-side `TLS_AES_128_GCM_SHA256` selection), **G2
-(`secp256r1` key exchange)**, G4 (variable-length `legacy_session_id` echo) and
-G5 (ECDSA server credentials) are **closed**; see the sections below.  Only G3
-(cross-record ClientHello reassembly) remains open.  G2 was closed on
-2026-08-18 by `c6fdefad6`, the last of the staged commits laid out in
-`docs/server-p256-plan.md`; HelloRetryRequest remains out of scope and is
-tracked separately.
+(`secp256r1` key exchange)**, **G3 (cross-record cleartext handshake
+reassembly, both roles)**, G4 (variable-length `legacy_session_id` echo) and
+G5 (ECDSA server credentials) are **all closed**; see the sections below.  G2
+was closed on 2026-08-18 by `c6fdefad6`, the last of the staged commits laid
+out in `docs/server-p256-plan.md`; G3 was closed by the `B9`..`B15` series in
+the same plan -- the server half on 2026-08-22 (`9ef353062`) and the client
+half immediately after (`6299e0957` and the ledger flip that follows it).
+HelloRetryRequest remains out of scope and is tracked separately.
 
 ## Why this document exists
 
@@ -247,14 +249,19 @@ that guessed P-256 to resend with X25519, so "supported_groups lists X25519 but
 key_share carries only P-256" -- OpenSSL's behaviour when P-256 is listed first
 -- is unserviceable.
 
-### G3. The server cannot reassemble a handshake message split across records
+### G3. Neither role could reassemble a handshake message split across records -- **CLOSED**
+
+*Closed by the `B9`..`B15` series (`b2f000afe` .. the client ledger flip).  The
+analysis that follows is kept because it is the reasoning the design came out
+of, and because the two false starts it records are the interesting part; the
+"how it was actually closed" summary is at the end of the section.*
 
 Commit `baaa66317` gave the client a third kind of protected-handshake step: a
 BUFFERING step that takes delivery of a record, appends its plaintext to a
 pending reassembly buffer, advances the record read sequence, and delivers no
 message.  It is what made Meta's three-record server flight work.
 
-That mechanism is **client-only by construction**:
+That mechanism was **client-only by construction**:
 
 ```fstar
 (* TLS13.Spec.StateMachine.fst:1979 *)
@@ -271,31 +278,31 @@ takes the client Finished as an ordinary `ConnNetworkEvent`
 record fragment to be *exactly* the serialized ClientHello
 (`TLS13.Impl.Server.Network.fsti:60`).
 
-Two distinct things must not be confused here, and the test suite now separates
+Two distinct things must not be confused here, and the test suite separates
 them explicitly:
 
 * **TCP short reads** -- one TLS record arriving in several `read()` calls -- are
   handled.  `decode_network_buffer` returns `NetworkBufferNeedMoreInput` and the
   driver retries against a retained buffer with `consumed_len == 0`
   (`TLS13.Impl.Server.Driver.BufferedNetwork.fst:457`).  This is the
-  `tcp-dribble` cell, and it passes.
+  `tcp-dribble` cell, and it always passed.
 * **Record fragmentation** -- one handshake message arriving as two TLS records
-  -- is not handled.  This is the `clienthello-across-two-records` cell, and it
-  fails.
+  -- was not handled.  This is the `clienthello-across-two-records` cell, and it
+  used to fail.
 
-This gap is **not server-only**, which the ledger now says out loud.  The
-verified *client* refuses a ServerHello torn across two records for the same
-reason, and `test/unit/test_client_record_split.c` measures it as
+This gap was **not server-only**, which the ledger said out loud before it was
+closed.  The verified *client* refused a ServerHello torn across two records
+for the same reason, and `test/unit/test_client_record_split.c` measured it as
 `serverhello-across-two-records` (see P2b below).  The client's
-`protected_handshake_buffering` does not help: it is confined to the protected
+`protected_handshake_buffering` did not help: it is confined to the protected
 path and to stages at or after ServerHello, and a ServerHello is cleartext.
 
-Interop consequence: any peer whose ClientHello does not fit one record, or
-whose stack fragments it, cannot connect.  This is a live concern as client
+Interop consequence: any peer whose ClientHello did not fit one record, or
+whose stack fragmented it, could not connect.  This was a live concern as client
 hellos grow (post-quantum key shares push a ClientHello past 1500 bytes and
 some stacks split them).
 
-A related, milder limitation applies to both roles: `parse_tls_message`
+A related, milder limitation still applies to both roles: `parse_tls_message`
 (`TLS13.Wire.Spec.fst:921`, handshake arm at `:927`) requires `consumed == B.length fragment`, so several
 handshake messages coalesced into one record are rejected rather than drained.
 
@@ -337,6 +344,74 @@ architecturally conservative route, because it leaves `wire_message`, the
 canonical protocol refinement and the cross-endpoint pairing theorems untouched.
 Both routes, their costs and the recommendation are written up in
 `docs/server-p256-plan.md`, section "G3 line-level plan".
+
+#### How it was actually closed
+
+The archived route is the one that landed, and it landed for both roles.  The
+shape is the same on each side, and it is worth stating compactly because the
+analysis above is long:
+
+* **One new event.**  `CS.ConnCleartextHandshake` carries a
+  `cleartext_handshake_step` -- a fragment and the resulting stream -- and
+  `CS.legal_cleartext_handshake_step` gates it on a non-empty fragment, on the
+  role's pre-hello control stage, on `stream <= max_pending_cleartext_handshake`
+  (32768), and on `parse_tls_message Handshake stream == None`.  That last
+  conjunct makes buffering a **last resort**: a record whose fragment already
+  parses as a whole message can never be buffered instead of delivered, so the
+  existing single-record path keeps its meaning exactly.
+* **One new raw-delta rule.**  `CS.received_cleartext_tls_message_raw_buffered`
+  reads the pending buffer out of the model: with an empty buffer it is
+  byte-equality against the canonical single-record serialization (the old
+  rule), and with a non-empty one it is a parse of `pending ++ fragment`.  It is
+  an `if`, not a disjunction, because the replay-determinism proofs in
+  `ProtectedWireSegmentation` need the rule to be a *function* of the raw bytes.
+  `CS.lemma_received_cleartext_tls_message_raw_buffered_of_empty` carries an
+  `SMTPat`, so every pre-existing proof stays applicable whenever the buffer is
+  empty -- which is why `TLS13.System.fst`, whose `tls_system_inv` pins
+  `cleartext_handshake_buffer_empty` for both endpoints, needed no change at
+  all.
+* **A concrete buffer beside the ghost one.**  The prediction above that "the
+  server needs a concrete reassembly buffer in its connection representation,
+  tied by invariant to `pending_cleartext_handshake` of the ghost model" was
+  correct, and that plumbing (`ConnectionState.Repr` / `.Network` / `.Queries`,
+  and the role-agnostic `CQ.can_buffer_cleartext_handshake` /
+  `CQ.copy_pending_cleartext_handshake`) is the bulk of the work.
+* **Two implementation entry points per role**, chained in that order ahead of
+  the ordinary decode-error path: a delivery that fires only when the pending
+  buffer is NON-empty (`try_deliver_reassembled_client_hello` in
+  `TLS13.Impl.Server.Network.fst`, `try_deliver_reassembled_server_hello` in
+  `TLS13.Impl.Client.fst`), and a buffering step behind it
+  (`try_buffer_cleartext_handshake_record`, one per role).
+
+The one place the two roles genuinely differ is where the reassembled delivery
+lands in the correctness statement.  The server's
+`server_network_bytes_end_to_end_correct` has few enough conjuncts to admit it
+directly.  The client's `network_bytes_end_to_end_correct` does not: it projects
+a DECODED MESSAGE out of every consumed record, and a message spread over
+several records has no such projection.  So on the client the reassembled
+delivery lands in the **weak** disjunct, `CT.coalesced_head_step_correct`, which
+was widened to admit a received cleartext `ConnNetworkEvent` carrying
+`raw_record_parse_success` explicitly.  That is sound for the same reason the
+server's version is: a reassembled delivery supplies `legal_response_for_event`,
+the record shape, a vacuous decode projection (its guard is
+`network_message_is_cleartext ... == false`) and a zero-output response.
+
+Also worth recording, because the earlier analysis got it wrong: the
+implementation-side blocker named above --
+`DecoderWF.lemma_mk_cleartext_network_input_wf` having to establish the raw
+rule from nothing but the record it just parsed -- was real, and the fix is that
+the projection is a **disjunction** of the record-local rule and the buffered
+one rather than a replacement.  The shared decoder proves the record-local
+disjunct, which is all it can know; the empty-buffer `SMTPat` collapses the two
+everywhere the buffer is empty.  A straight replacement broke
+`Client.CanonicalProtocol.lemma_client_network_input_projection_refines_core`,
+and that failure is what pointed at the disjunction.
+
+Finally, the concern about threat models stands and is discharged by the cap.
+A server buffering a ClientHello accumulates bytes from an **unauthenticated**
+peer before any key exists, so `max_pending_cleartext_handshake` is load-bearing
+for resource safety and not merely for the record-counting argument that
+motivates the client's `max_pending_protected_handshake`.
 
 ### G4. The server echoes a padded `legacy_session_id` -- **CLOSED**
 
@@ -487,8 +562,8 @@ compares the observed outcome of every cell against a recorded expectation.
 Two design decisions carry the value:
 
 1. **Expectations are two-sided.**  A cell recorded as a gap fails the test if
-   it starts *succeeding*.  When someone implements G2 or G3, the harness names
-   the row to flip, so the capability change is recorded in the same commit as
+   it starts *succeeding*.  When G2 and G3 were implemented, the harness named
+   the row to flip, so the capability change was recorded in the same commit as
    the implementation.  A "known failures are skipped" harness would let a gap
    close silently and then reopen silently.
 2. **Successful cells assert the negotiated parameters**, not just success:
@@ -519,9 +594,11 @@ The framing axis is served by an in-process TCP proxy that re-frames the
 client->server stream at the record layer.  It re-frames only *cleartext*
 handshake records: a protected record is a single AEAD-sealed unit, so
 splitting its ciphertext would test nothing but the tag.  The `tcp-dribble` cell
-runs through the same proxy code and passes, which is what makes the
+runs through the same proxy code and passes, which is what made the
 `clienthello-across-two-records` failure attributable to record fragmentation
-rather than to the proxy.
+rather than to the proxy -- and, now that the cell is `ok`, is what makes its
+success attributable to reassembly rather than to a proxy that quietly stopped
+splitting.
 
 A third decision was added once the first three gaps closed: **a gap is
 recorded on more than one axis wherever it is claimed to be axis-independent.**
@@ -530,9 +607,12 @@ the credential or the suite; `ecdsa-credential-p256-only` and
 `aes128-clienthello-across-two-records` say so as ledger entries rather than as
 prose.  A partial fix that closed a gap on only one axis -- P-256 that works for
 RSA credentials but not EC ones, say -- would otherwise look like a complete
-one.
+one.  The same decision is why `clienthello-across-three-records` exists beside
+the two-record cell: two records only ever buffer onto an EMPTY pending buffer
+and then deliver, whereas three make the middle record coalesce onto an ALREADY
+NON-EMPTY one, which is a distinct branch of the buffering step.
 
-Current ledger (all thirty-four cells agree; `cred` is the key the verified
+Current ledger (all thirty-five cells agree; `cred` is the key the verified
 server is started with):
 
 ```
@@ -568,8 +648,9 @@ no-middlebox-compat-aes128           rsa    ok        G4+G1: empty id and the fa
 no-middlebox-compat-dribble          rsa    ok        G4: empty id through the retry loop
 no-middlebox-compat-x25519-and-p256  rsa    ok        G4: empty id, two-group groups list
 tcp-dribble                          rsa    ok        retained-buffer retry loop
-clienthello-across-two-records       rsa    refused   G3
-aes128-clienthello-across-two-records rsa   refused   G3 is independent of the suite axis
+clienthello-across-two-records       rsa    ok        G3: reassembled out of the cleartext buffer
+aes128-clienthello-across-two-records rsa   ok        G3 is independent of the suite axis
+clienthello-across-three-records     rsa    ok        G3: the middle record coalesces onto a non-empty buffer
 tls12-only                           rsa    refused   correctly refused: no TLS 1.3 in supported_versions
 ```
 
@@ -595,45 +676,53 @@ would notice when it stopped being true.
 
 `test/unit/test_client_record_split.c` executes it.  It runs the extracted,
 verified client against the local OpenSSL echo server through an in-process
-proxy that re-frames the **server -> client** stream, and records three cells:
+proxy that re-frames the **server -> client** stream, and records four cells:
 
 ```
 CASE                               EXPECT   NOTE
 passthrough                        ok       control: the proxy is transparent
 serverhello-tcp-dribble            ok       control: TCP segmentation, not record segmentation
-serverhello-across-two-records     refused  G3, client side: the mirror of clienthello-across-two-records
+serverhello-across-two-records     ok       G3, client side: the mirror of clienthello-across-two-records
+serverhello-across-three-records   ok       G3: the middle record coalesces onto a non-empty buffer
 ```
 
-The refusal is a *protocol* refusal, and the harness proves it rather than
-asserting it: cells connect with `tls13_client_driver_connect_reporting`, and
-the split cell reports `connect: verified protocol step failed` -- the verified
+The split cells were recorded as `refused` when the harness was written, and
+that refusal was a *protocol* refusal which the harness proved rather than
+asserted: cells connect with `tls13_client_driver_connect_reporting`, and the
+split cell reported `connect: verified protocol step failed` -- the verified
 state machine rejecting a truncated ServerHello.  A TCP error or a timeout
-would read differently.
+would have read differently.  The row then failed loudly the moment the
+capability landed, which is exactly what it was for.
 
-The two controls are load-bearing.  A single expect-refused cell proves nothing
-on its own, because a harness broken for any reason at all would also report
-"refused" and would still look green.  `passthrough` shows the proxy relays
-faithfully, so a refusal in the split cell is attributable to the re-framing;
-`serverhello-tcp-dribble` separates TCP-level segmentation -- which the client's
-retained receive buffer and `NeedMoreInput` retry loop already absorb -- from
-record-level segmentation, which is the gap.  If a control cell goes red, the
-split cell's verdict must not be read at all until it is green again.
+The two controls are load-bearing.  A single cell proves little on its own,
+because a harness broken for any reason at all would report "refused" and, while
+the row expected refused, would have looked green.  `passthrough` shows the
+proxy relays faithfully, so the split cells' verdicts are attributable to the
+re-framing; `serverhello-tcp-dribble` separates TCP-level segmentation -- which
+the client's retained receive buffer and `NeedMoreInput` retry loop already
+absorb -- from record-level segmentation, which is the capability.  If a control
+cell goes red, the split cells' verdicts must not be read at all until it is
+green again.
 
-The client's `protected_handshake_buffering` does not cover this cell, and the
+The client's `protected_handshake_buffering` does not cover these cells, and the
 distinction is easy to get wrong.  That buffering is confined to the protected
 path and to stages at or after ServerHello
 (`protected_handshake_buffering_stage` = `HsServerHelloReceived`,
 `HsEncryptedExtensionsReceived`, `HsCertificateValidated`,
 `HsCertificateVerifyVerified`).  A ServerHello is cleartext and precedes all of
-them.  Cross-record buffering on the protected path *is* exercised -- by the
+them; what these cells exercise is the *cleartext* buffering G3 added.
+Cross-record buffering on the protected path *is* exercised -- by the
 real-world sweep in `test/interop`, where Meta serves its flight in three
 protected records with `Certificate` starting at offset 6 of the first and
-running past its end -- but by the sweep, not by this file, and never in the
-clear.
+running past its end -- but by the sweep, not by this file.
 
-So G3 is a **both-roles** gap, and closing it on the server alone will leave
-`serverhello-across-two-records` red-by-ledger.  When the client half lands,
-flip that row and this table together.
+So G3 was a **both-roles** gap, and both halves are now closed.  The
+record-local ServerHello delivery in `TLS13.Impl.Handle.Handshake` still gates
+on `can_receive && buffer_empty`, so it declines to fire while a partial message
+is pending; `CN.mark_received_server_hello` itself imposes no such gate, which
+is what lets the reassembled path take the buffered reading of
+`received_cleartext_tls_message_raw_buffered` without disturbing the unbuffered
+one.
 
 ### P3. The established connection keeps working -- existing tests
 
@@ -662,11 +751,16 @@ top-100 sweep in `test/interop/sweep.sh`.
    `credential_signature_scheme` of the configured credential; `ecdsa-only` is
    `ok` and seven further credential-axis cells pin both directions.
 
-The two that remain are **not** incremental, and this section is deliberate
-about that rather than leaving them on a roadmap that implies they are next
-week's work.
+The two that remained were **not** incremental, and this section is deliberate
+about that rather than leaving them on a roadmap that implied they were next
+week's work.  Both have since landed.
 
-4. **G3 (cross-record ClientHello reassembly).**
+4. ~~**G3 (cross-record cleartext reassembly, both roles).**~~  **Done.**  The
+   entry below is the pre-implementation scoping, kept verbatim because its two
+   wrong turns are instructive and because comparing the estimate against what
+   landed is useful.  What actually landed, and where the estimate was right and
+   wrong, is summarised under "How it was actually closed" in the G3 section
+   above.
 
    **First, a correction to the intuition that this is a port of client work.**
    It is natural to say "the client already does cross-record reassembly, so
@@ -877,13 +971,27 @@ week's work.
    `clienthello-across-two-records`, and add a three-record cell and an
    over-cap cell to pin the boundaries.
 
+   *That order was followed, with one correction: step (2) turned out not to be
+   needed as stated.  No third decoder outcome was added -- an incomplete
+   handshake message keeps falling through the existing "did not parse" arm,
+   and the decoder's postcondition was merely STRENGTHENED with a clause pinning
+   the outer content type.  Nor was a buffer-aware `network_input_wf` needed:
+   the decoder proves the record-local disjunct of a widened projection and the
+   empty-buffer `SMTPat` does the rest, so the shared decoder's statement of
+   `network_input_wf` was left alone.  An over-cap cell was not added; the cap is
+   exercised at the spec level by `legal_cleartext_handshake_step` and at the
+   implementation level by the `Bounds.max_client_hello_len_sz` /
+   `max_handshake_flight_len` guards on the coalescing path.*
+
    **The spec attempt itself is preserved on the branch
    `g3-route-b-spec-attempt`** (24 files, +529/-20), whose commit message
-   carries the full fallout enumeration above.  It is archived rather than
-   merged because, as measured, landing it alone would buy no capability while
-   weakening three proved pairing theorems -- step (1) has to come first.  It
-   was checked to still apply cleanly to `interop` as of `e0727d23c`; recover
-   the diff with
+   carries the full fallout enumeration above.  It was archived rather than
+   merged because, as measured, landing it alone would have bought no capability
+   while weakening three proved pairing theorems -- step (1) had to come first.
+   It has since been **superseded** by the `B9`..`B15` series, which does step
+   (1) first and then re-lands the spec mechanism on top of it; the branch is
+   only of historical interest now.  It was checked to still apply cleanly to
+   `interop` as of `e0727d23c`; recover the diff with
 
    ```
    git diff interop...g3-route-b-spec-attempt
