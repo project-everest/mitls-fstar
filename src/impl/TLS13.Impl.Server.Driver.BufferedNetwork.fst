@@ -1481,7 +1481,7 @@ fn read
     }
 
     noextract
-    let server_endpoint
+    unfold let server_endpoint
       : BS.buffered_stream_endpoint
           endpoint
           endpoint_state
@@ -1666,6 +1666,7 @@ fn finish_owns
   pending_len
 }
 
+#push-options "--z3rlimit 400"
 inline_for_extraction
 fn drive
   (d:DS.buffered_driver)
@@ -1981,3 +1982,4 @@ fn drive
     }
   }
 }
+#pop-options

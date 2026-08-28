@@ -30,8 +30,8 @@ module R   = Pulse.Lib.Reference
 module Hdr = HTTP.Impl.Codec.Header
 module Resp = HTTP.Impl.Codec.Response
 
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* Count the well-formed header field-lines in `inp[0..n)` up to (and not
    including) the terminating empty CRLF.  Memory-safe; the returned count is
    bounded by `n` because every counted line strictly advances the cursor. *)
@@ -60,7 +60,7 @@ fn http_count_headers (inp: array U8.t) (n: SZ.t)
     pts_to inp 'i **
     pure (SZ.v vpos <= SZ.v n /\ SZ.v vcnt <= SZ.v vpos /\
           SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32)
-  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  decreases %[(if !go then 1 else 0); Prims.op_Minus (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     Hdr.http_parse_header_field inp n vpos pis_end pok pnlen pvoff pvlen pnext;
@@ -108,7 +108,7 @@ fn ci_eq_at
     pure (SZ.v vk <= SZ.v nm_len /\ SZ.v n <= Seq.length 'i /\
           SZ.v nm_len <= Seq.length 'm /\
           (vok ==> SZ.v pos + SZ.v nm_len <= SZ.v n))
-  decreases (Prims.op_Subtraction (SZ.v nm_len) (SZ.v (!k)))
+  decreases (Prims.op_Minus (SZ.v nm_len) (SZ.v (!k)))
   {
     let vk = !k;
     let c = inp.(SZ.add pos vk);
@@ -156,7 +156,7 @@ fn http_find_header
     pure (SZ.v vpos <= SZ.v n /\ SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\
           SZ.v nm_len <= Seq.length 'm /\
           (vfound == true ==> SZ.v vo + SZ.v vl <= SZ.v n))
-  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  decreases %[(if !go then 1 else 0); Prims.op_Minus (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     Hdr.http_parse_header_field inp n vpos pis_end pok pnlen voffr vlenr pnext;
@@ -263,7 +263,7 @@ fn http_parse_headers
           SZ.v vcnt <= SZ.v cap /\ SZ.v cap < pow2 32 /\
           Seq.length no == SZ.v cap /\ Seq.length nl == SZ.v cap /\
           Seq.length vo == SZ.v cap /\ Seq.length vl == SZ.v cap)
-  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  decreases %[(if !go then 1 else 0); Prims.op_Minus (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     let vcnt = !cnt;
@@ -338,7 +338,7 @@ fn http_count_header_named
     pts_to inp 'i ** pts_to nm 'm **
     pure (SZ.v vpos <= SZ.v n /\ SZ.v vcnt <= SZ.v vpos /\
           SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32 /\ SZ.v nm_len <= Seq.length 'm)
-  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  decreases %[(if !go then 1 else 0); Prims.op_Minus (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     Hdr.http_parse_header_field inp n vpos pis_end pok pnlen pvoff pvlen pnext;
@@ -424,7 +424,7 @@ fn http_header_limits_ok
     pts_to inp 'i **
     pure (SZ.v vpos <= SZ.v n /\ SZ.v vcnt <= SZ.v vpos /\
           SZ.v n <= Seq.length 'i /\ SZ.v n < pow2 32)
-  decreases %[(if !go then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!pos))]
+  decreases %[(if !go then 1 else 0); Prims.op_Minus (SZ.v n) (SZ.v (!pos))]
   {
     let vpos = !pos;
     Hdr.http_parse_header_field inp n vpos pis_end pok pnlen pvoff pvlen pnext;
@@ -502,7 +502,7 @@ fn http_connection_close
       pure (SZ.v n <= Seq.length 'i /\ SZ.v cl_len <= Seq.length 'cls /\
             SZ.v cl_len > 0 /\
             SZ.v vend <= SZ.v n /\ SZ.v voff <= SZ.v vj /\ SZ.v vj <= SZ.v vend)
-    decreases %[(if !hit then 0 else 1); Prims.op_Subtraction (SZ.v vend) (SZ.v (!j))]
+    decreases %[(if !hit then 0 else 1); Prims.op_Minus (SZ.v vend) (SZ.v (!j))]
     {
       let vj = !j;
       let m = ci_eq_at inp n vj cl cl_len;

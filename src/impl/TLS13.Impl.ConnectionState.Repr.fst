@@ -979,7 +979,7 @@ fn alloc_default_cipher_suites ()
             default_connection_config.CS.config_cipher_suites
 {
   let items = V.alloc 0x1303us (max_cipher_suites_sz);
-  V.op_Array_Assignment items 1sz 0x1301us;
+  V.op_Dot_Lparen_Rparen_Less_Minus items 1sz 0x1301us;
   let contents = Ghost.hide (Seq.upd (Seq.create max_cipher_suites 0x1303us) 1 0x1301us);
   let len = Box.alloc 2sz;
   let slot = { items; len };
@@ -1020,7 +1020,7 @@ fn alloc_default_signature_schemes ()
             default_connection_config.CS.config_signature_schemes
 {
   let items = V.alloc 0x0804us (max_signature_schemes_sz);
-  V.op_Array_Assignment items 1sz 0x0403us;
+  V.op_Dot_Lparen_Rparen_Less_Minus items 1sz 0x0403us;
   let contents = Ghost.hide (Seq.upd (Seq.create max_signature_schemes 0x0804us) 1 0x0403us);
   let len = Box.alloc 2sz;
   let slot = { items; len };

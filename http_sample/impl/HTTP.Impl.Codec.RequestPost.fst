@@ -250,7 +250,7 @@ fn http_emit_request_post
       Seq.length sv == 36 + SZ.v target_len + SZ.v dcount /\
       (forall (m:nat). m < SZ.v va ==>
          Seq.index sv m == Seq.index (postbytes (Ghost.reveal tok) (U32.v len)) m))
-  decreases (Prims.op_Subtraction (SZ.v 5sz) (SZ.v (!a)))
+  decreases (Prims.op_Minus (SZ.v 5sz) (SZ.v (!a)))
   {
     let va = !a;
     lemma_lit_post_byte va;
@@ -271,7 +271,7 @@ fn http_emit_request_post
       Seq.length sv == 36 + SZ.v target_len + SZ.v dcount /\
       (forall (m:nat). m < 5 + SZ.v vi ==>
          Seq.index sv m == Seq.index (postbytes (Ghost.reveal tok) (U32.v len)) m))
-  decreases (Prims.op_Subtraction (SZ.v target_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v target_len) (SZ.v (!i)))
   {
     let vi = !i;
     CL.lemma_fits32 (5 + SZ.v vi);
@@ -292,7 +292,7 @@ fn http_emit_request_post
       Seq.length sv == 36 + SZ.v target_len + SZ.v dcount /\
       (forall (m:nat). m < 5 + SZ.v target_len + SZ.v vb ==>
          Seq.index sv m == Seq.index (postbytes (Ghost.reveal tok) (U32.v len)) m))
-  decreases (Prims.op_Subtraction (SZ.v 27sz) (SZ.v (!b)))
+  decreases (Prims.op_Minus (SZ.v 27sz) (SZ.v (!b)))
   {
     let vb = !b;
     assert_norm (Seq.length mid27 == 27);
@@ -330,7 +330,7 @@ fn http_emit_request_post
          Seq.index sv (SZ.v dbase + jj)
            == Seq.index (postbytes (Ghost.reveal tok) (U32.v len)) (SZ.v dbase + jj)) /\
       W.all_dec (Seq.slice (W.enc_dec_var (U32.v len)) 0 (SZ.v vpos - SZ.v dbase)) /\
-      Prims.op_Equality #Prims.nat (U32.v vrem)
+      Prims.op_Equals #Prims.nat (U32.v vrem)
         (W.dec_dec_var (Seq.slice (W.enc_dec_var (U32.v len)) 0 (SZ.v vpos - SZ.v dbase))))
   decreases (SZ.v (!pos))
   {
@@ -375,7 +375,7 @@ fn http_emit_request_post
       (forall (kk:nat). kk < SZ.v vc ==>
          Seq.index sv (SZ.v base + kk)
            == Seq.index (postbytes (Ghost.reveal tok) (U32.v len)) (SZ.v base + kk)))
-  decreases (Prims.op_Subtraction (SZ.v 4sz) (SZ.v (!c)))
+  decreases (Prims.op_Minus (SZ.v 4sz) (SZ.v (!c)))
   {
     let vc = !c;
     CL.lemma_cl_post_byte vc;

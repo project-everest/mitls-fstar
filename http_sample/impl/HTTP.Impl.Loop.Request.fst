@@ -24,8 +24,8 @@ module U8  = FStar.UInt8
 module R   = Pulse.Lib.Reference
 module RL  = HTTP.Impl.Codec.RequestLine
 
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* Parse the request line and return true iff its method equals `nm` (exact).
    The equality scan runs unconditionally in the `match_ci_at` idiom: the
    accumulator `m` starts true only if the line parsed and the lengths agree, so
@@ -56,7 +56,7 @@ fn http_method_eq
     R.pts_to k vk ** R.pts_to m vm ** pts_to inp 'i ** pts_to nm 'm **
     pure (SZ.v vk <= SZ.v mlen /\
           (vm == true ==> (SZ.v mlen <= Seq.length 'i /\ SZ.v mlen <= Seq.length 'm)))
-  decreases (Prims.op_Subtraction (SZ.v mlen) (SZ.v (!k)))
+  decreases (Prims.op_Minus (SZ.v mlen) (SZ.v (!k)))
   {
     let vk = !k;
     let c = inp.(vk);

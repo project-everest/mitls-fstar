@@ -75,9 +75,9 @@ ensures
 {
   unfold (CC.ymodem_client_inv i received sent st);
   with svs. _;
-  let s = Vec.op_Array_Access i.CC.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.CC.status 0sz;
   if (s = 0uy) {
-    Vec.op_Array_Assignment i.CC.status 0sz 1uy;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus i.CC.status 0sz 1uy;
     with svs2. _;
     Log.lemma_yc_start_advance received sent st (Ghost.reveal filename) (Ghost.reveal len);
     RTC.closure_step Log.yc_step_rel
@@ -273,7 +273,7 @@ ensures exists* (rn1:bool) (f1:SZ.t).
 {
   unfold (CC.ymodem_client_inv i received sent st);
   with svs. _;
-  let sv = Vec.op_Array_Access i.CC.status 0sz;
+  let sv = Vec.op_Dot_Lparen_Rparen i.CC.status 0sz;
   fold (CC.ymodem_client_inv i received sent st);
   if (sv = 2uy || sv = 3uy) {
     R.write running false;

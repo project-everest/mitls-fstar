@@ -248,7 +248,7 @@ let lemma_update_label_ksp
     together) and the two traffic-key installs (an application-epoch install is
     legal only when `expected_traffic_secret` — hence the master secret — is
     already present); every other event leaves the key schedule fixed. **)
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 200"
 let lemma_ksp_step
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma

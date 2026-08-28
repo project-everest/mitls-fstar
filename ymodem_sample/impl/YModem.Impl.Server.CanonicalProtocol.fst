@@ -382,7 +382,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 {
   unfold (ymodem_server_inv i received0 sent0 st0);
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   unfold (ymodem_server_network_frame_pre frame input input_len out out_len input_contents old_out);
   with d0. _;
   let lead = input.(0sz);
@@ -394,7 +394,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
     Log.lemma_ack_step (Ghost.reveal st0);
     let st1 = Ghost.hide (Log.ack_next_state (Ghost.reveal st0));
     let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
-    Vec.op_Array_Assignment i.status 0sz 0uy;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 0uy;
     with svs2. _;
     let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
     let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -446,7 +446,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
     Log.lemma_can_step (Ghost.reveal st0);
     let st1 = Ghost.hide (Log.abort_next_state (Ghost.reveal st0));
     let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
-    Vec.op_Array_Assignment i.status 0sz 4uy;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 4uy;
     with svs2. _;
     let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
     let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -527,7 +527,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 {
   unfold (ymodem_server_inv i received0 sent0 st0);
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   unfold (ymodem_server_local_frame_pre ev frame st0 out out_len old_out);
   with d. _;
   match ev {
@@ -535,7 +535,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — initialise the transfer; the "idle" cell 0uy is unchanged. *)
       Log.lemma_start_step (Ghost.reveal st0) filename len plan;
       let st1 = Ghost.hide (Log.start_next_state filename len plan);
-      Vec.op_Array_Assignment i.status 0sz 0uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 0uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -561,7 +561,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       Log.lemma_send_step (Ghost.reveal st0) (Ghost.reveal body);
       let st1 = Ghost.hide (Log.send_next_state (Ghost.reveal st0));
       let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent0) (ymodem_serialize (Body_soh (Ghost.reveal body))));
-      Vec.op_Array_Assignment i.status 0sz 1uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 1uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent1) (Ghost.reveal st1));
@@ -588,7 +588,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent0) (Seq.create 1 4uy));
       out.(0sz) <- 4uy;
       with o'. _;
-      Vec.op_Array_Assignment i.status 0sz 2uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 2uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent1) (Ghost.reveal st1));
@@ -609,7 +609,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — the EOT was acked; flip the status to Completed (cell 3uy). *)
       Log.lemma_complete_step (Ghost.reveal st0);
       let st1 = Ghost.hide (Log.complete_next_state (Ghost.reveal st0));
-      Vec.op_Array_Assignment i.status 0sz 3uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 3uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -687,7 +687,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — cancel; flip the status to Aborted (cell 4uy). *)
       Log.lemma_abort_step (Ghost.reveal st0);
       let st1 = Ghost.hide (Log.abort_next_state (Ghost.reveal st0));
-      Vec.op_Array_Assignment i.status 0sz 4uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 4uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));

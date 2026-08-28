@@ -1815,6 +1815,7 @@ let lemma_sent_received_replay_append_split_equal_tails
           receiver_prefix_received
           receiver_suffix_received ) ) )
 
+#push-options "--z3rlimit 200"
 let lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes
   (sender_model:connection_model)
   (receiver_model:connection_model)
@@ -2075,6 +2076,7 @@ let lemma_sent_received_replay_append_split_equal_tails_from_aligned_prefixes
       receiver_suffix_received
     and () )
 
+#pop-options
 let lemma_same_endpoint_sent_received_replay_append_split_equal_suffixes_from_equal_prefixes
   (model:connection_model)
   (prefix:list conn_event)

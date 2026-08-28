@@ -363,12 +363,12 @@ ensures
 {
   unfold (CC.ymodem_server_inv i (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   fold (CC.ymodem_server_inv i (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   unfold (ymodem_server_frame_ready i cfg frame (Ghost.reveal st));
   with cv bv blkd ysnfd. _;
-  let b = Vec.op_Array_Access frame.sef_started 0sz;
-  let c = Vec.op_Array_Access frame.sef_cursor 0sz;
+  let b = Vec.op_Dot_Lparen_Rparen frame.sef_started 0sz;
+  let c = Vec.op_Dot_Lparen_Rparen frame.sef_cursor 0sz;
   Plan.blocks_of_length cfg.scfg_contents 0 (L.length (Ghost.reveal st).YP.yss_sent);
   fold (ymodem_server_frame_ready i cfg frame (Ghost.reveal st));
   if (b = 0uy) {
@@ -755,7 +755,7 @@ ensures exists* (d1:Seq.seq U8.t).
   {
     let vj = !j;
     FStar.SizeT.fits_lte (SZ.v off + SZ.v vj) (SZ.v off + 128);
-    let src = Vec.op_Array_Access file (SZ.add off vj);
+    let src = Vec.op_Dot_Lparen_Rparen file (SZ.add off vj);
     dst.(vj) <- src;
     j := SZ.add vj 1sz;
   };
@@ -808,7 +808,7 @@ ensures
      of the pending list; other live events leave sef_blk untouched. *)
   match ev {
     YP.Server_send -> {
-      let c = Vec.op_Array_Access frame.sef_cursor 0sz;
+      let c = Vec.op_Dot_Lparen_Rparen frame.sef_cursor 0sz;
       let cn = SZ.v c;
       (* cn == L.length sent < nblocks (from cells_ok + server_local_ready) *)
       Math.lemma_mult_le_right 128 (cn + 1) cfg.scfg_nblocks;
@@ -1026,16 +1026,16 @@ ensures ymodem_server_frame_ready i cfg frame (Ghost.reveal st1)
     as (pts_to frame.sef_blk d);
   match ev {
     YP.Server_send -> {
-      let c = Vec.op_Array_Access frame.sef_cursor 0sz;
+      let c = Vec.op_Dot_Lparen_Rparen frame.sef_cursor 0sz;
       FStar.SizeT.fits_lte (SZ.v c + 1) (cfg.scfg_nblocks);
-      Vec.op_Array_Assignment frame.sef_cursor 0sz (SZ.add c 1sz);
+      Vec.op_Dot_Lparen_Rparen_Less_Minus frame.sef_cursor 0sz (SZ.add c 1sz);
       (* st1 == send_next_state st0; re-establish the coupling at cursor+1 *)
       send_preserves_plan_ok cfg (Ghost.reveal st0) (Ghost.reveal st1);
       fold (ymodem_server_frame_ready i cfg frame (Ghost.reveal st1))
     }
     YP.Server_start filename len plan -> {
-      Vec.op_Array_Assignment frame.sef_cursor 0sz 0sz;
-      Vec.op_Array_Assignment frame.sef_started 0sz 1uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus frame.sef_cursor 0sz 0sz;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus frame.sef_started 0sz 1uy;
       (* st1 == start_next_state: sent=[], pending=plan=blocks_of 0 nblocks *)
       start_preserves_plan_ok cfg (Ghost.reveal st1) filename len plan;
       fold (ymodem_server_frame_ready i cfg frame (Ghost.reveal st1))

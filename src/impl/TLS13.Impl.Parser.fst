@@ -1290,7 +1290,7 @@ fn build_ch_cipher_suites
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
           assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
-          let el = V.op_Array_Access (snd nv) iv;
+          let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
           SMU.seq_list_match_index_trade
             (PPB.vmatch_conv GCS.cipherSuite_vmatch GCS.cipherSuite_conv)
             s (Ghost.reveal cm) (SZ.v iv);
@@ -1327,7 +1327,7 @@ fn build_ch_cipher_suites
             (SM.seq_list_match s (Ghost.reveal cm)
                (PPB.vmatch_conv GCS.cipherSuite_vmatch GCS.cipherSuite_conv));
           let wire = cipher_suite_lo_to_u16 el;
-          V.op_Array_Assignment dst iv wire;
+          V.op_Dot_Lparen_Rparen_Less_Minus dst iv wire;
           with bytes1. assert (V.pts_to dst bytes1);
           RV.lemma_list_drop_index (Ghost.reveal cm) (SZ.v iv);
           RV.lemma_reveal_synth_cipher_suites_cons
@@ -1483,7 +1483,7 @@ fn copy_ch_signature_schemes_into
           let iv = !i;
           with bytes0 processed0. assert (V.pts_to dst bytes0 ** GR.pts_to proc_ref processed0);
           assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
-          let el = V.op_Array_Access (snd nv) iv;
+          let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
           SMU.seq_list_match_index_trade
             (PPB.vmatch_conv GSS.signatureScheme_vmatch GSS.signatureScheme_conv)
             s (Ghost.reveal cm) (SZ.v iv);
@@ -1520,7 +1520,7 @@ fn copy_ch_signature_schemes_into
             (SM.seq_list_match s (Ghost.reveal cm)
                (PPB.vmatch_conv GSS.signatureScheme_vmatch GSS.signatureScheme_conv));
           let wire = sig_scheme_lo_to_u16 el;
-          V.op_Array_Assignment dst iv wire;
+          V.op_Dot_Lparen_Rparen_Less_Minus dst iv wire;
           with bytes1. assert (V.pts_to dst bytes1);
           RV.lemma_list_drop_index (Ghost.reveal cm) (SZ.v iv);
           RV.lemma_reveal_synth_sig_schemes_cons
@@ -2447,7 +2447,7 @@ fn copy_first_protocol_name
       V.pts_to_len (snd nv);
       SMU.seq_list_match_index_trade
         (PPB.vmatch_conv GPN.protocolName_vmatch GPN.protocolName_conv) s cm 0;
-      let el0 = V.op_Array_Access (snd nv) 0sz;
+      let el0 = V.op_Dot_Lparen_Rparen (snd nv) 0sz;
       Trade.rewrite_with_trade
         (PPB.vmatch_conv GPN.protocolName_vmatch GPN.protocolName_conv
            (Seq.index s 0) (FStar.List.Tot.index cm 0))
@@ -2611,12 +2611,12 @@ fn copy_padded_share_into
   {
     let iv = !i;
     if (iv `SZ.lt` n) {
-      let b = V.op_Array_Access src iv;
-      V.op_Array_Assignment dst iv b;
+      let b = V.op_Dot_Lparen_Rparen src iv;
+      V.op_Dot_Lparen_Rparen_Less_Minus dst iv b;
       SZ.fits_lte (SZ.v iv + 1) 65;
       i := iv `SZ.add` 1sz;
     } else {
-      V.op_Array_Assignment dst iv 0uy;
+      V.op_Dot_Lparen_Rparen_Less_Minus dst iv 0uy;
       SZ.fits_lte (SZ.v iv + 1) 65;
       i := iv `SZ.add` 1sz;
     }
@@ -2670,12 +2670,12 @@ fn copy_session_id_prefix_into
   {
     let iv = !i;
     if (iv `SZ.lt` n) {
-      let b = V.op_Array_Access src iv;
-      V.op_Array_Assignment dst iv b;
+      let b = V.op_Dot_Lparen_Rparen src iv;
+      V.op_Dot_Lparen_Rparen_Less_Minus dst iv b;
       SZ.fits_lte (SZ.v iv + 1) 32;
       i := iv `SZ.add` 1sz;
     } else {
-      V.op_Array_Assignment dst iv 0uy;
+      V.op_Dot_Lparen_Rparen_Less_Minus dst iv 0uy;
       SZ.fits_lte (SZ.v iv + 1) 32;
       i := iv `SZ.add` 1sz;
     }
@@ -2778,7 +2778,7 @@ fn copy_first_protocol_name_into
       V.pts_to_len (snd nv);
       SMU.seq_list_match_index_trade
         (PPB.vmatch_conv GPN.protocolName_vmatch GPN.protocolName_conv) s cm 0;
-      let el0 = V.op_Array_Access (snd nv) 0sz;
+      let el0 = V.op_Dot_Lparen_Rparen (snd nv) 0sz;
       Trade.rewrite_with_trade
         (PPB.vmatch_conv GPN.protocolName_vmatch GPN.protocolName_conv
            (Seq.index s 0) (FStar.List.Tot.index cm 0))
@@ -2919,7 +2919,7 @@ fn scan_ee_alpn
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cee));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GEEE.extensionEncryptedExtensions_vmatch
                            GEEE.extensionEncryptedExtensions_conv) s cee (SZ.v iv);
@@ -3867,7 +3867,7 @@ fn scan_sh_key_share
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length cext));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
           s cext (SZ.v iv);
@@ -4036,7 +4036,7 @@ fn copy_ch_server_name_into
       let count = fst nv;
       assert (pure (SZ.v count == FStar.List.Tot.length (Ghost.reveal cm)));
       assert (pure (FStar.List.Tot.length (Ghost.reveal cm) > 0));
-      let el0 = V.op_Array_Access (snd nv) 0sz;
+      let el0 = V.op_Dot_Lparen_Rparen (snd nv) 0sz;
       SMU.seq_list_match_index_trade
         (PPB.vmatch_conv GSN.serverName_vmatch GSN.serverName_conv)
         s (Ghost.reveal cm) 0;
@@ -4222,7 +4222,7 @@ fn scan_ch_supported_versions
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GOV.offeredVersion_vmatch GOV.offeredVersion_conv)
           s (Ghost.reveal cm) (SZ.v iv);
@@ -4371,7 +4371,7 @@ fn scan_ch_key_share
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
           s (Ghost.reveal cm) (SZ.v iv);
@@ -4590,7 +4590,7 @@ fn scan_kse_list_p256
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cm)));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GKSE.keyShareEntry_vmatch GKSE.keyShareEntry_conv)
           s (Ghost.reveal cm) (SZ.v iv);
@@ -4753,7 +4753,7 @@ fn scan_ch_p256_key_share
       {
         let iv = !i;
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cext)));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GECH.extensionClientHello_vmatch GECH.extensionClientHello_conv)
           s (Ghost.reveal cext) (SZ.v iv);
@@ -5022,7 +5022,7 @@ fn scan_ch_extensions
                   V.pts_to sig_vec sig_bytes0 ** GR.pts_to sn_ref sn_acc0 **
                   GR.pts_to key_ref key_acc0 ** GR.pts_to sig_ref sig_acc0);
         assert (pure (SZ.v iv < FStar.List.Tot.length (Ghost.reveal cext)));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GECH.extensionClientHello_vmatch
                            GECH.extensionClientHello_conv)
@@ -5771,7 +5771,7 @@ fn scan_certificate_chain
           V.pts_to chain_bytes cb0 ** V.pts_to offsets offs0 **
           V.pts_to lens lns0 ** GR.pts_to proc_ref processed0);
         assert (pure (SZ.v iv < FStar.List.Tot.length cm));
-        let el = V.op_Array_Access (snd nv) iv;
+        let el = V.op_Dot_Lparen_Rparen (snd nv) iv;
         SMU.seq_list_match_index_trade
           (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
           s cm (SZ.v iv);
@@ -5806,8 +5806,8 @@ fn scan_certificate_chain
           (FStar.List.Tot.index cm (SZ.v iv))
           (RV.list_drop (SZ.v iv + 1) cm);
         if (fits1 && fits2) {
-          V.op_Array_Assignment offsets cntv offv;
-          V.op_Array_Assignment lens cntv cert_len;
+          V.op_Dot_Lparen_Rparen_Less_Minus offsets cntv offv;
+          V.op_Dot_Lparen_Rparen_Less_Minus lens cntv cert_len;
           assert (pure (SZ.v offv + SZ.v cert_len <= 32768));
           copy_vec_into_at chain_bytes offv (fst el).PPBY.lvec_vec cert_len;
           with cbN. assert (V.pts_to chain_bytes cbN);

@@ -1418,7 +1418,7 @@ fn process_local_event
 }
 
 noextract
-let client_endpoint
+unfold let client_endpoint
   : BS.buffered_stream_endpoint
       endpoint
       endpoint_state
@@ -1489,6 +1489,7 @@ let public_drive_post
       initial_app_out)
     outcome
 
+#push-options "--z3rlimit 400"
 inline_for_extraction
 fn drive_until_conclusive
   (d:top_buffered_driver)
@@ -1685,6 +1686,7 @@ fn drive_until_conclusive
   outcome
 }
 
+#pop-options
 inline_for_extraction
 fn finish_owns
   (e:endpoint)

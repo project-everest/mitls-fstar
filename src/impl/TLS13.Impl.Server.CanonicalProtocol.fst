@@ -5314,6 +5314,7 @@ let server_process_network_post  (srv:canonical_server)
 // Prove server_canonical_step_rel st0 st1 in the non-StepOk, st1 <> st0 case for
 // the network handler.  Mirrors lemma_client_network_nonstep_canonical_step in
 // TLS13.Impl.Client.CanonicalProtocol.fst.
+#push-options "--z3rlimit 200"
 let lemma_server_network_nonstep_canonical_step
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5474,6 +5475,7 @@ let lemma_server_network_nonstep_canonical_step
     assert (server_canonical_step_rel #CTypes.server_local_event st0 st1)
   )
 
+#pop-options
 let lemma_server_network_event_progress
   (initial:server_initial_state)
   (st0:CS.connection_state)

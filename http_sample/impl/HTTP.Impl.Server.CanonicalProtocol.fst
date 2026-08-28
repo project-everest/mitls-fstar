@@ -95,7 +95,7 @@ fn http_emit_body
       Seq.length 'd == SZ.v data_len /\
       Seq.length sv == SZ.v data_len /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv j == Seq.index 'd j))
-  decreases (Prims.op_Subtraction (SZ.v data_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v data_len) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = data.(vi);
@@ -441,7 +441,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       Log.lemma_start_step (Ghost.reveal st0) filename plan;
       let st1 = Ghost.hide (Log.start_next_state filename plan);
       let flag = (if frame.hslf_more then 0uy else 1uy);
-      Vec.op_Array_Assignment i.status 0sz flag;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz flag;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -466,7 +466,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       Log.lemma_send_step (Ghost.reveal st0) (Ghost.reveal pl);
       let st1 = Ghost.hide (Log.send_next_state (Ghost.reveal st0));
       let flag = (if frame.hslf_more then 0uy else 1uy);
-      Vec.op_Array_Assignment i.status 0sz flag;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz flag;
       with svs2. _;
       let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent0) (Ghost.reveal pl <: TCP.bytes));
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
@@ -490,7 +490,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — the declared Content-Length has been written. *)
       Log.lemma_complete_step (Ghost.reveal st0);
       let st1 = Ghost.hide (Log.complete_next_state (Ghost.reveal st0));
-      Vec.op_Array_Assignment i.status 0sz 2uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 2uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -511,7 +511,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — the connection was torn down mid-body. *)
       Log.lemma_abort_step (Ghost.reveal st0);
       let st1 = Ghost.hide (Log.abort_next_state (Ghost.reveal st0));
-      Vec.op_Array_Assignment i.status 0sz 3uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 3uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));

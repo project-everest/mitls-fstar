@@ -949,7 +949,7 @@ fn serialize_server_hello_handshake_poc
 
   (* ---- two-element extensions vclist [ks_ext; sv_ext] ---- *)
   let ext_vec = V.alloc ks_low 2sz;
-  V.op_Array_Assignment ext_vec 1sz sv_low;
+  V.op_Dot_Lparen_Rparen_Less_Minus ext_vec 1sz sv_low;
   with vc. assert (V.pts_to ext_vec vc);
   rewrite (V.pts_to ext_vec vc) as (V.pts_to ext_vec (Seq.upd (Seq.create 2 ks_low) 1 sv_low));
   SM.seq_list_match_nil_intro (Seq.empty #GESH.extensionServerHello_lowtype) ([] <: list GESH.extensionServerHello)
@@ -1262,8 +1262,8 @@ fn serialize_certificate_handshake_poc
   V.pts_to_len lcert.L.certificate_msg_cert_lens;
   lemma_chain_extract cb (SZ.v lcert.L.certificate_msg_chain_bytes_len) offs lns
     (SZ.v lcert.L.certificate_msg_cert_count) (reveal chain);
-  let off0 = V.op_Array_Access lcert.L.certificate_msg_cert_offsets 0sz;
-  let len0 = V.op_Array_Access lcert.L.certificate_msg_cert_lens 0sz;
+  let off0 = V.op_Dot_Lparen_Rparen lcert.L.certificate_msg_cert_offsets 0sz;
+  let len0 = V.op_Dot_Lparen_Rparen lcert.L.certificate_msg_cert_lens 0sz;
   let chain_vec = alloc_copy_subslice lcert.L.certificate_msg_chain_bytes off0 len0 32768sz;
   with cv_bytes. assert (V.pts_to chain_vec cv_bytes);
   Seq.lemma_eq_elim cv_bytes (reveal chain);
@@ -1836,7 +1836,7 @@ fn mk_pair_vclist
   ensures PPVCL.vmatch_vclist elem_vmatch r [reveal e0_high; reveal e1_high]
 {
   let vec = V.alloc e0_low 2sz;
-  V.op_Array_Assignment vec 1sz e1_low;
+  V.op_Dot_Lparen_Rparen_Less_Minus vec 1sz e1_low;
   SM.seq_list_match_nil_intro (Seq.empty #el) ([] <: list eh) elem_vmatch;
   SM.seq_list_match_cons_intro e1_low (reveal e1_high) (Seq.empty #el) ([] <: list eh) elem_vmatch;
   SM.seq_list_match_cons_intro e0_low (reveal e0_high)
@@ -1965,7 +1965,7 @@ fn mk_vclist_from_u16_leaf_array
     PPVCL.vmatch_vclist (PPB.vmatch_conv elem_vmatch elem_conv) r (Ghost.reveal l)
 {
   let sl : Ghost.erased (Seq.seq eh) = Ghost.hide (Seq.seq_of_list (Ghost.reveal l));
-  let w0 = V.op_Array_Access src 0sz;
+  let w0 = V.op_Dot_Lparen_Rparen src 0sz;
   let e0 = coerce w0;
   let vec = V.alloc e0 n;
   V.pts_to_len vec;
@@ -1988,9 +1988,9 @@ fn mk_vclist_from_u16_leaf_array
   {
     let i = !pi;
     with s1. assert (V.pts_to vec s1);
-    let wi = V.op_Array_Access src i;
+    let wi = V.op_Dot_Lparen_Rparen src i;
     let ei = coerce wi;
-    V.op_Array_Assignment vec i ei;
+    V.op_Dot_Lparen_Rparen_Less_Minus vec i ei;
     with s1'. assert (V.pts_to vec s1');
     SM.seq_seq_match_rewrite_seq (PPB.vmatch_conv elem_vmatch elem_conv) s1 s1' (Ghost.reveal sl) (Ghost.reveal sl) 0 (SZ.v i);
     Seq.lemma_seq_of_list_index (Ghost.reveal l) (SZ.v i);
@@ -2261,10 +2261,10 @@ fn serialize_client_hello_handshake_poc
 
   (* ---- 5-element extensions vclist ---- *)
   let ext_vec = V.alloc sn_elem_low 5sz;
-  V.op_Array_Assignment ext_vec 1sz sg_elem_low;
-  V.op_Array_Assignment ext_vec 2sz sa_elem_low;
-  V.op_Array_Assignment ext_vec 3sz ks_elem_low;
-  V.op_Array_Assignment ext_vec 4sz sv_elem_low;
+  V.op_Dot_Lparen_Rparen_Less_Minus ext_vec 1sz sg_elem_low;
+  V.op_Dot_Lparen_Rparen_Less_Minus ext_vec 2sz sa_elem_low;
+  V.op_Dot_Lparen_Rparen_Less_Minus ext_vec 3sz ks_elem_low;
+  V.op_Dot_Lparen_Rparen_Less_Minus ext_vec 4sz sv_elem_low;
   with vc. assert (V.pts_to ext_vec vc);
   rewrite (V.pts_to ext_vec vc)
       as (V.pts_to ext_vec (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.create 5 sn_elem_low) 1 sg_elem_low) 2 sa_elem_low) 3 ks_elem_low) 4 sv_elem_low));

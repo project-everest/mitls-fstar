@@ -243,7 +243,7 @@ fn http_emit_request_host
       Seq.length 't == SZ.v target_len /\ Seq.length 'hst == SZ.v host_len /\
       Seq.length sv == 4 + SZ.v target_len + 17 + SZ.v host_len + 23 /\
       (forall (k:nat). k < SZ.v va ==> Seq.index sv k == Seq.index lit_get k))
-  decreases (Prims.op_Subtraction (SZ.v 4sz) (SZ.v (!a)))
+  decreases (Prims.op_Minus (SZ.v 4sz) (SZ.v (!a)))
   {
     let va = !a;
     CL.lemma_lit_get_byte va;
@@ -263,7 +263,7 @@ fn http_emit_request_host
       Seq.length sv == 4 + SZ.v target_len + 17 + SZ.v host_len + 23 /\
       (forall (k:nat). k < 4 ==> Seq.index sv k == Seq.index lit_get k) /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (4 + j) == Seq.index 't j))
-  decreases (Prims.op_Subtraction (SZ.v target_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v target_len) (SZ.v (!i)))
   {
     let vi = !i;
     CL.lemma_fits32 (4 + SZ.v vi);
@@ -284,7 +284,7 @@ fn http_emit_request_host
       (forall (j:nat). j < SZ.v target_len ==> Seq.index sv (4 + j) == Seq.index 't j) /\
       (forall (k:nat). k < SZ.v vb ==>
          Seq.index sv (4 + SZ.v target_len + k) == Seq.index mid17 k))
-  decreases (Prims.op_Subtraction (SZ.v 17sz) (SZ.v (!b)))
+  decreases (Prims.op_Minus (SZ.v 17sz) (SZ.v (!b)))
   {
     let vb = !b;
     assert_norm (Seq.length mid17 == 17);
@@ -309,7 +309,7 @@ fn http_emit_request_host
          Seq.index sv (4 + SZ.v target_len + k) == Seq.index mid17 k) /\
       (forall (j0:nat). j0 < SZ.v vj ==>
          Seq.index sv (4 + SZ.v target_len + 17 + j0) == Seq.index 'hst j0))
-  decreases (Prims.op_Subtraction (SZ.v host_len) (SZ.v (!j)))
+  decreases (Prims.op_Minus (SZ.v host_len) (SZ.v (!j)))
   {
     let vj = !j;
     CL.lemma_fits32 (4 + SZ.v target_len + 17 + SZ.v vj);
@@ -335,7 +335,7 @@ fn http_emit_request_host
       (forall (k:nat). k < SZ.v vc ==>
          Seq.index sv (4 + SZ.v target_len + 17 + SZ.v host_len + k)
            == Seq.index tail23 k))
-  decreases (Prims.op_Subtraction (SZ.v 23sz) (SZ.v (!c)))
+  decreases (Prims.op_Minus (SZ.v 23sz) (SZ.v (!c)))
   {
     let vc = !c;
     assert_norm (Seq.length tail23 == 23);

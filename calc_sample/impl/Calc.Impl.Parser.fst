@@ -19,7 +19,7 @@ fn parse_tag (buf: Vec.vec U8.t)
   returns tag: U8.t
   ensures Vec.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5 /\ tag == Seq.index 'bytes 0)
 {
-  Vec.op_Array_Access buf 0sz
+  Vec.op_Dot_Lparen_Rparen buf 0sz
 }
 
 (** Parse Push value from bytes 1-4 (big-endian U32) **)
@@ -34,10 +34,10 @@ fn parse_push_value (buf: Vec.vec U8.t)
                   (Seq.index 'bytes 3)
                   (Seq.index 'bytes 4))
 {
-  let b1 = Vec.op_Array_Access buf 1sz;
-  let b2 = Vec.op_Array_Access buf 2sz;
-  let b3 = Vec.op_Array_Access buf 3sz;
-  let b4 = Vec.op_Array_Access buf 4sz;
+  let b1 = Vec.op_Dot_Lparen_Rparen buf 1sz;
+  let b2 = Vec.op_Dot_Lparen_Rparen buf 2sz;
+  let b3 = Vec.op_Dot_Lparen_Rparen buf 3sz;
+  let b4 = Vec.op_Dot_Lparen_Rparen buf 4sz;
   let v0 : U32.t = Cast.uint8_to_uint32 b1;
   let v1 : U32.t = Cast.uint8_to_uint32 b2;
   let v2 : U32.t = Cast.uint8_to_uint32 b3;

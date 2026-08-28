@@ -31,11 +31,11 @@ fn write_ok_response (resp_buf: Vec.vec U8.t)
       Seq.index resp_bytes1 4 == 0uy
     )
 {
-  Vec.op_Array_Assignment resp_buf 0sz 0uy;
-  Vec.op_Array_Assignment resp_buf 1sz 0uy;
-  Vec.op_Array_Assignment resp_buf 2sz 0uy;
-  Vec.op_Array_Assignment resp_buf 3sz 0uy;
-  Vec.op_Array_Assignment resp_buf 4sz 0uy
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 0sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 1sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 2sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 3sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 4sz 0uy
 }
 
 fn write_error_response (resp_buf: Vec.vec U8.t)
@@ -51,11 +51,11 @@ fn write_error_response (resp_buf: Vec.vec U8.t)
       Seq.index resp_bytes1 4 == 0uy
     )
 {
-  Vec.op_Array_Assignment resp_buf 0sz 2uy;
-  Vec.op_Array_Assignment resp_buf 1sz 0uy;
-  Vec.op_Array_Assignment resp_buf 2sz 0uy;
-  Vec.op_Array_Assignment resp_buf 3sz 0uy;
-  Vec.op_Array_Assignment resp_buf 4sz 0uy
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 0sz 2uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 1sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 2sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 3sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 4sz 0uy
 }
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100 --z3cliopt smt.arith.nl=false"
@@ -86,15 +86,15 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
 {
   unfold (server_exactly srv log0);
   with sb size_seq. _;
-  let csz = Vec.op_Array_Access srv.size 0sz;
+  let csz = Vec.op_Dot_Lparen_Rparen srv.size 0sz;
 
   if SZ.gte csz 2sz {
     // Mul success: pop two, multiply, push result
-    let val1 = Vec.op_Array_Access srv.stack (SZ.sub csz 2sz);  // second from top
-    let val2 = Vec.op_Array_Access srv.stack (SZ.sub csz 1sz);  // top
+    let val1 = Vec.op_Dot_Lparen_Rparen srv.stack (SZ.sub csz 2sz);  // second from top
+    let val2 = Vec.op_Dot_Lparen_Rparen srv.stack (SZ.sub csz 1sz);  // top
     let result = U32.mul_mod val1 val2;
-    Vec.op_Array_Assignment srv.stack (SZ.sub csz 2sz) result;
-    Vec.op_Array_Assignment srv.size 0sz (SZ.sub csz 1sz);
+    Vec.op_Dot_Lparen_Rparen_Less_Minus srv.stack (SZ.sub csz 2sz) result;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus srv.size 0sz (SZ.sub csz 1sz);
     write_ok_response resp_buf;
     with resp_bytes1. _;
     

@@ -270,7 +270,7 @@ ensures
 {
   unfold (CC.ymodem_client_inv i (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   fold (CC.ymodem_client_inv i (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   if (s = 0uy) {
     fold (ymodem_client_action_frame i cfg frame (Ghost.reveal st)

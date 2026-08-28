@@ -30,11 +30,11 @@ fn write_error_response (resp_buf: Vec.vec U8.t)
       (forall (i:nat{i > 0 /\ i < 5}). Seq.index resp_bytes1 i == 0uy)
     )
 {
-  Vec.op_Array_Assignment resp_buf 0sz 2uy;
-  Vec.op_Array_Assignment resp_buf 1sz 0uy;
-  Vec.op_Array_Assignment resp_buf 2sz 0uy;
-  Vec.op_Array_Assignment resp_buf 3sz 0uy;
-  Vec.op_Array_Assignment resp_buf 4sz 0uy
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 0sz 2uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 1sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 2sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 3sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 4sz 0uy
 }
 
 (** Write Result response (tag 1, then big-endian value) **)
@@ -49,15 +49,15 @@ fn write_result_response (resp_buf: Vec.vec U8.t) (value: U32.t)
       Calc.Wire.be_to_n (Seq.slice resp_bytes1 1 5) == U32.v value
     )
 {
-  Vec.op_Array_Assignment resp_buf 0sz 1uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 0sz 1uy;
   with rb1. _;
-  Vec.op_Array_Assignment resp_buf 1sz (Cast.uint32_to_uint8 (U32.shift_right value 24ul));
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 1sz (Cast.uint32_to_uint8 (U32.shift_right value 24ul));
   with rb2. _;
-  Vec.op_Array_Assignment resp_buf 2sz (Cast.uint32_to_uint8 (U32.shift_right value 16ul));
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 2sz (Cast.uint32_to_uint8 (U32.shift_right value 16ul));
   with rb3. _;
-  Vec.op_Array_Assignment resp_buf 3sz (Cast.uint32_to_uint8 (U32.shift_right value 8ul));
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 3sz (Cast.uint32_to_uint8 (U32.shift_right value 8ul));
   with rb4. _;
-  Vec.op_Array_Assignment resp_buf 4sz (Cast.uint32_to_uint8 value);
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 4sz (Cast.uint32_to_uint8 value);
   with resp_bytes1. _;
   
   // Assert the concrete byte values
@@ -108,11 +108,11 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
 {
   unfold (server_exactly srv log0);
   with sb size_seq. _;
-  let csz = Vec.op_Array_Access srv.size 0sz;
+  let csz = Vec.op_Dot_Lparen_Rparen srv.size 0sz;
 
   if SZ.gt csz 0sz {
     // Peek success: read top element
-    let top = Vec.op_Array_Access srv.stack (SZ.sub csz 1sz);
+    let top = Vec.op_Dot_Lparen_Rparen srv.stack (SZ.sub csz 1sz);
     write_result_response resp_buf top;
     with resp_bytes1. _;
     

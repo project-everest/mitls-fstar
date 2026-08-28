@@ -375,7 +375,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 {
   unfold (tftp_server_inv i received0 sent0 st0);
   with svs evs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   unfold (tftp_server_network_frame_pre frame input input_len out out_len input_contents old_out);
   with d0. _;
   if (input_len = 4sz) {
@@ -386,7 +386,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
     if (s = 1uy && b0 = ha && b1 = la) {
       (* ACK in the one-outstanding state: recover the block number. *)
       let blk = Codec.tftp_recv_ack input;
-      let exp = Vec.op_Array_Access i.expected 0sz;
+      let exp = Vec.op_Dot_Lparen_Rparen i.expected 0sz;
       if (blk = exp) {
         (* StepOk — the acked block equals the outstanding one; advance acked. *)
         Log.lemma_ack_parse_eval (Ghost.reveal input_contents);
@@ -394,7 +394,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
         Log.lemma_ack_step (Ghost.reveal st0) blk;
         let st1 = Ghost.hide (Log.ack_next_state (Ghost.reveal st0));
         let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
-        Vec.op_Array_Assignment i.status 0sz 0uy;
+        Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 0uy;
         with svs2. _;
         let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
         let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -449,7 +449,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       Log.lemma_error_step (Ghost.reveal st0) code (Seq.empty <: cstring);
       let st1 = Ghost.hide (Log.abort_next_state (Ghost.reveal st0));
       let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
-      Vec.op_Array_Assignment i.status 0sz 3uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 3uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -541,7 +541,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 {
   unfold (tftp_server_inv i received0 sent0 st0);
   with svs evs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   unfold (tftp_server_local_frame_pre ev frame st0 out out_len old_out);
   with d. _;
   match ev {
@@ -549,7 +549,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — initialise the transfer; the "idle" cell 0uy is unchanged. *)
       Log.lemma_start_step (Ghost.reveal st0) filename plan;
       let st1 = Ghost.hide (Log.start_next_state filename plan);
-      Vec.op_Array_Assignment i.status 0sz 0uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 0uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -575,9 +575,9 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       Log.lemma_send_step (Ghost.reveal st0) frame.tslf_blk (Ghost.reveal pl);
       let st1 = Ghost.hide (Log.send_next_state (Ghost.reveal st0));
       let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent0) (tftp_serialize (Msg_data frame.tslf_blk (Ghost.reveal pl))));
-      Vec.op_Array_Assignment i.status 0sz 1uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 1uy;
       with svs2. _;
-      Vec.op_Array_Assignment i.expected 0sz frame.tslf_blk;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.expected 0sz frame.tslf_blk;
       with evs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent1) (Ghost.reveal st1));
@@ -600,7 +600,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — the final block was acked; flip the status to Completed (2uy). *)
       Log.lemma_complete_step (Ghost.reveal st0);
       let st1 = Ghost.hide (Log.complete_next_state (Ghost.reveal st0));
-      Vec.op_Array_Assignment i.status 0sz 2uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 2uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -657,7 +657,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       (* StepOk — cancel; flip the status to Aborted (cell 3uy). *)
       Log.lemma_abort_step (Ghost.reveal st0);
       let st1 = Ghost.hide (Log.abort_next_state (Ghost.reveal st0));
-      Vec.op_Array_Assignment i.status 0sz 3uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 3uy;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));

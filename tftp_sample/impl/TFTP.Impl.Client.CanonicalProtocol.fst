@@ -298,7 +298,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
 {
   unfold (tftp_client_inv i received0 sent0 st0);
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   unfold (tftp_client_network_frame_pre frame input input_len out out_len input_contents old_out);
   with d0. _;
   if (SZ.gte input_len 4sz && SZ.lte input_len 516sz && s = 1uy) {
@@ -323,7 +323,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
       let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
       let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent0) (tftp_serialize (Msg_ack blk)));
       let new_flag = (if SZ.lt input_len 516sz then 2uy else 1uy);
-      Vec.op_Array_Assignment i.status 0sz new_flag;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz new_flag;
       with svs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent1) (Ghost.reveal st1));
@@ -354,7 +354,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
         Log.lemma_error_step (Ghost.reveal st0) code (Seq.empty <: cstring);
         let st1 = Ghost.hide (Log.error_next_state (Ghost.reveal st0));
         let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal input_contents));
-        Vec.op_Array_Assignment i.status 0sz 3uy;
+        Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 3uy;
         with svs2. _;
         let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
         let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received1) (Ghost.reveal sent0) (Ghost.reveal st1));
@@ -458,7 +458,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
   unfold (tftp_client_local_frame_pre ev frame st0 out out_len old_out);
   unfold (tftp_client_inv i received0 sent0 st0);
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   match ev {
     TP.Client_start filename -> {
       if (s = 0uy) {
@@ -466,7 +466,7 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
            move into the receiving state (cell 1uy). *)
         Log.lemma_start_step (Ghost.reveal st0) filename;
         let st1 = Ghost.hide (Log.start_next_state filename);
-        Vec.op_Array_Assignment i.status 0sz 1uy;
+        Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 1uy;
         with svs2. _;
         let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
         let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));
