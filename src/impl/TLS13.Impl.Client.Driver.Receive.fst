@@ -34,6 +34,7 @@ noeq type receive_workflow_result = {
 }
 
 noextract
+unfold
 let receive_workflow_observation
   (result:receive_workflow_result)
   : client_receive_observation =
@@ -120,32 +121,36 @@ let lemma_receive_observation_network_ok
           app_out)
 =
   (* The observation is the step that was just taken, so the witnesses are the
-     lemma's own arguments.  The obligation is stated through [obs] rather than
-     through the record literal so that it keeps the shape of the definition. *)
-  let obs = {
-    client_receive_observed_status = DriverWorkflowOk;
-    client_receive_observed_response = buffer_resp;
-  } in
+     lemma's own arguments.  The status is the literal [DriverWorkflowOk], so
+     the [DriverWorkflowExhausted]/[DriverWorkflowClosed] guards discharge by
+     computation and only the [DriverWorkflowOk] conjunct carries content.
+
+     NOTE: the record is *not* bound to a local [obs] here.  F* no longer
+     substitutes let-bound definitions into the VC, so [obs.client_receive_-
+     observed_response] would remain a stuck projection and fail to match the
+     [buffer_resp] appearing in the unfolding of
+     [client_receive_observation_network_correct]. *)
   introduce
-    obs.client_receive_observed_status <> DriverWorkflowExhausted ==>
+    (Mkclient_receive_observation DriverWorkflowOk buffer_resp)
+      .client_receive_observed_status <> DriverWorkflowExhausted ==>
     (exists st_observed st_before' observed_input'
             observed_old_network_out' observed_network_out'
             observed_old_app_out' observed_app_out'.
       D.drained_network_bytes_end_to_end_correct
         st_before'
         st_observed
-        obs.client_receive_observed_response
+        buffer_resp
         observed_input'
         observed_old_network_out'
         observed_network_out'
         observed_old_app_out'
         observed_app_out' /\
-      (obs.client_receive_observed_status == DriverWorkflowOk ==>
+      (DriverWorkflowOk == DriverWorkflowOk ==>
         st_observed == st1 /\ Seq.equal observed_app_out' app_out) /\
-      (obs.client_receive_observed_status == DriverWorkflowClosed ==>
+      (DriverWorkflowOk == DriverWorkflowClosed ==>
         st_observed == st1 /\
         st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
-        obs.client_receive_observed_response.CT.response.CT.app_out_len == 0sz))
+        buffer_resp.CT.response.CT.app_out_len == 0sz))
   with begin
     introduce exists st_observed st_before' observed_input'
                      observed_old_network_out' observed_network_out'
@@ -153,18 +158,18 @@ let lemma_receive_observation_network_ok
       D.drained_network_bytes_end_to_end_correct
         st_before'
         st_observed
-        obs.client_receive_observed_response
+        buffer_resp
         observed_input'
         observed_old_network_out'
         observed_network_out'
         observed_old_app_out'
         observed_app_out' /\
-      (obs.client_receive_observed_status == DriverWorkflowOk ==>
+      (DriverWorkflowOk == DriverWorkflowOk ==>
         st_observed == st1 /\ Seq.equal observed_app_out' app_out) /\
-      (obs.client_receive_observed_status == DriverWorkflowClosed ==>
+      (DriverWorkflowOk == DriverWorkflowClosed ==>
         st_observed == st1 /\
         st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
-        obs.client_receive_observed_response.CT.response.CT.app_out_len == 0sz)
+        buffer_resp.CT.response.CT.app_out_len == 0sz)
     with st1 st0 input old_network_out network_out old_app_out app_out
     and ()
   end
@@ -630,11 +635,6 @@ fn rec receive_application_data
           network_out_network
           (Ghost.reveal 'old_app_out)
           app_out_network));
-        let proof_observation : erased client_receive_observation =
-          Ghost.hide {
-            client_receive_observed_status = DriverWorkflowOk;
-            client_receive_observed_response = buffer_resp;
-          };
         lemma_receive_observation_network_ok
           'st0
           st_network
@@ -648,12 +648,12 @@ fn rec receive_application_data
         assert (pure (client_receive_observation_network_correct
           'st0
           st_network
-          (Ghost.reveal proof_observation)
+          (Mkclient_receive_observation DriverWorkflowOk buffer_resp)
           app_out_network));
         CChannel.lemma_receive_observation_app_out_length
           'st0
           st_network
-          (Ghost.reveal proof_observation)
+          (Mkclient_receive_observation DriverWorkflowOk buffer_resp)
           app_out_network;
         CChannel.lemma_network_bytes_application_log
           'st0
@@ -689,6 +689,11 @@ fn rec receive_application_data
           assert (pure (
             result.receive_workflow_pending_len ==
               network.BN.completed_drive_pending_len));
+          (* F* no longer substitutes let-bound definitions into the VC, so the
+             projections out of [result] stay stuck.  Name them explicitly. *)
+          assert (pure (
+            result.receive_workflow_status == DriverWorkflowOk /\
+            result.receive_workflow_response == buffer_resp));
           rewrite
             (top_driver_exactly
               d
@@ -739,7 +744,7 @@ fn rec receive_application_data
               'st0
               st_network
               app_out_network
-              (Ghost.reveal proof_observation)
+              (Mkclient_receive_observation DriverWorkflowOk buffer_resp)
               (receive_workflow_observation result);
             assert (pure (client_receive_observation_network_correct
               'st0
@@ -837,7 +842,7 @@ fn rec receive_application_data
                 st_local
                 app_out_network
                 app_out_local
-                (Ghost.reveal proof_observation)
+                (Mkclient_receive_observation DriverWorkflowOk buffer_resp)
                 (receive_workflow_observation result);
               assert (pure (client_receive_observation_network_correct
                 'st0
@@ -1145,10 +1150,8 @@ fn run
   V.to_vec_pts_to d.client_driver_auth_payload;
   V.to_vec_pts_to d.client_driver_auth_cv_input;
   V.to_vec_pts_to d.client_driver_auth_signature;
-  let observation : erased client_receive_observation =
-    Ghost.hide (receive_workflow_observation workflow);
   CChannel.lemma_receive_observation_app_out_length
-    'st0 st1 (Ghost.reveal observation) out_bytes;
+    'st0 st1 (receive_workflow_observation workflow) out_bytes;
   let workflow_ok =
     workflow.receive_workflow_status = DriverWorkflowOk;
   let response = workflow.receive_workflow_response.CT.response;
@@ -1163,9 +1166,9 @@ fn run
       if workflow_ok then response.CT.app_out_len else 0sz;
   };
   assert (pure (client_driver_receive_status_correct
-    result (Ghost.reveal observation) out_bytes out_bytes));
+    result (receive_workflow_observation workflow) out_bytes out_bytes));
   assert (pure (client_driver_receive_correct
-    'st0 st1 result (Ghost.reveal observation) out_bytes out_bytes));
+    'st0 st1 result (receive_workflow_observation workflow) out_bytes out_bytes));
   if workflow_ok {
     assert (pure (
       result.client_receive_status == DriverWorkflowOk));

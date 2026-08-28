@@ -39,6 +39,7 @@ ensures emp
   drop_ (MR.pts_to srv.ghost_log #1.0R log)
 }
 
+#push-options "--z3rlimit 100"
 inline_for_extraction
 fn run_connection_loop
   (srv:server_state)
@@ -207,6 +208,7 @@ ensures
     }
   }
 }
+#pop-options
 
 fn run_channel
   (ch:TCP.channel)

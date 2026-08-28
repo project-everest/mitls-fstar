@@ -627,8 +627,8 @@ let lemma_emit_response_var_final
     U16.v co == U16.v code /\ s == ser_response_var co (U32.v len)
   with (code <: status_code) and ()
 
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* size_t is at least 32 bits on every real target; HTTP head buffers can exceed
    F*'s SizeT 2^16 auto-`fits` line, so discharge sub-2^32 `fits` explicitly
    (the same open assumption as the chunked codec). *)
@@ -727,7 +727,7 @@ fn http_emit_body
       Seq.length 'd == SZ.v data_len /\
       Seq.length ov == SZ.v data_len /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'd j))
-  decreases (Prims.op_Subtraction (SZ.v data_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v data_len) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = data.(vi);
@@ -773,7 +773,7 @@ fn http_recv_body (body: array U8.t) (out: array U8.t) (n: SZ.t)
       Seq.length 'b == SZ.v n /\
       Seq.length ov == SZ.v n /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'b j))
-  decreases (Prims.op_Subtraction (SZ.v n) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v n) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = body.(vi);
@@ -839,7 +839,7 @@ fn http_emit_request
       Seq.length 't == SZ.v target_len /\
       Seq.length sv == 4 + SZ.v target_len + 13 /\
       (forall (k:nat). k < SZ.v va ==> Seq.index sv k == Seq.index lit_get k))
-  decreases (Prims.op_Subtraction (SZ.v 4sz) (SZ.v (!a)))
+  decreases (Prims.op_Minus (SZ.v 4sz) (SZ.v (!a)))
   {
     let va = !a;
     lemma_lit_get_byte va;
@@ -860,7 +860,7 @@ fn http_emit_request
       Seq.length sv == 4 + SZ.v target_len + 13 /\
       (forall (k:nat). k < 4 ==> Seq.index sv k == Seq.index lit_get k) /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (4 + j) == Seq.index 't j))
-  decreases (Prims.op_Subtraction (SZ.v target_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v target_len) (SZ.v (!i)))
   {
     let vi = !i;
     lemma_fits32 (4 + SZ.v vi);
@@ -882,7 +882,7 @@ fn http_emit_request
       (forall (j:nat). j < SZ.v target_len ==> Seq.index sv (4 + j) == Seq.index 't j) /\
       (forall (k:nat). k < SZ.v vb ==>
          Seq.index sv (4 + SZ.v target_len + k) == Seq.index (Seq.cons W.bSP req_tail) k))
-  decreases (Prims.op_Subtraction (SZ.v 13sz) (SZ.v (!b)))
+  decreases (Prims.op_Minus (SZ.v 13sz) (SZ.v (!b)))
   {
     let vb = !b;
     lemma_req_tail_byte vb;
@@ -926,7 +926,7 @@ let head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
 (* head_byte agrees with `respbytes code len` at every position.  All the
    digit arithmetic (UInt.mod -> % bridges) lives here; the caller loop stays
    trivial.  Split up front so each range/case is a small, cheap query. *)
-#push-options "--z3rlimit 300 --fuel 4 --ifuel 2"
+#push-options "--z3rlimit 800 --fuel 4 --ifuel 2"
 let lemma_head_byte (code:U16.t{100 <= U16.v code /\ U16.v code < 1000})
                     (len:U32.t{U32.v len < W.max_len8})
                     (k:SZ.t{SZ.v k < 43})
@@ -976,17 +976,17 @@ fn http_emit_response
   (out: array U8.t)
   requires
     pts_to out 'o **
-    pure (Prims.op_LessThanOrEqual 100 (U16.v code) /\
-          Prims.op_LessThan (U16.v code) 1000 /\
-          Prims.op_LessThan (U32.v len) W.max_len8 /\
+    pure (Prims.op_Less_Equals 100 (U16.v code) /\
+          Prims.op_Less (U16.v code) 1000 /\
+          Prims.op_Less (U32.v len) W.max_len8 /\
           Seq.length 'o == 43)
   ensures
     (exists* (o':Seq.seq U8.t).
        pts_to out o' **
        pure (Seq.length o' == 43 /\
-             ((Prims.op_LessThanOrEqual 100 (U16.v code) /\
-               Prims.op_LessThan (U16.v code) 1000 /\
-               Prims.op_LessThan (U32.v len) W.max_len8) ==>
+             ((Prims.op_Less_Equals 100 (U16.v code) /\
+               Prims.op_Less (U16.v code) 1000 /\
+               Prims.op_Less (U32.v len) W.max_len8) ==>
               (exists (co:status_code) (ln:content_len).
                  U16.v co == U16.v code /\ ln == U32.v len /\
                  o' == ser_response co ln))))
@@ -998,7 +998,7 @@ fn http_emit_response
     R.pts_to i vi ** pts_to out sv **
     pure (SZ.v vi <= 43 /\ Seq.length sv == 43 /\ Seq.length (respbytes code len) == 43 /\
       (forall (k:nat). k < SZ.v vi ==> Seq.index sv k == Seq.index (respbytes code len) k))
-  decreases (Prims.op_Subtraction (SZ.v 43sz) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v 43sz) (SZ.v (!i)))
   {
     let vi = !i;
     lemma_head_byte code len vi;
@@ -1025,15 +1025,15 @@ fn http_emit_response
 fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
   requires
     pts_to out 'o **
-    pure (Prims.op_LessThanOrEqual 100 (U16.v code) /\
-          Prims.op_LessThan (U16.v code) 1000 /\
-          Seq.length 'o == Prims.op_Addition 35 (dec_width (U32.v len)))
+    pure (Prims.op_Less_Equals 100 (U16.v code) /\
+          Prims.op_Less (U16.v code) 1000 /\
+          Seq.length 'o == Prims.op_Plus 35 (dec_width (U32.v len)))
   ensures
     (exists* (o':Seq.seq U8.t).
        pts_to out o' **
-       pure (Seq.length o' == Prims.op_Addition 35 (dec_width (U32.v len)) /\
-             ((Prims.op_LessThanOrEqual 100 (U16.v code) /\
-               Prims.op_LessThan (U16.v code) 1000) ==>
+       pure (Seq.length o' == Prims.op_Plus 35 (dec_width (U32.v len)) /\
+             ((Prims.op_Less_Equals 100 (U16.v code) /\
+               Prims.op_Less (U16.v code) 1000) ==>
               (exists (co:status_code).
                  U16.v co == U16.v code /\
                  o' == ser_response_var co (U32.v len)))))
@@ -1052,10 +1052,10 @@ fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
     pure (
       SZ.v va <= 31 /\
       SZ.v dcount == Seq.length (W.enc_dec_var (U32.v len)) /\
-      Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
-      Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
+      Seq.length sv == Prims.op_Plus 35 (SZ.v dcount) /\
+      Seq.length (srv_bytes code len) == Prims.op_Plus 35 (SZ.v dcount) /\
       (forall (k:nat). k < SZ.v va ==> Seq.index sv k == Seq.index (srv_bytes code len) k))
-  decreases (Prims.op_Subtraction (SZ.v 31sz) (SZ.v (!a)))
+  decreases (Prims.op_Minus (SZ.v 31sz) (SZ.v (!a)))
   {
     let va = !a;
     lemma_head_pre code len va;
@@ -1072,17 +1072,17 @@ fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
   invariant exists* (vpos:SZ.t) (vrem:U32.t) (sv:Seq.seq U8.t).
     R.pts_to pos vpos ** R.pts_to rem vrem ** pts_to out sv **
     pure (
-      31 <= SZ.v vpos /\ SZ.v vpos <= Prims.op_Addition 31 (SZ.v dcount) /\
+      31 <= SZ.v vpos /\ SZ.v vpos <= Prims.op_Plus 31 (SZ.v dcount) /\
       SZ.v dcount == Seq.length (W.enc_dec_var (U32.v len)) /\
-      Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
-      Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
+      Seq.length sv == Prims.op_Plus 35 (SZ.v dcount) /\
+      Seq.length (srv_bytes code len) == Prims.op_Plus 35 (SZ.v dcount) /\
       (forall (k:nat). k < 31 ==> Seq.index sv k == Seq.index (srv_bytes code len) k) /\
       (forall (jj:nat).
-         (Prims.op_Subtraction (SZ.v vpos) 31 <= jj /\ jj < SZ.v dcount) ==>
-         Seq.index sv (Prims.op_Addition 31 jj) == Seq.index (srv_bytes code len) (Prims.op_Addition 31 jj)) /\
-      W.all_dec (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Subtraction (SZ.v vpos) 31)) /\
-      Prims.op_Equality #Prims.nat (U32.v vrem)
-        (W.dec_dec_var (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Subtraction (SZ.v vpos) 31))))
+         (Prims.op_Minus (SZ.v vpos) 31 <= jj /\ jj < SZ.v dcount) ==>
+         Seq.index sv (Prims.op_Plus 31 jj) == Seq.index (srv_bytes code len) (Prims.op_Plus 31 jj)) /\
+      W.all_dec (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Minus (SZ.v vpos) 31)) /\
+      Prims.op_Equals #Prims.nat (U32.v vrem)
+        (W.dec_dec_var (Seq.slice (W.enc_dec_var (U32.v len)) 0 (Prims.op_Minus (SZ.v vpos) 31))))
   decreases (SZ.v (!pos))
   {
     let vpos = !pos;
@@ -1115,15 +1115,15 @@ fn http_emit_response_var (code: U16.t) (len: U32.t) (out: array U8.t)
     pure (
       SZ.v vb <= 4 /\
       SZ.v dcount == Seq.length (W.enc_dec_var (U32.v len)) /\
-      Seq.length sv == Prims.op_Addition 35 (SZ.v dcount) /\
-      Seq.length (srv_bytes code len) == Prims.op_Addition 35 (SZ.v dcount) /\
+      Seq.length sv == Prims.op_Plus 35 (SZ.v dcount) /\
+      Seq.length (srv_bytes code len) == Prims.op_Plus 35 (SZ.v dcount) /\
       (forall (k:nat). k < 31 ==> Seq.index sv k == Seq.index (srv_bytes code len) k) /\
       (forall (jj:nat). jj < SZ.v dcount ==>
-         Seq.index sv (Prims.op_Addition 31 jj) == Seq.index (srv_bytes code len) (Prims.op_Addition 31 jj)) /\
+         Seq.index sv (Prims.op_Plus 31 jj) == Seq.index (srv_bytes code len) (Prims.op_Plus 31 jj)) /\
       (forall (kk:nat). kk < SZ.v vb ==>
-         Seq.index sv (Prims.op_Addition (Prims.op_Addition 31 (SZ.v dcount)) kk)
-           == Seq.index (srv_bytes code len) (Prims.op_Addition (Prims.op_Addition 31 (SZ.v dcount)) kk)))
-  decreases (Prims.op_Subtraction (SZ.v 4sz) (SZ.v (!b)))
+         Seq.index sv (Prims.op_Plus (Prims.op_Plus 31 (SZ.v dcount)) kk)
+           == Seq.index (srv_bytes code len) (Prims.op_Plus (Prims.op_Plus 31 (SZ.v dcount)) kk)))
+  decreases (Prims.op_Minus (SZ.v 4sz) (SZ.v (!b)))
   {
     let vb = !b;
     lemma_srv_index code len;
@@ -1161,9 +1161,9 @@ fn http_recv_response (inp: array U8.t) (pcode: R.ref U16.t) (plen: R.ref U32.t)
     (exists* (cv:U16.t) (lv:U32.t).
        R.pts_to pcode cv ** R.pts_to plen lv **
        pure (ok == true ==>
-         (Prims.op_LessThanOrEqual 100 (U16.v cv) /\
-          Prims.op_LessThan (U16.v cv) 1000 /\
-          Prims.op_LessThan (U32.v lv) W.max_len8 /\
+         (Prims.op_Less_Equals 100 (U16.v cv) /\
+          Prims.op_Less (U16.v cv) 1000 /\
+          Prims.op_Less (U32.v lv) W.max_len8 /\
           http_parse 'i == Some (Msg_response cv (U32.v lv), Seq.empty #U8.t))))
 {
   (* decode the 11 digit positions to a candidate (code,len) *)
@@ -1201,7 +1201,7 @@ fn http_recv_response (inp: array U8.t) (pcode: R.ref U16.t) (plen: R.ref U32.t)
           Seq.length (respbytes code len) == 43 /\
           (okv == true ==> (forall (k:nat). k < SZ.v vi ==>
              Seq.index 'i k == Seq.index (respbytes code len) k)))
-      decreases (Prims.op_Subtraction (SZ.v 43sz) (SZ.v (!i)))
+      decreases (Prims.op_Minus (SZ.v 43sz) (SZ.v (!i)))
       {
         let vi = !i;
         let bv = inp.(vi);
@@ -1252,8 +1252,8 @@ fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
        pure (ok == true ==>
          (exists (tk:W.token).
             Seq.length 'i == SZ.v n /\
-            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v n) /\
-            (tk <: Seq.seq U8.t) == Seq.slice 'i 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            Prims.op_Less_Equals (Prims.op_Plus 4 (SZ.v tl)) (SZ.v n) /\
+            (tk <: Seq.seq U8.t) == Seq.slice 'i 4 (Prims.op_Plus 4 (SZ.v tl)) /\
             http_parse 'i == Some (Msg_request tk, Seq.empty #U8.t))))
 {
   if SZ.lt n 17sz {
@@ -1271,7 +1271,7 @@ fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       pure (4 <= SZ.v vi /\ SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\
         (forall (j:nat). 4 <= j /\ j < SZ.v vi ==> Seq.index 'i j =!= W.bSP) /\
         (vf == true ==> (SZ.v vi < SZ.v n /\ Seq.index 'i (SZ.v vi) == W.bSP)))
-    decreases %[(if !fnd then 0 else 1); Prims.op_Subtraction (SZ.v n) (SZ.v (!i))]
+    decreases %[(if !fnd then 0 else 1); Prims.op_Minus (SZ.v n) (SZ.v (!i))]
     {
       let vi = !i;
       let c = inp.(vi);
@@ -1291,12 +1291,12 @@ fn http_recv_request (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       invariant exists* (vk:SZ.t) (vt:bool).
         R.pts_to k vk ** R.pts_to tok vt ** pts_to inp 'i **
         pure (SZ.v vk <= 12 /\ Seq.length 'i == SZ.v n /\
-          4 <= SZ.v sp /\ Prims.op_Addition (SZ.v sp) 13 == SZ.v n /\
+          4 <= SZ.v sp /\ Prims.op_Plus (SZ.v sp) 13 == SZ.v n /\
           Seq.index 'i (SZ.v sp) == W.bSP /\
           (vt == true ==> (forall (kk:nat). kk < SZ.v vk ==>
-             Seq.index 'i (Prims.op_Addition (Prims.op_Addition (SZ.v sp) 1) kk)
-               == Seq.index (Seq.cons W.bSP req_tail) (Prims.op_Addition kk 1))))
-      decreases (Prims.op_Subtraction (SZ.v 12sz) (SZ.v (!k)))
+             Seq.index 'i (Prims.op_Plus (Prims.op_Plus (SZ.v sp) 1) kk)
+               == Seq.index (Seq.cons W.bSP req_tail) (Prims.op_Plus kk 1))))
+      decreases (Prims.op_Minus (SZ.v 12sz) (SZ.v (!k)))
       {
         let vk = !k;
         let bv = inp.(SZ.add (SZ.add sp 1sz) vk);
@@ -1345,8 +1345,8 @@ fn http_recv_request_head (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
        pure (ok == true ==>
          (exists (tk:W.token).
             Seq.length 'i == SZ.v n /\
-            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v n) /\
-            (tk <: Seq.seq U8.t) == Seq.slice 'i 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            Prims.op_Less_Equals (Prims.op_Plus 4 (SZ.v tl)) (SZ.v n) /\
+            (tk <: Seq.seq U8.t) == Seq.slice 'i 4 (Prims.op_Plus 4 (SZ.v tl)) /\
             parse_request_line 'i == Some tk)))
 {
   if SZ.lt n 15sz {
@@ -1364,7 +1364,7 @@ fn http_recv_request_head (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       pure (4 <= SZ.v vi /\ SZ.v vi <= SZ.v n /\ Seq.length 'i == SZ.v n /\
         (forall (j:nat). 4 <= j /\ j < SZ.v vi ==> Seq.index 'i j =!= W.bSP) /\
         (vf == true ==> (SZ.v vi < SZ.v n /\ Seq.index 'i (SZ.v vi) == W.bSP)))
-    decreases %[(if !fnd then 0 else 1); Prims.op_Subtraction (SZ.v n) (SZ.v (!i))]
+    decreases %[(if !fnd then 0 else 1); Prims.op_Minus (SZ.v n) (SZ.v (!i))]
     {
       let vi = !i;
       let c = inp.(vi);
@@ -1385,11 +1385,11 @@ fn http_recv_request_head (inp: array U8.t) (n: SZ.t) (ptlen: R.ref SZ.t)
       invariant exists* (vk:SZ.t) (vt:bool).
         R.pts_to k vk ** R.pts_to tok vt ** pts_to inp 'i **
         pure (SZ.v vk <= 10 /\ Seq.length 'i == SZ.v n /\
-          4 <= SZ.v sp /\ Prims.op_Addition (SZ.v sp) 11 <= SZ.v n /\
+          4 <= SZ.v sp /\ Prims.op_Plus (SZ.v sp) 11 <= SZ.v n /\
           (vt == true ==> (forall (kk:nat). kk < SZ.v vk ==>
-             Seq.index 'i (Prims.op_Addition (Prims.op_Addition (SZ.v sp) 1) kk)
+             Seq.index 'i (Prims.op_Plus (Prims.op_Plus (SZ.v sp) 1) kk)
                == Seq.index req_ver kk)))
-      decreases (Prims.op_Subtraction (SZ.v 10sz) (SZ.v (!k)))
+      decreases (Prims.op_Minus (SZ.v 10sz) (SZ.v (!k)))
       {
         let vk = !k;
         let bv = inp.(SZ.add (SZ.add sp 1sz) vk);

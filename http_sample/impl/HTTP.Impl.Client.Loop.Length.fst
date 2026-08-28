@@ -38,8 +38,8 @@ let lemma_flen_fits (flen:SZ.t)
   : Lemma (requires SZ.v flen < W.max_len8) (ensures SZ.v flen < pow2 32)
   = assert_norm (W.max_len8 < pow2 32)
 
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* Receive one Content-Length body segment of the agreed length `flen` over `ch`.
    `body` (flen bytes) stages the raw payload and `out` (flen bytes) receives the
    decoded body.  Returns whether the segment is `body_ok`; on success `out`
@@ -91,7 +91,7 @@ fn http_client_run_length_full
     pure (Seq.length 'hb == 43 /\
           Seq.length 'b == SZ.v flen /\
           Seq.length 'o == SZ.v flen /\
-          Prims.op_LessThan (SZ.v flen) W.max_len8)
+          Prims.op_Less (SZ.v flen) W.max_len8)
   returns ok: bool
   ensures
     (exists* (rcv snt:TCP.bytes) (hb' bb o':Seq.seq U8.t) (cv:U16.t) (lv:U32.t).
@@ -100,10 +100,10 @@ fn http_client_run_length_full
        pts_to body bb ** pts_to out o' **
        pure (Seq.length o' == SZ.v flen /\
              (ok == true ==>
-                (Prims.op_LessThanOrEqual 100 (U16.v cv) /\
-                 Prims.op_LessThan (U16.v cv) 1000 /\
-                 Prims.op_LessThan (U32.v lv) W.max_len8 /\
-                 Prims.op_Equality #nat (U32.v lv) (SZ.v flen) /\
+                (Prims.op_Less_Equals 100 (U16.v cv) /\
+                 Prims.op_Less (U16.v cv) 1000 /\
+                 Prims.op_Less (U32.v lv) W.max_len8 /\
+                 Prims.op_Equals #nat (U32.v lv) (SZ.v flen) /\
                  http_parse hb' == Some (Msg_response cv (U32.v lv), Seq.empty #U8.t) /\
                  body_ok o' /\
                  http_parse o' == Some (Msg_body o', Seq.empty #U8.t)))))
@@ -166,7 +166,7 @@ fn http_client_exchange_length
           Seq.length 'hb == 43 /\
           Seq.length 'b == SZ.v flen /\
           Seq.length 'o == SZ.v flen /\
-          Prims.op_LessThan (SZ.v flen) W.max_len8)
+          Prims.op_Less (SZ.v flen) W.max_len8)
   returns ok: bool
   ensures
     pts_to target 't **
@@ -177,17 +177,17 @@ fn http_client_exchange_length
        pts_to body bb ** pts_to out o' **
        pure (Seq.length o' == SZ.v flen /\
              (ok == true ==>
-                (Prims.op_LessThanOrEqual 100 (U16.v cv) /\
-                 Prims.op_LessThan (U16.v cv) 1000 /\
-                 Prims.op_LessThan (U32.v lv) W.max_len8 /\
-                 Prims.op_Equality #nat (U32.v lv) (SZ.v flen) /\
+                (Prims.op_Less_Equals 100 (U16.v cv) /\
+                 Prims.op_Less (U16.v cv) 1000 /\
+                 Prims.op_Less (U32.v lv) W.max_len8 /\
+                 Prims.op_Equals #nat (U32.v lv) (SZ.v flen) /\
                  http_parse hb' == Some (Msg_response cv (U32.v lv), Seq.empty #U8.t) /\
                  body_ok o' /\
                  http_parse o' == Some (Msg_body o', Seq.empty #U8.t)))))
 {
   Codec.http_emit_request target target_len reqbuf;
-  Codec.lemma_fits32 (Prims.op_Addition 4 (SZ.v target_len));
-  Codec.lemma_fits32 (Prims.op_Addition (Prims.op_Addition 4 (SZ.v target_len)) 13);
+  Codec.lemma_fits32 (Prims.op_Plus 4 (SZ.v target_len));
+  Codec.lemma_fits32 (Prims.op_Plus (Prims.op_Plus 4 (SZ.v target_len)) 13);
   let rlen = SZ.add (SZ.add 4sz target_len) 13sz;
   let _nw = TCP.write ch reqbuf rlen;
   let ok = http_client_run_length_full ch headbuf pcode plen body out flen;

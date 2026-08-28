@@ -3060,6 +3060,7 @@ fn process_send_stored_certificate_verify_serialized
 }
 
 #pop-options
+#push-options "--z3rlimit 200"
 fn process_send_server_finished_serialized
   (s:server)
   (network_out:array U8.t)
@@ -3469,3 +3470,5 @@ fn process_send_server_finished_serialized
     'old_app_out));
   resp
 }
+
+#pop-options

@@ -33,8 +33,8 @@ module Codec = HTTP.Impl.Codec.Chunked
 module W     = HTTP.Wire.Common
 
 open HTTP.Wire.Chunked
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* Receive one chunk (of the agreed length `flen`) over `ch`.  `hdr` (6 bytes)
    stages the size header, `body` (flen+2 bytes) the payload plus its CRLF, and
    `out` (flen bytes) receives the decoded payload.  Returns whether the chunk

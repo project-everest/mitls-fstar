@@ -32,8 +32,8 @@ module A     = Pulse.Lib.Array
 module W     = HTTP.Wire.Common
 module Codec = HTTP.Impl.Codec.Chunked
 
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* size_t is at least 32 bits on every real target, so any value below 2^32
    fits.  HTTP chunk lengths reach 8+65535 = 65543, which crosses F*'s SizeT
    2^16 auto-`fits` line, so we discharge it explicitly (same open assumption as

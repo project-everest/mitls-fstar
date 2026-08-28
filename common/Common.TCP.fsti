@@ -10,7 +10,7 @@ module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
-type bytes = Seq.seq U8.t
+unfold type bytes = Seq.seq U8.t
 
 noextract
 noeq

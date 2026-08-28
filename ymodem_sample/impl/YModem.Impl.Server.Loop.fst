@@ -134,7 +134,7 @@ ensures
   unfold (CC.ymodem_server_inv i received sent st);
   with svs. _;
   Log.lemma_start_step (Ghost.reveal st) (Ghost.reveal filename) (Ghost.reveal len) (Ghost.reveal plan);
-  Vec.op_Array_Assignment i.status 0sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 0uy;
   with svs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent)
@@ -189,7 +189,7 @@ ensures exists* (st1:YP.ymodem_server_state) (nsent:TCP.bytes) (oc':Seq.seq U8.t
   Log.lemma_send_step (Ghost.reveal st) (Ghost.reveal body);
   let st1 = Ghost.hide (Log.send_next_state (Ghost.reveal st));
   let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent) (ymodem_serialize (Body_soh (Ghost.reveal body))));
-  Vec.op_Array_Assignment i.status 0sz 1uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 1uy;
   with svs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent1) (Ghost.reveal st1));
@@ -234,7 +234,7 @@ ensures exists* (nsent:TCP.bytes) (oc':Seq.seq U8.t).
   let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent) (Seq.create 1 4uy));
   out.(0sz) <- 4uy;
   with o'. _;
-  Vec.op_Array_Assignment i.status 0sz 2uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 2uy;
   with svs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent1)
@@ -271,7 +271,7 @@ ensures
   unfold (CC.ymodem_server_inv i received sent st);
   with svs. _;
   Log.lemma_complete_step (Ghost.reveal st);
-  Vec.op_Array_Assignment i.status 0sz 3uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 3uy;
   with svs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent)
@@ -300,7 +300,7 @@ ensures
 {
   unfold (CC.ymodem_server_inv i received sent st);
   with svs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   fold (CC.ymodem_server_inv i received sent st);
   s
 }

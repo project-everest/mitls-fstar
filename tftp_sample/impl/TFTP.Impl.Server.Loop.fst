@@ -131,7 +131,7 @@ ensures
   unfold (CC.tftp_server_inv i received sent st);
   with svs evs. _;
   Log.lemma_start_step (Ghost.reveal st) (Ghost.reveal filename) (Ghost.reveal plan);
-  Vec.op_Array_Assignment i.status 0sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 0uy;
   with svs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent)
@@ -215,9 +215,9 @@ ensures exists* (st1:TP.tftp_server_state) (nsent:TCP.bytes) (oc':Seq.seq U8.t).
   let st1 = Ghost.hide (Log.send_next_state (Ghost.reveal st));
   let sent1 = Ghost.hide (Seq.append (Ghost.reveal sent)
                 (tftp_serialize (Msg_data blk (Ghost.reveal pl))));
-  Vec.op_Array_Assignment i.status 0sz 1uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 1uy;
   with svs2. _;
-  Vec.op_Array_Assignment i.expected 0sz blk;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.expected 0sz blk;
   with evs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent1) (Ghost.reveal st1));
@@ -249,7 +249,7 @@ ensures
   unfold (CC.tftp_server_inv i received sent st);
   with svs evs. _;
   Log.lemma_complete_step (Ghost.reveal st);
-  Vec.op_Array_Assignment i.status 0sz 2uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 2uy;
   with svs2. _;
   let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent) (Ghost.reveal st));
   let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received) (Ghost.reveal sent)
@@ -278,7 +278,7 @@ ensures
 {
   unfold (CC.tftp_server_inv i received sent st);
   with svs evs. _;
-  let s = Vec.op_Array_Access i.status 0sz;
+  let s = Vec.op_Dot_Lparen_Rparen i.status 0sz;
   fold (CC.tftp_server_inv i received sent st);
   s
 }

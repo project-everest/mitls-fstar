@@ -41,16 +41,16 @@ fn copy5 (dst: Vec.vec U8.t) (src: Vec.vec U8.t)
     Vec.pts_to dst 'sb **
     Vec.pts_to src 'sb
 {
-  let b0 = Vec.op_Array_Access src 0sz;
-  let b1 = Vec.op_Array_Access src 1sz;
-  let b2 = Vec.op_Array_Access src 2sz;
-  let b3 = Vec.op_Array_Access src 3sz;
-  let b4 = Vec.op_Array_Access src 4sz;
-  Vec.op_Array_Assignment dst 0sz b0;
-  Vec.op_Array_Assignment dst 1sz b1;
-  Vec.op_Array_Assignment dst 2sz b2;
-  Vec.op_Array_Assignment dst 3sz b3;
-  Vec.op_Array_Assignment dst 4sz b4;
+  let b0 = Vec.op_Dot_Lparen_Rparen src 0sz;
+  let b1 = Vec.op_Dot_Lparen_Rparen src 1sz;
+  let b2 = Vec.op_Dot_Lparen_Rparen src 2sz;
+  let b3 = Vec.op_Dot_Lparen_Rparen src 3sz;
+  let b4 = Vec.op_Dot_Lparen_Rparen src 4sz;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus dst 0sz b0;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus dst 1sz b1;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus dst 2sz b2;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus dst 3sz b3;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus dst 4sz b4;
   with db1. assert (Vec.pts_to dst db1);
   Seq.lemma_eq_elim db1 'sb;
   rewrite (Vec.pts_to dst db1) as (Vec.pts_to dst 'sb)

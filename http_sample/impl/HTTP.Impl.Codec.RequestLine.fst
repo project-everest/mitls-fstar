@@ -203,7 +203,7 @@ fn scan_sp (inp: array U8.t) (n: SZ.t) (from: SZ.t) (pj: R.ref SZ.t)
           (vg == false ==>
             (SZ.v vj == SZ.v n \/
              (SZ.v vj < SZ.v n /\ Seq.index 'i (SZ.v vj) == W.bSP))))
-  decreases %[(if !g then 1 else 0); Prims.op_Subtraction (SZ.v n) (SZ.v (!j))]
+  decreases %[(if !g then 1 else 0); Prims.op_Minus (SZ.v n) (SZ.v (!j))]
   {
     let vj = !j;
     if SZ.lt vj n {
@@ -250,7 +250,7 @@ fn check_ver (inp: array U8.t) (n: SZ.t) (sp: SZ.t)
             (vgood == true ==>
               (forall (kk:nat). kk < SZ.v vk ==> Seq.index 'i (SZ.v sp + 1 + kk) == Seq.index req_ver kk)) /\
             (vg == false ==> (SZ.v vk == 10 \/ vgood == false)))
-    decreases %[(if !g then 1 else 0); Prims.op_Subtraction (SZ.v 10sz) (SZ.v (!k))]
+    decreases %[(if !g then 1 else 0); Prims.op_Minus (SZ.v 10sz) (SZ.v (!k))]
     {
       let vk = !k;
       let vgood = !good;

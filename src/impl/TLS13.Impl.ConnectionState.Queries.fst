@@ -1495,11 +1495,11 @@ fn can_receive_server_hello
         let offered_len = !c.handshake.start.cipher_suites.len;
         assert (pure (offered_len == cipher_len));
         let offered_nonempty = SZ.gt offered_len 0sz;
-        let first_cipher = V.op_Array_Access c.handshake.start.cipher_suites.items 0sz;
+        let first_cipher = V.op_Dot_Lparen_Rparen c.handshake.start.cipher_suites.items 0sz;
         let offers_chacha = first_cipher = 0x1303us;
         let offers_two = SZ.gte offered_len 2sz;
         let second_cipher =
-          if offers_two { V.op_Array_Access c.handshake.start.cipher_suites.items 1sz }
+          if offers_two { V.op_Dot_Lparen_Rparen c.handshake.start.cipher_suites.items 1sz }
           else { 0us };
         let offers_aes = offers_two && second_cipher = 0x1301us;
         if (offered_nonempty && offers_chacha && offers_aes) {
@@ -1993,7 +1993,7 @@ fn scan_u16_for
   decreases %[(if PRef.op_Bang found then 0 else 1); (SZ.v len - SZ.v (PRef.op_Bang i))]
   {
     let iv = PRef.op_Bang i;
-    let el = V.op_Array_Access v iv;
+    let el = V.op_Dot_Lparen_Rparen v iv;
     if (el = target) {
       assert (pure (SZ.v iv < SZ.v len /\ Seq.index bytes (SZ.v iv) == target));
       PRef.op_Colon_Equals found true;

@@ -27,8 +27,8 @@ module W     = HTTP.Wire.Common
 module Codec = HTTP.Impl.Codec.Length
 
 open HTTP.Wire.Length
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* Send a whole file body over `ch` as a Content-Length delimited segment, then
    close the channel.  `scratch` (file_len bytes) stages the body; `body_ok`
    guarantees the segment cannot be confused with a request/response line. *)
@@ -76,9 +76,9 @@ fn http_server_run_length_full
           Seq.length 'hb == 43 /\
           Seq.length 's == SZ.v file_len /\
           body_ok 'f /\
-          Prims.op_LessThanOrEqual 100 (U16.v code) /\
-          Prims.op_LessThan (U16.v code) 1000 /\
-          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+          Prims.op_Less_Equals 100 (U16.v code) /\
+          Prims.op_Less (U16.v code) 1000 /\
+          Prims.op_Less (SZ.v file_len) W.max_len8)
   ensures
     pts_to file 'f **
     (exists* (hb' s':Seq.seq U8.t).
@@ -116,12 +116,12 @@ fn http_server_run_length_var
     pts_to headbuf 'hb **
     pts_to scratch 's **
     pure (Seq.length 'f == SZ.v file_len /\
-          Seq.length 'hb == Prims.op_Addition 35 (Codec.dec_width (SZ.v file_len)) /\
+          Seq.length 'hb == Prims.op_Plus 35 (Codec.dec_width (SZ.v file_len)) /\
           Seq.length 's == SZ.v file_len /\
           body_ok 'f /\
-          Prims.op_LessThanOrEqual 100 (U16.v code) /\
-          Prims.op_LessThan (U16.v code) 1000 /\
-          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+          Prims.op_Less_Equals 100 (U16.v code) /\
+          Prims.op_Less (U16.v code) 1000 /\
+          Prims.op_Less (SZ.v file_len) W.max_len8)
   ensures
     pts_to file 'f **
     (exists* (hb' s':Seq.seq U8.t).
@@ -165,9 +165,9 @@ fn http_server_exchange_length
           Seq.length 'hb == 43 /\
           Seq.length 's == SZ.v file_len /\
           body_ok 'f /\
-          Prims.op_LessThanOrEqual 100 (U16.v code) /\
-          Prims.op_LessThan (U16.v code) 1000 /\
-          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+          Prims.op_Less_Equals 100 (U16.v code) /\
+          Prims.op_Less (U16.v code) 1000 /\
+          Prims.op_Less (SZ.v file_len) W.max_len8)
   returns okr: bool
   ensures
     pts_to file 'f **
@@ -177,8 +177,8 @@ fn http_server_exchange_length
        pure (okr == true ==>
          (exists (tk:W.token).
             Seq.length rq' == SZ.v reqlen /\
-            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v reqlen) /\
-            (tk <: Seq.seq U8.t) == Seq.slice rq' 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            Prims.op_Less_Equals (Prims.op_Plus 4 (SZ.v tl)) (SZ.v reqlen) /\
+            (tk <: Seq.seq U8.t) == Seq.slice rq' 4 (Prims.op_Plus 4 (SZ.v tl)) /\
             http_parse rq' == Some (Msg_request tk, Seq.empty #U8.t))))
 {
   let _nr = TCP.read_full ch reqbuf reqlen;
@@ -216,9 +216,9 @@ fn http_server_exchange_length_head
           Seq.length 'hb == 43 /\
           Seq.length 's == SZ.v file_len /\
           body_ok 'f /\
-          Prims.op_LessThanOrEqual 100 (U16.v code) /\
-          Prims.op_LessThan (U16.v code) 1000 /\
-          Prims.op_LessThan (SZ.v file_len) W.max_len8)
+          Prims.op_Less_Equals 100 (U16.v code) /\
+          Prims.op_Less (U16.v code) 1000 /\
+          Prims.op_Less (SZ.v file_len) W.max_len8)
   returns okr: bool
   ensures
     pts_to file 'f **
@@ -228,8 +228,8 @@ fn http_server_exchange_length_head
        pure (okr == true ==>
          (exists (tk:W.token).
             Seq.length rq' == SZ.v reqlen /\
-            Prims.op_LessThanOrEqual (Prims.op_Addition 4 (SZ.v tl)) (SZ.v reqlen) /\
-            (tk <: Seq.seq U8.t) == Seq.slice rq' 4 (Prims.op_Addition 4 (SZ.v tl)) /\
+            Prims.op_Less_Equals (Prims.op_Plus 4 (SZ.v tl)) (SZ.v reqlen) /\
+            (tk <: Seq.seq U8.t) == Seq.slice rq' 4 (Prims.op_Plus 4 (SZ.v tl)) /\
             parse_request_line rq' == Some tk)))
 {
   let okr = Codec.http_recv_request_head reqbuf reqlen ptlen;

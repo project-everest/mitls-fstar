@@ -31,11 +31,11 @@ fn write_ok_response (resp_buf: Vec.vec U8.t)
       Seq.index resp_bytes1 4 == 0uy
     )
 {
-  Vec.op_Array_Assignment resp_buf 0sz 0uy;
-  Vec.op_Array_Assignment resp_buf 1sz 0uy;
-  Vec.op_Array_Assignment resp_buf 2sz 0uy;
-  Vec.op_Array_Assignment resp_buf 3sz 0uy;
-  Vec.op_Array_Assignment resp_buf 4sz 0uy
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 0sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 1sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 2sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 3sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 4sz 0uy
 }
 
 (** Write Error response (tag 2, then zeros) **)
@@ -52,11 +52,11 @@ fn write_error_response (resp_buf: Vec.vec U8.t)
       Seq.index resp_bytes1 4 == 0uy
     )
 {
-  Vec.op_Array_Assignment resp_buf 0sz 2uy;
-  Vec.op_Array_Assignment resp_buf 1sz 0uy;
-  Vec.op_Array_Assignment resp_buf 2sz 0uy;
-  Vec.op_Array_Assignment resp_buf 3sz 0uy;
-  Vec.op_Array_Assignment resp_buf 4sz 0uy
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 0sz 2uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 1sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 2sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 3sz 0uy;
+  Vec.op_Dot_Lparen_Rparen_Less_Minus resp_buf 4sz 0uy
 }
 
 (** 
@@ -99,12 +99,12 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
   
   unfold (server_exactly srv log0);
   with sb size_seq. _;
-  let csz = Vec.op_Array_Access srv.size 0sz;
+  let csz = Vec.op_Dot_Lparen_Rparen srv.size 0sz;
 
   if SZ.lt csz 10sz {
     // Push success: stack not full
-    Vec.op_Array_Assignment srv.stack csz value;
-    Vec.op_Array_Assignment srv.size 0sz (SZ.add csz 1sz);
+    Vec.op_Dot_Lparen_Rparen_Less_Minus srv.stack csz value;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus srv.size 0sz (SZ.add csz 1sz);
     write_ok_response resp_buf;
     with resp_bytes1. _;
     

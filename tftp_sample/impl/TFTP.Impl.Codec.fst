@@ -277,8 +277,8 @@ let peek_opcode_correct (i:Seq.seq U8.t)
 (* The verified leaves.                                                      *)
 (* ------------------------------------------------------------------------ *)
 
-open Pulse.Lib.BoundedIntegers
 
+open FStar.SizeT { (+), (-), ( * ), (/), (%), (<), (<=), (>), (>=) }
 (* Build a TFTP DATA packet  03 | blk(2) | payload(len)  from a `len`-byte file
    chunk; `out` (length 4+len) receives the whole packet, proved equal to
    `tftp_serialize (Msg_data blk payload)`. *)
@@ -321,7 +321,7 @@ fn tftp_emit_data
       Seq.index sv 2 == u16_hi blk /\
       Seq.index sv 3 == u16_lo blk /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (4 + j) == Seq.index 'd j))
-  decreases (Prims.op_Subtraction (SZ.v data_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v data_len) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = data.(vi);
@@ -393,7 +393,7 @@ fn tftp_recv_data
       Seq.length 'i == SZ.v inp_len /\
       SZ.v inp_len == Seq.length ov + 4 /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index ov j == Seq.index 'i (4 + j)))
-  decreases (Prims.op_Subtraction (SZ.v plen) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v plen) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = inp.(4sz + vi);
@@ -474,7 +474,7 @@ fn tftp_emit_rrq
       Seq.index sv 0 == u16_hi op_rrq /\
       Seq.index sv 1 == u16_lo op_rrq /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (2 + j) == Seq.index 'fnb j))
-  decreases (Prims.op_Subtraction (SZ.v fn_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v fn_len) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = filename.(vi);
@@ -499,7 +499,7 @@ fn tftp_emit_rrq
       Seq.index sv ((2 <: nat) + SZ.v fn_len) == 0uy /\
       (forall (j:nat). j < SZ.v vk ==>
          Seq.index sv ((2 <: nat) + SZ.v fn_len + 1 + j) == Seq.index 'mdb j))
-  decreases (Prims.op_Subtraction (SZ.v mode_len) (SZ.v (!k)))
+  decreases (Prims.op_Minus (SZ.v mode_len) (SZ.v (!k)))
   {
     let vk = !k;
     let dv = mode.(vk);
@@ -556,7 +556,7 @@ fn tftp_emit_error
       Seq.index sv 2 == u16_hi code /\
       Seq.index sv 3 == u16_lo code /\
       (forall (j:nat). j < SZ.v vi ==> Seq.index sv (4 + j) == Seq.index 'em j))
-  decreases (Prims.op_Subtraction (SZ.v msg_len) (SZ.v (!i)))
+  decreases (Prims.op_Minus (SZ.v msg_len) (SZ.v (!i)))
   {
     let vi = !i;
     let dv = msg.(vi);

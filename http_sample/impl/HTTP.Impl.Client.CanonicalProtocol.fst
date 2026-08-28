@@ -321,8 +321,8 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
   unfold (http_client_inv i received0 sent0 st0);
   with svs cvs. _;
   unfold (http_client_network_frame_pre frame input input_len out out_len input_contents old_out);
-  let sflag = Vec.op_Array_Access i.status 0sz;
-  let rem = Vec.op_Array_Access i.remaining 0sz;
+  let sflag = Vec.op_Dot_Lparen_Rparen i.status 0sz;
+  let rem = Vec.op_Dot_Lparen_Rparen i.remaining 0sz;
   let ok = http_body_ok input input_len;
   if (U8.eq sflag 1uy && ok) {
     (* StepOk — the segment is acceptable and the transfer is in progress. *)
@@ -332,8 +332,8 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
     lemma_recv_len (Ghost.reveal st0).HP.hcs_received (Ghost.reveal p);
     let flag = (if done then 2uy else 1uy);
     let newrem = (if done then 0sz else SZ.sub rem input_len);
-    Vec.op_Array_Assignment i.status 0sz flag;
-    Vec.op_Array_Assignment i.remaining 0sz newrem;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz flag;
+    Vec.op_Dot_Lparen_Rparen_Less_Minus i.remaining 0sz newrem;
     with cvs2. _;
     let received1 = Ghost.hide (Seq.append (Ghost.reveal received0) (Ghost.reveal p <: TCP.bytes));
     let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
@@ -423,8 +423,8 @@ ensures exists* (received1:Ghost.erased TCP.bytes)
     HP.Client_start filename len -> {
       Log.lemma_client_start_step (Ghost.reveal st0) filename len;
       let st1 = Ghost.hide (Log.client_start_next_state filename len);
-      Vec.op_Array_Assignment i.status 0sz 1uy;
-      Vec.op_Array_Assignment i.remaining 0sz frame.hclf_len;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.status 0sz 1uy;
+      Vec.op_Dot_Lparen_Rparen_Less_Minus i.remaining 0sz frame.hclf_len;
       with cvs2. _;
       let log0 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st0));
       let log1 = Ghost.hide (Log.mk_log (Ghost.reveal received0) (Ghost.reveal sent0) (Ghost.reveal st1));

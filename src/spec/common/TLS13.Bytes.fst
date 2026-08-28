@@ -1,8 +1,8 @@
 module TLS13.Bytes
 
 module Seq = FStar.Seq
-type byte = FStar.UInt8.t
-type bytes = Seq.seq byte
+unfold type byte = FStar.UInt8.t
+unfold type bytes = Seq.seq byte
 
 let length (b:bytes) : nat = Seq.length b
 
