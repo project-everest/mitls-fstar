@@ -16,7 +16,7 @@
  * WHAT IS AND IS NOT COVERED, AND WHY THE CONTROLS MATTER.  A single cell
  * proves little on its own: a harness that broke the connection for any reason
  * at all would report "refused" and, while the row expected refused, would
- * have looked green.  So the ledger below shares one proxy across four cells:
+ * have looked green.  So the ledger below shares one proxy across five cells:
  *
  *   FRAMING_NORMAL        the proxy relays byte for byte.  Expect OK.  This
  *                         cell exists to prove the proxy is transparent, so
@@ -51,6 +51,23 @@
  *                         the middle one coalesce onto an ALREADY NON-EMPTY
  *                         buffer, which is a distinct branch of the buffering
  *                         step.
+ *
+ *   FRAMING_RECORD_SPLIT_MANY
+ *                         the same message delivered as 8-byte records, so N
+ *                         follows from the ServerHello's size rather than from
+ *                         the harness.  This cell is NOT about branch coverage
+ *                         -- three records already saturate the branch
+ *                         structure, and a fourth takes the identical path to
+ *                         the third.  It exists because "2 and 3" invites the
+ *                         reading that reassembly is special-cased for small N,
+ *                         and it is not: `cleartext_handshake_stream` is
+ *                         `pending ++ fragment` and NO RECORD COUNTER appears
+ *                         anywhere in the step relation, so the only limits are
+ *                         the byte cap (`max_pending_cleartext_handshake`,
+ *                         32768) and the requirement that each fragment be
+ *                         non-empty.  The proxy prints the N it produced rather
+ *                         than this comment fixing one, since N is a property
+ *                         of the peer's ServerHello and not of the test.
  *
  * WHY THE DELIVERY IS NOT ON THE RECORD-LOCAL PATH.  The record-local
  * ServerHello delivery in TLS13.Impl.Handle.Handshake gates on
@@ -118,6 +135,7 @@ typedef enum {
   FRAMING_TCP_DRIBBLE,
   FRAMING_RECORD_SPLIT,
   FRAMING_RECORD_SPLIT3,
+  FRAMING_RECORD_SPLIT_MANY,
 } framing_mode;
 
 struct case_spec {
@@ -148,6 +166,18 @@ static const struct case_spec k_cases[] = {
     {"serverhello-across-three-records", FRAMING_RECORD_SPLIT3, true,
      "G3: two buffering steps then a delivery -- the middle record coalesces "
      "onto a non-empty buffer"},
+    /* N records, for N determined by the message size rather than by the
+       harness.  Three records already SATURATE the branch structure -- a
+       fourth record takes the identical path to the third -- so this cell is
+       not about coverage.  It exists to demonstrate that the capability is
+       genuinely inductive in the pending buffer rather than special-cased for
+       small N: `cleartext_handshake_stream` is `pending ++ fragment` and no
+       record counter appears anywhere in the step relation, so the only limit
+       is the byte cap. */
+    {"serverhello-across-many-records", FRAMING_RECORD_SPLIT_MANY, true,
+     "G3: the reassembly is inductive, not special-cased -- the ServerHello is "
+     "delivered as 8-byte records and every one after the first coalesces onto "
+     "a non-empty buffer.  The proxy reports the record count it produced"},
 };
 
 #define CASE_COUNT (sizeof k_cases / sizeof k_cases[0])
@@ -377,8 +407,43 @@ static int run_proxy(uint16_t listen_port, uint16_t server_port,
     }
     first_server_record_done = true;
 
-    if (framing == FRAMING_RECORD_SPLIT3 && header[0] == 22 /* handshake */ &&
-        frag_len >= 3) {
+    if (framing == FRAMING_RECORD_SPLIT_MANY &&
+        header[0] == 22 /* handshake */ && frag_len >= 2) {
+      /* One record per 8 bytes.  Nothing here depends on the resulting count:
+         the loop just walks the fragment, so N follows from the ServerHello's
+         size.  Every record after the first coalesces onto a non-empty
+         buffer. */
+      size_t off = 0;
+      size_t records = 0;
+      bool failed = false;
+      while (off < frag_len && !failed) {
+        size_t chunk = frag_len - off < 8 ? frag_len - off : 8;
+        uint8_t part[5];
+        memcpy(part, header, 5);
+        part[3] = (uint8_t)((chunk >> 8) & 0xffu);
+        part[4] = (uint8_t)(chunk & 0xffu);
+        failed = write_all(client_fd, part, 5) != 0 ||
+                 write_all(client_fd, fragment + off, chunk) != 0;
+        off += chunk;
+        records++;
+        /* Shorter than the 50ms used by the two- and three-record cells,
+           because there are many more of them; still long enough that the
+           receiver sees each record on its own rather than finding several
+           already buffered when it first parses. */
+        usleep(10000);
+      }
+      /* Reported rather than asserted: the point of the cell is that N is
+         whatever the message size makes it, so the harness states the N it
+         actually produced instead of the test hard-coding one. */
+      fprintf(stderr,
+              "  proxy: split the %zu-byte ServerHello into %zu records\n",
+              frag_len, records);
+      if (failed) {
+        free(fragment);
+        goto done;
+      }
+    } else if (framing == FRAMING_RECORD_SPLIT3 &&
+               header[0] == 22 /* handshake */ && frag_len >= 3) {
       /* THREE records, not two.  Two records only ever exercise buffering
          onto an EMPTY pending buffer followed by delivery; three additionally
          exercise the coalescing buffering step, where the middle record is

@@ -160,11 +160,18 @@ theorems intact.
 
 * **An empty-buffer bridge with an `SMTPat`.**
   `lemma_received_cleartext_tls_message_raw_buffered_of_empty` collapses the new
-  rule onto the old one whenever the buffer is empty.  This is why the change is
-  affordable: `tls_system_inv` pins both endpoints' cleartext buffers empty, so
-  **`TLS13.System.fst` needed no change at all**.  Buffering only ever happens
+  rule onto the old one whenever the buffer is empty.  This is what keeps the
+  change affordable -- but it is not free.  `tls_system_inv` had to be *taught*
+  that both endpoints' cleartext buffers are empty: `TLS13.System.fst` grows by
+  206 lines, adding `cleartext_handshake_buffer_empty` per endpoint and
+  `no_cleartext_buffering_steps` on each event log, with preservation lemmas for
+  both.  Ten pre-existing `ProtectedWireSegmentation` lemmas pick up a matching
+  hypothesis.  This mirrors an existing precedent rather than setting one:
+  `protected_witnesses_ok` was already conditioned on
+  `CCShape.no_buffering_steps` before this branch.  Buffering only ever happens
   *inside* one endpoint's `process_network_bytes`, between two system-visible
-  states.
+  states -- so the paired-system theorems hold for non-reassembling runs, and
+  extending them over reassembly is future work.
 
 * **A concrete buffer beside the ghost one**, in `ConnectionState.Repr` /
   `.Network` / `.Queries`, with role-agnostic

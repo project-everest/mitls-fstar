@@ -87,14 +87,34 @@
  *                         proof.  See docs/server-client-parity.md, G3, and the
  *                         G3 commit sections of docs/server-p256-plan.md.
  *
- *                         THE CLIENT HALF IS STILL OPEN.  `protected_handshake_
- *                         buffering` on the client is confined to the PROTECTED
- *                         path and to stages after ServerHello, so a ServerHello
- *                         split across two records is still refused by the
- *                         CLIENT.  That is not left as a claim in this comment:
- *                         it is executed as a ledger row of its own, by
+ *                         THE CLIENT HALF IS NOW CLOSED TOO.  `protected_hand-
+ *                         shake_buffering` on the client is confined to the
+ *                         PROTECTED path and to stages after ServerHello, so a
+ *                         ServerHello split across records was refused by the
+ *                         CLIENT long after the server half landed.  That was
+ *                         never left as a claim in this comment: it is executed
+ *                         as ledger rows of its own, by
  *                         test/unit/test_client_record_split.c, which re-frames
- *                         the ServerHello in the server->client direction.
+ *                         the ServerHello in the server->client direction, and
+ *                         those rows are now OK.
+ *
+ *   FRAMING_RECORD_SPLIT_MANY
+ *                         the same message delivered as 8-byte records, so N
+ *                         follows from the ClientHello's size rather than from
+ *                         the harness.  This cell is NOT about branch coverage
+ *                         -- three records already saturate the branch
+ *                         structure, and a fourth takes the identical path to
+ *                         the third.  It exists because "2 and 3" invites the
+ *                         reading that reassembly is special-cased for small N,
+ *                         and it is not: `cleartext_handshake_stream` is
+ *                         `pending ++ fragment` and NO RECORD COUNTER appears
+ *                         anywhere in the step relation, so the only limits are
+ *                         the byte caps (`max_pending_cleartext_handshake` =
+ *                         32768, `max_client_hello_len` = 8192) and the
+ *                         requirement that each fragment be non-empty.  The
+ *                         proxy prints the N it produced rather than this
+ *                         comment fixing one, since N is a property of the
+ *                         peer's ClientHello and not of the test.
  *
  * The split is performed by an in-process TCP proxy that re-frames the
  * client->server byte stream at the record layer.  It only ever re-frames
@@ -162,6 +182,7 @@ typedef enum {
   FRAMING_TCP_DRIBBLE,
   FRAMING_RECORD_SPLIT,
   FRAMING_RECORD_SPLIT3,
+  FRAMING_RECORD_SPLIT_MANY,
 } framing_mode;
 
 struct case_spec {
@@ -436,6 +457,17 @@ static const struct case_spec k_cases[] = {
      OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
      "G3: two buffering steps then a delivery -- the middle record coalesces "
      "onto a non-empty buffer", TLS13_ONLY},
+    /* N records, for N determined by the ClientHello's size rather than by the
+       harness.  Three records already saturate the branch structure, so this
+       is not a coverage cell: it demonstrates that the reassembly is inductive
+       in the pending buffer rather than special-cased for small N.  The proxy
+       reports the record count it actually produced. */
+    {"clienthello-across-many-records", "TLS_CHACHA20_POLY1305_SHA256",
+     "X25519", "rsa_pss_rsae_sha256", CRED_RSA, true,
+     FRAMING_RECORD_SPLIT_MANY, OK, "TLS_CHACHA20_POLY1305_SHA256", "X25519",
+     "G3: the reassembly is inductive, not special-cased -- 8-byte records, so "
+     "every record after the first coalesces onto a non-empty buffer",
+     TLS13_ONLY},
 
     /* --- Protocol-version axis. ------------------------------------------
      *
@@ -628,7 +660,39 @@ static int run_proxy(uint16_t listen_port, uint16_t server_port, framing_mode fr
     goto done;
   }
 
-  if (framing == FRAMING_RECORD_SPLIT3 && header[0] == 22 /* handshake */ &&
+  if (framing == FRAMING_RECORD_SPLIT_MANY && header[0] == 22 /* handshake */ &&
+      frag_len >= 2) {
+    /* One record per 8 bytes.  Nothing here depends on the resulting count:
+       the loop just walks the fragment, so N follows from the ClientHello's
+       size.  Every record after the first coalesces onto a non-empty buffer. */
+    size_t off = 0;
+    size_t records = 0;
+    bool failed = false;
+    while (off < frag_len && !failed) {
+      size_t chunk = frag_len - off < 8 ? frag_len - off : 8;
+      uint8_t part[5];
+      memcpy(part, header, 5);
+      part[3] = (uint8_t)((chunk >> 8) & 0xffu);
+      part[4] = (uint8_t)(chunk & 0xffu);
+      failed = write_all(server_fd, part, 5) != 0 ||
+               write_all(server_fd, fragment + off, chunk) != 0;
+      off += chunk;
+      records++;
+      /* Shorter than the 50ms the two- and three-record cells use, because
+         there are many more records; still long enough that the receiver sees
+         each one on its own. */
+      usleep(10000);
+    }
+    /* Reported rather than asserted: the point of the cell is that N is
+       whatever the message size makes it, so the harness states the N it
+       actually produced instead of the test hard-coding one. */
+    fprintf(stderr, "  proxy: split the %zu-byte ClientHello into %zu records\n",
+            frag_len, records);
+    if (failed) {
+      free(fragment);
+      goto done;
+    }
+  } else if (framing == FRAMING_RECORD_SPLIT3 && header[0] == 22 /* handshake */ &&
       frag_len >= 3) {
     /* THREE records, not two.  Two records only ever exercise buffering onto
        an EMPTY pending buffer followed by delivery; three additionally

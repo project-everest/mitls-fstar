@@ -381,9 +381,22 @@ analysis above is long:
   `ProtectedWireSegmentation` need the rule to be a *function* of the raw bytes.
   `CS.lemma_received_cleartext_tls_message_raw_buffered_of_empty` carries an
   `SMTPat`, so every pre-existing proof stays applicable whenever the buffer is
-  empty -- which is why `TLS13.System.fst`, whose `tls_system_inv` pins
-  `cleartext_handshake_buffer_empty` for both endpoints, needed no change at
-  all.
+  empty.  That is what keeps the cost of the change bounded -- but it is *not*
+  free: `TLS13.System.fst` still grew by 206 lines, because something has to
+  say the buffer *is* empty at the points the paired-system theorems are
+  stated.  `tls_system_inv` gains four conjuncts --
+  `CS.cleartext_handshake_buffer_empty` for each endpoint's model, plus
+  `no_cleartext_buffering_steps` on each endpoint's event log -- preserved by
+  `lemma_client_no_cleartext_buffering_pres` and
+  `lemma_server_no_cleartext_buffering_pres`.  Ten pre-existing lemmas in
+  `ProtectedWireSegmentation` pick up a matching empty-buffer hypothesis.  This
+  follows an existing precedent in identical shape rather than setting one:
+  `protected_witnesses_ok` was *already* conditioned on
+  `CCShape.no_buffering_steps` before this branch, and the two new cleartext
+  hypotheses sit literally beside that pre-existing protected one in both
+  flagship inversion lemmas' `requires`.  The honest reading is that the
+  paired-system theorems now hold for *non-reassembling* runs; extending them
+  to cover reassembly is future work, and is called out as such below.
 * **A concrete buffer beside the ghost one.**  The prediction above that "the
   server needs a concrete reassembly buffer in its connection representation,
   tied by invariant to `pending_cleartext_handshake` of the ghost model" was
@@ -626,7 +639,22 @@ the two-record cell: two records only ever buffer onto an EMPTY pending buffer
 and then deliver, whereas three make the middle record coalesce onto an ALREADY
 NON-EMPTY one, which is a distinct branch of the buffering step.
 
-Current ledger (all thirty-five cells agree; `cred` is the key the verified
+**Two and three records are coverage choices, not a limit.**  Three records
+*saturate* the branch structure -- first record onto an empty buffer, middle
+onto a non-empty one, last coalesces and parses -- so a fourth takes the
+identical path to the third and a hundredth adds no new arm.  The capability
+itself is inductive: `cleartext_handshake_stream` is just `pending ++ fragment`
+and **no record counter appears anywhere in the step relation**, so the only
+limits are the byte caps (§ "Resource safety" below) and the requirement that
+each fragment be non-empty.  Because that is an easy thing to assert and a
+harder thing to believe, both matrices carry an N-way cell as well --
+`clienthello-across-many-records` and `serverhello-across-many-records` -- in
+which the proxy emits 8-byte records and lets N follow from the message size.
+The proxy prints the N it produced rather than the test hard-coding one; today
+that is 24 records for OpenSSL's 190-byte ClientHello and 16 for its 122-byte
+ServerHello.
+
+Current ledger (all thirty-six cells agree; `cred` is the key the verified
 server is started with):
 
 ```
@@ -665,6 +693,7 @@ tcp-dribble                          rsa    ok        retained-buffer retry loop
 clienthello-across-two-records       rsa    ok        G3: reassembled out of the cleartext buffer
 aes128-clienthello-across-two-records rsa   ok        G3 is independent of the suite axis
 clienthello-across-three-records     rsa    ok        G3: the middle record coalesces onto a non-empty buffer
+clienthello-across-many-records      rsa    ok        G3: 8-byte records -- the reassembly is inductive, not special-cased for small N
 tls12-only                           rsa    refused   correctly refused: no TLS 1.3 in supported_versions
 ```
 
@@ -690,7 +719,7 @@ would notice when it stopped being true.
 
 `test/unit/test_client_record_split.c` executes it.  It runs the extracted,
 verified client against the local OpenSSL echo server through an in-process
-proxy that re-frames the **server -> client** stream, and records four cells:
+proxy that re-frames the **server -> client** stream, and records five cells:
 
 ```
 CASE                               EXPECT   NOTE
@@ -698,6 +727,7 @@ passthrough                        ok       control: the proxy is transparent
 serverhello-tcp-dribble            ok       control: TCP segmentation, not record segmentation
 serverhello-across-two-records     ok       G3, client side: the mirror of clienthello-across-two-records
 serverhello-across-three-records   ok       G3: the middle record coalesces onto a non-empty buffer
+serverhello-across-many-records    ok       G3: 8-byte records -- the reassembly is inductive, not special-cased for small N
 ```
 
 The split cells were recorded as `refused` when the harness was written, and

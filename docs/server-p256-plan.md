@@ -2985,3 +2985,75 @@ empty-buffer hypothesis) and what it got wrong (no buffer-aware
 decoder's postcondition was merely STRENGTHENED with the outer-content-type
 clause of B11, and an incomplete handshake message keeps falling through the
 existing `decoded_buffer_parsed == None` arm).
+
+## B16 — "why 2 and 3?", answered by an N-way cell rather than by argument
+
+Reviewing the closed G3 write-up, the question came up: the matrices exercise a
+hello split across **two** and **three** records, so why those two numbers --
+could a hello not be split arbitrarily?
+
+It can, and the docs were reading like a limit when they were describing a
+coverage choice.  The two facts, both checked directly against the tree:
+
+* **The capability is inductive, with no record counter.**
+  `cleartext_handshake_stream model step = B.append (pending_cleartext_handshake
+  model) step.cleartext_handshake_fragment` -- the stream is just `pending ++
+  fragment`, and nothing anywhere in `legal_cleartext_handshake_step` or in
+  `received_cleartext_tls_message_raw_buffered` counts records.  The only
+  bounds are on **bytes** (`max_pending_cleartext_handshake` = 32768, and
+  `max_client_hello_len` = 8192 on the server's concrete buffer) plus the
+  requirement that each fragment be non-empty -- which is what stops an
+  unbounded number of zero-length steps.
+* **Three records saturate the branch structure.**  Record 1 buffers onto an
+  EMPTY buffer; records 2..N-1 buffer onto a NON-EMPTY one; record N coalesces,
+  parses and delivers.  A fourth record takes the identical path to the third.
+  So three is the point past which no new arm is reached, which is the real
+  reason the cells stop there -- not a bound on N.
+
+Rather than assert that, both matrices grew an N-way cell:
+`clienthello-across-many-records` and `serverhello-across-many-records`, using a
+new `FRAMING_RECORD_SPLIT_MANY` proxy branch that emits the hello as successive
+**8-byte** records.  N is therefore a property of the peer's hello, not of the
+test.
+
+Two deliberate choices in the harness:
+
+* **The proxy prints the N it produced** (`proxy: split the 190-byte
+  ClientHello into 24 records`) instead of the test hard-coding one.  A
+  hard-coded count would be a fact about OpenSSL's current extension set that
+  would rot; a printed one is evidence.  Measured today: **24** records for
+  OpenSSL's 190-byte ClientHello, **16** for its 122-byte ServerHello.
+* **10ms between records**, not the 50ms the two- and three-record cells use --
+  there are an order of magnitude more of them, and the pause only has to be
+  long enough that the receiver sees each record on its own rather than finding
+  several already buffered when it first parses.
+
+Both cells passed on their first run, which was the outcome worth knowing: the
+open question was whether many *tiny* records would trip the driver's retry
+loop or the retained receive buffer, independently of the spec being inductive.
+They do not.  Server matrix 35 -> **36** cells, client matrix 4 -> **5**.
+
+### A stale claim caught in the same pass
+
+`docs/server-client-parity.md` and `PR.md` both said the empty-buffer `SMTPat`
+was "why `TLS13.System.fst` needed no change at all".  That is false, and the
+diffstat says so: **`src/impl/TLS13.System.fst` is +206/-21**.  The `SMTPat`
+bounds the cost, it does not eliminate it -- something still has to *say* the
+buffer is empty where the paired-system theorems are stated.  `tls_system_inv`
+gains four conjuncts (`CS.cleartext_handshake_buffer_empty` per endpoint,
+`no_cleartext_buffering_steps` on each event log), preserved by
+`lemma_client_no_cleartext_buffering_pres` / `lemma_server_no_cleartext_
+buffering_pres`, and ten pre-existing `ProtectedWireSegmentation` lemmas take a
+matching hypothesis.
+
+The mitigating fact is real but is a *precedent*, not an absence of cost:
+`protected_witnesses_ok` was already conditioned on
+`CCShape.no_buffering_steps` before this branch, so the two new cleartext
+hypotheses sit literally beside a pre-existing protected one.  The honest
+statement, now in all three documents, is that the paired-system theorems hold
+for non-reassembling runs and extending them over reassembly is future work.
+
+The general lesson, and the reason this is written down: **"module X needed no
+change" is a claim about a diffstat and should be checked against one.**  It was
+true of the single commit it was first written for (B13-2a) and was carried
+forward into summaries of the whole series, where it was no longer true.
