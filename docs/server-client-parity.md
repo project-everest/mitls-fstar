@@ -302,9 +302,23 @@ whose stack fragmented it, could not connect.  This was a live concern as client
 hellos grow (post-quantum key shares push a ClientHello past 1500 bytes and
 some stacks split them).
 
-A related, milder limitation still applies to both roles: `parse_tls_message`
-(`TLS13.Wire.Spec.fst:921`, handshake arm at `:927`) requires `consumed == B.length fragment`, so several
-handshake messages coalesced into one record are rejected rather than drained.
+A related limitation applies to the **cleartext path only**, and the scope is
+narrower than this paragraph used to claim.  `parse_tls_message`
+(`TLS13.Wire.Spec.fst:921`, handshake arm at `:927`) requires
+`consumed == B.length fragment`, so several handshake messages coalesced into
+one *cleartext* record are rejected rather than drained.  The **protected** path
+does drain them: `protected_handshake_step` carries an `offset` and a `consumed`
+count, and a non-`head` step continues inside the buffer its head published
+without advancing `record_read`, which is what
+`try_process_protected_handshake_drain` walks.  That is how Meta's flight is
+handled in the `test/interop` sweep, where `Certificate` begins at offset 6 of
+the first record and runs past its end -- several messages in one record *and*
+one message across records, at the same time.
+
+The cleartext restriction is close to vacuous in TLS 1.3 anyway: a ClientHello
+is the client's entire cleartext flight and a ServerHello the server's, and the
+CCS that may follow a ServerHello under middlebox compatibility carries a
+different content type, so it is necessarily a separate record.
 
 Two designs for closing this have now been built against the whole tree and
 measured.  The blocker is **not** where the first analysis put it.

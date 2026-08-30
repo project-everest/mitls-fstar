@@ -95,9 +95,14 @@ reason.
 Both directions now work, for arbitrarily many records up to the cap.
 
 Note what is *not* in scope: several handshake messages **coalesced into one**
-record are still rejected, because `parse_tls_message` requires
-`consumed == B.length fragment`.  That is a separate, milder limitation and it
-still applies to both roles.
+record are still rejected on the **cleartext** path, because `parse_tls_message`
+requires `consumed == B.length fragment`.  That restriction does **not** apply to
+the protected path, which has drained several messages out of one record since
+`baaa66317` -- `protected_handshake_step` carries an `offset` and a `consumed`
+count, and a non-`head` step continues inside the buffer its head published.
+It is also close to vacuous in the clear: a ClientHello is the client's whole
+cleartext flight and a ServerHello the server's, and a CCS has a different
+content type and so cannot share their record.
 
 ### Interop ledger
 

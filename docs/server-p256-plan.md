@@ -1732,12 +1732,30 @@ unconstrained, so a mid-reassembly server falsifies the record-aligned
 conclusion).  Commit B should therefore add the hypothesis **and** a
 fresh-server corollary, so the guarantee for real connections is unweakened.
 
-## Related limitation, both roles
+## Related limitation — CLEARTEXT path only
+
+*(Corrected.  This section was headed "both roles" and said the limitation
+applied to the client and the server alike.  That is wrong: the PROTECTED path
+has drained several messages out of one record since `baaa66317`.)*
 
 `WS.parse_tls_message` (`src/spec/core/TLS13.Wire.Spec.fst:921`) requires
-`consumed == B.length fragment`, so **two handshake messages coalesced into one
-record** are rejected on both the client and the server.  This is a separate
-gap from G3 and is not addressed by either route above.
+`consumed == B.length fragment`, so two handshake messages coalesced into one
+**cleartext** record are rejected rather than drained.  This is a separate gap
+from G3 and is not addressed by it.
+
+It does **not** apply to the protected path.  `protected_handshake_step` carries
+`protected_handshake_offset` and `protected_handshake_consumed`, and
+`protected_handshake_stream` gives a non-`head` step the buffer its head
+published rather than a new record, so successive non-head steps walk successive
+messages out of one record's plaintext without advancing `record_read`.  That is
+what `try_process_protected_handshake_drain` (`TLS13.Impl.Client.fst:1704`)
+implements, and what makes Meta's flight work in the `test/interop` sweep --
+`Certificate` there begins at offset 6 of the first record and runs past its
+end, which is coalescing and reassembly simultaneously.
+
+The cleartext restriction is close to vacuous in TLS 1.3: a ClientHello is the
+client's whole cleartext flight and a ServerHello the server's, and a CCS has a
+different content type and so cannot share their record.
 
 ### Commit B, unblocked: un-fusing the cleartext delivery rule
 
