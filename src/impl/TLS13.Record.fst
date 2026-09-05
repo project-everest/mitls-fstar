@@ -980,6 +980,7 @@ fn peek_open_application
   }
 }
 
+#push-options "--z3rlimit 200"
 fn peek_open_application_suffix
   (st: record_state)
   (aad: array U8.t)
@@ -1070,6 +1071,7 @@ fn peek_open_application_suffix
   ok
 }
 
+#pop-options
 fn open_application_runtime
   (st: record_state)
   (aad: array U8.t)

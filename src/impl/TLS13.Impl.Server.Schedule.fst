@@ -104,6 +104,7 @@ let lemma_control_snapshot_matches_hs_client_finished_received
     | _ -> assert False
   | _ -> assert False
 
+#push-options "--z3rlimit 200"
 fn next_local_action
   (s:server)
   requires connection_exactly s 'st0 **
@@ -510,3 +511,5 @@ fn next_local_action
     }
   }
 }
+
+#pop-options

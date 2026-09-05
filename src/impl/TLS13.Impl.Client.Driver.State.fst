@@ -282,26 +282,31 @@ type client_receive_observation = {
   client_receive_observed_response: CT.client_buffer_response;
 }
 
+(* The existential is kept behind this non-[unfold] definition, applied to the
+   observation's fields rather than to the observation itself.  Callers that
+   instantiate [obs] with a literal record then get a *ground* application here,
+   which the solver can relate by congruence; inlining the existential instead
+   would put the projections under a quantifier, where congruence does not
+   reach. *)
 noextract
-unfold
-let client_receive_observation_network_correct
-  (st0:CS.connection_state)
+let client_receive_status_response_network_correct
   (st1:CS.connection_state)
-  (obs:client_receive_observation)
+  (status:driver_workflow_status)
+  (response:CT.client_buffer_response)
   (app_out:B.bytes)
   : prop =
-  obs.client_receive_observed_status <> DriverWorkflowExhausted ==>
+  status <> DriverWorkflowExhausted ==>
     exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
       D.drained_network_bytes_end_to_end_correct
         st_before
         st_network
-        obs.client_receive_observed_response
+        response
         input
         old_network_out
         network_out
         old_app_out
         observed_app_out /\
-      (obs.client_receive_observed_status == DriverWorkflowOk ==>
+      (status == DriverWorkflowOk ==>
         st_network == st1 /\ Seq.equal observed_app_out app_out) /\
       (**
         A peer close_notify is detected as a StepOk network step that both
@@ -312,10 +317,24 @@ let client_receive_observation_network_correct
         stop retrying and release the transport (e.g. via [abort]) instead of
         looping until fuel is exhausted.
       **)
-      (obs.client_receive_observed_status == DriverWorkflowClosed ==>
+      (status == DriverWorkflowClosed ==>
         st_network == st1 /\
         st1.CS.cs_model.CS.model_control == CS.ControlClosed /\
-        obs.client_receive_observed_response.CT.response.CT.app_out_len == 0sz)
+        response.CT.response.CT.app_out_len == 0sz)
+
+noextract
+unfold
+let client_receive_observation_network_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (obs:client_receive_observation)
+  (app_out:B.bytes)
+  : prop =
+  client_receive_status_response_network_correct
+    st1
+    obs.client_receive_observed_status
+    obs.client_receive_observed_response
+    app_out
 
 noextract
 let client_driver_receive_status_correct
@@ -1993,6 +2012,9 @@ let lemma_network_bytes_logged_received_accounted
   if CT.response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out then (
     assert (st1 == st0);
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received;
+    Seq.lemma_eq_elim
+      (B.append st0.CS.cs_wire_log.CL.raw_received B.empty)
+      st1.CS.cs_wire_log.CL.raw_received;
     lemma_logged_received_bytes_accounted_append_delta
       st0.CS.cs_wire_log.CL.raw_received
       old_consumed

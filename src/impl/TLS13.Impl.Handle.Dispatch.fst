@@ -25,6 +25,7 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
+#push-options "--z3rlimit 200"
 fn dispatch_network_event
   (c:CR.connection_state)
   (content_type:U8.t)
@@ -434,3 +435,5 @@ fn dispatch_network_event
     }
   }
 }
+
+#pop-options

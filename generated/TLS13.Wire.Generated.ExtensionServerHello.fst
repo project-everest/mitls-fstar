@@ -337,6 +337,7 @@ let copyful_extensionServerHello_cases (k: LP.dsum_key extensionServerHello_sum)
 
 let read_extensionServerHello_sum
   : PPB.copyful_parse (PPS.vmatch_dsum extensionServerHello_sum extensionServerHello_low extensionServerHello_tag_of_low extensionServerHello_mid_of_tag extensionServerHello_casevmatch) extensionServerHello_parser (PPS.dsum_conv extensionServerHello_sum extensionServerHello_mid_of_tag extensionServerHello_conv_of_tag) =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPS.copyful_parse_dsum extensionServerHello_sum read_maybe_extensionType_key extensionType_repr_jumper parse_extensionServerHello_cases
     extensionServerHello_low extensionServerHello_tag_of_low extensionServerHello_mid_of_tag extensionServerHello_casevmatch extensionServerHello_conv_of_tag copyful_extensionServerHello_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) (_ by (LP.enum_repr_of_key_tac extensionType_enum)) ()
 
@@ -581,6 +582,7 @@ let extensionServerHello_write_coerce_eq ()
     FStar.Classical.forall_intro extensionServerHello_write_conv_eq
 
 let write_extensionServerHello : PPB.l2r_safe_writer extensionServerHello_vmatch extensionServerHello_serializer extensionServerHello_conv =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPB.l2r_safe_writer_coerce_mid write_extensionServerHello_sum extensionServerHello_vmatch extensionServerHello_conv extensionServerHello_gf (extensionServerHello_write_coerce_eq ())
 
 #pop-options
@@ -662,42 +664,49 @@ let extensionServerHello_bytesize_eqn_Unknown_extensionType v x =
   (extensionServerHello_extension_data_default_bytesize_eq (x))
 
 let extensionServerHello_accessor_key_share : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_key_share_parser extensionServerHello_clens_key_share =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Key_share)) ())
     extensionServerHello_clens_key_share
     ()
 
 let extensionServerHello_accessor_supported_versions : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_supported_versions_parser extensionServerHello_clens_supported_versions =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Supported_versions)) ())
     extensionServerHello_clens_supported_versions
     ()
 
 let extensionServerHello_accessor_application_layer_protocol_negotiation : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_default_parser extensionServerHello_clens_application_layer_protocol_negotiation =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Application_layer_protocol_negotiation)) ())
     extensionServerHello_clens_application_layer_protocol_negotiation
     ()
 
 let extensionServerHello_accessor_signature_algorithms : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_default_parser extensionServerHello_clens_signature_algorithms =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Signature_algorithms)) ())
     extensionServerHello_clens_signature_algorithms
     ()
 
 let extensionServerHello_accessor_supported_groups : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_default_parser extensionServerHello_clens_supported_groups =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Supported_groups)) ())
     extensionServerHello_clens_supported_groups
     ()
 
 let extensionServerHello_accessor_server_name : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_default_parser extensionServerHello_clens_server_name =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Server_name)) ())
     extensionServerHello_clens_server_name
     ()
 
 let extensionServerHello_accessor_Unknown : PPB.accessor extensionServerHello_parser extensionServerHello_extension_data_default_parser extensionServerHello_clens_Unknown =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionServerHello_sum parse_extensionServerHello_cases (LP.get_parser_kind extensionServerHello_extension_data_default_parser) == extensionServerHello_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_unknown_payload extensionServerHello_sum extensionType_repr_jumper parse_extensionServerHello_cases extensionServerHello_extension_data_default_parser ())
     extensionServerHello_clens_Unknown

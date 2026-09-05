@@ -2642,7 +2642,7 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         and () ) )
 
 #restart-solver
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 800"
 let lemma_protected_handshake_event_projection_pairs_after_server_write_client_read_install_server_encrypted_flight_with_tails
   (server:connection_model)
   (client:connection_model)
@@ -3076,7 +3076,7 @@ let lemma_protected_handshake_event_projection_pairs_after_server_write_client_r
         and () ) )
 #pop-options
  
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 800"
 let lemma_protected_handshake_event_projection_pairs_server_encrypted_flight_after_installs_with_tails
   (server:connection_model)
   (client:connection_model)

@@ -169,6 +169,7 @@ let copyful_serverName_cases (k: LP.sum_key serverName_sum)
 
 let read_serverName_sum
   : PPB.copyful_parse (PPS.vmatch_sum serverName_sum serverName_low serverName_tag_of_low serverName_mid_of_tag serverName_casevmatch) serverName_parser (PPS.sum_conv serverName_sum serverName_mid_of_tag serverName_conv_of_tag) =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind nameType_repr_parser) serverName_sum parse_serverName_cases == serverName_parser_kind);
   PPS.copyful_parse_sum serverName_sum nameType_repr_reader nameType_repr_jumper parse_serverName_cases
     serverName_low serverName_tag_of_low serverName_mid_of_tag serverName_casevmatch serverName_conv_of_tag copyful_serverName_cases (_ by (LP.dep_enum_destr_tac ())) (_ by (LP.dep_maybe_enum_destr_t_tac ())) () ()
 
@@ -249,6 +250,7 @@ let serverName_write_coerce_eq ()
     FStar.Classical.forall_intro serverName_write_conv_eq
 
 let write_serverName : PPB.l2r_safe_writer serverName_vmatch serverName_serializer serverName_conv =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind nameType_repr_parser) serverName_sum parse_serverName_cases == serverName_parser_kind);
   PPB.l2r_safe_writer_coerce_mid write_serverName_sum serverName_vmatch serverName_conv serverName_gf (serverName_write_coerce_eq ())
 
 let serverName_accessor_tag : PPB.accessor serverName_parser nameType_parser serverName_clens_tag =
@@ -272,6 +274,7 @@ let serverName_bytesize_eqn_host_name x =
   (hostName_bytesize_eq (x))
 
 let serverName_accessor_host_name : PPB.accessor serverName_parser hostName_parser serverName_clens_host_name =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind nameType_repr_parser) serverName_sum parse_serverName_cases == serverName_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload serverName_sum nameType_repr_jumper parse_serverName_cases (nameType_as_enum_key Host_name) ())
     serverName_clens_host_name

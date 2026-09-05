@@ -4216,6 +4216,7 @@ let lemma_paired_handshake_events_same_key_derivation_checkpoint
   | DeriveTrafficUpdate _ ->
     assert False
 
+#push-options "--z3rlimit 200"
 let lemma_paired_supported_profile_all_derived_key_material_agrees
   (client:connection_state)
   (server:connection_state)
@@ -4265,6 +4266,7 @@ let lemma_paired_supported_profile_all_derived_key_material_agrees
   lemma_paired_x25519_key_shares_derived_key_agrees
     (FinishedKey ServerTraffic) client server
 
+#pop-options
 let lemma_key_schedule_traffic_record_material_agrees_from_expected
   (traffic_id:labeled_traffic_epoch)
   (client:connection_state)
@@ -4612,6 +4614,7 @@ let lemma_supported_profile_client_server_key_material_agrees
   lemma_paired_supported_profile_all_derived_key_material_agrees client server;
   lemma_paired_supported_profile_application_record_material_agrees client server
 
+#push-options "--z3rlimit 800"
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)
@@ -4638,6 +4641,7 @@ let lemma_step_role_install_record_keys_consistent_for_role
 =
   ()
 
+#pop-options
 let lemma_initial_record_keys_consistent_for_role
   (role:endpoint_role)
   (cfg:connection_config)

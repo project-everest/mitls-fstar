@@ -606,7 +606,7 @@ let sr_shape (model:CS.connection_model) : prop =
     model.CS.model_record.CS.record_read.R.seq == 0
   | _ -> True
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 400"
 let lemma_step_sr_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires sr_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')
