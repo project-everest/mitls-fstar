@@ -2608,7 +2608,7 @@ let lemma_client_send_installs_app_write_pins
     establishment via `CSL.lemma_connection_appdata_keys_installed_for_role`
     (through `SY.lemma_appdata_implies_{client,server}_ready`). **)
 #restart-solver
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 600"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 2400"
 let lemma_ama_deliver_to_server
   (a:SY.tls_system_state) (wire:CW.wire_message) (s':CS.connection_state)
   (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)

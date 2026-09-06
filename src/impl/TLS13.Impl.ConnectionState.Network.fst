@@ -3183,6 +3183,7 @@ fn mark_received_protected_certificate_verify_drain
     #st0
 }
 
+#push-options "--z3rlimit 200"
 fn apply_received_server_finished
   (c:connection_state)
   (raw:array U8.t)
@@ -3610,6 +3611,7 @@ fn apply_received_server_finished
 
 }
 
+#pop-options
 fn mark_received_server_finished
   (c:connection_state)
   (raw:array U8.t)
@@ -3750,6 +3752,7 @@ fn mark_received_protected_server_finished_drain
     #st0
 }
 
+#push-options "--z3rlimit 800"
 fn mark_received_client_finished
   (c:connection_state)
   (raw:array U8.t)
@@ -4135,6 +4138,7 @@ fn mark_received_client_finished
     (received_client_finished_state st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)))
 }
 
+#pop-options
 fn mark_received_application_data
   (c:connection_state)
   (raw:array U8.t)

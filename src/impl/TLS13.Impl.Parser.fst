@@ -697,6 +697,7 @@ let lemma_client_hello_conv (vm: GHS.handshake_mid) (v: GHS.handshake)
 (* Unwind the generated ClientHello conversion enough for the parser proof:
    the high-level ClientHello carried by the handshake is the synthesis of the
    mid-level tuple, hence its relevant fields are the mid-level fields. *)
+#push-options "--z3rlimit 200"
 let lemma_client_hello_conv_fields (cm: GCH.clientHello_mid) (v: GHS.handshake)
   : Lemma
     (requires GHS.handshake_conv (GHS.Body_client_hello_mid cm) == Some v)
@@ -712,6 +713,7 @@ let lemma_client_hello_conv_fields (cm: GCH.clientHello_mid) (v: GHS.handshake)
        (ch.GCH.extensions <: list GECH.extensionClientHello) ==
          (snd (snd cm) <: list GECH.extensionClientHello)))
   = ()
+#pop-options
 
 (* Recover (without consuming) the pure fact that the high-level handshake value
    behind a [Body_client_hello_low] read-result is a [Body_client_hello]. *)

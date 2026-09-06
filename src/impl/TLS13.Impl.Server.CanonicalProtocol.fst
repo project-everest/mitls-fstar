@@ -1403,6 +1403,7 @@ let rec lemma_server_trace_wire_logs_match
         st0.CS.cs_wire_log.CL.raw_received
         (B.append step_received rest_received)))
 
+#push-options "--z3rlimit 200"
 let lemma_server_state_ahead_valid_byte_trace
   (initial:server_initial_state)
   (received:B.bytes)
@@ -1484,6 +1485,7 @@ let lemma_server_state_ahead_valid_byte_trace
           (SM.trace_wire_outputs trace')))
   )
 
+#pop-options
 let lemma_server_legal_delta_histories_ahead
   (st0:CS.connection_state)
   (delta:CS.connection_delta)
@@ -4702,6 +4704,7 @@ let lemma_server_wire_outputs_match_response
       (server_response_wire_outputs resp network_out))
   )
 
+#push-options "--z3rlimit 800"
 let lemma_server_local_process_correct
   (initial:server_initial_state)
   (st0:CS.connection_state)
@@ -5005,6 +5008,7 @@ let lemma_server_local_process_correct
       produced
   )
 
+#pop-options
 #restart-solver
 let server_local_bridge_obligation
   (base:tls_server_local_frame)
@@ -5715,6 +5719,7 @@ let lemma_server_network_common_witness_progress
   )
 
 #pop-options
+#push-options "--z3rlimit 800"
 let lemma_server_local_event_progress
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -5853,6 +5858,7 @@ let lemma_server_local_event_progress
 
 // Prove server_progress_preorder st0 st1 from server_local_common_witness.
 // Mirrors lemma_client_local_progress in TLS13.Impl.Client.CanonicalProtocol.fst.
+#pop-options
 #restart-solver
 let lemma_server_local_progress
   (initial:server_initial_state)

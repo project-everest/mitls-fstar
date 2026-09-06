@@ -300,6 +300,7 @@ let copyful_handshake_cases (k: LP.sum_key handshake_sum)
 
 let read_handshake_sum
   : PPB.copyful_parse (PPS.vmatch_sum handshake_sum handshake_low handshake_tag_of_low handshake_mid_of_tag handshake_casevmatch) handshake_parser (PPS.sum_conv handshake_sum handshake_mid_of_tag handshake_conv_of_tag) =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPS.copyful_parse_sum handshake_sum handshakeType_repr_reader handshakeType_repr_jumper parse_handshake_cases
     handshake_low handshake_tag_of_low handshake_mid_of_tag handshake_casevmatch handshake_conv_of_tag copyful_handshake_cases (_ by (LP.dep_enum_destr_tac ())) (_ by (LP.dep_maybe_enum_destr_t_tac ())) () ()
 
@@ -576,6 +577,7 @@ let handshake_write_coerce_eq ()
     FStar.Classical.forall_intro handshake_write_conv_eq
 
 let write_handshake : PPB.l2r_safe_writer handshake_vmatch handshake_serializer handshake_conv =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPB.l2r_safe_writer_coerce_mid write_handshake_sum handshake_vmatch handshake_conv handshake_gf (handshake_write_coerce_eq ())
 
 let handshake_accessor_tag : PPB.accessor handshake_parser handshakeType_parser handshake_clens_tag =
@@ -641,42 +643,49 @@ let handshake_bytesize_eqn_key_update x =
   (handshake_body_key_update_bytesize_eq (x))
 
 let handshake_accessor_client_hello : PPB.accessor handshake_parser handshake_body_client_hello_parser handshake_clens_client_hello =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Client_hello) ())
     handshake_clens_client_hello
     ()
 
 let handshake_accessor_server_hello : PPB.accessor handshake_parser handshake_body_server_hello_parser handshake_clens_server_hello =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Server_hello) ())
     handshake_clens_server_hello
     ()
 
 let handshake_accessor_encrypted_extensions : PPB.accessor handshake_parser handshake_body_encrypted_extensions_parser handshake_clens_encrypted_extensions =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Encrypted_extensions) ())
     handshake_clens_encrypted_extensions
     ()
 
 let handshake_accessor_certificate : PPB.accessor handshake_parser handshake_body_certificate_parser handshake_clens_certificate =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Certificate) ())
     handshake_clens_certificate
     ()
 
 let handshake_accessor_certificate_verify : PPB.accessor handshake_parser handshake_body_certificate_verify_parser handshake_clens_certificate_verify =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Certificate_verify) ())
     handshake_clens_certificate_verify
     ()
 
 let handshake_accessor_finished : PPB.accessor handshake_parser handshake_body_finished_parser handshake_clens_finished =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Finished) ())
     handshake_clens_finished
     ()
 
 let handshake_accessor_key_update : PPB.accessor handshake_parser handshake_body_key_update_parser handshake_clens_key_update =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind handshakeType_repr_parser) handshake_sum parse_handshake_cases == handshake_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload handshake_sum handshakeType_repr_jumper parse_handshake_cases (handshakeType_as_enum_key Key_update) ())
     handshake_clens_key_update

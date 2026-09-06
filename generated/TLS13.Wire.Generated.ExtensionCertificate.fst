@@ -335,6 +335,7 @@ let copyful_extensionCertificate_cases (k: LP.dsum_key extensionCertificate_sum)
 
 let read_extensionCertificate_sum
   : PPB.copyful_parse (PPS.vmatch_dsum extensionCertificate_sum extensionCertificate_low extensionCertificate_tag_of_low extensionCertificate_mid_of_tag extensionCertificate_casevmatch) extensionCertificate_parser (PPS.dsum_conv extensionCertificate_sum extensionCertificate_mid_of_tag extensionCertificate_conv_of_tag) =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPS.copyful_parse_dsum extensionCertificate_sum read_maybe_extensionType_key extensionType_repr_jumper parse_extensionCertificate_cases
     extensionCertificate_low extensionCertificate_tag_of_low extensionCertificate_mid_of_tag extensionCertificate_casevmatch extensionCertificate_conv_of_tag copyful_extensionCertificate_cases (_ by (LP.dep_maybe_enum_destr_t_tac ())) (_ by (LP.enum_repr_of_key_tac extensionType_enum)) ()
 
@@ -579,6 +580,7 @@ let extensionCertificate_write_coerce_eq ()
     FStar.Classical.forall_intro extensionCertificate_write_conv_eq
 
 let write_extensionCertificate : PPB.l2r_safe_writer extensionCertificate_vmatch extensionCertificate_serializer extensionCertificate_conv =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPB.l2r_safe_writer_coerce_mid write_extensionCertificate_sum extensionCertificate_vmatch extensionCertificate_conv extensionCertificate_gf (extensionCertificate_write_coerce_eq ())
 
 #pop-options
@@ -660,42 +662,49 @@ let extensionCertificate_bytesize_eqn_Unknown_extensionType v x =
   (extensionCertificate_extension_data_default_bytesize_eq (x))
 
 let extensionCertificate_accessor_key_share : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_key_share =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Key_share)) ())
     extensionCertificate_clens_key_share
     ()
 
 let extensionCertificate_accessor_supported_versions : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_supported_versions =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Supported_versions)) ())
     extensionCertificate_clens_supported_versions
     ()
 
 let extensionCertificate_accessor_application_layer_protocol_negotiation : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_application_layer_protocol_negotiation =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Application_layer_protocol_negotiation)) ())
     extensionCertificate_clens_application_layer_protocol_negotiation
     ()
 
 let extensionCertificate_accessor_signature_algorithms : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_signature_algorithms =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Signature_algorithms)) ())
     extensionCertificate_clens_signature_algorithms
     ()
 
 let extensionCertificate_accessor_supported_groups : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_supported_groups =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Supported_groups)) ())
     extensionCertificate_clens_supported_groups
     ()
 
 let extensionCertificate_accessor_server_name : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_server_name =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser (LowParse.Spec.Enum.Known (known_extensionType_as_enum_key Server_name)) ())
     extensionCertificate_clens_server_name
     ()
 
 let extensionCertificate_accessor_Unknown : PPB.accessor extensionCertificate_parser extensionCertificate_extension_data_default_parser extensionCertificate_clens_Unknown =
+  assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) extensionCertificate_sum parse_extensionCertificate_cases (LP.get_parser_kind extensionCertificate_extension_data_default_parser) == extensionCertificate_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_dsum_unknown_payload extensionCertificate_sum extensionType_repr_jumper parse_extensionCertificate_cases extensionCertificate_extension_data_default_parser ())
     extensionCertificate_clens_Unknown
