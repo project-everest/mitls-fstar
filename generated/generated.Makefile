@@ -29,7 +29,7 @@ include $(EVERPARSE_SRC_PATH)/common.Makefile
 # dependence hashes don't match under these harness flags; downgrade the "stale
 # checked, will recheck" error (241) to a warning so F* transparently rechecks
 # them (otherwise a cold-cache run — e.g. a fresh checkout — aborts).
-FSTAR_OPTIONS += $(LAX_OPT) --ext 'optimize_let_vc=false' --warn_error @272 --warn_error +241
+FSTAR_OPTIONS += $(LAX_OPT) --warn_error @272 --warn_error +241
 
 # Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
 # Exported by the root Makefile when this is run as a sub-make.

@@ -66,10 +66,28 @@ let string_of_handshakeType = function
     Key_update, 24z;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Client_hello, 1z;
+    New_session_ticket, 4z;
+    Server_hello, 2z;
+    Encrypted_extensions, 8z;
+    Certificate, 11z;
+    Certificate_verify, 15z;
+    Finished, 20z;
+    Key_update, 24z;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Client_hello, 1z;
+    New_session_ticket, 4z;
+    Server_hello, 2z;
+    Encrypted_extensions, 8z;
+    Certificate, 11z;
+    Certificate_verify, 15z;
+    Finished, 20z;
+    Key_update, 24z;
+  ]))
   in e
 
 inline_for_extraction noextract let handshakeType_parser_kind = LP.strong_parser_kind 1 1 None

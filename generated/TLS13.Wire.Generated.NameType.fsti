@@ -45,10 +45,14 @@ let string_of_nameType = function
     Host_name, 0z;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Host_name, 0z;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Host_name, 0z;
+  ]))
   in e
 
 inline_for_extraction noextract let nameType_parser_kind = LP.strong_parser_kind 1 1 None

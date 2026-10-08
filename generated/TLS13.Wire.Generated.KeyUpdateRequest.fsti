@@ -48,10 +48,16 @@ let string_of_keyUpdateRequest = function
     Update_requested, 1z;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Update_not_requested, 0z;
+    Update_requested, 1z;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Update_not_requested, 0z;
+    Update_requested, 1z;
+  ]))
   in e
 
 inline_for_extraction noextract let keyUpdateRequest_parser_kind = LP.strong_parser_kind 1 1 None

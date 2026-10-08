@@ -72,10 +72,32 @@ let string_of_alertDescription = function
     Unsupported_extension, 110z;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Close_notify, 0z;
+    Unexpected_message, 10z;
+    Bad_record_mac, 20z;
+    Handshake_failure, 40z;
+    Certificate_unknown, 46z;
+    Illegal_parameter, 47z;
+    Decode_error, 50z;
+    Decrypt_error, 51z;
+    Protocol_version, 70z;
+    Unsupported_extension, 110z;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Close_notify, 0z;
+    Unexpected_message, 10z;
+    Bad_record_mac, 20z;
+    Handshake_failure, 40z;
+    Certificate_unknown, 46z;
+    Illegal_parameter, 47z;
+    Decode_error, 50z;
+    Decrypt_error, 51z;
+    Protocol_version, 70z;
+    Unsupported_extension, 110z;
+  ]))
   in e
 
 inline_for_extraction noextract let alertDescription_parser_kind = LP.strong_parser_kind 1 1 None

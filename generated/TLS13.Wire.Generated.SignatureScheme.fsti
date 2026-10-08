@@ -57,10 +57,18 @@ let string_of_signatureScheme = function
     Ed25519, 2055us;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Ecdsa_secp256r1_sha256, 1027us;
+    Rsa_pss_rsae_sha256, 2052us;
+    Ed25519, 2055us;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Ecdsa_secp256r1_sha256, 1027us;
+    Rsa_pss_rsae_sha256, 2052us;
+    Ed25519, 2055us;
+  ]))
   in e
 
 inline_for_extraction noextract let signatureScheme_parser_kind = LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)

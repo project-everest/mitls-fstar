@@ -54,10 +54,16 @@ let string_of_cipherSuite = function
     TLS_CHACHA20_POLY1305_SHA256, 4867us;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    TLS_AES_128_GCM_SHA256, 4865us;
+    TLS_CHACHA20_POLY1305_SHA256, 4867us;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    TLS_AES_128_GCM_SHA256, 4865us;
+    TLS_CHACHA20_POLY1305_SHA256, 4867us;
+  ]))
   in e
 
 inline_for_extraction noextract let cipherSuite_parser_kind = LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)

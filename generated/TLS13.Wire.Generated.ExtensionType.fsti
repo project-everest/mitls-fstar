@@ -66,10 +66,24 @@ let string_of_extensionType = function
     Key_share, 51us;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Server_name, 0us;
+    Supported_groups, 10us;
+    Signature_algorithms, 13us;
+    Application_layer_protocol_negotiation, 16us;
+    Supported_versions, 43us;
+    Key_share, 51us;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Server_name, 0us;
+    Supported_groups, 10us;
+    Signature_algorithms, 13us;
+    Application_layer_protocol_negotiation, 16us;
+    Supported_versions, 43us;
+    Key_share, 51us;
+  ]))
   in e
 
 inline_for_extraction noextract let extensionType_parser_kind = LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)

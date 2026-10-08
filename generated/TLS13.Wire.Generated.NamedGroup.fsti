@@ -54,10 +54,16 @@ let string_of_namedGroup = function
     X25519, 29us;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Secp256r1, 23us;
+    X25519, 29us;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Secp256r1, 23us;
+    X25519, 29us;
+  ]))
   in e
 
 inline_for_extraction noextract let namedGroup_parser_kind = LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)

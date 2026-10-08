@@ -54,10 +54,16 @@ let string_of_offeredVersion = function
     Offered_TLS_1p3, 772us;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Offered_TLS_1p2, 771us;
+    Offered_TLS_1p3, 772us;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Offered_TLS_1p2, 771us;
+    Offered_TLS_1p3, 772us;
+  ]))
   in e
 
 inline_for_extraction noextract let offeredVersion_parser_kind = LP.strong_parser_kind 2 2 (Some LP.ParserKindMetadataTotal)
