@@ -331,7 +331,7 @@ shares in its first flight rather than negotiate a group.
 
 ### Diagnostic-only issue
 
-`Common_TCP_read` returns 0 for both EOF and error, and the driver reads 0 as
+`Pulse_Lib_TCP_read` returns 0 for both EOF and error, and the driver reads 0 as
 "no data yet".  A server that RSTs the connection makes ATLAS spin until its
 fuel is exhausted (~3 s) instead of reporting "peer closed".  This changes no
 verdict; reporting it cleanly would need a new driver outcome.

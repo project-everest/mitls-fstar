@@ -191,7 +191,7 @@ precondition, a **verbatim** `EC.client_step` / `ES.server_step`, a wire-output 
 log/channel update — with no additional TLS-specific side conditions. The former strict-progress
 `*_advances` guards have been removed along with the entire progress-counting apparatus that
 supported them, and `tls_sys_step` is now exactly `SP.product_step tls_iface` over the generic
-combinator in `common/Common.SystemProduct.fst`, shared with `Calc.System.sys_step`.
+combinator in `Pulse.Lib.Protocol.SystemProduct.fst`, shared with `Calc.System.sys_step`.
 
 Because removing guards makes the step relation strictly *larger*, the flagship now holds over
 *more* behaviours and is proved from a *weaker* invariant. That is strictly stronger, and it removes
@@ -214,7 +214,7 @@ the atomic-Finished change had to be made in *both* the spec and `Network.fst`, 
 | `src/spec/core/TLS13.Spec.StateMachine.fst` | The canonical model; Model-Fix-1 lives here |
 | `src/impl/TLS13.System.fst` | `tls_system_inv`, the six move families, `tls_iface`, `tls_sys_step`, `lemma_pw_establish`, `lemma_ready_quiescent_agrees` |
 | `src/impl/TLS13.System.Temporal.fst` | The flagship `T.ag` theorem |
-| `common/Common.SystemProduct.fst` | Generic single-slot directed-channel product, shared with Calc |
+| `Pulse.Lib.Protocol.SystemProduct.fst` | Generic single-slot directed-channel product, shared with Calc |
 | `src/impl/TLS13.Impl.ConnectionState.Network.fst` | The two Pulse functions implementing atomic Finished delivery |
 | `src/spec/properties/TLS13.ConnectionState.ProtectedWireServerFlightInversion.*` | Field-pinned bridge (server flight) |
 | `src/spec/properties/TLS13.ConnectionState.ProtectedWireClientFinishedInversion.*` | Field-pinned bridge (client Finished) |

@@ -8,21 +8,24 @@ This catalog records the project-local dependency closures computed with
 - `src/impl/TLS13.Impl.Server.Driver.fst`
 
 The scans use the root `Makefile` include paths, cache policy, and extraction
-selector. The counted source universe is `common/`, `generated/`, `src/spec/`,
-and `src/impl/`; F*, Pulse, LowParse, and other toolchain libraries are external.
+selector. The counted source universe is `generated/`, `src/spec/`, and
+`src/impl/`; F*, Pulse (including the protocol libraries `Pulse.Lib.TCP`,
+`Pulse.Lib.Protocol.*`, ... that used to live in this repository under
+`common/`), LowParse, and other toolchain libraries are external.
 
 ## Result
 
-The project-local universe contains **246 modules in 432 `.fst`/`.fsti`
-files**. The maintained TLS closure contains **243 modules in 429 files**.
-The other three modules are sample-owned common code listed below.
+The project-local universe and the maintained TLS closure both contain
+**236 modules in 422 `.fst`/`.fsti` files**.  (Before the protocol libraries
+moved to Pulse, the counts were 246/432 and 243/429: the seven reachable
+`common/` modules listed below plus three sample-only `common/` modules.)
 
 | Root | Modules | Files |
 | --- | ---: | ---: |
-| Temporal theorem | 243 | 429 |
-| Client executable | 166 | 285 |
-| Server executable | 170 | 294 |
-| All three roots | 243 | 429 |
+| Temporal theorem | 236 | 422 |
+| Client executable | 160 | 279 |
+| Server executable | 164 | 288 |
+| All three roots | 236 | 422 |
 
 The temporal theorem already reaches the complete maintained TLS closure. The
 client and server roots remain explicit in `ROOT_FILES` because they are the
@@ -32,27 +35,27 @@ executable entry points and define the intended build surface.
 
 | Area | Temporal | Client | Server | Combined |
 | --- | ---: | ---: | ---: | ---: |
-| `common/` | 7 / 7 | 6 / 6 | 6 / 6 | 7 / 7 |
 | `generated/` | 77 / 154 | 77 / 154 | 77 / 154 | 77 / 154 |
 | `src/spec/assumptions/` | 2 / 2 | 2 / 2 | 2 / 2 | 2 / 2 |
 | `src/spec/common/` | 1 / 1 | 1 / 1 | 1 / 1 | 1 / 1 |
 | `src/spec/core/` | 18 / 19 | 18 / 19 | 18 / 19 | 18 / 19 |
 | `src/spec/properties/` | 36 / 64 | 16 / 26 | 16 / 26 | 36 / 64 |
 | `src/impl/` | 102 / 182 | 46 / 77 | 50 / 86 | 102 / 182 |
-| **Total** | **243 / 429** | **166 / 285** | **170 / 294** | **243 / 429** |
+| **Total** | **236 / 422** | **160 / 279** | **164 / 288** | **236 / 422** |
 
 Each cell is `modules / files`. An implementation and its interface count as
 one module and two files.
 
-The seven reachable common modules are:
+The seven reachable Pulse protocol-library modules (formerly `common/`, now
+external) are:
 
-- `Common.ProtocolEndpoint`
-- `Common.ProtocolImplementation`
-- `Common.StateMachine`
-- `Common.TCP`
-- `Common.Temporal`
-- `Common.WireFormat`
-- `Common.WireFormatStateMachine`
+- `Pulse.Lib.Protocol.Endpoint`
+- `Pulse.Lib.Protocol.Implementation`
+- `Pulse.Lib.Protocol.StateMachine`
+- `Pulse.Lib.TCP`
+- `Pulse.Lib.Protocol.Temporal`
+- `Pulse.Lib.Protocol.WireFormat`
+- `Pulse.Lib.Protocol.WireFormatStateMachine`
 
 ## Active generated wire codecs
 
@@ -128,9 +131,9 @@ The orphaned `test/unit/test_extract_smoke.c` harness was removed with
 These three modules are outside the TLS closure but remain because independent
 sample Makefiles import them:
 
-- `Common.FileTransfer`
-- `Common.ProtocolDriver`
-- `Common.TCP.History`
+- `Pulse.Lib.Protocol.FileTransfer`
+- `Pulse.Lib.Protocol.Driver`
+- `Pulse.Lib.TCP.History`
 
 They support the calculator, TFTP, YMODEM, and FTP samples and are not roots of
 the main TLS Makefile.

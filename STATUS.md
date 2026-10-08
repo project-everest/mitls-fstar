@@ -2,7 +2,7 @@
 
 ## End goal
 
-Prove a calc_sample-style end-to-end functional correctness theorem for the extracted, buffer/event-oriented TLS 1.3 client API in `TLS13.Impl.Client`.
+Prove a calc-example-style end-to-end functional correctness theorem for the extracted, buffer/event-oriented TLS 1.3 client API in `TLS13.Impl.Client`.
 
 The theorem should say that constructors establish a layered invariant, and every exported client step preserves it while tying concrete buffers to the specification:
 
@@ -29,10 +29,10 @@ The current committed proof surface is centered on `TLS13.Impl.Client`, not the 
 - Both public step predicates directly preserve `CT.client_end_to_end_invariant`.
 - `CT.client_end_to_end_invariant` packages `CT.client_state_correct` with `CS.connection_state_raw_to_message_replay_consistent`.
 - `CT.driver_trace_end_to_end` folds those public step predicates over a ghost driver trace.
-- `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` are stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Common.TCP` channels, endpoint scheduling, local/API events, residual input buffering before fresh reads, and generated canonical network/local handlers.
-- `Common.ProtocolImplementation` is the core refinement contract; `Common.ProtocolEndpoint` adds endpoint frames, concrete buffer preparation, first-order scheduling actions, and TCP I/O resources; `Common.ProtocolDriver` provides the verified fuel-bounded endpoint loop used by the calc socket sample and as the proof contract for TLS monomorphic runtime wrappers.
+- `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` are stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Pulse.Lib.TCP` channels, endpoint scheduling, local/API events, residual input buffering before fresh reads, and generated canonical network/local handlers.
+- `Pulse.Lib.Protocol.Implementation` is the core refinement contract; `Pulse.Lib.Protocol.Endpoint` adds endpoint frames, concrete buffer preparation, first-order scheduling actions, and TCP I/O resources; `Pulse.Lib.Protocol.Driver` provides the verified fuel-bounded endpoint loop used by the calc socket sample and as the proof contract for TLS monomorphic runtime wrappers.
 - TLS endpoint-local callback outcomes are represented as local/API events, not external actions. Certificate validation/signature verification, server parameter selection, shared-secret derivation, signing, application send, and close_notify all go through the canonical local handler path.
-- The shared TCP bridge is `Common.TCP` plus `c_stubs/common_tcp_custard.*`/`common_tcp_stubs.*`. The C shim accepts both generated erased-argument shapes for bundles that erase ghost histories differently.
+- The shared TCP bridge is `Pulse.Lib.TCP` plus the Pulse runtime's `Pulse_Lib_TCP_runtime.*`/`pulse_tcp_sockets.*`. The C shim accepts both generated erased-argument shapes for bundles that erase ghost histories differently.
 
 The invariant now includes:
 
@@ -132,7 +132,7 @@ Remaining work:
 - add a public free/close path for an allocated-but-never-connected driver if that lifecycle becomes part of the public API; today failed connect is terminal, and successful connect must be followed by close;
 - decide whether to prove liveness/progress beyond the current fueled workflow status API;
 - keep the typed OpenSSL interface (`TLS13.OpenSSL.fsti`) as the explicit auth TCB, or replace it with verified validation/signature code later;
-- keep TCP connect/read/write in the unverified `Common.TCP` bridge, with stronger raw byte-log specs when we want transport-honesty proofs;
+- keep TCP connect/read/write in the unverified `Pulse.Lib.TCP` bridge, with stronger raw byte-log specs when we want transport-honesty proofs;
 - preserve the concrete C driver API as the runtime contract while reducing the C wrapper further when practical.
 
 ### 3. Make the supported-profile boundary explicit in the final theorem
@@ -186,9 +186,9 @@ Start with these files:
 - `src/impl/TLS13.Impl.Client.fsti`: public API and theorem-returning postconditions.
 - `src/impl/TLS13.Impl.Client.Types.fst`: definitions of `client_state_correct`, `client_end_to_end_invariant`, `network_bytes_end_to_end_correct`, `local_event_end_to_end_correct`, and the `driver_trace_end_to_end` theorem surface.
 - `runtime/tls13_client_driver.c`, `runtime/tls13_server_driver.c`, and their headers: stable concrete C APIs over the extracted endpoint/canonical protocol runtime path.
-- `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and `common/Common.TCP.fsti`: shared protocol refinement, endpoint scheduling, generic fuel-bounded driver, and TCP-history interface.
+- `Pulse.Lib.Protocol.Implementation.fst`, `Pulse.Lib.Protocol.Endpoint.fst`, `Pulse.Lib.Protocol.Driver.fst`, and `Pulse.Lib.TCP.fsti`: shared protocol refinement, endpoint scheduling, generic fuel-bounded driver, and TCP-history interface.
 - `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_custard.*`: typed OpenSSL auth TCB used by the verified workflow.
-- `c_stubs/common_tcp_custard.*`, `c_stubs/common_tcp_stubs.*`, and the OpenSSL interop tests in `test/unit/`: C ABI bridge and smoke tests for the endpoint-driven runtime path.
+- `Pulse_Lib_TCP_runtime.*` (Pulse runtime), `pulse_tcp_sockets.*` (Pulse runtime), and the OpenSSL interop tests in `test/unit/`: C ABI bridge and smoke tests for the endpoint-driven runtime path.
 - `src/spec/core/TLS13.Spec.StateMachine.fst`: audit-facing core connection-state model and legal deltas. Client/server endpoint machines and exact wire semantics are in `src/spec/core/TLS13.Spec.Endpoint.*` and `TLS13.Spec.StateMachine.Canonical`; replay and preservation properties are isolated under `src/spec/properties`.
 - `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*`: verified parser/serializer facades and their `TLS13.Wire.Spec` postconditions.
 - `TLS_DESIGN_AND_IMPL.md`: high-level description of the current proof architecture and remaining gaps.

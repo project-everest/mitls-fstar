@@ -5,7 +5,9 @@ Experimental TLS 1.3 client implementation in F*/Pulse, extracted to C.
 
 ## Read next
 
-- `calc_sample/CALC_DESIGN_AND_IMPL.md` - canonical calc-sample methodology reference.
+- `CALC_DESIGN_AND_IMPL.md` in the Pulse calc example
+  ([pulse/share/pulse/examples/protocol/calc](https://github.com/FStarLang/FStar/tree/master/pulse/share/pulse/examples/protocol/calc))
+  - canonical calc-sample methodology reference.
 - `TLS_OUTLINE.md` - concise task statement and proof requirements.
 - `TLS_DESIGN_AND_IMPL.md` - canonical TLS design, proof plan, TCB, extraction notes, and validation workflow.
 
@@ -87,30 +89,36 @@ handshake, engine, and record-layer control flow. Analyze traces with
 `runtime/analyze_atlas_trace.py`; see `runtime/chromium/README.md` for the trace
 schema, safety boundary, and browser workflow.
 
-For the methodology reference:
-
-```sh
-cd calc_sample
-make verify
-make check-admits
-make test-c
-```
+For the methodology reference, see the calc example shipped with Pulse
+(`pulse/share/pulse/examples/protocol/calc` in
+[FStarLang/FStar](https://github.com/FStarLang/FStar)); it builds with that
+repository's example Makefiles.
 
 ## Shared protocol endpoint architecture
 
-The calc sample and TLS runtime now share the same proof architecture in
-`common/`:
+The generic protocol libraries that the samples and the TLS runtime share now
+live in the Pulse standard library, as the `Pulse.Lib.TCP`,
+`Pulse.Lib.BufferedTCP`, `Pulse.Lib.BufferedStream` and `Pulse.Lib.Protocol.*`
+modules (`pulse/lib/pulse/lib/protocol` in
+[FStarLang/FStar](https://github.com/FStarLang/FStar)), with their C runtime
+(`Pulse_Lib_TCP_runtime.{c,h}`, `pulse_tcp_sockets.{c,h}`,
+`Pulse_Lib_Memmove_runtime.{c,h}`) in `pulse/share/pulse/runtime`.  They used to
+live in this repository under `common/`; the calc and TFTP samples moved with
+them and are now the Pulse examples in `pulse/share/pulse/examples/protocol`
+(`calc`, `echo`, `tftp`).  The build locates the runtime through
+`PULSE_RUNTIME_DIR` (by default `share/pulse/runtime` next to the F* binary).
+The calc example and the TLS runtime share the same proof architecture:
 
-- `Common.ProtocolImplementation` is the core refinement contract connecting
+- `Pulse.Lib.Protocol.Implementation` is the core refinement contract connecting
   Pulse network/local handlers, TCP byte histories, wire-format messages, and a
   state-machine step relation.
-- `Common.ProtocolEndpoint` bundles that core implementation with a concrete
-  `Common.TCP.channel`, persistent endpoint frames, network/local action
+- `Pulse.Lib.Protocol.Endpoint` bundles that core implementation with a concrete
+  `Pulse.Lib.TCP.channel`, persistent endpoint frames, network/local action
   resources, buffer preparation, and finish hooks. Driver-visible actions are
   first-order (`NeedInput`, `Local`, `Done`, `Failed`); callback outcomes are
   modeled as local/API events rather than external actions.
-- `Common.ProtocolDriver` is a verified fuel-bounded endpoint loop. For C
-  extraction, endpoint loops are specialized monomorphically: `calc_sample`
+- `Pulse.Lib.Protocol.Driver` is a verified fuel-bounded endpoint loop. For C
+  extraction, endpoint loops are specialized monomorphically: the calc example
   extracts and runs a socket server through this structure, while the TLS C
   runtime wrappers call the generated endpoint/canonical functions directly for
   residual-buffered TLS I/O.
@@ -118,7 +126,6 @@ The calc sample and TLS runtime now share the same proof architecture in
 The main executable confidence gates are:
 
 ```sh
-cd calc_sample && make test-c
 make extract-tls13-bundle
 make test-openssl-echo test-openssl-sclient
 ```

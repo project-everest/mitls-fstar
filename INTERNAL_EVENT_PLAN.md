@@ -9,7 +9,7 @@ Gate: `make -j128 verify test`
 ## 1. Problem
 
 The client has two receive semantics, and only one of them is packaged as a
-`Common.ProtocolImplementation`.
+`Pulse.Lib.Protocol.Implementation`.
 
 ### 1.1 The fork is in the spec, not just the implementation
 
@@ -92,13 +92,13 @@ An **internal event** is a `LocalEvent` that is:
    caller; and
 2. classified as internal by a protocol-supplied syntactic predicate.
 
-There is **no new constructor in `Common.StateMachine.event`** and **no fifth
+There is **no new constructor in `Pulse.Lib.Protocol.StateMachine.event`** and **no fifth
 type parameter** on the generic classes.
 
 This is not a shortcut. The generic layers already implement internal steps
 under exactly this reading:
 
-**`Common.SystemProduct`** already treats "internal" as a first-class move
+**`Pulse.Lib.Protocol.SystemProduct`** already treats "internal" as a first-class move
 family with the right channel discipline:
 
 > *an INTERNAL move (a party steps with no channel interaction) is enabled only
@@ -107,7 +107,7 @@ family with the right channel discipline:
 with fields `client_local` / `server_local`, gated in `product_step` by
 `is_quiet a /\ i.client_local a b`.
 
-**`Common.MachineProduct`** already derives those families from `LocalEvent`
+**`Pulse.Lib.Protocol.MachineProduct`** already derives those families from `LocalEvent`
 steps, splitting on wire output:
 
 ```fstar
@@ -123,11 +123,11 @@ let mp_client_local ... =
 and `full_duplex_moves` already sets `uses_client_local = uses_server_local =
 True`.
 
-**`Common.WireFormatStateMachine.event_input_messages`** already returns `[]`
+**`Pulse.Lib.Protocol.WireFormatStateMachine.event_input_messages`** already returns `[]`
 for `LocalEvent`, so `valid_byte_trace` already charges local steps zero
 transport bytes.
 
-**`Common.ProtocolImplementation.local_process_correct`** (line 383) already
+**`Pulse.Lib.Protocol.Implementation.local_process_correct`** (line 383) already
 proves, for `StepOk`:
 
 ```fstar
@@ -154,12 +154,12 @@ pinned by state — which is precisely "implementation-selected". Note that
 
 ### 2.2 Consequences
 
-- `Common.StateMachine`, `Common.WireFormatStateMachine`,
-  `Common.SystemProduct`, `Common.MachineProduct` and
-  `Common.ChannelImplementation` need **no signature change**.
+- `Pulse.Lib.Protocol.StateMachine`, `Pulse.Lib.Protocol.WireFormatStateMachine`,
+  `Pulse.Lib.Protocol.SystemProduct`, `Pulse.Lib.Protocol.MachineProduct` and
+  `Pulse.Lib.Protocol.ChannelImplementation` need **no signature change**.
 - The five sample protocols sharing `../common` (`calc_sample`, `ftp_sample`,
   `http_sample`, `tftp_sample`, `ymodem_sample`) need **no migration**.
-- `Common.BufferedStream.buffered_stream_endpoint` is abstract over `state` and
+- `Pulse.Lib.BufferedStream.buffered_stream_endpoint` is abstract over `state` and
   `result` and never mentions `local_event`; it needs no signature change.
 
 ### 2.3 Local events may emit wire output — generically
@@ -292,7 +292,7 @@ fragments. Where a whole-input parser sits in a length-sensitive position, add a
 
 ## 4. ProtocolImplementation changes
 
-All changes are confined to `common/Common.ProtocolImplementation.fst` and its
+All changes are confined to `Pulse.Lib.Protocol.Implementation.fst` and its
 instances.
 
 ### 4.1 New class fields
@@ -421,7 +421,7 @@ unprocessed pending-plaintext byte count strictly decreases on every
 
 ## 6. System and temporal proof
 
-`Common.SystemProduct` and `Common.MachineProduct`: **no change**. Internal
+`Pulse.Lib.Protocol.SystemProduct` and `Pulse.Lib.Protocol.MachineProduct`: **no change**. Internal
 endpoint moves are already `mp_client_local` / `mp_server_local`.
 
 `TLS13.System`: no new move families. The work is in the TLS-specific delivery,
@@ -482,7 +482,7 @@ over. Settling it first means the temporal proof is done once.
 - Add the streaming handshake-plaintext parser of §3.6.
 
 ### Phase 1 — ProtocolImplementation
-Files: `common/Common.ProtocolImplementation.fst` and TLS instances.
+Files: `Pulse.Lib.Protocol.Implementation.fst` and TLS instances.
 - Add `pi_internal`, `pi_internal_pending`, `pi_process_internal`.
 - Add `internal_status`, `no_internal_step_enabled`, `internal_process_correct`.
 - Add `~(pi_internal ev)` to `pi_process_local`.
@@ -1199,7 +1199,7 @@ client's `BS.bse_process`:
   (`InternalProgress`) and `internal_failed_result` (`InternalFailed`).  The
   protected-handshake pipeline never needs a local action to unblock it, so the
   fourth status is discharged by construction rather than by a scheduling rule.
-  It stays in `Common.ProtocolImplementation` because it is generic: decision
+  It stays in `Pulse.Lib.Protocol.Implementation` because it is generic: decision
   D2 keeps the distinction in the class, not in TLS.
 * **Steps 5-6 (quiescent: process a complete frame, else read)** — unchanged
   `BufferedStream` behaviour, but now *justified*.  `drain_pending` returns a
@@ -1322,7 +1322,7 @@ channel quiet; full gate.
 ### Phase 7 as built — internal steps in the combined system
 
 `src/impl/TLS13.System.Internal.fst` (new, verified, no admits). Three claims,
-all machine-checked; `Common.SystemProduct`, `Common.MachineProduct`,
+all machine-checked; `Pulse.Lib.Protocol.SystemProduct`, `Pulse.Lib.Protocol.MachineProduct`,
 `TLS13.System.fst` and `TLS13.System.Temporal.fst` are **unmodified**.
 
 **1. No new move families — discharged, not asserted.**
@@ -1522,7 +1522,7 @@ There are seven `protocol_implementation` instances across the samples
 ymodem client/server.
 
 **The helper, not the template.** Rather than copy the TLS-server no-internal
-template seven times, `common/Common.ProtocolImplementation.fst` gained three
+template seven times, `Pulse.Lib.Protocol.Implementation.fst` gained three
 generic definitions placed immediately before `class protocol_implementation`:
 
 - `no_internal_frame_pre` and `no_internal_frame_post`, both `emp` — a protocol
@@ -1551,20 +1551,20 @@ internal/local split is respected everywhere, not just in TLS:
    each sample's `*_process_local` needed the same conjunct in its `requires`
    (7 edits). Symptom: `Error 19 Subtyping check failed` at the
    `pi_process_local = ...` field.
-2. `Common.ProtocolEndpoint` requires `pure (action_not_internal impl action)`
+2. `Pulse.Lib.Protocol.Endpoint` requires `pure (action_not_internal impl action)`
    in `pe_next_action`'s ensures, so the three `*_next_action` functions (calc
    server, ymodem client, ymodem server) needed that clause (3 edits). For
    ymodem this is not vacuous — `next_action` really does return
    `EndpointLocal` actions — but it is still definitional, because
    `no_internal_events` is constantly `false`.
 
-All five sample gates and the root gate are green. `Common.ProtocolImplementation.fst`
+All five sample gates and the root gate are green. `Pulse.Lib.Protocol.Implementation.fst`
 is shared with TLS, so the root gate was re-run after the helper landed.
 
 **The root gate now covers the samples.** `make verify-samples` recurses into
 all five sample directories, and `make test` depends on it. This closes the
 "extend the root gate to cover the sample protocols" exit criterion: a future
-change to `Common.ProtocolImplementation` can no longer silently break a sample.
+change to `Pulse.Lib.Protocol.Implementation` can no longer silently break a sample.
 
 ### Phase 9 as built (cleanup) — the interface is the audit artefact
 
@@ -1651,7 +1651,7 @@ regenerated by `dot -Tsvg`).
 
 Six further orphans remain in `test/unit/` and were deliberately *not* touched,
 since they are outside this work and may be kept intentionally:
-`test_common_tcp_stubs.c`, `test_connection_driver_bindings.c`,
+`test_pulse_tcp_sockets.c`, `test_connection_driver_bindings.c`,
 `test_extracted_client_driver_slice.c`, `test_extracted_server_driver_slice.c`,
 `test_openssl_stubs.c`, `test_record_bindings.c`.
 
@@ -1664,7 +1664,7 @@ under `make verify`, with no admits and no assumes. Where the as-built shape
 differs from the wording written at design time, the difference is stated rather
 than glossed.
 
-**ProtocolImplementation** — `common/Common.ProtocolImplementation.fst`
+**ProtocolImplementation** — `Pulse.Lib.Protocol.Implementation.fst`
 
 - [x] `InternalProgress` corresponds to one canonical `LocalEvent` step whose
       event satisfies `pi_internal`. — `internal_process_correct`, the
@@ -1870,7 +1870,7 @@ Enabledness is derived from `sm_step`, so the classifier itself need not be
 state-dependent. No new `event` constructor and no fifth type parameter.
 
 **S2 — `InternalBlocked`.** Adopted, and kept generic: the four-way
-`internal_status` lives in `Common.ProtocolImplementation`, not in TLS, so any
+`internal_status` lives in `Pulse.Lib.Protocol.Implementation`, not in TLS, so any
 protocol can use it and no-internal protocols discharge it trivially. §4.2 gives
 the concrete `CertificateVerify` case that forces the distinction. The rejected
 alternative — three statuses with the TLS driver disambiguating via
@@ -1928,7 +1928,7 @@ baseline.
 - No treating decrypted handshake messages as independently received records.
 - No outbound handshake-record coalescing in the server.
 - No new generic buffering abstraction.
-- No new move families in `Common.SystemProduct` or `Common.MachineProduct`.
+- No new move families in `Pulse.Lib.Protocol.SystemProduct` or `Pulse.Lib.Protocol.MachineProduct`.
 - No restriction that internal steps be wire-silent (see §2.3).
 - No `runtime_refines_system` relation or concrete-to-system simulation.
 - No restructuring of `TLS13.Impl.Driver.Pairing` beyond what the new event
@@ -1970,7 +1970,7 @@ baseline.
       product move families. — proved, not asserted: internal steps travel on
       `MP.mp_client_local`, which already exists and already demands
       `so_wire_outputs == []` (`lemma_drain_step_is_client_local`).
-      `Common.MachineProduct` and `Common.SystemProduct` are untouched.
+      `Pulse.Lib.Protocol.MachineProduct` and `Pulse.Lib.Protocol.SystemProduct` are untouched.
 - [x] The temporal theorem is re-established at unchanged scope. —
       `lemma_flagship_record_material_agreement` retained verbatim;
       `lemma_flagship_settled_record_material_agreement` added.

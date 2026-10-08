@@ -1586,7 +1586,7 @@ One protocol step may consume n >= 1 records.  Implementation cost is near zero
 layer: `wire_message` must become "the record *group* consumed by one step",
 `wire_parse` must become a streaming parser that coalesces consecutive Handshake
 records until the concatenation is a whole handshake message, and every
-`Common.WireFormat` law (prefix determinism, consumed-length, append
+`Pulse.Lib.Protocol.WireFormat` law (prefix determinism, consumed-length, append
 invariance) must be re-proven for it.  `Server.CanonicalProtocol` and the
 pairing theory are generic over the class, so in principle they follow — but
 site 2 shows they also reason about the one-record shape directly.

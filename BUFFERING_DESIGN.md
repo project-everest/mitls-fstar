@@ -45,32 +45,32 @@ refer to definitions in the corresponding module, not to informal intentions.
         +-----------------------+-----------------------+
         |                                               |
  TLS endpoint processing                       buffering scheduler
- TLS13.Impl.Client/Server              Common.BufferedStream protocol
- Common.ProtocolImplementation         instantiated by Client/Server
+ TLS13.Impl.Client/Server              Pulse.Lib.BufferedStream protocol
+ Pulse.Lib.Protocol.Implementation         instantiated by Client/Server
         |                               Driver.BufferedNetwork
         +-----------------------+-----------------------+
                                 |
-                       Common.BufferedTCP
+                       Pulse.Lib.BufferedTCP
           abstract buffered channel, exact byte conservation,
              borrow/commit/read/write, attach/detach
                                 |
-                  Common.BufferedTCP.Internal
+                  Pulse.Lib.BufferedTCP.Internal
            fixed vector, dense prefix, in-place compaction
                                 |
-                         Common.TCP
+                         Pulse.Lib.TCP
                  trusted external transport contract
                                 |
-                  c_stubs/common_tcp_custard.c
+                  Pulse_Lib_TCP_runtime.c
 ```
 
 The abstraction boundary is intentional:
 
-- TLS workflow modules see `Common.BufferedTCP.t` and its logical
+- TLS workflow modules see `Pulse.Lib.BufferedTCP.t` and its logical
   `phys_buffer`; they do not see the backing vector or boxed length.
-- Only `Common.BufferedTCP` imports `Common.BufferedTCP.Internal` on the live
+- Only `Pulse.Lib.BufferedTCP` imports `Pulse.Lib.BufferedTCP.Internal` on the live
   buffering path.
 - Only the role-specific `BufferedNetwork` endpoint read operation can obtain
-  the ownership needed to call `Common.BufferedTCP.read_more`.
+  the ownership needed to call `Pulse.Lib.BufferedTCP.read_more`.
 - The runtime C shims call only the public extracted driver facade.
 
 Some older server proof modules remain in the source tree and may mention raw
@@ -79,11 +79,11 @@ the extraction roots and the top-level call graph determine the live audit
 surface. Nevertheless, an audit should check that these legacy modules are not
 reintroduced into a top-level workflow or exported facade.
 
-## Shared low-level buffering: `Common.BufferedTCP`
+## Shared low-level buffering: `Pulse.Lib.BufferedTCP`
 
 ### Abstract state
 
-`common/Common.BufferedTCP.fsti` deliberately hides the representation of:
+`Pulse.Lib.BufferedTCP.fsti` deliberately hides the representation of:
 
 - `t`, an attached buffered TCP channel;
 - `storage`, detached reusable receive storage;
@@ -126,7 +126,7 @@ It is updated only by `write`.
 
 ### Physical representation
 
-`Common.BufferedTCP.Internal` implements the abstract model with:
+`Pulse.Lib.BufferedTCP.Internal` implements the abstract model with:
 
 - one fixed `Pulse.Lib.Vec` byte array;
 - one boxed `SizeT.t` pending length;
@@ -140,8 +140,8 @@ uses verified in-place compaction (`memmove` in extracted C) to move the
 remaining suffix to index zero.
 
 The concrete representation should be audited only through
-`Common.BufferedTCP.fst` and `Common.BufferedTCP.Internal.{fsti,fst}`. It should
-not leak through the public `Common.BufferedTCP.fsti`.
+`Pulse.Lib.BufferedTCP.fst` and `Pulse.Lib.BufferedTCP.Internal.{fsti,fst}`. It should
+not leak through the public `Pulse.Lib.BufferedTCP.fsti`.
 
 ### State transitions and conservation
 
@@ -220,7 +220,7 @@ Audit attach/detach in:
 - `TLS13.Impl.Client.Driver.Cleanup`; and
 - `TLS13.Impl.Server.Driver.BufferedTransport`.
 
-## Shared scheduling protocol: `Common.BufferedStream`
+## Shared scheduling protocol: `Pulse.Lib.BufferedStream`
 
 ### Why byte conservation is not enough
 
@@ -229,7 +229,7 @@ implementation blocks on another socket read while a complete record is
 already pending. Buffer safety therefore does not imply the desired scheduling
 or liveness property.
 
-`common/Common.BufferedStream.fsti` adds a linear ownership protocol around
+`Pulse.Lib.BufferedStream.fsti` adds a linear ownership protocol around
 processing and reads. Its `buffered_stream_endpoint` class abstracts a
 relational, effectful protocol processor while retaining the exact buffering
 indices.
@@ -305,7 +305,7 @@ wall-clock termination guarantee.
 ### Production specialization
 
 The endpoint class and its logical dictionary are `noextract`.
-`Common.BufferedStream.drive_until_conclusive` is the single production
+`Pulse.Lib.BufferedStream.drive_until_conclusive` is the single production
 implementation: an `inline_for_extraction noextract` Pulse `while` loop.
 
 The two dictionaries are explicitly typed concrete values:
@@ -455,13 +455,13 @@ There are three related layers of history.
 
 ### 1. Physical TCP history
 
-`common/Common.TCP.fsti` is the trusted transport boundary.
-`Common.TCP.read` appends exactly the returned chunk to `tcp_received`;
-`Common.TCP.write` appends exactly the written prefix to `tcp_sent`.
+`Pulse.Lib.TCP.fsti` is the trusted transport boundary.
+`Pulse.Lib.TCP.read` appends exactly the returned chunk to `tcp_received`;
+`Pulse.Lib.TCP.write` appends exactly the written prefix to `tcp_sent`.
 
 `BufferedTCP.is_buffered` carries those exact histories through buffering.
 
-`Common.ChannelImplementation.ci_open_io_channel` and
+`Pulse.Lib.Protocol.ChannelImplementation.ci_open_io_channel` and
 `ci_close_io_channel` state the correspondence at the abstract channel layer:
 opening `ci_channel_inv` ghostly yields `TCP.is_channel` at the same
 `wire_received` and `wire_sent` indexes plus a frame that closes back to the
@@ -472,7 +472,7 @@ the view through the corresponding ghost-only `BufferedTCP` view.
 ### 2. Driver monotonic history
 
 Each driver owns a monotonic reference indexed by
-`Common.ChannelImplementation.io_history_preorder`. Every physical read and
+`Pulse.Lib.Protocol.ChannelImplementation.io_history_preorder`. Every physical read and
 write updates it with the exact same chunk used in the `BufferedTCP`
 transition. The preorder is proved to imply prefix extension of both receive
 and send histories, so snapshots remain valid as the connection progresses.
@@ -502,7 +502,7 @@ consumed       = TLS state wire_log.raw_received
 Thus pending bytes are physically received but intentionally absent from the
 TLS state until the processor commits them.
 
-`Common.ChannelImplementation.channel_state_valid` supplies the top-level
+`Pulse.Lib.Protocol.ChannelImplementation.channel_state_valid` supplies the top-level
 semantic statement:
 
 ```text
@@ -512,10 +512,10 @@ exists tls_state consumed.
   /\ application_log = project tls_state
 ```
 
-`Common.ProtocolImplementation` is the bridge from imperative processing to
+`Pulse.Lib.Protocol.Implementation` is the bridge from imperative processing to
 parsing, the pure state-machine transition, exact consumed input, and exact
 generated output. The client and server instantiate
-`Common.ChannelImplementation.channel_implementation` with their canonical TLS
+`Pulse.Lib.Protocol.ChannelImplementation.channel_implementation` with their canonical TLS
 protocol and application-log projection.
 
 On a terminal failed TLS state, the driver still proves exact physical
@@ -660,8 +660,8 @@ Primary server audit path:
 
 | Concern | Shared | Client-specific | Server-specific |
 |---|---|---|---|
-| Physical buffering | `Common.BufferedTCP` | Storage attached after connect | Storage attached after accept |
-| Process-before-read protocol | `Common.BufferedStream` | Client endpoint instance and monomorphic loop | Server endpoint instance and monomorphic loop |
+| Physical buffering | `Pulse.Lib.BufferedTCP` | Storage attached after connect | Storage attached after accept |
+| Process-before-read protocol | `Pulse.Lib.BufferedStream` | Client endpoint instance and monomorphic loop | Server endpoint instance and monomorphic loop |
 | Read warrant | `record_prefix_incomplete` | Propagated through client processor | Propagated through server processor |
 | Byte conservation | `received_split` and exact transitions | Client wire-log witness | Server wire-log witness |
 | State-machine validity | `ProtocolImplementation` and `ChannelImplementation` | Canonical client and authentication projection | Canonical server, credentials, and server application projection |
@@ -673,16 +673,16 @@ Primary server audit path:
 
 ### A. Audit no data loss or duplication
 
-1. Start at `Common.BufferedTCP.fsti`, not the implementation. Confirm that
+1. Start at `Pulse.Lib.BufferedTCP.fsti`, not the implementation. Confirm that
    `received_split` is exact ordered concatenation and is exposed in the
    postconditions of all state transitions.
-2. In `Common.BufferedTCP.fst`, check that:
-   - `read_more` uses the exact chunk returned by `Common.TCP.read` for both
+2. In `Pulse.Lib.BufferedTCP.fst`, check that:
+   - `read_more` uses the exact chunk returned by `Pulse.Lib.TCP.read` for both
      history and buffer-model updates;
    - `commit_prefix` uses `take` and `drop` at the same `n`;
    - `write` records exactly the prefix handed to TCP; and
    - `borrow_pending`/`release_pending` expose and restore unchanged bytes.
-3. In `Common.BufferedTCP.Internal.fst`, inspect the dense-prefix invariant,
+3. In `Pulse.Lib.BufferedTCP.Internal.fst`, inspect the dense-prefix invariant,
    append-read into the free suffix, and overlap-safe compaction.
 4. In both `BufferedNetwork.process` implementations, confirm that the borrowed
    view covers all pending bytes and that only the reported `consumed_len` is
@@ -704,7 +704,7 @@ sent'    = sent ++ exact_written_prefix
 
 ### B. Audit TCP/state-machine history conformance
 
-1. Treat `Common.TCP.fsti` as a trusted assumption and verify that the C stub
+1. Treat `Pulse.Lib.TCP.fsti` as a trusted assumption and verify that the C stub
    implements its exact append contracts, including partial writes and EOF/error
    behavior.
 2. In each role's `buffered_driver_indexed`, locate all of:
@@ -719,10 +719,10 @@ sent'    = sent ++ exact_written_prefix
 5. Inspect `client_driver_wire_logs_match_witness` and
    `server_driver_wire_logs_match_witness`; on nonfailed states they must equate
    the consumed history with `raw_received` and sent history with `raw_sent`.
-6. Inspect `Common.ProtocolImplementation` to check that an imperative
+6. Inspect `Pulse.Lib.Protocol.Implementation` to check that an imperative
    processing success corresponds to the pure parser and state-machine
    transition with exact consumed/generated bytes.
-7. Inspect `Common.ChannelImplementation.channel_state_valid`; confirm that the
+7. Inspect `Pulse.Lib.Protocol.ChannelImplementation.channel_state_valid`; confirm that the
    valid trace runs over `consumed`, while `pending` is only the exact suffix of
    physical receive history.
 8. Check send/receive snapshots use `io_history_preorder`, and that its closure
@@ -733,7 +733,7 @@ sent'    = sent ++ exact_written_prefix
 
 ### C. Audit no needless read-ahead
 
-1. In `Common.BufferedStream.fsti`, verify that only a `NeedMore`
+1. In `Pulse.Lib.BufferedStream.fsti`, verify that only a `NeedMore`
    `process_post` can produce `bse_read_auth`.
 2. Verify that `bse_read` requires and consumes `bse_read_auth` and returns only
    `bse_owns`.
@@ -745,7 +745,7 @@ sent'    = sent ++ exact_written_prefix
    complete state/output stuttering.
 5. In client and server `BufferedNetwork.process`, make sure `read_auth`
    contains `needs_more st (BT.pending model)` for the exact current model.
-6. Inspect the single `Common.BufferedStream.drive_until_conclusive` loop:
+6. Inspect the single `Pulse.Lib.BufferedStream.drive_until_conclusive` loop:
    - zero fuel returns without processing or reading;
    - every positive-fuel iteration processes first;
    - only `NeedMore` reaches `read`;
@@ -791,7 +791,7 @@ exist, but live top-level workflows must not call their raw read helpers.
    not appear in the public driver API.
 3. Inspect `runtime/tls13_client_driver.c` and
    `runtime/tls13_server_driver.c`. They should not call:
-   - `Common_TCP_read`, `Common_TCP_write`, connect/accept/close primitives;
+   - `Pulse_Lib_TCP_read`, `Pulse_Lib_TCP_write`, connect/accept/close primitives;
    - client/server `process_network_bytes`;
    - endpoint local-action functions; or
    - buffering internals.
@@ -815,7 +815,7 @@ The proof does not eliminate every trust assumption:
 
 - F*, Pulse, Z3, KaRaMeL, the C compiler, and their memory/extraction models are
   in the trusted toolchain.
-- `Common.TCP.fsti` is an external contract. The socket C implementation must
+- `Pulse.Lib.TCP.fsti` is an external contract. The socket C implementation must
   actually satisfy its exact history, partial-I/O, EOF, and error semantics.
 - Cryptographic external implementations and randomness must satisfy their
   verified interfaces.

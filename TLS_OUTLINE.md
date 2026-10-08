@@ -2,7 +2,9 @@ We have an implementation of a TLS-1.3 Client in Pulse & F*. The proof of
 correctness is in progress, but it is messy and incomplete.
 
 I want to revise the proof following the methodology developed in the
-calc_sample directory. Read CALC_DESIGN_AND_IMPL.md for details. 
+calc example (formerly `calc_sample`; now shipped with Pulse in
+pulse/share/pulse/examples/protocol/calc of FStarLang/FStar). Read its
+CALC_DESIGN_AND_IMPL.md for details.
 
 Let's make a plan to apply the CALC methodology to the TLS-1.3 Client
 implementation.

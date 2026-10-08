@@ -154,9 +154,9 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
       interop probe `make test-keepalive` (two GETs over one connection →
       `200 200`; a `Connection: close` GET → `200` then closed).
       TLS DONE: the interop server carries the SAME verified HTTP leaves over a
-      pluggable transport (`io_t`) that is either a plaintext Common.TCP channel
+      pluggable transport (`io_t`) that is either a plaintext Pulse.Lib.TCP channel
       or an OpenSSL TLS session — the transport is unverified glue, exactly like
-      the Common.TCP channel. Setting `HTTP_TLS_CERT` + `HTTP_TLS_KEY` makes the
+      the Pulse.Lib.TCP channel. Setting `HTTP_TLS_CERT` + `HTTP_TLS_KEY` makes the
       server terminate TLS (TLS 1.2+), so the verified server is reachable
       identically over `http://` and `https://`. Exercised by `make test-tls`
       (self-signed cert; `curl -k` GET → `200` + fixed body and POST → `200` +
@@ -164,8 +164,8 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
 - [x] 6. **State-machine refinement** — connect the executable layer to the
       protocol spec. Until item 5 the sample had two verified layers that never
       met: the `HTTP.Wire.*` codecs + `HTTP.Impl.*` Pulse loops that the C server
-      actually runs, and `HTTP.Protocol.Length`, a `Common.StateMachine` /
-      `Common.FileTransfer` model verified in isolation. Nothing tied the running
+      actually runs, and `HTTP.Protocol.Length`, a `Pulse.Lib.Protocol.StateMachine` /
+      `Pulse.Lib.Protocol.FileTransfer` model verified in isolation. Nothing tied the running
       bytes to the model.
 
       Slice 1 DONE — the pure ghost-log refinement core, in the style of
@@ -207,7 +207,7 @@ Items 1–2 are the highest leverage: they turn this from "talks to itself and
           exactly the bytes the sender produced, the file the receiver
           reconstitutes IS the file the sender was serving.
 
-      **Slice 2 (done)** — the Pulse `Common.ProtocolImplementation`
+      **Slice 2 (done)** — the Pulse `Pulse.Lib.Protocol.Implementation`
       `protocol_implementation` instances:
 
         * `HTTP.Impl.Server.CanonicalProtocol.http_server_protocol_implementation`
@@ -312,9 +312,10 @@ Implementation notes:
   listens), so the plaintext `socket`/`bind`/`listen` path is skipped.
 * `HTTP_TLS_CERT` must be the leaf certificate in **DER** form for this backend
   (the verified X.509 path consumes DER); `HTTP_TLS_KEY` stays a PEM key.
-* The HTTP translation units are compiled separately from the TLS13 bundle: they
-  are extracted against the *variadic* `Common.TCP` stub declarations, which
-  clash with the bundle's strict `Common_TCP.h`.
+* The HTTP translation units are compiled separately from the TLS13 bundle,
+  against the HTTP extraction's own headers.  (They used to be extracted against
+  variadic TCP stub declarations; both now use the exact prototypes in the Pulse
+  runtime's `Pulse_Lib_TCP_runtime.h`.)
 
 ### Client profile the verified server accepts (measured)
 
@@ -498,7 +499,7 @@ and certificate compression) gets a ServerHello.
 
 Closing the parse-level gaps was necessary but not sufficient: with a real
 browser the server answered the first request and then wedged, with every
-process parked in `read()` (`Common_TCP_read` <- `Common_BufferedTCP_read_more`
+process parked in `read()` (`Pulse_Lib_TCP_read` <- `Pulse_Lib_BufferedTCP_read_more`
 <- the verified receive loop).  Two unverified-glue problems, both about
 *availability*, not about the protocol:
 
@@ -519,12 +520,12 @@ process parked in `read()` (`Common_TCP_read` <- `Common_BufferedTCP_read_more`
 2. **Idle connections were never timed out on the verified path.**  The
    plaintext path armed `SO_RCVTIMEO` in `http_server.c`, but on the verified
    path the socket is accepted *inside* the driver and was never reachable.
-   `common_tcp_accept` now arms a receive timeout on every accepted socket
-   (`COMMON_TCP_ACCEPT_TIMEOUT_SECS`, default 15s, 0 disables), which also
-   bounds the handshake.  A timeout alone was not enough: `Common_TCP_read` maps
+   `pulse_tcp_accept` now arms a receive timeout on every accepted socket
+   (`PULSE_TCP_ACCEPT_TIMEOUT_SECS`, default 15s, 0 disables), which also
+   bounds the handshake.  A timeout alone was not enough: `Pulse_Lib_TCP_read` maps
    any short read to "0 bytes", which the verified receive loop treats as *need
    more input* and retries against its fuel budget -- so an idle connection was
-   retried `fuel x timeout` instead of being dropped.  `common_tcp_read_fd` now
+   retried `fuel x timeout` instead of being dropped.  `pulse_tcp_read_fd` now
    makes a timeout **terminal** by half-closing the socket, so subsequent reads
    report a clean end-of-stream and the worker is released at once.
 

@@ -10,7 +10,7 @@ currently implemented.
 
 The verified core is the extraction-oriented buffer/event API in
 `TLS13.Impl.Client`. Network I/O belongs in an external driver. The proof target
-is a calc_sample-style public theorem showing that each extracted client step
+is a calc-example-style public theorem showing that each extracted client step
 preserves a layered invariant from concrete raw buffers through parsed TLS
 records/messages, transcript and key schedule evolution, state-machine events,
 and application-log projection.
@@ -21,8 +21,8 @@ and application-log projection.
 | --- | --- | --- |
 | Public extracted API | `src/impl/TLS13.Impl.Client.fsti`, `src/impl/TLS13.Impl.Client.fst` | Constructor, driver-hint, network-input, local-event, and observation/copyout entry points. |
 | Response/event types | `src/impl/TLS13.Impl.Client.Types.fst` | Extraction-facing response types plus legal-response predicates. |
-| Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h`, `runtime/tls13_server_driver.c`, `runtime/tls13_server_driver.h` | Stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Common.TCP` channels, endpoint scheduling, residual input buffering before fresh reads, canonical network/local handlers, and endpoint finish hooks. |
-| Common endpoint driver contract | `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, `common/Common.TCP.fsti`, `c_stubs/common_tcp_custard.*` | Shared calc/TLS architecture: the core implementation relates handlers, TCP histories, wire messages, and the protocol state machine; endpoints add frames, concrete buffers, and first-order `NeedInput`/`Local`/`Done`/`Failed` scheduling; the generic driver is verified and fuel-bounded, while TLS extraction uses monomorphic runtime wrappers against the same endpoint contract. |
+| Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h`, `runtime/tls13_server_driver.c`, `runtime/tls13_server_driver.h` | Stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Pulse.Lib.TCP` channels, endpoint scheduling, residual input buffering before fresh reads, canonical network/local handlers, and endpoint finish hooks. |
+| Common endpoint driver contract | `Pulse.Lib.Protocol.Implementation.fst`, `Pulse.Lib.Protocol.Endpoint.fst`, `Pulse.Lib.Protocol.Driver.fst`, `Pulse.Lib.TCP.fsti`, `Pulse_Lib_TCP_runtime.*` (Pulse runtime) | Shared calc/TLS architecture: the core implementation relates handlers, TCP histories, wire messages, and the protocol state machine; endpoints add frames, concrete buffers, and first-order `NeedInput`/`Local`/`Done`/`Failed` scheduling; the generic driver is verified and fuel-bounded, while TLS extraction uses monomorphic runtime wrappers against the same endpoint contract. |
 | Concrete state representation | `src/impl/TLS13.Impl.ConnectionState.Repr.fst` | Concrete storage records, allocation helpers, ownership predicates, low-level copy helpers, and `connection_exactly`. |
 | State queries | `src/impl/TLS13.Impl.ConnectionState.Queries.fst` | Read-only runtime checks, snapshots, and driver copyout helpers. |
 | State model helpers | `src/impl/TLS13.Impl.ConnectionState.{Bounds,Model,Tags}.fst` | Constants, pure transition constructors/evolution lemmas, and proof-only control/tag predicates. |
@@ -139,8 +139,7 @@ The public client API is buffer/event oriented:
   exposes these assumptions through `CT.local_auth_tcb_projection`, and
   `CT.legal_local_response` now pins the successful validation event to that
   peer and the successful signature event to the parsed CertificateVerify.
-- There are no explicit `admit()` or `assume_` sites under `src/` or
-  `calc_sample/`.
+- There are no explicit `admit()` or `assume_` sites under `src/`.
 - The strongest current proof surface is per-step preservation of
   `TLS13.Impl.Client.connection_exactly` /
   `TLS13.Impl.ConnectionState.Repr.connection_exactly` plus spec-level legal
@@ -284,7 +283,7 @@ The public client API is buffer/event oriented:
 - `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` now package
   the concrete top-level runtime as stable ABI wrappers over the extracted
   endpoint/canonical protocol functions. The wrappers keep the public C API,
-  own the concrete `Common.TCP` channel handle, process retained input before
+  own the concrete `Pulse.Lib.TCP` channel handle, process retained input before
   reading more bytes, call the generated canonical network/local handlers, and
   use endpoint finish hooks to keep the proof layers aligned with emitted bytes.
   OpenSSL-backed certificate validation and CertificateVerify checks remain
@@ -337,16 +336,16 @@ Other trusted runtime boundaries remain:
   `c_stubs/tls13_openssl_stubs.c`; certificate validation hands the verified
   local event only the exact returned identity prefix;
 - Pulse/F*/KaRaMeL/runtime infrastructure, allocation, and C platform behavior;
-- the TCP bridge in `c_stubs/common_tcp_stubs.c` and
-  `c_stubs/common_tcp_custard.*` that connects explicit input/output buffers to
-  socket reads and writes under the shared `Common.TCP` F*/Pulse interface.
+- the TCP bridge in `pulse_tcp_sockets.c` (Pulse runtime) and
+  `Pulse_Lib_TCP_runtime.*` (Pulse runtime) that connects explicit input/output buffers to
+  socket reads and writes under the shared `Pulse.Lib.TCP` F*/Pulse interface.
   The endpoint runtime wrappers perform residual-buffer prefix processing,
   read-append, suffix compaction, and exact response writes before returning to
   the generated endpoint/canonical protocol surface.
 
 ## Critical gaps
 
-1. The public step theorem is now calc_sample-shaped at the exported API level:
+1. The public step theorem is now calc-example-shaped at the exported API level:
    `process_network_bytes` and `process_local_event` directly return
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
@@ -406,7 +405,7 @@ Other trusted runtime boundaries remain:
    application send, close_notify send, optional peer-close wait, channel close,
    and auth context free. The receive side has verified retained-buffer prefix/read-append
    bridges: the full buffer is split, only the active prefix is passed to
-   `process_network_bytes`, the free suffix is split before `Common.TCP.read`, and
+   `process_network_bytes`, the free suffix is split before `Pulse.Lib.TCP.read`, and
    the full buffer is restored. The remaining proof-polish step is to prove
    liveness beyond the current fueled status API, if that becomes part of the
    theorem.
@@ -507,11 +506,6 @@ git --no-pager diff --check
 the extracted C compiles and the OpenSSL echo interop path works. `make test`
 includes verification, echo stub checks, and that interop test.
 
-For the calc methodology reference:
-
-```sh
-cd calc_sample
-make verify
-make check-admits
-make test-c
-```
+For the calc methodology reference, see the calc example shipped with Pulse
+(`pulse/share/pulse/examples/protocol/calc` in FStarLang/FStar, formerly
+`calc_sample/` in this repository).

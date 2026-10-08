@@ -3,8 +3,8 @@
 This repository contains a verified, extraction-oriented TLS 1.3 client core for
 the supported client profile, plus endpoint-driven C glue for client/server
 interop. The core proof boundary is the buffer/event API in `TLS13.Impl.Client`;
-the public runtime path now routes through the shared `Common.ProtocolEndpoint`
-and `Common.TCP` architecture, with small C wrappers preserving the runtime ABIs.
+the public runtime path now routes through the shared `Pulse.Lib.Protocol.Endpoint`
+and `Pulse.Lib.TCP` architecture, with small C wrappers preserving the runtime ABIs.
 
 ## Supported profile
 
@@ -86,25 +86,25 @@ accepted-event-log design currently used by the trace theorem.
 The migration path from handwritten C orchestration into a shared verified
 endpoint architecture is:
 
-- `common/Common.ProtocolImplementation.fst`
-- `common/Common.ProtocolEndpoint.fst`
-- `common/Common.ProtocolDriver.fst`
-- `common/Common.TCP.fsti`
+- `Pulse.Lib.Protocol.Implementation.fst`
+- `Pulse.Lib.Protocol.Endpoint.fst`
+- `Pulse.Lib.Protocol.Driver.fst`
+- `Pulse.Lib.TCP.fsti`
 - `src/impl/TLS13.Impl.Client.Endpoint.fst`
 - `src/impl/TLS13.Impl.Server.Endpoint.fst`
 
-`Common.ProtocolImplementation` is the auditable refinement contract for
-network/local handlers. `Common.ProtocolEndpoint` adds scheduling, concrete
-frames, I/O resources, and first-order local/API events. `Common.ProtocolDriver`
-is a fuel-bounded proof-generic loop over a `Common.TCP.channel`; extraction uses
+`Pulse.Lib.Protocol.Implementation` is the auditable refinement contract for
+network/local handlers. `Pulse.Lib.Protocol.Endpoint` adds scheduling, concrete
+frames, I/O resources, and first-order local/API events. `Pulse.Lib.Protocol.Driver`
+is a fuel-bounded proof-generic loop over a `Pulse.Lib.TCP.channel`; extraction uses
 monomorphic endpoint/runtime wrappers where that gives a simpler C ABI.
 
 The implementation/runtime path owns extracted TLS state, typed OpenSSL auth or
-credential contexts, connected `Common.TCP` channels, retained receive lengths,
+credential contexts, connected `Pulse.Lib.TCP` channels, retained receive lengths,
 and scratch buffers in endpoint-specific frames or thin C wrapper structs. It
 routes:
 
-- TCP connect/listen/accept/read/write/close through `Common.TCP`;
+- TCP connect/listen/accept/read/write/close through `Pulse.Lib.TCP`;
 - network bytes through endpoint `pi_process_network` handlers;
 - certificate validation, CertificateVerify verification/signing, server
   parameter selection, shared-secret derivation, application sends, and
@@ -113,7 +113,7 @@ routes:
 - application-data receive copyout from Pulse-owned scratch storage.
 
 The top-level workflows treat short writes as failures: a `StepOk` local or
-network step only continues or reports success when the `Common.TCP.write` return
+network step only continues or reports success when the `Pulse.Lib.TCP.write` return
 count equals the verified response `network_out_len`.
 
 For certificate validation, the Pulse workflow copies the parsed leaf DER into
@@ -124,7 +124,7 @@ verified local event therefore installs the exact validated bytes, not a padded
 scratch-buffer value.
 
 The retained-buffer read-append function is the important receive-buffer bridge.
-`Common.TCP.read` writes into the free suffix of a caller-owned retained buffer,
+`Pulse.Lib.TCP.read` writes into the free suffix of a caller-owned retained buffer,
 while `process_network_bytes` requires a raw array whose logical length is
 exactly the buffered bytes being processed. The Pulse driver uses
 `Pulse.Lib.Array.sub` / `return_sub` to split the read suffix, rejoin the full
@@ -142,7 +142,7 @@ verified driver helper layer, and compacts the unconsumed suffix after successfu
 consumption.
 
 `driver_read_buffered_network_bytes_compact_once` additionally splits the free
-suffix of the retained buffer, calls `Common.TCP.read` on that suffix, rejoins the
+suffix of the retained buffer, calls `Pulse.Lib.TCP.read` on that suffix, rejoins the
 full buffer, and then runs the same verified buffered-prefix processing and
 compaction path. The concrete runtime now uses this entry point when it needs
 more network input; the C code no longer performs a direct socket read into the
@@ -192,7 +192,7 @@ and Microsoft top-level navigation through the same fail-closed provider.
 These C drivers are thin ABI wrappers around the extracted endpoint/canonical
 runtime path:
 
-- `tls13_client_driver_connect` opens a `Common.TCP` channel and drives the
+- `tls13_client_driver_connect` opens a `Pulse.Lib.TCP` channel and drives the
   endpoint handshake;
 - `tls13_client_driver_send_application_data` and
   `tls13_client_driver_receive_application_data` route application traffic
@@ -216,7 +216,7 @@ The active TCB surface is intentionally explicit.
 | --- | --- | --- |
 | Crypto primitives and entropy | `src/impl/extern/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, HACL* sources | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, and X25519. |
 | X509/signature validation | `src/impl/extern/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_custard.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
-| TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_custard.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. The generated C includes `common_tcp_custard.h` for the TCP handle types (`--custard_extern_type`); the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
+| TCP bridge | `Pulse.Lib.TCP.fsti`, `pulse_tcp_sockets.c` (Pulse runtime), `Pulse_Lib_TCP_runtime.*` (Pulse runtime) | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. The generated C includes `Pulse_Lib_TCP_runtime.h` for the TCP handle types (`--custard_extern_type`); the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
 | ATLAS trace writer | `src/impl/extern/TLS13.Trace.fsti`, `c_stubs/atlas_trace.*`, `runtime/analyze_atlas_trace.py` | Explicit observational TCB. Verified code chooses event positions and metadata under an `emp -> emp` Pulse contract; the C writer supplies timestamps and process/thread/connection correlation and emits atomic JSONL records. Callers are forbidden to pass secrets, plaintext, certificates, or payload bytes. Disabled builds macro-eliminate calls without evaluating arguments. |
 | Extracted runtime infrastructure | F*, Pulse, Custard, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
 | Concrete C ABI wrapper | `runtime/tls13_client_driver.c` | Trusted allocation of the small wrapper object, status-to-error translation, and lifetime tracking around the extracted Pulse workflow. |
@@ -226,8 +226,8 @@ The active TCB surface is intentionally explicit.
 
 The C code is kept to glue and TCB responsibilities:
 
-- POSIX socket connect/listen/accept/read/write/close in `common_tcp_stubs.c`;
-- the tiny extracted-TCP ABI shim in `common_tcp_custard.c`;
+- POSIX socket connect/listen/accept/read/write/close in `pulse_tcp_sockets.c`;
+- the tiny extracted-TCP ABI shim in `Pulse_Lib_TCP_runtime.c`;
 - the typed OpenSSL ABI shim in `tls13_openssl_custard.c`;
 - crypto/X509 bridge code;
 - optional ATLAS JSONL trace emission and runtime connection correlation;
@@ -254,7 +254,7 @@ The current theorem does not yet claim:
   `client_driver`; today failed `connect` is terminal and frees driver-owned
   IO/auth/buffer resources, while successful `connect` must be followed by
   `close`;
-- transport honesty beyond the trusted `Common.TCP` bridge contract;
+- transport honesty beyond the trusted `Pulse.Lib.TCP` bridge contract;
 - general multi-record local application-data send correctness beyond the current
   supported one-record send theorem.
 
@@ -271,9 +271,9 @@ Start with these files:
 4. `src/spec/TLS13.ConnectionLog.fst` and `src/spec/TLS13.StateMachine.fst` for
    layered logs and the small client-only trace automaton used by log/projection
    proofs.
-5. `common/Common.ProtocolImplementation.fst`,
-   `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and
-   `common/Common.TCP.fsti` for the shared endpoint/driver/TCP architecture.
+5. `Pulse.Lib.Protocol.Implementation.fst`,
+   `Pulse.Lib.Protocol.Endpoint.fst`, `Pulse.Lib.Protocol.Driver.fst`, and
+   `Pulse.Lib.TCP.fsti` for the shared endpoint/driver/TCP architecture.
 6. `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_custard.*` for the
    typed OpenSSL TCB boundary called by the Pulse workflow.
 7. `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` for the
@@ -281,7 +281,7 @@ Start with these files:
 8. `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*` for
    the verified parser/serializer facades and their `TLS13.Wire.Spec`
    postconditions.
-9. `c_stubs/common_tcp_custard.*`, `c_stubs/common_tcp_stubs.*`,
+9. `Pulse_Lib_TCP_runtime.*` (Pulse runtime), `pulse_tcp_sockets.*` (Pulse runtime),
    `c_stubs/tls13_crypto_external.*`, and `c_stubs/tls13_openssl_stubs.*` for
    the remaining C boundary.
 

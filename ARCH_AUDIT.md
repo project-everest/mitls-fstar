@@ -3,7 +3,7 @@
 This note describes the current client/server architecture and the cleanup that
 aligns the canonical protocol/endpoint layer with the verified driver modules.
 The proof-facing story is organized around
-`Common.ProtocolImplementation`, `Common.ProtocolEndpoint`, and valid byte traces
+`Pulse.Lib.Protocol.Implementation`, `Pulse.Lib.Protocol.Endpoint`, and valid byte traces
 of `Client.CanonicalProtocol.client_system` / `Server.CanonicalProtocol.server_system`.
 The extracted C runtime wrappers execute through the monomorphic endpoint
 runners, and the verified `Client.Driver` / `Server.Driver` interfaces now expose
@@ -13,7 +13,9 @@ the endpoint-owned proof-facing workflow operations as their public audit surfac
 
 The endpoint-routing cleanup stages are complete:
 
-1. `calc_sample` extraction uses the endpoint canary path.
+1. `calc_sample` (now the Pulse calc example,
+   `pulse/share/pulse/examples/protocol/calc`) extraction uses the endpoint
+   canary path.
 2. TLS has `new_canonical_client` and `new_canonical_server` constructors that
    package the concrete role state with the canonical initial state and progress
    reference.
@@ -142,11 +144,11 @@ flowchart TD
   (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:230-253`,
   `2672-2748`).
 - `Client.CanonicalProtocol.client_protocol_implementation` is the
-  `Common.ProtocolImplementation` instance.  Its system is exactly
+  `Pulse.Lib.Protocol.Implementation` instance.  Its system is exactly
   `client_system (Ghost.reveal cc.canonical_client_initial)`
   (`src/impl/TLS13.Impl.Client.CanonicalProtocol.fst:3742-3767`).
 - `Client.Endpoint.client_protocol_endpoint` instantiates
-  `Common.ProtocolEndpoint` for that implementation
+  `Pulse.Lib.Protocol.Endpoint` for that implementation
   (`src/impl/TLS13.Impl.Client.Endpoint.fst:3064-3095`).  The endpoint layer owns
   scheduling frames, auth buffers, TCP I/O buffers, and a fuel-bounded endpoint
   workflow (`src/impl/TLS13.Impl.Client.Endpoint.fst:31-115`,
@@ -229,11 +231,11 @@ flowchart TD
   (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:230-273`,
   `1467-1503`).
 - `Server.CanonicalProtocol.server_protocol_implementation` is the
-  `Common.ProtocolImplementation` instance, with
+  `Pulse.Lib.Protocol.Implementation` instance, with
   `pi_system srv = server_system (Ghost.reveal srv.canonical_server_initial)`
   (`src/impl/TLS13.Impl.Server.CanonicalProtocol.fst:3500-3525`).
 - `Server.Endpoint.server_protocol_endpoint` instantiates
-  `Common.ProtocolEndpoint` for that implementation
+  `Pulse.Lib.Protocol.Endpoint` for that implementation
   (`src/impl/TLS13.Impl.Server.Endpoint.fst:4102-4135`).  The endpoint frame
   carries query state, raw/network buffers, certificate-chain/material buffers,
   and credential-dependent material facts
@@ -330,7 +332,7 @@ The fork is gone. The current shape is:
 - An internal event is an ordinary `LocalEvent`, distinguished only by the
   syntactic classifier `pi_internal` and the state predicate
   `pi_internal_pending` (decision S1). There is no new `event` constructor and
-  no new move family in `Common.MachineProduct` / `Common.SystemProduct`, so
+  no new move family in `Pulse.Lib.Protocol.MachineProduct` / `Pulse.Lib.Protocol.SystemProduct`, so
   `TLS13.System` needed no new inductive argument — internal steps travel on
   `mp_client_local`, which already exists and already requires
   `so_wire_outputs == []`.
@@ -345,7 +347,7 @@ Audit surface:
 
 | Concern | Where |
 |---|---|
-| Generic class fields | `common/Common.ProtocolImplementation.fst` — `pi_internal`, `pi_internal_pending`, `pi_process_internal`, `internal_status` |
+| Generic class fields | `Pulse.Lib.Protocol.Implementation.fst` — `pi_internal`, `pi_internal_pending`, `pi_process_internal`, `internal_status` |
 | No-internal protocols | same file — `no_internal_events`, `nothing_pending`, `no_internal_frame_pre/post`, `quiescent_process_internal`. All five sample protocols use these |
 | Client receive primitive | `TLS13.Impl.Client.process_coalesced_network_bytes` — the **only** receive `fn` exported by `TLS13.Impl.Client.fsti` |
 | Client internal primitive | `TLS13.Impl.Client.process_pending_protected_handshake` |
@@ -372,7 +374,7 @@ of the flagship pairing theorem.
 ## Architectural gaps and audit risks
 
 1. **Two verified stories.**  The endpoint layer is a generic, uniform executable
-   story over `Common.ProtocolImplementation`, but the verified driver APIs still
+   story over `Pulse.Lib.Protocol.Implementation`, but the verified driver APIs still
    expose separate role-specific workflows.  The C runtime has moved to the
    endpoint path; the verified F* driver surface has not.
 
@@ -409,9 +411,9 @@ flowchart TD
   Repr[ConnectionState.Repr\nrole initial state = CS.initial role config]
   Low[Low-level role state\nC.client or S.server]
   CanonicalCtor[new_canonical_client/new_canonical_server\nalloc low state, credentials/auth, progress ref\nstore canonical_*_initial]
-  ProtocolImpl[Common.ProtocolImplementation\nclient/server_protocol_implementation]
-  Endpoint[Common.ProtocolEndpoint instance\nclient_protocol_endpoint/server_protocol_endpoint]
-  GenericDriver[Common.ProtocolDriver or thin role wrapper\nendpoint run loop]
+  ProtocolImpl[Pulse.Lib.Protocol.Implementation\nclient/server_protocol_implementation]
+  Endpoint[Pulse.Lib.Protocol.Endpoint instance\nclient_protocol_endpoint/server_protocol_endpoint]
+  GenericDriver[Pulse.Lib.Protocol.Driver or thin role wrapper\nendpoint run loop]
   PublicDriver[Exported TLS driver API\nconnect/accept/send/receive/close]
   ProofSurface[Public audit theorem\nendpoint run produces valid_byte_trace\nand driver wire logs]
   Pairing[Pairing/NoTail/SemanticTrace theorems]
@@ -446,7 +448,8 @@ generic driver.**
 
 ### 1. Use `calc_sample` as the extraction canary
 
-`calc_sample` already has the same architectural split in miniature:
+`calc_sample` (since moved to Pulse as the calc example) already has the same
+architectural split in miniature:
 
 - `Calc.Server.CanonicalProtocol.new_canonical_server` constructs a canonical
   server and `calc_server_protocol_implementation`.
@@ -462,7 +465,7 @@ First cleanup target:
    endpoint runner in `Calc.Server.Endpoint`.  **Done.**
 2. Add the endpoint/canonical modules needed by that path to the calc extraction
    target.  **Done.**
-3. Run `make -C calc_sample test-c`.  **Done.**
+3. Run `make -C calc_sample test-c` (now the Pulse calc example's C test).  **Done.**
 4. Inspect the generated C or add a small Makefile check so the public extracted
    symbol is backed by the endpoint module, not `Calc.Server.Socket.run_channel`.
 
@@ -471,8 +474,8 @@ non-extractable terms into runtime code.
 
 ### 2. Keep generic classes proof-only at first
 
-The extraction risk is real: `Common.ProtocolEndpoint.protocol_endpoint` is
-`noextract`, and `Common.ProtocolDriver.drive_once` / `drive_steps` are also
+The extraction risk is real: `Pulse.Lib.Protocol.Endpoint.protocol_endpoint` is
+`noextract`, and `Pulse.Lib.Protocol.Driver.drive_once` / `drive_steps` are also
 `noextract`.  Forcing the public C path to execute through those class records
 would require extracting typeclass dictionaries, dependent record fields,
 polymorphic generic driver code, and proof-heavy erased arguments all at once.
@@ -546,7 +549,7 @@ legacy driver records; simply calling the endpoint runner from the existing
 legacy predicates is not sound because the canonical progress-resource ownership
 is missing.
 
-Do not make this depend on extracting `Common.ProtocolDriver.drive_steps` yet.
+Do not make this depend on extracting `Pulse.Lib.Protocol.Driver.drive_steps` yet.
 If a common driver is desired later, add a separate monomorphized extraction
 experiment after the TLS endpoint path is already green.
 
@@ -582,8 +585,8 @@ The final audit should be able to read the system in one line per role:
 ```text
 role configuration
   -> canonical role constructor fixes CS.initial role_config
-  -> Common.ProtocolImplementation proves each handler refines role_system initial
-  -> Common.ProtocolEndpoint proves executable scheduling/I/O frames preserve the invariant
+  -> Pulse.Lib.Protocol.Implementation proves each handler refines role_system initial
+  -> Pulse.Lib.Protocol.Endpoint proves executable scheduling/I/O frames preserve the invariant
   -> exported driver runs only this endpoint
   -> valid byte trace + paired transport histories feed the pairing theorem
 ```
