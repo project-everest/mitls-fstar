@@ -1761,9 +1761,40 @@ let server_side_exists (s:sysp) : prop =
     server_side_package s ms material_s ee_s cert_s cv_local_s cv_s sf_s tail_s
       fl_sent_s fl_recv_s ch_s sh_s d_ch_s rest_sr
 
+(* The application-data spine of the server's event log, with its witnesses
+   named (the body of `SCShape.lemma_server_canonical_appdata_exact_spine`). *)
+let server_appdata_spine (s:sysp)
+    (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+    (cv_local:CS.local_event) (cv:GCV.certificateVerify) (sf:GFin.finished)
+    (region:list CS.conn_event) (tail:list CS.conn_event) : prop =
+  (forall (e:CS.conn_event). L.memP e region ==> SCShape.is_server_hs_install e == true) /\
+  (exists (ew:CS.conn_event). L.memP ew region /\ SCShape.is_server_hs_install_dir CS.TrafficWrite ew) /\
+  (exists (er:CS.conn_event). L.memP er region /\ SCShape.is_server_hs_install_dir CS.TrafficRead er) /\
+  s.server.CS.cs_event_log ==
+    L.append
+      (PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh)
+      (L.append region
+         (CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
+          CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+          CS.ConnLocalEvent cv_local ::
+          CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+          CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+          tail))
+
+(* `lemma_server_side` for a fixed spine witness.  Split out so that the
+   existential elimination in `lemma_server_side` runs in a small context. *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
-let lemma_server_side (s:sysp)
-  : Lemma (requires server_flight_bridge_inputs s.client s.server)
+let lemma_server_side_of_spine (s:sysp)
+    (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+    (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
+    (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+    (cv_local:CS.local_event) (cv:GCV.certificateVerify) (sf:GFin.finished)
+    (region:list CS.conn_event) (tail:list CS.conn_event)
+  : Lemma (requires server_flight_bridge_inputs s.client s.server /\
+                    server_appdata_spine s ch selection server_shared sh ee cert
+                      cv_local cv sf region tail)
           (ensures server_side_exists s)
   =
   let cfg_s = s.server.CS.cs_model.CS.model_config in
@@ -1773,29 +1804,6 @@ let lemma_server_side (s:sysp)
   lemma_server_replays s;
   SNoCcs.lemma_no_received_ccs_from_pairing s.client s.server;
   lemma_appdata_server s.server;
-  assert (WStep.server_reachable (CS.initial cfg_s) s.server);
-  assert (cfg_s.CS.config_role == CS.ServerEndpoint);
-  assert (SCShape.log_has_no_received_ccs s.server.CS.cs_event_log);
-  SCShape.lemma_server_canonical_appdata_exact_spine cfg_s s.server;
-  eliminate exists (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
-                   (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
-                   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
-                   (cv_local:CS.local_event) (cv:GCV.certificateVerify) (sf:GFin.finished)
-                   (region:list CS.conn_event) (tail:list CS.conn_event).
-    (forall (e:CS.conn_event). L.memP e region ==> SCShape.is_server_hs_install e == true) /\
-    (exists (ew:CS.conn_event). L.memP ew region /\ SCShape.is_server_hs_install_dir CS.TrafficWrite ew) /\
-    (exists (er:CS.conn_event). L.memP er region /\ SCShape.is_server_hs_install_dir CS.TrafficRead er) /\
-    s.server.CS.cs_event_log ==
-      L.append
-        (PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh)
-        (L.append region
-           (CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
-            CS.ConnLocalEvent cv_local ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
-            tail))
-  with
   (
     let prefix = PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh in
     let sflight = server_flight_events ee cert cv_local cv sf tail in
@@ -1827,6 +1835,70 @@ let lemma_server_side (s:sysp)
       )
     )
   )
+#pop-options
+
+(* Eliminates the (11-binder) spine existential by universally introducing
+   the per-witness lemma and letting Z3 skolemize the hypothesis.  F*'s
+   `eliminate exists` goes through `indefinite_descriptionN`, whose obligations
+   over nested dependent tuples time out for 11 binders. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
+let lemma_server_side_of_spine_exists (s:sysp)
+  : Lemma (requires server_flight_bridge_inputs s.client s.server /\
+                    (exists (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+                       (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
+                       (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+                       (cv_local:CS.local_event) (cv:GCV.certificateVerify) (sf:GFin.finished)
+                       (region:list CS.conn_event) (tail:list CS.conn_event).
+       (forall (e:CS.conn_event). L.memP e region ==> SCShape.is_server_hs_install e == true) /\
+       (exists (ew:CS.conn_event). L.memP ew region /\ SCShape.is_server_hs_install_dir CS.TrafficWrite ew) /\
+       (exists (er:CS.conn_event). L.memP er region /\ SCShape.is_server_hs_install_dir CS.TrafficRead er) /\
+       s.server.CS.cs_event_log ==
+         L.append
+           (PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh)
+           (L.append region
+              (CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
+               CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+               CS.ConnLocalEvent cv_local ::
+               CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+               CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+               tail))))
+          (ensures server_side_exists s)
+  = introduce forall (ch:GCH.clientHello) (selection:CS.server_handshake_selection)
+                     (server_shared:C.x25519_shared_secret) (sh:GSH.serverHello)
+                   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+                   (cv_local:CS.local_event) (cv:GCV.certificateVerify) (sf:GFin.finished)
+                   (region:list CS.conn_event) (tail:list CS.conn_event).
+      ((forall (e:CS.conn_event). L.memP e region ==> SCShape.is_server_hs_install e == true) /\
+      (exists (ew:CS.conn_event). L.memP ew region /\ SCShape.is_server_hs_install_dir CS.TrafficWrite ew) /\
+      (exists (er:CS.conn_event). L.memP er region /\ SCShape.is_server_hs_install_dir CS.TrafficRead er) /\
+      s.server.CS.cs_event_log ==
+        L.append
+          (PWSeg.server_cleartext_handshake_prefix_events ch selection server_shared sh)
+          (L.append region
+             (CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
+              CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+              CS.ConnLocalEvent cv_local ::
+              CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+              CS.ConnNetworkEvent { CL.message_direction = CL.Sent; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+              tail)))
+      ==> server_side_exists s
+    with introduce _ ==> _
+    with lemma_server_side_of_spine s ch selection server_shared sh ee cert cv_local cv sf region tail
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+let lemma_server_side (s:sysp)
+  : Lemma (requires server_flight_bridge_inputs s.client s.server)
+          (ensures server_side_exists s)
+  =
+  let cfg_s = s.server.CS.cs_model.CS.model_config in
+  SNoCcs.lemma_no_received_ccs_from_pairing s.client s.server;
+  lemma_appdata_server s.server;
+  assert (WStep.server_reachable (CS.initial cfg_s) s.server);
+  assert (cfg_s.CS.config_role == CS.ServerEndpoint);
+  assert (SCShape.log_has_no_received_ccs s.server.CS.cs_event_log);
+  SCShape.lemma_server_canonical_appdata_exact_spine cfg_s s.server;
+  lemma_server_side_of_spine_exists s
 #pop-options
 
 (* ================================================================== *)
@@ -1913,9 +1985,36 @@ let client_side_exists (s:sysp) : prop =
       tail_c raw_flight_c
       fl_sent_c fl_recv_c ch_c sh_c rest_cs
 
+(* `lemma_client_side` for a fixed spine witness (see `lemma_server_side_of_spine`). *)
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
-let lemma_client_side (s:sysp)
-  : Lemma (requires server_flight_bridge_inputs s.client s.server)
+let lemma_client_side_of_spine (s:sysp)
+    (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
+    (client_shared:C.x25519_shared_secret)
+    (region:list CS.conn_event)
+    (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+    (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
+    (cv_verify:CS.local_event) (sf:GFin.finished)
+    (tail:list CS.conn_event)
+  : Lemma (requires server_flight_bridge_inputs s.client s.server /\
+                    ((forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+                     (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+                     (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+                     (exists (raw_suffix:list CS.conn_event).
+                       s.client.CS.cs_event_log ==
+                         L.append
+                           (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+                           (L.append region raw_suffix)) /\
+                     CCShape.canonical_log s.client.CS.cs_event_log ==
+                       L.append
+                         (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+                         (L.append region
+                            (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
+                             CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+                             CS.ConnLocalEvent cv_validate ::
+                             CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+                             CS.ConnLocalEvent cv_verify ::
+                             CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+                             tail))))
           (ensures client_side_exists s)
   =
   let cfg_c = s.client.CS.cs_model.CS.model_config in
@@ -1925,37 +2024,6 @@ let lemma_client_side (s:sysp)
   lemma_client_replays s;
   CNoCcs.lemma_no_received_ccs_from_pairing_client s.client s.server;
   lemma_appdata_client s.client;
-  assert (WStep.client_reachable (CS.initial cfg_c) s.client);
-  assert (cfg_c.CS.config_role == CS.ClientEndpoint);
-  assert (CCShape.log_has_no_received_ccs s.client.CS.cs_event_log);
-  CCShape.lemma_client_canonical_appdata_exact_spine cfg_c s.client;
-  eliminate exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
-                   (client_shared:C.x25519_shared_secret)
-                   (region:list CS.conn_event)
-                   (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
-                   (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
-                   (cv_verify:CS.local_event) (sf:GFin.finished)
-                   (tail:list CS.conn_event).
-    (forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
-    (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
-    (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
-    (exists (raw_suffix:list CS.conn_event).
-      s.client.CS.cs_event_log ==
-        L.append
-          (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
-          (L.append region raw_suffix)) /\
-    CCShape.canonical_log s.client.CS.cs_event_log ==
-      L.append
-        (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
-        (L.append region
-           (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
-            CS.ConnLocalEvent cv_validate ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
-            CS.ConnLocalEvent cv_verify ::
-            CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
-            tail))
-  with
   (
     eliminate exists (raw_suffix:list CS.conn_event).
       s.client.CS.cs_event_log ==
@@ -2004,6 +2072,83 @@ let lemma_client_side (s:sysp)
       )
     )
   )
+#pop-options
+
+(* See `lemma_server_side_of_spine_exists`. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
+let lemma_client_side_of_spine_exists (s:sysp)
+  : Lemma (requires server_flight_bridge_inputs s.client s.server /\
+                    (exists (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
+                       (client_shared:C.x25519_shared_secret)
+                       (region:list CS.conn_event)
+                       (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+                       (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
+                       (cv_verify:CS.local_event) (sf:GFin.finished)
+                       (tail:list CS.conn_event).
+                      (forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+                      (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+                      (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+                      (exists (raw_suffix:list CS.conn_event).
+                        s.client.CS.cs_event_log ==
+                          L.append
+                            (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+                            (L.append region raw_suffix)) /\
+                      CCShape.canonical_log s.client.CS.cs_event_log ==
+                        L.append
+                          (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+                          (L.append region
+                             (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
+                              CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+                              CS.ConnLocalEvent cv_validate ::
+                              CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+                              CS.ConnLocalEvent cv_verify ::
+                              CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+                              tail))))
+          (ensures client_side_exists s)
+  = introduce forall (start:CS.handshake_start) (ch:GCH.clientHello) (sh:GSH.serverHello)
+                     (client_shared:C.x25519_shared_secret)
+                     (region:list CS.conn_event)
+                     (ee:GEE.encryptedExtensions) (cert:GCert.certificate)
+                     (cv_validate:CS.local_event) (cv:GCV.certificateVerify)
+                     (cv_verify:CS.local_event) (sf:GFin.finished)
+                     (tail:list CS.conn_event).
+      ((forall (e:CS.conn_event). L.memP e region ==> CCShape.is_client_hs_install e == true) /\
+        (exists (er:CS.conn_event). L.memP er region /\ CCShape.is_client_hs_install_dir CS.TrafficRead er) /\
+        (exists (ew:CS.conn_event). L.memP ew region /\ CCShape.is_client_hs_install_dir CS.TrafficWrite ew) /\
+        (exists (raw_suffix:list CS.conn_event).
+          s.client.CS.cs_event_log ==
+            L.append
+              (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+              (L.append region raw_suffix)) /\
+        CCShape.canonical_log s.client.CS.cs_event_log ==
+          L.append
+            (PWSeg.client_cleartext_handshake_prefix_events start ch sh client_shared)
+            (L.append region
+               (CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee) } ::
+                CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Certificate cert) } ::
+                CS.ConnLocalEvent cv_validate ::
+                CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.CertificateVerify cv) } ::
+                CS.ConnLocalEvent cv_verify ::
+                CS.ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = M.TlsHandshake (M.Finished sf) } ::
+                tail)))
+      ==> client_side_exists s
+    with introduce _ ==> _
+    with lemma_client_side_of_spine s start ch sh client_shared region ee cert cv_validate cv cv_verify sf tail
+#pop-options
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+let lemma_client_side (s:sysp)
+  : Lemma (requires server_flight_bridge_inputs s.client s.server)
+          (ensures client_side_exists s)
+  =
+  let cfg_c = s.client.CS.cs_model.CS.model_config in
+  CNoCcs.lemma_no_received_ccs_from_pairing_client s.client s.server;
+  lemma_appdata_client s.client;
+  assert (WStep.client_reachable (CS.initial cfg_c) s.client);
+  assert (cfg_c.CS.config_role == CS.ClientEndpoint);
+  assert (CCShape.log_has_no_received_ccs s.client.CS.cs_event_log);
+  CCShape.lemma_client_canonical_appdata_exact_spine cfg_c s.client;
+  lemma_client_side_of_spine_exists s
 #pop-options
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 20"

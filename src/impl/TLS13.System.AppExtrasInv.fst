@@ -4093,25 +4093,18 @@ let lemma_s2_server_send (a b:SY.tls_system_state)
     lemma_server_send_hs_seq_exact_preserved a b
 #pop-options
 
-(** CLIENT LOCAL. **)
+(* `client_hs_buffer_empty b` after a client local step: the underlying `conn_ev`
+   (`ASP.lemma_client_local_extract`) is either `ConnNetworkEvent`/`ConnLocalEvent`
+   (buffer untouched) or a TAIL `ConnProtectedHandshake` step, which is impossible
+   under the empty-buffer IH (a tail step needs `offset < B.length fragment`, with
+   `fragment == B.empty`).  Kept apart from `lemma_s2_client_local` so the final
+   `stream2_extras b` conjunction is discharged in a small context. *)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
-let lemma_s2_client_local (a b:SY.tls_system_state)
+let lemma_client_local_hs_buffer_empty_preserved (a b:SY.tls_system_state)
   : Lemma
-      (requires
-        SY.tls_system_inv a /\ stream2_extras a /\
-        MP.Quiet? a.channel /\ SY.tls_step_client_local a b /\
-        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
-      (ensures stream2_extras b)
-  = lemma_ae_client_local a b;
-    lemma_sfif_client_local a b;
-    lemma_cfif_client_local a b;
-    HSP.lemma_hsp_client_local a b;
-    HSP.lemma_hscs_client_local a b;
-    // `client_hs_buffer_empty b`: the underlying `conn_ev` (`ASP.lemma_client_local_extract`)
-    // is either `ConnNetworkEvent`/`ConnLocalEvent` (buffer untouched) or a TAIL
-    // `ConnProtectedHandshake` step, which is impossible under the empty-buffer IH
-    // (a tail step needs `offset < B.length fragment`, with `fragment == B.empty`).
-    eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
+      (requires client_hs_buffer_empty a /\ SY.tls_step_client_local a b)
+      (ensures client_hs_buffer_empty b)
+  = eliminate exists (local:CTy.client_local_event) (c':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output).
       EC.client_step a.client (SM.LocalEvent local) c' out /\
       out.SM.so_wire_outputs == [] /\
@@ -4126,7 +4119,24 @@ let lemma_s2_client_local (a b:SY.tls_system_state)
       with
       lemma_client_local_step_preserves_hs_buffer_empty
         a.client.CS.cs_model c'.CS.cs_model ce
-    );
+    )
+#pop-options
+
+(** CLIENT LOCAL. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 40"
+let lemma_s2_client_local (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        MP.Quiet? a.channel /\ SY.tls_step_client_local a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_client_local a b;
+    lemma_sfif_client_local a b;
+    lemma_cfif_client_local a b;
+    HSP.lemma_hsp_client_local a b;
+    HSP.lemma_hscs_client_local a b;
+    lemma_client_local_hs_buffer_empty_preserved a b;
     lemma_client_local_no_buffering_steps_preserved a b;
     lemma_client_local_hs_seq_exact_preserved a b
 #pop-options
@@ -4190,20 +4200,19 @@ let lemma_s2_deliver_to_client (a b:SY.tls_system_state)
     lemma_deliver_to_client_all3 a b
 #pop-options
 
-(** DELIVER TO SERVER.  Mirror. **)
+(* The `hs_seq_pairing`/`hs_channel_seal_ok` and `client_hs_buffer_empty`
+   conjuncts of `lemma_s2_deliver_to_server`, proved apart so that the step's
+   existential is eliminated in a small context. *)
 #push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
-let lemma_s2_deliver_to_server (a b:SY.tls_system_state)
+let lemma_hsp_deliver_to_server_step (a b:SY.tls_system_state)
   : Lemma
       (requires
         SY.tls_system_inv a /\ stream2_extras a /\
         SY.server_config_valid_e2e a.server /\
         SY.tls_step_deliver_to_server a b /\
         SY.tls_no_rekeying b /\ SY.tls_system_inv b)
-      (ensures stream2_extras b)
-  = lemma_ae_deliver_to_server a b;
-    lemma_sfif_deliver_to_server a b;
-    lemma_cfif_deliver_to_server a b;
-    SY.lemma_deliver_to_server_shape a b;
+      (ensures HSP.hs_seq_pairing b /\ HSP.hs_channel_seal_ok b /\ client_hs_buffer_empty b)
+  = SY.lemma_deliver_to_server_shape a b;
     eliminate exists (wire:CW.wire_message) (s':CS.connection_state)
                      (out:SM.step_output CW.wire_message EAPI.local_output) (raw:B.bytes)
                      (snap:CS.connection_model) (sent:M.tls_message).
@@ -4220,7 +4229,23 @@ let lemma_s2_deliver_to_server (a b:SY.tls_system_state)
       // producer discharges `hs_channel_seal_ok b`, so that if that conjunct ever
       // stops being vacuous at a `Quiet` post-state the obligation is already wired.
       HSP.lemma_hscs_deliver_to_server a wire s' out raw snap sent
-    );
+    )
+#pop-options
+
+(** DELIVER TO SERVER.  Mirror. **)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+let lemma_s2_deliver_to_server (a b:SY.tls_system_state)
+  : Lemma
+      (requires
+        SY.tls_system_inv a /\ stream2_extras a /\
+        SY.server_config_valid_e2e a.server /\
+        SY.tls_step_deliver_to_server a b /\
+        SY.tls_no_rekeying b /\ SY.tls_system_inv b)
+      (ensures stream2_extras b)
+  = lemma_ae_deliver_to_server a b;
+    lemma_sfif_deliver_to_server a b;
+    lemma_cfif_deliver_to_server a b;
+    lemma_hsp_deliver_to_server_step a b;
     lemma_deliver_to_server_no_buffering_steps_preserved a b;
     lemma_deliver_to_server_hs_seq_exact_preserved a b
 #pop-options

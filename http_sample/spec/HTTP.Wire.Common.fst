@@ -77,12 +77,23 @@ let dec3_ok (b:TCP.bytes) : bool =
 let dec_dec3 (b:TCP.bytes{dec3_ok b}) : nat =
   100 * undig (Seq.index b 0) + 10 * undig (Seq.index b 1) + undig (Seq.index b 2)
 
-#push-options "--z3rlimit 40"
+(* Digit arithmetic is proved over plain integers, apart from the sequence
+   encoding: left together, Z3 4.15.3's nonlinear solver can run for minutes
+   far beyond the rlimit (see also lemma_hex4_digits). *)
+let lemma_dec3_digits (n:nat{n < 1000})
+  : Lemma (100 * (n / 100) + 10 * ((n / 10) % 10) + n % 10 == n)
+= ML.euclidean_division_definition n 10;
+  ML.division_multiplication_lemma n 10 10;
+  ML.euclidean_division_definition (n / 10) 10
+
 let lemma_dec3_roundtrip (n:nat{n < 1000})
   : Lemma (dec3_ok (enc_dec3 n) /\ dec_dec3 (enc_dec3 n) == n)
-= ML.lemma_div_mod n 10;
-  ML.lemma_div_mod n 100
-#pop-options
+= let b = enc_dec3 n in
+  ML.lemma_div_le n 999 100;
+  assert (Seq.index b 0 == dig (n / 100));
+  assert (Seq.index b 1 == dig ((n / 10) % 10));
+  assert (Seq.index b 2 == dig (n % 10));
+  lemma_dec3_digits n
 
 (* ─── Fixed 4-digit decimal block (value < 10^4) ───────────────────────────── *)
 let enc_dec4 (n:nat{n < 10000}) : (b:TCP.bytes{Seq.length b == 4}) =
@@ -99,13 +110,24 @@ let dec_dec4 (b:TCP.bytes{dec4_ok b}) : nat =
   undig (Seq.index b 2) * 10 +
   undig (Seq.index b 3)
 
-#push-options "--z3rlimit 40"
+let lemma_dec4_digits (n:nat{n < 10000})
+  : Lemma ((n / 1000) % 10 * 1000 + (n / 100) % 10 * 100 + (n / 10) % 10 * 10 + n % 10 == n)
+= ML.euclidean_division_definition n 10;
+  ML.division_multiplication_lemma n 10 10;
+  ML.division_multiplication_lemma n 100 10;
+  ML.euclidean_division_definition (n / 10) 10;
+  ML.euclidean_division_definition (n / 100) 10;
+  ML.lemma_div_le n 9999 1000;
+  ML.small_mod (n / 1000) 10
+
 let lemma_dec4_roundtrip (n:nat{n < 10000})
   : Lemma (dec4_ok (enc_dec4 n) /\ dec_dec4 (enc_dec4 n) == n)
-= ML.lemma_div_mod n 10;
-  ML.lemma_div_mod n 100;
-  ML.lemma_div_mod n 1000
-#pop-options
+= let b = enc_dec4 n in
+  assert (Seq.index b 0 == dig ((n / 1000) % 10));
+  assert (Seq.index b 1 == dig ((n / 100) % 10));
+  assert (Seq.index b 2 == dig ((n / 10) % 10));
+  assert (Seq.index b 3 == dig ((n / 1) % 10));
+  lemma_dec4_digits n
 
 (* ─── Fixed 8-digit decimal (Content-Length, < 10^8) ─── two 4-digit blocks. ── *)
 let max_len8 : nat = 100000000  (* 10^8 *)
@@ -146,13 +168,24 @@ let dec_hex4 (b:TCP.bytes{hex4_ok b}) : nat =
   unhex (Seq.index b 2) * 16 +
   unhex (Seq.index b 3)
 
-#push-options "--z3rlimit 60"
+let lemma_hex4_digits (n:nat{n < 65536})
+  : Lemma ((n / 4096) % 16 * 4096 + (n / 256) % 16 * 256 + (n / 16) % 16 * 16 + n % 16 == n)
+= ML.euclidean_division_definition n 16;
+  ML.division_multiplication_lemma n 16 16;
+  ML.division_multiplication_lemma n 256 16;
+  ML.euclidean_division_definition (n / 16) 16;
+  ML.euclidean_division_definition (n / 256) 16;
+  ML.lemma_div_le n 65535 4096;
+  ML.small_mod (n / 4096) 16
+
 let lemma_hex4_roundtrip (n:nat{n < 65536})
   : Lemma (hex4_ok (enc_hex4 n) /\ dec_hex4 (enc_hex4 n) == n)
-= ML.lemma_div_mod n 16;
-  ML.lemma_div_mod n 256;
-  ML.lemma_div_mod n 4096
-#pop-options
+= let b = enc_hex4 n in
+  assert (Seq.index b 0 == hexdig ((n / 4096) % 16));
+  assert (Seq.index b 1 == hexdig ((n / 256) % 16));
+  assert (Seq.index b 2 == hexdig ((n / 16) % 16));
+  assert (Seq.index b 3 == hexdig ((n / 1) % 16));
+  lemma_hex4_digits n
 
 (* ─── Variable-width hex (RFC 9112 chunk-size = 1*HEXDIG) ───────────────────── *)
 (* A byte sequence is a hex run iff every byte is a hex digit (length may be 0). *)
