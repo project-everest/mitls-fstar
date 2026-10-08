@@ -4141,7 +4141,7 @@ let lemma_paired_x25519_key_shares_base_secret_agree
   lemma_paired_x25519_key_shares_shared_secret_agree client server;
   lemma_shared_secret_lineage_base_secret_agree base_id client server
 
-let lemma_paired_x25519_key_shares_derived_key_agrees
+let lemma_paired_x25519_key_shares_derivation_inputs_agree
   (key_id:derived_key_id)
   (client:connection_state)
   (server:connection_state)
@@ -4152,9 +4152,9 @@ let lemma_paired_x25519_key_shares_derived_key_agrees
         connection_supported_profile_key_schedule_lineage client /\
         connection_supported_profile_key_schedule_lineage server /\
         derivation_checkpoint_inputs_agree key_id client server)
-      (ensures peer_derived_key_material_agrees key_id client server)
+      (ensures derivation_inputs_agree key_id client server)
 =
-  (match key_id with
+  match key_id with
    | BaseSecret base_id ->
      lemma_paired_x25519_key_shares_base_secret_agree base_id client server;
      assert (derivation_inputs_agree key_id client server)
@@ -4178,7 +4178,22 @@ let lemma_paired_x25519_key_shares_derived_key_agrees
    | TrafficUpdateSecret _
    | ExporterMasterSecret
    | ResumptionMasterSecret ->
-     assert False);
+     assert False
+
+let lemma_paired_x25519_key_shares_derived_key_agrees
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        first_milestone_derived_key_id key_id /\
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server /\
+        derivation_checkpoint_inputs_agree key_id client server)
+      (ensures peer_derived_key_material_agrees key_id client server)
+=
+  lemma_paired_x25519_key_shares_derivation_inputs_agree key_id client server;
   lemma_paired_endpoints_derived_key_agrees key_id client server
 
 let lemma_paired_handshake_events_same_transcript_checkpoint

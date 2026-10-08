@@ -165,6 +165,21 @@ let lemma_non_application_local_event_deltas
   | ST.LocalSendApplicationData, _ -> assert False
   | _, _ -> ()
 
+let lemma_empty_app_log_delta_preserves_application_log
+  (st0 st1:CS.connection_state)
+  (ev:CS.conn_event)
+  : Lemma
+      (requires
+        CSL.model_app_log_delta st0.CS.cs_model ev st1.CS.cs_model /\
+        CSL.conn_event_app_sent_delta ev == [] /\
+        CSL.conn_event_app_received_delta ev == [])
+      (ensures TChannel.application_log st1 == TChannel.application_log st0)
+=
+  FStar.List.Tot.Properties.append_l_nil
+    st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_sent;
+  FStar.List.Tot.Properties.append_l_nil
+    st0.CS.cs_model.CS.model_application.CS.app_log.CL.app_received
+
 (**
   Every local event other than an application-data send or delivery leaves the
   application log completely alone -- successful or not.  This is what lets a
@@ -217,7 +232,7 @@ let lemma_local_event_preserves_application_log
     ST.lemma_legal_response_for_event_app_log_delta
       st0 st1 resp ev raw_sent raw_received network_out app_out;
     lemma_non_application_local_event_deltas kind payload ev;
-    assert (TChannel.application_log st1 == TChannel.application_log st0)
+    lemma_empty_app_log_delta_preserves_application_log st0 st1 ev
   ) else (
     assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
     ST.lemma_legal_response_for_event_app_log_delta
@@ -229,7 +244,10 @@ let lemma_local_event_preserves_application_log
       B.empty
       network_out
       app_out;
-    assert (TChannel.application_log st1 == TChannel.application_log st0)
+    lemma_empty_app_log_delta_preserves_application_log
+      st0
+      st1
+      (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.Unexpected_message)))
   )
 
 (**

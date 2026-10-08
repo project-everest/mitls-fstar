@@ -2699,6 +2699,12 @@ let lemma_client_coalesced_network_progress
       st1
   )
 
+(* Reflexivity of the closure, proved in an empty context: recovering it from
+   the [preorder] refinement inside a large proof can time out. *)
+let lemma_client_progress_preorder_refl (st:CS.connection_state)
+  : Lemma (client_progress_preorder #CTypes.client_local_event st st)
+  = ()
+
 let lemma_client_network_common_witness_progress
   (initial:client_initial_state)  (received0:B.bytes)
   (sent0:B.bytes)
@@ -2814,7 +2820,7 @@ let lemma_client_network_common_witness_progress
       st1
   ) else (
     if st1 == st0 then
-      assert (client_progress_preorder #CTypes.client_local_event st0 st1)
+      lemma_client_progress_preorder_refl st0
     else (
       assert (buffer_resp.CT.response.CT.status <> CT.StepOk);
       assert (client_invariant_pure initial received0 sent0 st0);

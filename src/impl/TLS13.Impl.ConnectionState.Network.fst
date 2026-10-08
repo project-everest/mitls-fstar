@@ -485,6 +485,34 @@ fn mark_received_hello_retry_request_rejected
     (received_hello_retry_request_rejected_state st0 (Ghost.reveal 'raw_bytes)))
 }
 
+let lemma_transcript_splice_prefix
+  (old_storage:B.bytes)
+  (old_len:nat)
+  (src:B.bytes)
+  (src_len:nat)
+  (transcript:B.bytes)
+  (appended:B.bytes)
+  : Lemma
+      (requires
+        B.length old_storage == max_transcript_len /\
+        old_len + src_len <= max_transcript_len /\
+        src_len <= B.length src /\
+        B.length appended == src_len /\
+        Seq.equal (Seq.slice src 0 src_len) appended /\
+        B.length transcript == old_len /\
+        Seq.equal transcript (Seq.slice old_storage 0 old_len))
+      (ensures (
+        let s =
+          Seq.append
+            (CL.raw_slice old_storage 0 old_len)
+            (Seq.append
+              (CL.raw_slice src 0 src_len)
+              (CL.raw_slice old_storage (old_len + src_len) max_transcript_len)) in
+        B.length s == max_transcript_len /\
+        B.length (B.append transcript appended) == old_len + src_len /\
+        Seq.equal (B.append transcript appended) (Seq.slice s 0 (old_len + src_len))))
+= ()
+
 let lemma_received_server_hello_state_server_hello
   (st:CS.connection_state) (sh:GSH.serverHello) (raw:B.bytes)
   : Lemma
@@ -688,6 +716,14 @@ fn mark_received_server_hello
     c.handshake.buffers.server_hello_bytes
     max_server_hello_len
     (W.serialize_handshake (M.ServerHello sh)));
+
+  lemma_transcript_splice_prefix
+    old_transcript_storage
+    (SZ.v transcript_len)
+    server_hello_storage
+    (SZ.v fragment_len)
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+    (W.serialize_handshake (M.ServerHello sh));
 
   fold (sized_bytes_exactly
     c.handshake.transcript

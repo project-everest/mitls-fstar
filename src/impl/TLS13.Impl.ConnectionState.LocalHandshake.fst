@@ -2545,6 +2545,35 @@ fn client_hello_start_nonempty_runtime
 }
 #pop-options
 
+fn set_control_handshaking_client_hello_sent
+  (control:control_storage)
+  (failure:erased (option T.tls_error))
+  requires
+    (exists* control_tag stage_tag failure_present failure_code failure_alert.
+      Box.pts_to control.control_tag control_tag **
+      Box.pts_to control.handshake_stage_tag stage_tag **
+      Box.pts_to control.failure_present failure_present **
+      Box.pts_to control.failure_code failure_code **
+      Box.pts_to control.failure_alert failure_alert) **
+    pure (Ghost.reveal failure == None)
+  ensures control_exactly control (CS.ControlHandshaking CS.HsClientHelloSent) failure
+{
+  control.control_tag := 1uy;
+  control.handshake_stage_tag := 2uy;
+  control.failure_present := false;
+  control.failure_code := 0uy;
+  control.failure_alert := 0uy;
+  assert_norm (Tags.control_state_matches
+    1uy
+    2uy
+    false
+    0uy
+    0uy
+    (CS.ControlHandshaking CS.HsClientHelloSent));
+  assert_norm (Tags.failure_option_matches false 0uy 0uy None);
+  fold (control_exactly control (CS.ControlHandshaking CS.HsClientHelloSent) failure)
+}
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)
@@ -2969,22 +2998,9 @@ fn try_send_client_hello
       c.handshake
       (sent_client_hello_state st0 (Ghost.reveal ch) (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
 
-    c.control.control_tag := 1uy;
-    c.control.handshake_stage_tag := 2uy;
-    c.control.failure_present := false;
-    c.control.failure_code := 0uy;
-    c.control.failure_alert := 0uy;
-    assert_norm (Tags.control_state_matches
-      1uy
-      2uy
-      false
-      0uy
-      0uy
-      (CS.ControlHandshaking CS.HsClientHelloSent));
-    fold (control_exactly
+    set_control_handshaking_client_hello_sent
       c.control
-      (CS.ControlHandshaking CS.HsClientHelloSent)
-      st0.CS.cs_model.CS.model_failure);
+      st0.CS.cs_model.CS.model_failure;
 
     assert (pure ((sent_client_hello_state st0 (Ghost.reveal ch) (Ghost.reveal raw_sent)).CS.cs_model.CS.model_config ==
       st0.CS.cs_model.CS.model_config));

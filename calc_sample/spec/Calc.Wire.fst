@@ -75,7 +75,8 @@ let serialize_response r =
 (** Helper lemmas for response serialization **)
 val lemma_serialize_ok_bytes 
   (b: bytes{Seq.length b == 5 /\ Seq.index b 0 == 0uy})
-  : Lemma (requires (forall (i:nat{i > 0 /\ i < 5}). Seq.index b i == 0uy))
+  : Lemma (requires Seq.index b 1 == 0uy /\ Seq.index b 2 == 0uy /\
+                    Seq.index b 3 == 0uy /\ Seq.index b 4 == 0uy)
           (ensures serialize_response Ok `Seq.equal` b)
 
 let lemma_serialize_ok_bytes b =
@@ -93,7 +94,8 @@ let lemma_serialize_ok_bytes b =
 
 val lemma_serialize_error_bytes 
   (b: bytes{Seq.length b == 5 /\ Seq.index b 0 == 2uy})
-  : Lemma (requires (forall (i:nat{i > 0 /\ i < 5}). Seq.index b i == 0uy))
+  : Lemma (requires Seq.index b 1 == 0uy /\ Seq.index b 2 == 0uy /\
+                    Seq.index b 3 == 0uy /\ Seq.index b 4 == 0uy)
           (ensures serialize_response Error `Seq.equal` b)
 
 let lemma_serialize_error_bytes b =
