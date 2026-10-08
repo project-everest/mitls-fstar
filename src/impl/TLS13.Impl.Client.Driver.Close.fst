@@ -7,8 +7,8 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module BN = TLS13.Impl.Client.Driver.BufferedNetwork
-module BS = Common.BufferedStream
-module BT = Common.BufferedTCP
+module BS = Pulse.Lib.BufferedStream
+module BT = Pulse.Lib.BufferedTCP
 module C = TLS13.Impl.Client
 module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr

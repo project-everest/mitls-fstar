@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module BS = Common.BufferedStream
+module BS = Pulse.Lib.BufferedStream
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries

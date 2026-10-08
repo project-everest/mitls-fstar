@@ -7,10 +7,10 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module CS = TLS13.Spec.StateMachine
 module DS = TLS13.Impl.Server.Driver.State
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 
 ghost fn open_channel_invariant
   (d:DS.top_server_driver)

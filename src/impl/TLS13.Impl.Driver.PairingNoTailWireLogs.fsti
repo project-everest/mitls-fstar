@@ -11,10 +11,10 @@ module EAPI = TLS13.Spec.Endpoint.API
 module L = FStar.List.Tot
 module Seq = FStar.Seq
 module ServerCP = TLS13.Impl.Server.CanonicalProtocol
-module SM = Common.StateMachine
-module TCP = Common.TCP
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 
 val lemma_wire_parses_as_serialize_with_tail
   (bytes:B.bytes)

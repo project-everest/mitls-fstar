@@ -3,12 +3,13 @@
 # ═══════════════════════════════════════════════════════════════════
 # Verifies the FTP block-mode (RFC 959 §3.4.2) data-block specification: the
 # QuackyDucky-generated wire format (a 2-byte length-prefixed data block) and
-# the hand-written Common.WireFormat / Common.WireFormatStateMachine + protocol
+# the Pulse library's Pulse.Lib.Protocol.WireFormat / Pulse.Lib.Protocol.WireFormatStateMachine + protocol
 # instances built on top of it.
 #
 # This sample is SPEC-ONLY: it has no executable (impl/) layer, no C extraction
 # and no interop harness — only the F* specification is verified.  The other
-# samples (calc/tftp/ymodem) additionally extract verified driver loops to C.
+# samples (ymodem/http here; calc/tftp in the Pulse examples) additionally
+# extract verified driver loops to C.
 #
 #   make verify   Verify all FTPBlock.* modules (default).
 #   make gen      Regenerate FTPBlock.Wire.Generated.* from ftp_block.qd.rfc.
@@ -36,13 +37,10 @@ endif
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
-EXTERN_DIR  = ../src/impl/extern
 OUTPUT_DIR  = _output
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
-  --include ../common \
-  --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(SPEC_DIR)
 
@@ -61,10 +59,8 @@ FSTAR_FLAGS = \
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
-COMMON_FILES = $(wildcard ../common/*.fst ../common/*.fsti)
-EXTERN_FILES = $(EXTERN_DIR)/Common.Memmove.fsti
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES)
+ALL_FILES  = $(SPEC_FILES)
 
 .PHONY: all verify gen clean check-admits help
 

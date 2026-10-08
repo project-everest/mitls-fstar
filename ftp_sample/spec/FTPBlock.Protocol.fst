@@ -6,12 +6,12 @@ module FTPBlock.Protocol
 
   This module provides:
 
-    * the FTP block-mode *server* state machine (Common.StateMachine.state_machine
-      + Common.WireFormatStateMachine.wire_format_state_machine), which serves a
+    * the FTP block-mode *server* state machine (Pulse.Lib.Protocol.StateMachine.state_machine
+      + Pulse.Lib.Protocol.WireFormatStateMachine.wire_format_state_machine), which serves a
       file to a client as a sequence of data blocks;
     * the FTP block-mode *client* state machine, which issues a read request and
       reassembles the file from the data blocks it receives;
-    * an instance of the Common.FileTransfer.file_transfer class for the server,
+    * an instance of the Pulse.Lib.Protocol.FileTransfer.file_transfer class for the server,
       establishing that the server delivers the requested file as an ordered
       sequence of blocks that reconstitute it.
 
@@ -42,11 +42,11 @@ module L = FStar.List.Tot
 module Seq = FStar.Seq
 module SP = FStar.Seq.Properties
 module U8 = FStar.UInt8
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module FT = Common.FileTransfer
-module TCP = Common.TCP
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module FT = Pulse.Lib.Protocol.FileTransfer
+module TCP = Pulse.Lib.TCP
 
 open FTPBlock.Wire.Generated.Ftp_block
 open FTPBlock.Wire

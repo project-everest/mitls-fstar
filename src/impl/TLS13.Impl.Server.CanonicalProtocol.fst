@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec
@@ -30,22 +30,22 @@ module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.Impl.Server
 module SS = TLS13.Impl.Server.Send
 module Seq = FStar.Seq
-module SM = Common.StateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
 module SZ = FStar.SizeT
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module T = TLS13.Types
 module U8 = FStar.UInt8
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 module WS = TLS13.Wire.Spec
 module V = Pulse.Lib.Vec
 
 open TLS13.Spec.Endpoint.Server
 
 (**
-  Canonical Common.ProtocolImplementation boundary for the low-level server.
+  Canonical Pulse.Lib.Protocol.Implementation boundary for the low-level server.
 
   Credential-dependent local APIs ([process_local_event_with_credentials] and
   the certificate/certificate-verify helpers) are deliberately outside this

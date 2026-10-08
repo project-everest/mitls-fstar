@@ -4,7 +4,7 @@ module HTTP.Impl.Loop.Chunked.Stream
 
 (**
   A minimal, **Low*-EXTRACTABLE** HTTP/1.1 *chunked streaming* driver pair over
-  `Common.TCP`, composing the verified in-buffer reassembler
+  `Pulse.Lib.TCP`, composing the verified in-buffer reassembler
   `HTTP.Impl.Codec.Chunked.Stream.http_decode_chunks`.
 
   The encoded stream length is agreed out of band (exactly as the single-chunk
@@ -24,7 +24,7 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ     = FStar.SizeT
 module Seq    = FStar.Seq
-module TCP    = Common.TCP
+module TCP    = Pulse.Lib.TCP
 module U8     = FStar.UInt8
 module R      = Pulse.Lib.Reference
 module Stream = HTTP.Impl.Codec.Chunked.Stream

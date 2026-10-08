@@ -9,8 +9,8 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module BR = TLS13.Impl.Server.Driver.BufferedReceive
 module BSend = TLS13.Impl.Server.Driver.BufferedSend
-module CI = Common.ChannelImplementation
-module CPI = Common.ProtocolImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CTypes = TLS13.Impl.CanonicalTypes
 module CW = TLS13.Spec.Endpoint.Wire
 module EAPI = TLS13.Spec.Endpoint.API
@@ -19,7 +19,7 @@ module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module DS = TLS13.Impl.Server.Driver.State
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
@@ -94,7 +94,7 @@ type server_receive_result = {
 (** {1 Generic channel vocabulary}
 
   These classify [server_workflow_status] for
-  [Common.ChannelImplementation]: which outcomes appended to the application
+  [Pulse.Lib.Protocol.ChannelImplementation]: which outcomes appended to the application
   log, and which left the channel usable.  [send]/[receive] below are stated
   directly in these terms, and [server_channel_implementation] at the end of
   this interface instantiates the class on them.
@@ -513,7 +513,7 @@ fn free
     DS.top_server_driver_closed d 'st 'certificate_chain 'credential_identity
   ensures DS.top_server_driver_released d 'st
 
-(** The production server driver as a [Common.ChannelImplementation]
+(** The production server driver as a [Pulse.Lib.Protocol.ChannelImplementation]
     instance.
 
     There is deliberately no separate "channel" API: [ci_send] and [ci_receive]

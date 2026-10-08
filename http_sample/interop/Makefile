@@ -22,16 +22,26 @@ EXTRACT_DIR  := $(PARENT)/_extract
 STUBS_DIR    := $(PARENT)/../c_stubs
 VERIFIED_DIR := $(PARENT)/verified
 EVERPARSE_HOME ?= $(abspath $(PARENT)/../tools/everparse)
+FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
+FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
+FSTAR_PREFIX = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
+# C runtime for the extern Pulse.Lib.TCP interface, shipped with Pulse.
+# Pulse_Lib_TCP_runtime.c is compiled with -DPULSE_RUNTIME_CUSTARD_C to match
+# the option layout of Custard's direct-to-C backend.
+PULSE_RUNTIME_DIR ?= $(firstword $(wildcard \
+  $(FSTAR_PREFIX)/share/pulse/runtime \
+  $(FSTAR_HOME)/pulse/share/pulse/runtime) \
+  $(FSTAR_PREFIX)/share/pulse/runtime)
 
 SRV_OUR := $(abspath $(EXTRACT_DIR)/http_server)
 
 PORT    ?= 8080
 TIMEOUT ?= 30
 CC      ?= gcc
-CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
+CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DPULSE_RUNTIME_CUSTARD_C \
+  -include Pulse_Lib_TCP_runtime.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(PULSE_RUNTIME_DIR) -I$(STUBS_DIR)
 
 RUN_DIR := _run_http
 RUN_DIR_ABS := $(abspath $(RUN_DIR))
@@ -74,7 +84,7 @@ build-progs:
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/http_server \
 	  http_server.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  -lssl -lcrypto
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 

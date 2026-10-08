@@ -6,22 +6,22 @@ open Pulse.Lib.Pervasives
 open Pulse.Class.Duplicable
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
-module CPI = Common.ProtocolImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CP = TLS13.Impl.Server.CanonicalProtocol
 module CSL = TLS13.Spec.StateMachine.Log
 module CS = TLS13.Spec.StateMachine
 module CL = TLS13.ConnectionLog
 module DS = TLS13.Impl.Server.Driver.State
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module ID = FStar.IndefiniteDescription
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module MR = Pulse.Lib.MonotonicGhostRef
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module ST = TLS13.Impl.Server.Types
 module TChannel = TLS13.Impl.Channel
-module WFSM = Common.WireFormatStateMachine
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 
 let lemma_server_end_to_end_app_log_consistent
   (st:CS.connection_state)

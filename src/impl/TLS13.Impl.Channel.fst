@@ -1,7 +1,7 @@
 module TLS13.Impl.Channel
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.Spec.StateMachine.Log

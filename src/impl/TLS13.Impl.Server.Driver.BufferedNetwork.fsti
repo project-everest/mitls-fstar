@@ -7,7 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
-module BS = Common.BufferedStream
+module BS = Pulse.Lib.BufferedStream
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec

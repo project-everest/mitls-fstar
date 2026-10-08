@@ -2,7 +2,7 @@ module YModem.Impl.Client.Log
 
 (**
   Pure ghost-log / reachable-trace machinery for the YMODEM *client* (receiver)
-  `Common.ProtocolImplementation.protocol_implementation` instance, refined
+  `Pulse.Lib.Protocol.Implementation.protocol_implementation` instance, refined
   against the *reliable-delivery (ARQ)* spec state machine
   `YModem.Protocol.ymodem_client_wfsm`.
 
@@ -40,12 +40,12 @@ module LP = LowParse.Spec
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module TCP = Common.TCP
-module CPI = Common.ProtocolImplementation
-module FT = Common.FileTransfer
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module TCP = Pulse.Lib.TCP
+module CPI = Pulse.Lib.Protocol.Implementation
+module FT = Pulse.Lib.Protocol.FileTransfer
 
 module YP = YModem.Protocol
 
@@ -857,9 +857,9 @@ let lemma_yc_network_soh_step_ok
           [`%CPI.network_process_correct;
            `%soh_result;
            `%ymodem_client_process_result;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_status;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_produced_len];
          iota; zeta; primops];
       FStar.Tactics.smt ())
   | _ -> assert False
@@ -930,9 +930,9 @@ let lemma_yc_network_eot_step_ok
           [`%CPI.network_process_correct;
            `%eot_result;
            `%ymodem_client_process_result;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_status;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_produced_len];
          iota; zeta; primops];
       FStar.Tactics.smt ())
   | _ -> assert False
@@ -1004,9 +1004,9 @@ let lemma_yc_network_can_step_ok
           [`%CPI.network_process_correct;
            `%can_result;
            `%ymodem_client_process_result;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_status;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_produced_len];
          iota; zeta; primops];
       FStar.Tactics.smt ())
   | _ -> assert False
@@ -1068,9 +1068,9 @@ let lemma_yc_network_noop
           [`%CPI.network_process_correct;
            `%illegal_result;
            `%ymodem_client_process_result;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_status;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_produced_len];
          iota; zeta; primops];
       FStar.Tactics.smt ())
   | _ -> assert False
@@ -1129,9 +1129,9 @@ let lemma_yc_local_start_step_ok
           [`%CPI.local_process_correct;
            `%start_result;
            `%ymodem_client_process_result;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_status;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_produced_len];
          iota; zeta; primops];
       FStar.Tactics.smt ())
   | _ -> assert False
@@ -1188,9 +1188,9 @@ let lemma_yc_local_illegal
           [`%CPI.local_process_correct;
            `%illegal_result;
            `%ymodem_client_process_result;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_status;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_consumed_len;
-           `%Common.ProtocolImplementation.__proj__Mkprocess_result__item__process_produced_len];
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_status;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_consumed_len;
+           `%Pulse.Lib.Protocol.Implementation.__proj__Mkprocess_result__item__process_produced_len];
          iota; zeta; primops];
       FStar.Tactics.smt ())
   | _ -> assert False

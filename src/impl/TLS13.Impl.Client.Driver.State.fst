@@ -6,11 +6,11 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module CP = TLS13.Impl.Client.CanonicalProtocol
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -22,8 +22,8 @@ module D = TLS13.Impl.Client.Drain
 module CTypes = TLS13.Impl.CanonicalTypes
 module EC = TLS13.Spec.Endpoint.Client
 module ID = FStar.IndefiniteDescription
-module IO = Common.TCP
-module CI = Common.ChannelImplementation
+module IO = Pulse.Lib.TCP
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module TChannel = TLS13.Impl.Channel
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages

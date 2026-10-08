@@ -11,10 +11,10 @@ module EAPI = TLS13.Spec.Endpoint.API
 module L = FStar.List.Tot
 module RVD = TLS13.Wire.Spec.RevealDecode
 module Seq = FStar.Seq
-module SM = Common.StateMachine
-module TCP = Common.TCP
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 module W = TLS13.Wire.Spec
 module WU = TLS13.Wire.Spec.Reveal.Util
 

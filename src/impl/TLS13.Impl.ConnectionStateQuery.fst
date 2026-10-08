@@ -6,12 +6,12 @@ open Pulse.Lib.Pervasives
 
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module U8 = FStar.UInt8
 
 // TLS-internal compatibility shim used by endpoint adapters that still split
 // scheduling into immediate local actions and endpoint-material-backed deferred
-// locals.  The executable driver-facing class lives in Common.ProtocolEndpoint.
+// locals.  The executable driver-facing class lives in Pulse.Lib.Protocol.Endpoint.
 
 type next_action
   (network_frame:Type0)

@@ -40,7 +40,7 @@ module B    = TLS13.Bytes
 module Seq  = FStar.Seq
 module R    = TLS13.Record.Spec
 module RF   = TLS13.Spec.StateMachine.RecordFraming
-module MP   = Common.MachineProduct
+module MP   = Pulse.Lib.Protocol.MachineProduct
 module SY   = TLS13.System
 module SMCan = TLS13.Spec.StateMachine.Canonical
 module CSL  = TLS13.ConnectionState.Lemmas
@@ -49,7 +49,7 @@ module T    = TLS13.Types
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
 module SMCorr = TLS13.Spec.StateMachine.Correspondence
 module SMR  = TLS13.Spec.StateMachine.Reachability
-module SM   = Common.StateMachine
+module SM   = Pulse.Lib.Protocol.StateMachine
 module CW   = TLS13.Spec.Endpoint.Wire
 module CTy  = TLS13.Impl.CanonicalTypes
 module EC   = TLS13.Spec.Endpoint.Client
@@ -57,7 +57,7 @@ module ES   = TLS13.Spec.Endpoint.Server
 module EAPI = TLS13.Spec.Endpoint.API
 module L    = FStar.List.Tot
 module WStep = TLS13.System.WireStep
-module WF   = Common.WireFormat
+module WF   = Pulse.Lib.Protocol.WireFormat
 module SCB  = TLS13.System.SeqCountBase
 module ORD  = TLS13.System.Ordering
 module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
@@ -1414,7 +1414,7 @@ let inflight_raw_delta_legal (s:SY.tls_system_state) : prop =
 
     STABILITY: a `ToServer` channel is entered ONLY by `client_send` (establishment)
     and the ONLY family enabled from it is `deliver_to_server`, which exits to
-    `Quiet` (Common.SystemProduct.fst:54-60); so the conjunct is non-vacuous only
+    `Quiet` (Pulse.Lib.Protocol.SystemProduct.fst:54-60); so the conjunct is non-vacuous only
     in the frozen window and is established once, at the send. **)
 let read_write_coupling (s:SY.tls_system_state) : prop =
   match s.channel with

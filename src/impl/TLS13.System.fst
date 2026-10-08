@@ -3,8 +3,9 @@ module TLS13.System
 (**
   The combined TLS 1.3 client<->server system — WIRE-LEVEL channel.
 
-  This scales the `calc_sample` combined-system + temporal approach up to real
-  TLS.  It composes two `TLS13.Spec.StateMachine.connection_state`s (a client
+  This scales the combined-system + temporal approach of the calc example
+  (pulse/share/pulse/examples/protocol/calc in Pulse) up to real TLS.
+  It composes two `TLS13.Spec.StateMachine.connection_state`s (a client
   and a server) with an explicit in-flight *raw-byte* channel, and advances each
   endpoint by exactly one step of the OFFICIAL canonical TLS transition relation
   (`TLS13.Spec.Endpoint.Client.client_step` /
@@ -32,7 +33,7 @@ module P   = TLS13.Impl.Driver.Pairing
 module CSL = TLS13.ConnectionState.Lemmas
 module CCShape = TLS13.ConnectionState.ClientCanonicalShape
 module ADBE = TLS13.ConnectionState.AppDataBufferEmpty
-module SM  = Common.StateMachine
+module SM  = Pulse.Lib.Protocol.StateMachine
 module CW  = TLS13.Spec.Endpoint.Wire
 module CTy = TLS13.Impl.CanonicalTypes
 module EC  = TLS13.Spec.Endpoint.Client
@@ -43,7 +44,7 @@ module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
 module SMKM = TLS13.Spec.StateMachine.KeyMaterial
 module SMCan = TLS13.Spec.StateMachine.Canonical
 module ES  = TLS13.Spec.Endpoint.Server
-module WF  = Common.WireFormat
+module WF  = Pulse.Lib.Protocol.WireFormat
 module WFL = TLS13.Spec.WireFormatLemmas
 module W   = TLS13.Wire.Spec
 module T   = TLS13.Types
@@ -51,13 +52,13 @@ module R   = TLS13.Record.Spec
 module S   = TLS13.Spec.StateMachine.ClientTrace
 module WStep = TLS13.System.WireStep
 module CTy2 = TLS13.Impl.Client.Types
-module SP  = Common.SystemProduct
-module MP  = Common.MachineProduct
+module SP  = Pulse.Lib.Protocol.SystemProduct
+module MP  = Pulse.Lib.Protocol.MachineProduct
 module X    = TLS13.X509.Spec
 module U8   = FStar.UInt8
 module TM   = TLS13.Impl.Messages
 module SHPB = TLS13.Wire.Spec.Reveal.ServerHello.Parseback
-module WFSM = Common.WireFormatStateMachine
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
 module PC   = TLS13.System.ProgressCount
 module PWL  = TLS13.ConnectionState.ProtectedWireBase
@@ -79,7 +80,7 @@ open FStar.List.Tot
     sender's model at emission time, and the logical message that was sent).
 
     The CHANNEL and the SYSTEM STATE themselves are no longer declared here: they
-    are the generic ones from `Common.MachineProduct`, whose constructors are
+    are the generic ones from `Pulse.Lib.Protocol.MachineProduct`, whose constructors are
     `MP.Quiet` / `MP.ToServer` / `MP.ToClient` and whose record fields are already
     named `client` / `server` / `channel`.  The `pl_` prefixes keep the payload
     projectors clear of the `raw` / `raw_sent` identifiers used throughout this
@@ -771,7 +772,7 @@ let tls_carries (p:tls_payload) (w:CW.wire_message) : prop =
   Seq.equal (CW.wire_serialize w) p.pl_raw
 
 (** The TLS system as an instance of the generic MACHINE product
-    (`Common.MachineProduct`), which itself feeds `Common.SystemProduct`'s
+    (`Pulse.Lib.Protocol.MachineProduct`), which itself feeds `Pulse.Lib.Protocol.SystemProduct`'s
     single-slot directed-channel discipline.
 
     Nothing about message delivery is written here any more.  We supply only the
@@ -803,7 +804,7 @@ let tls_machine_iface
     The six transition shapes, DERIVED from the two endpoint state machines.
 
     These are no longer hand-written relations: each is the corresponding generic
-    family of `Common.MachineProduct` at `tls_machine_iface`, i.e. exactly one
+    family of `Pulse.Lib.Protocol.MachineProduct` at `tls_machine_iface`, i.e. exactly one
     step of the official canonical relation, VERBATIM (no wrapper, no pin), plus
     channel bookkeeping.  A LocalEvent that emits a record is a "send", one that
     emits nothing is a "local"; deliveries consume the matching in-flight raw and

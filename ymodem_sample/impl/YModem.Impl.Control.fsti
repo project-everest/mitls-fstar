@@ -13,7 +13,7 @@ module YModem.Impl.Control
 
   and, more generally, `ymodem_serialize m == Seq.create 1 (ymodem_control_byte m)`
   for any non-SOH `m`.  Both the client and server
-  `Common.ProtocolImplementation.protocol_implementation` instances need these
+  `Pulse.Lib.Protocol.Implementation.protocol_implementation` instances need these
   layout/round-trip facts to justify writing/comparing the literal control
   bytes directly (EOT 0x04, ACK 0x06, NAK 0x15, CAN 0x18, 'C' 0x43).
 
@@ -30,8 +30,8 @@ module YModem.Impl.Control
 
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
-module TCP = Common.TCP
-module WF = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
 
 open YModem.Wire.Generated.Ymodem_message
 open YModem.Wire
@@ -52,7 +52,7 @@ noextract
 val lemma_serialize_control (m:ymodem_message{~(Body_soh? m)})
   : Lemma (ensures ymodem_serialize m == Seq.create 1 (ymodem_control_byte m))
 
-(* (3) The single-element `Common.WireFormat.serialize_all` of a control
+(* (3) The single-element `Pulse.Lib.Protocol.WireFormat.serialize_all` of a control
    message is the same single byte. *)
 noextract
 val lemma_serialize_all_control (m:ymodem_message{~(Body_soh? m)})

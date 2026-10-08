@@ -7,7 +7,7 @@ module HTTP.Impl.Server.Loop
 
   This is the "thin vertical slice": a verified Pulse loop that reuses the
   committed codec leaves (`HTTP.Impl.Codec.Chunked.http_emit_chunk` and
-  `http_emit_empty_chunk`) and the verified `Common.TCP` socket interface to
+  `http_emit_empty_chunk`) and the verified `Pulse.Lib.TCP` socket interface to
   push a file body over a connected channel as a single HTTP chunk followed by
   the RFC last-chunk terminator, then closes the channel.
 
@@ -26,7 +26,7 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ    = FStar.SizeT
 module Seq   = FStar.Seq
-module TCP   = Common.TCP
+module TCP   = Pulse.Lib.TCP
 module U8    = FStar.UInt8
 module A     = Pulse.Lib.Array
 module W     = HTTP.Wire.Common

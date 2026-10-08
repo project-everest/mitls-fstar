@@ -17,7 +17,7 @@ module HTTP.Impl.Client.Log
       `received` history is the whole story.
 
   Consequently the client discharges the *output* side of
-  `Common.WireFormatStateMachine.valid_byte_trace` outright
+  `Pulse.Lib.Protocol.WireFormatStateMachine.valid_byte_trace` outright
   (`lemma_client_trace_no_wire_outputs`) and satisfies the *input* side through
   the datagram disjunct: the received byte history is exactly the serialization
   of the consumed body segments, whose boundaries come from the
@@ -52,12 +52,12 @@ module RTC = FStar.ReflexiveTransitiveClosure
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module TCP = Common.TCP
-module CPI = Common.ProtocolImplementation
-module FT = Common.FileTransfer
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module TCP = Pulse.Lib.TCP
+module CPI = Pulse.Lib.Protocol.Implementation
+module FT = Pulse.Lib.Protocol.FileTransfer
 
 module HP = HTTP.Protocol.Length
 module SLog = HTTP.Impl.Server.Log
@@ -641,7 +641,7 @@ let lemma_end_to_end_transfer
   SLog.lemma_server_completed_sent_is_file Seq.empty bytes sst
 
 (* ───────────────────────────────────────────────────────────────────────────
-   Bridge to `Common.ProtocolImplementation.{local,network}_process_correct`
+   Bridge to `Pulse.Lib.Protocol.Implementation.{local,network}_process_correct`
 
    These are the obligations the Pulse `protocol_implementation` instance in
    `HTTP.Impl.Client.CanonicalProtocol` has to discharge at each of its exits.

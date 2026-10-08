@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module BS = Common.BufferedStream
+module BS = Pulse.Lib.BufferedStream
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types
 module D = TLS13.Impl.Client.Drain

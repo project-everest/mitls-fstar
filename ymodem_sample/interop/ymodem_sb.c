@@ -16,11 +16,11 @@
  * it early races rb's input purge and deadlocks the session).
  *
  * It speaks YMODEM over stdin (ACK/NAK/'C') / stdout (packets); the verified
- * loop reads and writes through a Common.TCP channel bridging those descriptors.
+ * loop reads and writes through a Pulse.Lib.TCP channel bridging those descriptors.
  */
 
 #include "YModem_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
   if (!blk || !out || !ctrl || !ysnf) { free(infile); return 1; }
 
   uint8_t *i = new_ymodem_server();
-  Common_TCP_channel ch = Common_TCP_channel_of_fds(STDIN_FILENO, STDOUT_FILENO);
+  Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fds(STDIN_FILENO, STDOUT_FILENO);
   ymodem_server_run(i, ch, infile, nblocks, blk, out, ctrl, ysnf, (size_t)FUEL);
   /* NB: keep the channel (fds 0/1) open — the end-of-batch glue below still
      reads/writes them; the channel is closed only at the very end. */
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
   write_full(STDOUT_FILENO, packet, YM_PKT_LEN);
   wait_for(STDIN_FILENO, YM_ACK);
 
-  Common_TCP_close(ch);
+  Pulse_Lib_TCP_close(ch);
   free(infile); free(i); free(blk); free(out); free(ctrl); free(ysnf);
   return 0;
 }

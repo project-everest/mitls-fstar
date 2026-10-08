@@ -4,7 +4,7 @@ module YModem.Impl.Server.Loop
   A verified, **Low*-EXTRACTABLE** YMODEM *server* (sender) driver loop.
 
   Unlike the generic `YModem.Impl.Server.Socket` driver (which runs the
-  typeclass-polymorphic `Common.ProtocolDriver.drive_steps` and is therefore
+  typeclass-polymorphic `Pulse.Lib.Protocol.Driver.drive_steps` and is therefore
   NOT extractable) and unlike the committed `ymodem_server_process_local` (whose
   event type `YModem.Protocol.ymodem_server_local` carries specification data
   — `Server_start filename:bytes len:nat plan:list _` — and so does NOT extract),
@@ -42,10 +42,10 @@ module YModem.Impl.Server.Loop
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI  = Common.ProtocolImplementation
+module CPI  = Pulse.Lib.Protocol.Implementation
 module SZ   = FStar.SizeT
 module Seq  = FStar.Seq
-module TCP  = Common.TCP
+module TCP  = Pulse.Lib.TCP
 module U8   = FStar.UInt8
 module Vec  = Pulse.Lib.Vec
 module MR   = Pulse.Lib.MonotonicGhostRef
@@ -53,7 +53,7 @@ module RTC  = FStar.ReflexiveTransitiveClosure
 module R    = Pulse.Lib.Reference
 module A    = Pulse.Lib.Array
 module L    = FStar.List.Tot
-module FT   = Common.FileTransfer
+module FT   = Pulse.Lib.Protocol.FileTransfer
 module Math = FStar.Math.Lemmas
 
 module YP    = YModem.Protocol

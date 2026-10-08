@@ -4,7 +4,7 @@ module YModem.Impl.Client.Loop
   A verified, **Low*-EXTRACTABLE** YMODEM *client* (receiver) driver loop.
 
   Unlike `YModem.Impl.Client.Socket.run_ymodem_client_channel` — which runs the
-  GENERIC typeclass-polymorphic driver `Common.ProtocolDriver.drive_steps` and is
+  GENERIC typeclass-polymorphic driver `Pulse.Lib.Protocol.Driver.drive_steps` and is
   therefore NOT extractable — this module contains a bespoke, first-order Pulse
   loop that DIRECTLY reuses the committed verified leaf
   `YModem.Impl.Client.CanonicalProtocol.ymodem_client_process_network`.  Every
@@ -12,8 +12,9 @@ module YModem.Impl.Client.Loop
   `process_network` dispatch, the ACK write-back, and the payload reconstruction
   into a caller-provided buffer.
 
-  Structural mirror of `calc_sample/impl/Calc.Server.Socket.fst`'s
-  `run_connection_loop`: a `while` loop over fuel with an `exists*` invariant
+  Structural mirror of `Calc.Server.Socket.run_connection_loop` (the calc
+  example shipped with Pulse, pulse/share/pulse/examples/protocol/calc):
+  a `while` loop over fuel with an `exists*` invariant
   binding the erased ghost history (received/sent/state) and the concrete
   channel + scratch buffers, plus concrete `Reference` cells for the fuel
   counter, the running flag and the reconstruction cursor.
@@ -27,10 +28,10 @@ module YModem.Impl.Client.Loop
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI  = Common.ProtocolImplementation
+module CPI  = Pulse.Lib.Protocol.Implementation
 module SZ   = FStar.SizeT
 module Seq  = FStar.Seq
-module TCP  = Common.TCP
+module TCP  = Pulse.Lib.TCP
 module U8   = FStar.UInt8
 module Vec  = Pulse.Lib.Vec
 module MR   = Pulse.Lib.MonotonicGhostRef
@@ -302,7 +303,7 @@ ensures exists* (rn1:bool) (f1:SZ.t).
    (advancing the channel history) yet is a sound protocol no-op (leaving the
    protocol history unchanged), so the two are not kept equal.
 
-   Structural mirror of `calc_sample/impl/Calc.Server.Socket.run_connection_loop`.
+   Structural mirror of `Calc.Server.Socket.run_connection_loop` (Pulse calc example).
    ─────────────────────────────────────────────────────────────────────────── *)
 
 fn ymodem_client_run

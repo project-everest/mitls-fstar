@@ -12,22 +12,30 @@
 #   * Specification layer (spec/):
 #       - HTTP.Wire       : hand-written RFC 1350 wire format (the five packet
 #         types RRQ/WRQ/DATA/ACK/ERROR as a tagged union `http_message`), the
-#         Common.WireFormat.wire_format instance, and its round-trip law.  Note:
+#         Pulse.Lib.Protocol.WireFormat.wire_format instance, and its round-trip law.  Note:
 #         DATA is datagram-delimited (implicit payload length), so it is NOT a
-#         strong (prefix) parser and the OPTIONAL Common.WireFormat stream laws
+#         strong (prefix) parser and the OPTIONAL Pulse.Lib.Protocol.WireFormat stream laws
 #         are deliberately not instantiated; the driver only needs per-datagram
 #         wf_parse (one datagram per read).
 #       - HTTP.Protocol   : (later) the stop-and-wait ARQ state machines +
-#         Common.FileTransfer instance for the RRQ/download direction.
+#         Pulse.Lib.Protocol.FileTransfer instance for the RRQ/download direction.
 #
 #   * Executable layer (impl/): (later phases) verified Pulse codec leaves and
-#     driver loops, plus the Common.ProtocolImplementation / ProtocolEndpoint
+#     driver loops, plus the Pulse.Lib.Protocol.Implementation / Endpoint
 #     dictionaries that drive them.
 
 # ── Toolchain ──────────────────────────────────────────────────────
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
+FSTAR_PREFIX = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
+# C runtime for the extern Pulse.Lib.TCP interface, shipped with Pulse.
+# Pulse_Lib_TCP_runtime.c is compiled with -DPULSE_RUNTIME_CUSTARD_C to match
+# the option layout of Custard's direct-to-C backend.
+PULSE_RUNTIME_DIR ?= $(firstword $(wildcard \
+  $(FSTAR_PREFIX)/share/pulse/runtime \
+  $(FSTAR_HOME)/pulse/share/pulse/runtime) \
+  $(FSTAR_PREFIX)/share/pulse/runtime)
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
 export PATH := $(Z3_DIR):$(PATH)
@@ -46,14 +54,11 @@ endif
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
 IMPL_DIR    = impl
-EXTERN_DIR  = ../src/impl/extern
 OUTPUT_DIR  = _output
 EXTRACT_DIR = _extract
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
-  --include ../common \
-  --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(SPEC_DIR) \
   --include $(IMPL_DIR)
@@ -73,11 +78,9 @@ FSTAR_FLAGS = \
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
-COMMON_FILES = $(wildcard ../common/*.fst ../common/*.fsti)
-EXTERN_FILES = $(EXTERN_DIR)/Common.Memmove.fsti
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
 IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES) $(IMPL_FILES)
+ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
 
 .PHONY: all verify clean check-admits help vcurl vcurl-demo
 
@@ -133,7 +136,7 @@ extract: extract-c
 # ═══════════════════════════════════════════════════════════════════
 # Extract the VERIFIED HTTP chunked send loop (http_server_run in
 # HTTP.Impl.Server.Loop) — which reuses the verified codec leaves
-# (http_emit_chunk / http_emit_empty_chunk) and the verified Common.TCP
+# (http_emit_chunk / http_emit_empty_chunk) and the verified Pulse.Lib.TCP
 # interface — to one self-contained C bundle (_extract/HTTP_Verified.c), then
 # link a socketpair test harness (verified sender -> plain-C chunked receiver)
 # that transfers a file body and checks the reconstructed bytes.  The socketpair
@@ -144,10 +147,10 @@ VERIFIED_DIR = verified
 STUBS_DIR    = ../c_stubs
 INTEROP_DIR  = interop
 CC ?= gcc
-CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
+CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DPULSE_RUNTIME_CUSTARD_C \
+  -include Pulse_Lib_TCP_runtime.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(PULSE_RUNTIME_DIR) -I$(STUBS_DIR)
 
 extract-loops: verify
 	@echo "Extracting the verified HTTP driver loop to C ..."
@@ -158,7 +161,7 @@ vloop-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
 	  $(VERIFIED_DIR)/vloop_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server send loop  ->  Verified client receive loop  (over a SOCK_STREAM socketpair)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -169,7 +172,7 @@ vloop-length-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_test \
 	  $(VERIFIED_DIR)/vloop_length_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server send loop  ->  Verified client receive loop  (Content-Length body, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -183,7 +186,7 @@ vloop-chunk-stream-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_chunk_stream_test \
 	  $(VERIFIED_DIR)/vloop_chunk_stream_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server send-stream loop  ->  Verified client recv+reassemble loop  (chunked, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -194,7 +197,7 @@ vloop-length-exchange-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_exchange_test \
 	  $(VERIFIED_DIR)/vloop_length_exchange_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified client request loop  <->  Verified server request-parse+response loop  (Content-Length, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -205,7 +208,7 @@ vloop-length-full-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_full_test \
 	  $(VERIFIED_DIR)/vloop_length_full_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server head+body loop  ->  Verified client head-parse+body loop  (Content-Length, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -216,7 +219,7 @@ head-emit-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/head_emit_test \
 	  $(VERIFIED_DIR)/head_emit_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_response / http_emit_request  ->  byte-exact reference"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -227,7 +230,7 @@ chunk-stream-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/chunk_stream_test \
 	  $(VERIFIED_DIR)/chunk_stream_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_chunk/empty  ->  Verified http_decode_chunks reassembly"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -238,7 +241,7 @@ request-emit-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_emit_test \
 	  $(VERIFIED_DIR)/request_emit_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_request_host  ->  byte-exact reference"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -249,7 +252,7 @@ response-parse-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/response_parse_test \
 	  $(VERIFIED_DIR)/response_parse_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_parse_response_head  ->  (code, framing, length)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -260,7 +263,7 @@ response-emit-var-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/response_emit_var_test \
 	  $(VERIFIED_DIR)/response_emit_var_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_response_var  ->  ser_response_var (minimal CL)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -271,7 +274,7 @@ header-parse-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/header_parse_test \
 	  $(VERIFIED_DIR)/header_parse_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_parse_header_field / http_count_headers -> parse_field"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -282,7 +285,7 @@ request-line-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_line_test \
 	  $(VERIFIED_DIR)/request_line_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_parse_request_line  ->  parse_request_line_m"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -293,7 +296,7 @@ request-post-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_post_test \
 	  $(VERIFIED_DIR)/request_post_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_request_post  ->  ser_request_post"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -304,7 +307,7 @@ framing-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/framing_test \
 	  $(VERIFIED_DIR)/framing_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_request_framing_ok / http_count_header_named"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -315,7 +318,7 @@ method-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/method_test \
 	  $(VERIFIED_DIR)/method_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_request_line_ok / http_method_known"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -326,7 +329,7 @@ limits-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/limits_test \
 	  $(VERIFIED_DIR)/limits_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_header_limits_ok"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -337,7 +340,7 @@ connclose-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/connclose_test \
 	  $(VERIFIED_DIR)/connclose_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_connection_close"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -349,7 +352,7 @@ get-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_test \
 	  $(VERIFIED_DIR)/get_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get  ->  GET / against a mock example.com server"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -360,7 +363,7 @@ get-chunked-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_chunked_test \
 	  $(VERIFIED_DIR)/get_chunked_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get + http_get_body_chunked  ->  chunked GET decode"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -371,7 +374,7 @@ get-chunked-var-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_chunked_var_test \
 	  $(VERIFIED_DIR)/get_chunked_var_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get + http_get_body_chunked_var -> min-hex decode"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -382,7 +385,7 @@ get-live-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_live_test \
 	  $(VERIFIED_DIR)/get_live_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get  ->  live GET http://example.com/ (guarded)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -398,7 +401,7 @@ vcurl: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vcurl \
 	  $(VERIFIED_DIR)/vcurl.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "Built $(EXTRACT_DIR)/vcurl.  Try:  $(EXTRACT_DIR)/vcurl http://example.com/"
 
 vcurl-demo: vcurl

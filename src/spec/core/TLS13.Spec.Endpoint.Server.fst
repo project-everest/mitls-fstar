@@ -7,12 +7,12 @@ module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module RTC = FStar.ReflexiveTransitiveClosure
 module Seq = FStar.Seq
-module SM = Common.StateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
 module SMCan = TLS13.Spec.StateMachine.Canonical
 module T = TLS13.Types
 module W = TLS13.Spec.Endpoint.Wire
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 
 (**
   Pure server-endpoint vocabulary and state machine.  The semantic local-event

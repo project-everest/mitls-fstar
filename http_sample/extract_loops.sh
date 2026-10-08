@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Extract the verified HTTP/1.1 driver loop (+ its codec deps) to a single C
-# bundle, mirroring tftp_sample/extract_loops.sh.  The verified Pulse loop
+# bundle, (the same scheme as the TFTP example shipped with Pulse,
+# pulse/share/pulse/examples/protocol/tftp).  The verified Pulse loop
 # http_server_run (HTTP.Impl.Server.Loop) and the codec leaves it reuses
 # (http_emit_chunk / http_emit_empty_chunk in HTTP.Impl.Codec.Chunked) lower to
 # first-order C in _extract/HTTP_Verified.c — the runnable verified
@@ -11,7 +12,7 @@ FS=$EP/opt/FStar/bin/fstar.exe
 LP=$EP/lib/everparse/lowparse
 export PATH=$EP/opt/z3:$PATH
 cd "$(dirname "$0")"
-F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include spec --include impl"
+F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include $LP --include spec --include impl"
 
 MODS="HTTP.Impl.Codec.Chunked HTTP.Impl.Codec.Chunked.Stream HTTP.Impl.Loop.Chunked.Stream HTTP.Impl.Server.Loop HTTP.Impl.Client.Loop HTTP.Impl.Codec.Length HTTP.Impl.Server.Loop.Length HTTP.Impl.Client.Loop.Length HTTP.Impl.Codec.Request HTTP.Impl.Codec.Response HTTP.Impl.Client.Loop.Get HTTP.Impl.Codec.Header HTTP.Impl.Loop.Header HTTP.Impl.Codec.RequestLine HTTP.Impl.Loop.Request HTTP.Impl.Codec.RequestPost HTTP.Impl.Loop.RequestPost"
 
@@ -73,7 +74,7 @@ for E in \
   HTTP.Impl.Codec.RequestPost.http_emit_request_post \
   HTTP.Impl.Loop.RequestPost.http_build_post_head \
   ; do ENTRIES="$ENTRIES --custard_entry $E"; done
-EXTERN_TYPES="--custard_extern_type Common.TCP.channel@common_tcp_custard.h --custard_extern_type Common.TCP.listener@common_tcp_custard.h"
+EXTERN_TYPES="--custard_extern_type Pulse.Lib.TCP.channel@Pulse_Lib_TCP_runtime.h --custard_extern_type Pulse.Lib.TCP.listener@Pulse_Lib_TCP_runtime.h"
 # The C drivers call the roots by their unqualified names.
 NO_PREFIX=""
 for M in HTTP.Impl.Server.Loop HTTP.Impl.Client.Loop HTTP.Impl.Codec.Chunked HTTP.Impl.Codec.Chunked.Stream HTTP.Impl.Loop.Chunked.Stream HTTP.Impl.Server.Loop.Length HTTP.Impl.Client.Loop.Length HTTP.Impl.Codec.Length HTTP.Impl.Codec.Request HTTP.Impl.Codec.Response HTTP.Impl.Client.Loop.Get HTTP.Impl.Codec.Header HTTP.Impl.Loop.Header HTTP.Impl.Codec.RequestLine HTTP.Impl.Loop.Request HTTP.Impl.Codec.RequestPost HTTP.Impl.Loop.RequestPost; do NO_PREFIX="$NO_PREFIX --custard_c_no_prefix $M"; done

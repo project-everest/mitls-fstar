@@ -534,7 +534,7 @@ ensures
     (Ghost.reveal input_contents)
     (Ghost.reveal old_out) **
   pure (
-    Common.ProtocolImplementation.buffers_wf
+    Pulse.Lib.Protocol.Implementation.buffers_wf
       (Ghost.reveal input_contents)
       input_len
       (Ghost.reveal old_out)
@@ -575,7 +575,7 @@ ensures
     out_len
     (Ghost.reveal input_contents)
     (Ghost.reveal old_out));
-  assert (pure (Common.ProtocolImplementation.buffers_wf
+  assert (pure (Pulse.Lib.Protocol.Implementation.buffers_wf
     (Ghost.reveal input_contents)
     input_len
     (Ghost.reveal old_out)
@@ -587,7 +587,7 @@ fn finish_client_next_action_network
   (cfg:client_next_local_action_config)
   (frame:client_next_local_action_frame)
   (network_frame:CP.tls_client_network_bridge_frame)
-  (result:Common.ProtocolImplementation.process_result)
+  (result:Pulse.Lib.Protocol.Implementation.process_result)
   (input_contents:Ghost.erased B.bytes)
   (input_len:SZ.t)
   (old_out:Ghost.erased B.bytes)
@@ -752,7 +752,7 @@ fn finish_client_next_action_local
   (frame:client_next_local_action_frame)
   (ev:CTypes.client_local_event)
   (local_frame:CP.tls_client_local_frame)
-  (result:Common.ProtocolImplementation.process_result)
+  (result:Pulse.Lib.Protocol.Implementation.process_result)
   (old_out:Ghost.erased B.bytes)
   (out_contents:Ghost.erased B.bytes)
   (st0:Ghost.erased CS.connection_state)

@@ -23,7 +23,7 @@ module HTTP.Wire.Header
 module Seq = FStar.Seq
 module SP  = FStar.Seq.Properties
 module U8  = FStar.UInt8
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module W   = HTTP.Wire.Common
 
 (* ── ASCII byte constants ─────────────────────────────────────────────────── *)

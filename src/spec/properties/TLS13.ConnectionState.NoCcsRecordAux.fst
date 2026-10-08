@@ -32,7 +32,7 @@ module Seq = FStar.Seq
 module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module CW = TLS13.Spec.Endpoint.Wire
-module WF = Common.WireFormat
+module WF = Pulse.Lib.Protocol.WireFormat
 module L = FStar.List.Tot
 
 open FStar.List.Tot

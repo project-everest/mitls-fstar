@@ -24,9 +24,9 @@
  * 2-byte big-endian length prefix followed by that many data bytes.
  *
  * This description covers the *per-message* wire format of one block, which is
- * what an instance of Common.WireFormat.wire_format needs; sequencing of blocks
+ * what an instance of Pulse.Lib.Protocol.WireFormat.wire_format needs; sequencing of blocks
  * (and end-of-file detection via the descriptor's EOF bit) is handled by the
- * state machine and the Common.WireFormat stream laws, not by this grammar.
+ * state machine and the Pulse.Lib.Protocol.WireFormat stream laws, not by this grammar.
  *
  * The FTP *control* connection (RETR/STOR commands and 3-digit reply codes,
  * carried as CRLF-terminated text) is deliberately out of scope here: it is

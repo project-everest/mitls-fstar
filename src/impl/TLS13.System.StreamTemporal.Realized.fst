@@ -43,7 +43,7 @@ module TLS13.System.StreamTemporal.Realized
   the server-side entry condition is discharged here.
 **)
 
-module T      = Common.Temporal
+module T      = Pulse.Lib.Protocol.Temporal
 module CS     = TLS13.Spec.StateMachine
 module WFL    = TLS13.Spec.WireFormatLemmas
 module SY     = TLS13.System

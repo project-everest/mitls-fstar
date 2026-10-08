@@ -9,7 +9,6 @@
     "--already_cached", "Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated",
     "--ext", "optimize_let_vc",
     "--ext", "fly_deps",
-    "--include", "../common",
     "--include", "spec/common",
     "--include", "spec/assumptions",
     "--include", "spec/core",
@@ -19,7 +18,6 @@
     "--include", "../tools/everparse/lib/everparse/lowparse"
   ],
   "include_dirs": [
-    "../common",
     "spec/common",
     "spec/assumptions",
     "spec/core",

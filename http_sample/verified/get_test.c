@@ -14,7 +14,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -60,7 +60,7 @@ int main(void) {
 
   /* ── parent: the VERIFIED GET client ──────────────────────────────────── */
   close(sv[0]);
-  Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[1]);
+  Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[1]);
 
   uint8_t target[] = { '/' };
   size_t target_len = 1;
@@ -88,7 +88,7 @@ int main(void) {
                      reqbuf, buf, cap, tmp, tmpcap,
                      &rlen, &code, &chunked, &has_cl, &cl, &headlen);
 
-  Common_TCP_close(ch);
+  Pulse_Lib_TCP_close(ch);
 
   int status = 0;
   waitpid(pid, &status, 0);

@@ -7,7 +7,7 @@ module HTTP.Impl.Client.Loop
   verified counterpart of HTTP.Impl.Server.Loop.http_server_run.
 
   `http_client_run` reads one HTTP chunk (header + body) off a connected
-  `Common.TCP` channel, using the verified receive codec leaves
+  `Pulse.Lib.TCP` channel, using the verified receive codec leaves
   (`http_peek_chunk_size` to decode the size header, then `http_recv_chunk` to
   copy + validate the body).  When it returns `true`, the copied output `out` is
   exactly the payload of the chunk the spec parser `http_parse` decodes from the
@@ -26,7 +26,7 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ    = FStar.SizeT
 module Seq   = FStar.Seq
-module TCP   = Common.TCP
+module TCP   = Pulse.Lib.TCP
 module U8    = FStar.UInt8
 module U16   = FStar.UInt16
 module Codec = HTTP.Impl.Codec.Chunked

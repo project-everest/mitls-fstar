@@ -12,12 +12,12 @@
  * state machine.
  *
  * It speaks YMODEM over stdin (received bytes) / stdout (ACK/NAK/'C'); the
- * verified loop reads and writes through a Common.TCP channel bridging those two
+ * verified loop reads and writes through a Pulse.Lib.TCP channel bridging those two
  * descriptors.
  */
 
 #include "YModem_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -122,7 +122,7 @@ int main(void) {
 
   uint8_t *i = new_ymodem_client();
   ymodem_client_start(i);
-  Common_TCP_channel ch = Common_TCP_channel_of_fds(STDIN_FILENO, STDOUT_FILENO);
+  Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fds(STDIN_FILENO, STDOUT_FILENO);
 
   size_t nbytes = ymodem_client_run(i, ch, ctrl, soh, tail, ack, ycnf, outbuf, ncap, (size_t)FUEL);
 
@@ -148,7 +148,7 @@ int main(void) {
     }
   }
 
-  Common_TCP_close(ch);
+  Pulse_Lib_TCP_close(ch);
   free(i); free(outbuf); free(ctrl); free(soh); free(tail); free(ack); free(ycnf);
   return 0;
 }

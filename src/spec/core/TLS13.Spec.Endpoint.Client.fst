@@ -7,11 +7,11 @@ module CS = TLS13.Spec.StateMachine
 module M = TLS13.Messages
 module RTC = FStar.ReflexiveTransitiveClosure
 module Seq = FStar.Seq
-module SM = Common.StateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
 module SMCan = TLS13.Spec.StateMachine.Canonical
 module W = TLS13.Spec.Endpoint.Wire
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 module X = TLS13.X509.Spec
 
 (**

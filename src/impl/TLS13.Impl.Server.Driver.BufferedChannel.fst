@@ -5,13 +5,13 @@ module TLS13.Impl.Server.Driver.BufferedChannel
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
-module CI = Common.ChannelImplementation
+module BT = Pulse.Lib.BufferedTCP
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CP = TLS13.Impl.Server.CanonicalProtocol
 module CS = TLS13.Spec.StateMachine
 module DS = TLS13.Impl.Server.Driver.State
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module MR = Pulse.Lib.MonotonicGhostRef
 module Seq = FStar.Seq
 module ST = TLS13.Impl.Server.Types

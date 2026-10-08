@@ -13,7 +13,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
   if (pid == 0) {
     /* -- child: the VERIFIED sender -------------------------------------- */
     close(sv[1]);
-    Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[0]);
+    Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[0]);
     /* http_server_send_stream writes the whole encoded stream then closes. */
     http_server_send_stream(ch, stream, enclen);
     free(stream); free(infile);
@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 
   /* -- parent: the VERIFIED receiver ------------------------------------- */
   close(sv[0]);
-  Common_TCP_channel rch = Common_TCP_channel_of_fd(sv[1]);
+  Pulse_Lib_TCP_channel rch = Pulse_Lib_TCP_channel_of_fd(sv[1]);
 
   uint8_t *inbuf  = malloc(enclen);            /* stages the encoded stream */
   uint8_t *outbuf = malloc(flen ? flen : 1);   /* reassembled body          */

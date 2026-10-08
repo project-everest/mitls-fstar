@@ -5,19 +5,19 @@ module CL = TLS13.ConnectionLog
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module T = TLS13.Types
-module WF = Common.WireFormat
+module WF = Pulse.Lib.Protocol.WireFormat
 module RVD = TLS13.Wire.Spec.RevealDecode
 module WS = TLS13.Wire.Spec
 module WU = TLS13.Wire.Spec.Reveal.Util
 
 (**
-  Core semantic endpoint wire boundary: a Common.WireFormat instance for raw TLS
+  Core semantic endpoint wire boundary: a Pulse.Lib.Protocol.WireFormat instance for raw TLS
   records, together with the generic stream-format theory (serialize/parse
   round-trips, prefix laws, and serialize_all/serialize_with_tail inversions)
   used by the endpoint state machines.
 
   This is pure spec: it depends only on the base wire spec (TLS13.Wire.Spec and
-  its reveal lemmas), the connection log, and the role-neutral Common.WireFormat
+  its reveal lemmas), the connection log, and the role-neutral Pulse.Lib.Protocol.WireFormat
   class.  It contains no implementation-, parser-representation- or
   Pulse-specific content, so both the client and server CanonicalProtocol
   endpoint systems (and the pairing theory) refine it directly instead of

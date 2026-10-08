@@ -26,7 +26,7 @@
  *     emit.
  *
  * This program only does argument parsing, socket setup (via the same
- * Common.TCP stub the verified code is specified against) and printing; it does
+ * Pulse.Lib.TCP stub the verified code is specified against) and printing; it does
  * not touch the HTTP bytes itself.  TLS / https is out of scope -- use the
  * verified server's TLS mode for that side of the demo.
  *
@@ -35,7 +35,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 #include "custard_option.h"
 
 #include <stdint.h>
@@ -44,13 +44,13 @@
 #include <string.h>
 #include <signal.h>
 
-/* Common_TCP_connect_tcp is defined in the hand-written c_stubs and linked in,
+/* Pulse_Lib_TCP_connect_tcp is defined in the hand-written c_stubs and linked in,
    but its option-return type and prototype are not published in a header
    (the generated code names the option type itself).  Re-declare them here
    with the layout Custard gives an option (see custard_option.h). */
-CUSTARD_OPTION_TYPE(option_channel, Common_TCP_channel);
+CUSTARD_OPTION_TYPE(option_channel, Pulse_Lib_TCP_channel);
 
-option_channel Common_TCP_connect_tcp(
+option_channel Pulse_Lib_TCP_connect_tcp(
     uint8_t *hostname, size_t hostname_len, uint16_t port);
 
 static void usage(const char *prog) {
@@ -137,13 +137,13 @@ int main(int argc, char **argv) {
           (int)host_len, host_s, port, path_s);
 
   option_channel c =
-    Common_TCP_connect_tcp((uint8_t *)host_s, host_len, port);
+    Pulse_Lib_TCP_connect_tcp((uint8_t *)host_s, host_len, port);
   if (c.tag != CUSTARD_SOME) {
     fprintf(stderr, "vcurl: could not connect to %.*s:%u\n",
             (int)host_len, host_s, port);
     return 2;
   }
-  Common_TCP_channel ch = c.val.Some;
+  Pulse_Lib_TCP_channel ch = c.val.Some;
 
   /* Request head size the verified emitter will write:
        "GET " + target + " HTTP/1.1\r\n" + "Host: " + host + "\r\nConnection: close\r\n\r\n" */
@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
   if (!reqbuf || !buf || !tmp) {
     fprintf(stderr, "vcurl: out of memory\n");
     free(reqbuf); free(buf); free(tmp);
-    Common_TCP_close(ch);
+    Pulse_Lib_TCP_close(ch);
     return 2;
   }
 
@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
                      reqbuf, buf, cap, tmp, tmpcap,
                      &rlen, &code, &chunked, &has_cl, &cl, &headlen);
 
-  Common_TCP_close(ch);
+  Pulse_Lib_TCP_close(ch);
 
   if (!ok) {
     fprintf(stderr, "vcurl: the verified client rejected the response "

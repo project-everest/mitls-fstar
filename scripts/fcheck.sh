@@ -22,7 +22,6 @@ exec "$FSTAR_EXE" \
   --warn_error -321 --report_assumes warn \
   --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc --ext fly_deps \
-  --include common \
   --include src/spec --include src/spec/assumptions --include src/spec/common \
   --include src/spec/core --include src/spec/properties \
   --include src/impl --include src/impl/extern --include generated \

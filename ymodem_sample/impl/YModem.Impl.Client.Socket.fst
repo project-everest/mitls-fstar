@@ -2,8 +2,8 @@ module YModem.Impl.Client.Socket
 
 (**
   Thin verified runner that drives the YMODEM *client* (receiver) over a
-  `Common.TCP` channel using the GENERIC verified loop
-  `Common.ProtocolDriver.drive_steps` specialised to the committed instances
+  `Pulse.Lib.TCP` channel using the GENERIC verified loop
+  `Pulse.Lib.Protocol.Driver.drive_steps` specialised to the committed instances
   `YModem.Impl.Client.CanonicalProtocol.ymodem_client_protocol_implementation`
   (the state-machine implementation dictionary) and
   `YModem.Impl.Client.Endpoint.ymodem_client_protocol_endpoint` (the scheduling
@@ -13,7 +13,7 @@ module YModem.Impl.Client.Socket
   (setup / fold / rewrite-to-instance-projections / drive / unfold / free),
   except:
 
-    * the driver invoked is the GENERIC `Common.ProtocolDriver.drive_steps`
+    * the driver invoked is the GENERIC `Pulse.Lib.Protocol.Driver.drive_steps`
       (a typeclass-polymorphic recursion), NOT a bespoke per-endpoint loop; and
 
     * the endpoint frame stores raw `array U8.t` buffers (obtained from
@@ -38,12 +38,12 @@ module YModem.Impl.Client.Socket
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI  = Common.ProtocolImplementation
-module PD   = Common.ProtocolDriver
-module PE   = Common.ProtocolEndpoint
+module CPI  = Pulse.Lib.Protocol.Implementation
+module PD   = Pulse.Lib.Protocol.Driver
+module PE   = Pulse.Lib.Protocol.Endpoint
 module SZ   = FStar.SizeT
 module Seq  = FStar.Seq
-module TCP  = Common.TCP
+module TCP  = Pulse.Lib.TCP
 module U8   = FStar.UInt8
 module U16  = FStar.UInt16
 module Vec  = Pulse.Lib.Vec

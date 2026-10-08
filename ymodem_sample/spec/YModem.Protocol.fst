@@ -15,7 +15,7 @@ module YModem.Protocol
       timeout, and closing the transfer with an EOT handshake;
     * the YMODEM *client* (receiver) state machine, which ACKs each SOH data
       packet, ACKs the final EOT, and reassembles the file;
-    * an instance of the Common.FileTransfer.file_transfer class for the server,
+    * an instance of the Pulse.Lib.Protocol.FileTransfer.file_transfer class for the server,
       with a *stop-and-wait* window (`ft_window = Some 1`), exercising the
       truncating exact-file guarantee together with ACK-driven advancement and
       NAK/timeout retransmission.
@@ -53,18 +53,18 @@ module YModem.Protocol
     * Data blocks are padded to exactly 128 bytes, so the raw reassembly
       overshoots the file; the declared length (carried, in YMODEM, by header
       block 0) truncates the padding away.  This is the truncating exact-file
-      guarantee of Common.FileTransfer.
+      guarantee of Pulse.Lib.Protocol.FileTransfer.
 **)
 
 module L = FStar.List.Tot
 module Seq = FStar.Seq
 module SP = FStar.Seq.Properties
 module U8 = FStar.UInt8
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module FT = Common.FileTransfer
-module TCP = Common.TCP
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module FT = Pulse.Lib.Protocol.FileTransfer
+module TCP = Pulse.Lib.TCP
 
 open YModem.Wire.Generated.Ymodem_message
 open YModem.Wire.Generated.Ymodem_soh_body

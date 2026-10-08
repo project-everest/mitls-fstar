@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CT = TLS13.Impl.Client.Types
 module EC = TLS13.Spec.Endpoint.Client
 module ET = TLS13.Impl.Endpoint.Types
@@ -18,7 +18,7 @@ module SZ = FStar.SizeT
 
 (**
   Role-specific, extraction-facing vocabulary for the canonical
-  Common.ProtocolImplementation adapters.
+  Pulse.Lib.Protocol.Implementation adapters.
 
   This module contains only implementation-specific vocabulary: client/server
   wrappers over the C-ABI [local_event_kind] enums, exhaustive projections of

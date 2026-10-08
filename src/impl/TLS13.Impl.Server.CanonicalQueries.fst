@@ -5,7 +5,7 @@ module TLS13.Impl.Server.CanonicalQueries
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CQ = TLS13.Impl.ConnectionStateQuery
 module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes

@@ -7,17 +7,17 @@ open Pulse.Class.Duplicable
 
 module B = TLS13.Bytes
 module C = TLS13.Impl.Client
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CP = TLS13.Impl.Client.CanonicalProtocol
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.Spec.StateMachine.Log
 module CT = TLS13.Impl.Client.Types
 module D = TLS13.Impl.Client.Drain
 module DS = TLS13.Impl.Client.Driver.State
 module ID = FStar.IndefiniteDescription
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
 module Seq = FStar.Seq
@@ -40,7 +40,7 @@ let lemma_channel_state_valid
   (st:CS.connection_state)
   : Lemma
       (requires
-        Common.WireFormatStateMachine.valid_byte_trace
+        Pulse.Lib.Protocol.WireFormatStateMachine.valid_byte_trace
           (CP.client_protocol_implementation.CPI.pi_system
             (DS.client_driver_canonical d))
           st.CS.cs_wire_log.CL.raw_received
@@ -71,7 +71,7 @@ let lemma_channel_state_valid
     Seq.equal
       wire_received
       (Seq.append consumed_received pending) /\
-    Common.WireFormatStateMachine.valid_byte_trace
+    Pulse.Lib.Protocol.WireFormatStateMachine.valid_byte_trace
       (CP.client_protocol_implementation.CPI.pi_system
         (DS.client_driver_canonical d))
       consumed_received
@@ -982,7 +982,7 @@ ghost fn open_channel_invariant
   fold (DS.buffered_driver_indexed
     (DS.client_buffered_driver d channel)
     st
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     buffered_len
     model
     (Ghost.reveal wire_received)
@@ -1046,7 +1046,7 @@ ghost fn open_io_channel
     model
     committed
     buffered_len);
-  let ch = Common.BufferedTCP.open_io_channel channel;
+  let ch = Pulse.Lib.BufferedTCP.open_io_channel channel;
   fold (DS.client_channel_io_frame_indexed
     d
     ch
@@ -1128,7 +1128,7 @@ ghost fn close_io_channel
     model
     committed
     buffered_len);
-  Common.BufferedTCP.close_io_channel channel ch;
+  Pulse.Lib.BufferedTCP.close_io_channel channel ch;
   fold (DS.client_channel_inv_indexed
     d
     (Ghost.reveal wire_received)
@@ -1187,7 +1187,7 @@ ghost fn pack_connected_channel_invariant
   unfold (DS.buffered_driver_indexed
     (DS.client_buffered_driver d channel)
     (Ghost.reveal st)
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     buffered_len
     model
     (Ghost.reveal received)
@@ -1198,7 +1198,7 @@ ghost fn pack_connected_channel_invariant
       (Ghost.reveal st)
       (Ghost.reveal received)
       (Ghost.reveal sent)
-      (Common.BufferedTCP.pending model)
+      (Pulse.Lib.BufferedTCP.pending model)
       buffered_len;
   assert (pure (
     Seq.equal
@@ -1212,7 +1212,7 @@ ghost fn pack_connected_channel_invariant
       (Ghost.reveal received)
       (B.append
         (Ghost.reveal st).CS.cs_wire_log.CL.raw_received
-        (Common.BufferedTCP.pending model))));
+        (Pulse.Lib.BufferedTCP.pending model))));
   unfold (DS.buffered_driver_canonical_progress
     (DS.client_buffered_driver d channel)
     (Ghost.reveal st));
@@ -1227,15 +1227,15 @@ ghost fn pack_connected_channel_invariant
       (Ghost.reveal received)
       (Ghost.reveal sent)
       committed
-      (Common.BufferedTCP.pending model)
+      (Pulse.Lib.BufferedTCP.pending model)
       buffered_len /\
     SZ.v buffered_len ==
-      B.length (Common.BufferedTCP.pending model)));
+      B.length (Pulse.Lib.BufferedTCP.pending model)));
   fold (DS.client_channel_inv_indexed
     d
     (Ghost.reveal received)
     (Ghost.reveal sent)
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     (TChannel.application_log (Ghost.reveal st))
     (Ghost.reveal st)
     channel
@@ -1246,7 +1246,7 @@ ghost fn pack_connected_channel_invariant
     d
     (Ghost.reveal received)
     (Ghost.reveal sent)
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     (TChannel.application_log (Ghost.reveal st)))
 }
 
@@ -1286,7 +1286,7 @@ ghost fn pack_connected_channel_terminal
   unfold (DS.buffered_driver_indexed
     (DS.client_buffered_driver d channel)
     (Ghost.reveal st)
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     buffered_len
     model
     (Ghost.reveal received)
@@ -1306,10 +1306,10 @@ ghost fn pack_connected_channel_terminal
       (Ghost.reveal received)
       (Ghost.reveal sent)
       committed
-      (Common.BufferedTCP.pending model)
+      (Pulse.Lib.BufferedTCP.pending model)
       buffered_len /\
     SZ.v buffered_len ==
-      B.length (Common.BufferedTCP.pending model)));
+      B.length (Pulse.Lib.BufferedTCP.pending model)));
   fold (DS.client_channel_terminal_indexed
     d
     (Ghost.reveal received)
@@ -1750,7 +1750,7 @@ ghost fn recall_tcp_history
   unfold (DS.buffered_driver_indexed
     (DS.client_buffered_driver d channel)
     (Ghost.reveal st)
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     buffered_len
     model
     (Ghost.reveal new_received)
@@ -1767,7 +1767,7 @@ ghost fn recall_tcp_history
   fold (DS.buffered_driver_indexed
     (DS.client_buffered_driver d channel)
     (Ghost.reveal st)
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     buffered_len
     model
     (Ghost.reveal new_received)
@@ -1851,7 +1851,7 @@ ghost fn open_terminal
   fold (DS.buffered_driver_indexed
     (DS.client_buffered_driver d channel)
     st
-    (Common.BufferedTCP.pending model)
+    (Pulse.Lib.BufferedTCP.pending model)
     buffered_len
     model
     (Ghost.reveal wire_received)

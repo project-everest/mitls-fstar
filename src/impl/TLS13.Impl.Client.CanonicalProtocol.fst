@@ -7,7 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module C = TLS13.Impl.Client
 module CL = TLS13.ConnectionLog
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CSL = TLS13.ConnectionState.Lemmas
@@ -27,21 +27,21 @@ module Pre = FStar.Preorder
 module RVD = TLS13.Wire.Spec.RevealDecode
 module RTC = FStar.ReflexiveTransitiveClosure
 module Seq = FStar.Seq
-module SM = Common.StateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
 module SZ = FStar.SizeT
 module Tac = FStar.Tactics
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
 module WS = TLS13.Wire.Spec
 
 open TLS13.Spec.Endpoint.Client
 
 (**
-  Canonical Common.ProtocolImplementation boundary for the low-level client.
+  Canonical Pulse.Lib.Protocol.Implementation boundary for the low-level client.
 
   This file contains the auditable state-machine/invariant/snapshot boundary
   and the low-level Pulse operations packaged as a [CPI.protocol_implementation].

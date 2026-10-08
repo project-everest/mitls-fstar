@@ -8,12 +8,12 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module BC = TLS13.Impl.Server.Driver.BufferedChannel
 module BN = TLS13.Impl.Server.Driver.BufferedNetwork
-module BS = Common.BufferedStream
-module BT = Common.BufferedTCP
-module CI = Common.ChannelImplementation
+module BS = Pulse.Lib.BufferedStream
+module BT = Pulse.Lib.BufferedTCP
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CImpl = TLS13.Impl.Server.ChannelImplementation
 module CLog = TLS13.Impl.Server.ChannelLog
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine

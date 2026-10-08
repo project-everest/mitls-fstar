@@ -1,13 +1,13 @@
 module FTPBlock.Wire
 
 (**
-  Instantiation of the `Common.WireFormat.wire_format` type class for the FTP
+  Instantiation of the `Pulse.Lib.Protocol.WireFormat.wire_format` type class for the FTP
   block-mode (MODE B) data block, RFC 959 Section 3.4.2.
 
   The per-message wire format is the EverParse/QuackyDucky-generated parser and
   serializer for the `ftp_block` type (see ftp_block.qd.rfc and the generated
   module FTPBlock.Wire.Generated.Ftp_block).  This module wraps the LowParse
-  spec-level parser/serializer into the `Common.WireFormat` interface — which
+  spec-level parser/serializer into the `Pulse.Lib.Protocol.WireFormat` interface — which
   expresses parsing as returning the message plus the *residual* input — and
   discharges the round-trip laws:
 
@@ -18,26 +18,26 @@ module FTPBlock.Wire
       as residual (the stream law), using the fact that the generated parser has
       a *strong* parser kind.
 
-  These are exactly the obligations `Common.WireFormat` and its stream laws
+  These are exactly the obligations `Pulse.Lib.Protocol.WireFormat` and its stream laws
   require to sequence a byte stream into a list of messages, as consumed by
-  `Common.WireFormatStateMachine`.
+  `Pulse.Lib.Protocol.WireFormatStateMachine`.
 **)
 
 module Seq = FStar.Seq
 module SP = FStar.Seq.Properties
 module LP = LowParse.Spec
-module TCP = Common.TCP
-module WF = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
 
 open FTPBlock.Wire.Generated.Ftp_block
 
 (* Serialize a block with the generated LowParse serializer.  LowParse's `bytes`
-   is `Seq.seq FStar.UInt8.t`, definitionally equal to `Common.TCP.bytes`. *)
+   is `Seq.seq FStar.UInt8.t`, definitionally equal to `Pulse.Lib.TCP.bytes`. *)
 let ftp_serialize (m:ftp_block) : GTot TCP.bytes =
   LP.serialize ftp_block_serializer m
 
 (* Parse one block off the front of the input, returning it together with the
-   unconsumed residual bytes (the `Common.WireFormat` convention). *)
+   unconsumed residual bytes (the `Pulse.Lib.Protocol.WireFormat` convention). *)
 let ftp_parse (input:TCP.bytes) : GTot (WF.parse_result ftp_block) =
   match LP.parse ftp_block_parser input with
   | None -> None

@@ -24,8 +24,8 @@ module HTTP.Wire.Chunked.Stream
 module Seq = FStar.Seq
 module SP  = FStar.Seq.Properties
 module U8  = FStar.UInt8
-module TCP = Common.TCP
-module WF  = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF  = Pulse.Lib.Protocol.WireFormat
 module W   = HTTP.Wire.Common
 
 open HTTP.Wire.Chunked

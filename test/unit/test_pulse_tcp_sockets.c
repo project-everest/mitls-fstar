@@ -1,4 +1,4 @@
-#include "common_tcp_stubs.h"
+#include "pulse_tcp_sockets.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -19,14 +19,14 @@ static int test_pipe_roundtrip(void) {
 
   static const uint8_t msg[] = "agentic tls io smoke";
   uint8_t out[sizeof msg];
-  ssize_t written = common_tcp_write_fd(fds[1], msg, sizeof msg);
+  ssize_t written = pulse_tcp_write_fd(fds[1], msg, sizeof msg);
   if (written != (ssize_t)sizeof msg) {
     fprintf(stderr, "write returned %zd\n", written);
     close(fds[0]);
     close(fds[1]);
     return 1;
   }
-  ssize_t read = common_tcp_read_fd(fds[0], out, sizeof out);
+  ssize_t read = pulse_tcp_read_fd(fds[0], out, sizeof out);
   close(fds[0]);
   close(fds[1]);
   if (read != (ssize_t)sizeof out) {
@@ -42,12 +42,12 @@ static int test_pipe_roundtrip(void) {
 
 static int test_rejects_null_buffers(void) {
   errno = 0;
-  if (common_tcp_write_fd(-1, NULL, 1) != -1 || errno != EINVAL) {
+  if (pulse_tcp_write_fd(-1, NULL, 1) != -1 || errno != EINVAL) {
     fprintf(stderr, "write did not reject null buffer\n");
     return 1;
   }
   errno = 0;
-  if (common_tcp_read_fd(-1, NULL, 1) != -1 || errno != EINVAL) {
+  if (pulse_tcp_read_fd(-1, NULL, 1) != -1 || errno != EINVAL) {
     fprintf(stderr, "read did not reject null buffer\n");
     return 1;
   }
@@ -98,8 +98,8 @@ static int test_tcp_connect_roundtrip(void) {
       _exit(2);
     }
     uint8_t buf[32];
-    ssize_t n = common_tcp_read_fd(accepted, buf, sizeof buf);
-    if (n <= 0 || common_tcp_write_fd(accepted, buf, (size_t)n) != n) {
+    ssize_t n = pulse_tcp_read_fd(accepted, buf, sizeof buf);
+    if (n <= 0 || pulse_tcp_write_fd(accepted, buf, (size_t)n) != n) {
       close(accepted);
       _exit(3);
     }
@@ -107,24 +107,24 @@ static int test_tcp_connect_roundtrip(void) {
     _exit(0);
   }
 
-  int client = common_tcp_connect("127.0.0.1", port);
+  int client = pulse_tcp_connect("127.0.0.1", port);
   close(listener);
   if (client < 0) {
-    perror("common_tcp_connect");
+    perror("pulse_tcp_connect");
     waitpid(child, NULL, 0);
     return 1;
   }
 
   static const uint8_t msg[] = "tcp io smoke";
   uint8_t out[sizeof msg];
-  if (common_tcp_write_fd(client, msg, sizeof msg) != (ssize_t)sizeof msg ||
-      common_tcp_read_fd(client, out, sizeof out) != (ssize_t)sizeof out) {
+  if (pulse_tcp_write_fd(client, msg, sizeof msg) != (ssize_t)sizeof msg ||
+      pulse_tcp_read_fd(client, out, sizeof out) != (ssize_t)sizeof out) {
     fprintf(stderr, "TCP roundtrip I/O failed\n");
-    common_tcp_close_fd(client);
+    pulse_tcp_close_fd(client);
     waitpid(child, NULL, 0);
     return 1;
   }
-  common_tcp_close_fd(client);
+  pulse_tcp_close_fd(client);
 
   int status = 0;
   if (waitpid(child, &status, 0) != child || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {

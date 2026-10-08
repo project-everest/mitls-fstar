@@ -5,10 +5,10 @@ module TLS13.Impl.Client.Driver.Cleanup
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module C = TLS13.Impl.Client
 module DS = TLS13.Impl.Client.Driver.State
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module MR = Pulse.Lib.MonotonicGhostRef
 module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box

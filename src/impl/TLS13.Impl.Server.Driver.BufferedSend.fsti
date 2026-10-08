@@ -6,8 +6,8 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
-module CPI = Common.ProtocolImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module DS = TLS13.Impl.Server.Driver.State
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8

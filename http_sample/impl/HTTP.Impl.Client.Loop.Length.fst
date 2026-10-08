@@ -8,7 +8,7 @@ module HTTP.Impl.Client.Loop.Length
   HTTP.Impl.Server.Loop.Length.http_server_run_length.
 
   `http_client_run_length` reads the agreed-length body segment off a connected
-  `Common.TCP` channel (a single `read_full` of `flen` bytes) and hands it to the
+  `Pulse.Lib.TCP` channel (a single `read_full` of `flen` bytes) and hands it to the
   verified receive codec leaf `HTTP.Impl.Codec.Length.http_recv_body`, which
   copies it into `out` and reports `body_ok`.  When it returns `true`, `out` is
   exactly the payload the spec parser `http_parse` decodes to `Msg_body`.
@@ -24,7 +24,7 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ    = FStar.SizeT
 module Seq   = FStar.Seq
-module TCP   = Common.TCP
+module TCP   = Pulse.Lib.TCP
 module U8    = FStar.UInt8
 module U16   = FStar.UInt16
 module U32   = FStar.UInt32

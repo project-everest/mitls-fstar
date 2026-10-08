@@ -2,7 +2,7 @@ module YModem.Impl.Server.Endpoint
 
 (**
   YMODEM *server* (sender) driver-facing endpoint: a full 28-field instance of
-  `Common.ProtocolEndpoint.protocol_endpoint` over the committed dictionary
+  `Pulse.Lib.Protocol.Endpoint.protocol_endpoint` over the committed dictionary
   `YModem.Impl.Server.CanonicalProtocol.ymodem_server_protocol_implementation`.
 
   This is the HARDEST endpoint: it SCHEDULES local send events (Server_start,
@@ -40,16 +40,16 @@ module YModem.Impl.Server.Endpoint
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI = Common.ProtocolImplementation
-module PE = Common.ProtocolEndpoint
+module CPI = Pulse.Lib.Protocol.Implementation
+module PE = Pulse.Lib.Protocol.Endpoint
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module U8 = FStar.UInt8
 module Vec = Pulse.Lib.Vec
 module R = Pulse.Lib.Reference
 module L = FStar.List.Tot
-module FT = Common.FileTransfer
+module FT = Pulse.Lib.Protocol.FileTransfer
 module Math = FStar.Math.Lemmas
 
 module YP = YModem.Protocol

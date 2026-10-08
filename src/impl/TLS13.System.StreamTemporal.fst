@@ -3,7 +3,7 @@ module TLS13.System.StreamTemporal
 (**
   THE APPLICATION-DATA STREAM-INTEGRITY FLAGSHIP.
 
-  Using the generic path-based operators of `Common.Temporal` over the transition
+  Using the generic path-based operators of `Pulse.Lib.Protocol.Temporal` over the transition
   system of `TLS13.System`, this module proves, in the same clean LTL /
   `system_state` style as the record-key-material flagship
   (`TLS13.System.Temporal.lemma_flagship_record_material_agreement`):
@@ -48,7 +48,7 @@ module TLS13.System.StreamTemporal
   strictly stronger hypothesis than the conclusion requires.
 **)
 
-module T   = Common.Temporal
+module T   = Pulse.Lib.Protocol.Temporal
 module RTC = FStar.ReflexiveTransitiveClosure
 module CS  = TLS13.Spec.StateMachine
 module WFL = TLS13.Spec.WireFormatLemmas

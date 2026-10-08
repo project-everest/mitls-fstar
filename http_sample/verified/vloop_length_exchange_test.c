@@ -20,7 +20,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
   if (pid == 0) {
     /* -- child: the VERIFIED server ------------------------------------- */
     close(sv[1]);
-    Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[0]);
+    Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[0]);
     uint8_t *reqbuf  = malloc(reqlen);            /* stages the request head  */
     uint8_t *headbuf = malloc(HEAD_LEN);          /* stages the response head */
     uint8_t *scratch = malloc(flen ? flen : 1);   /* stages the response body */
@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
 
   /* -- parent: the VERIFIED client --------------------------------------- */
   close(sv[0]);
-  Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[1]);
+  Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[1]);
 
   uint8_t *target  = malloc(target_len ? target_len : 1);
   memcpy(target, TARGET, target_len);

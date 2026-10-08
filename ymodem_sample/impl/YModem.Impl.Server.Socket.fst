@@ -2,8 +2,8 @@ module YModem.Impl.Server.Socket
 
 (**
   Thin verified runner that drives the YMODEM *server* (sender) over a
-  `Common.TCP` channel using the GENERIC verified loop
-  `Common.ProtocolDriver.drive_steps` specialised to the committed instances
+  `Pulse.Lib.TCP` channel using the GENERIC verified loop
+  `Pulse.Lib.Protocol.Driver.drive_steps` specialised to the committed instances
   `YModem.Impl.Server.CanonicalProtocol.ymodem_server_protocol_implementation`
   (the state-machine implementation dictionary) and
   `YModem.Impl.Server.Endpoint.ymodem_server_protocol_endpoint` (the scheduling
@@ -47,12 +47,12 @@ module YModem.Impl.Server.Socket
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI  = Common.ProtocolImplementation
-module PD   = Common.ProtocolDriver
-module PE   = Common.ProtocolEndpoint
+module CPI  = Pulse.Lib.Protocol.Implementation
+module PD   = Pulse.Lib.Protocol.Driver
+module PE   = Pulse.Lib.Protocol.Endpoint
 module SZ   = FStar.SizeT
 module Seq  = FStar.Seq
-module TCP  = Common.TCP
+module TCP  = Pulse.Lib.TCP
 module U8   = FStar.UInt8
 module U16  = FStar.UInt16
 module Vec  = Pulse.Lib.Vec

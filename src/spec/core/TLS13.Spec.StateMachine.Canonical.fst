@@ -4,12 +4,12 @@ module TLS13.Spec.StateMachine.Canonical
   Clean public spec boundary for the canonical wire-level protocol step.
 
   [canonical_wire_step] is the pure TLS 1.3 semantic relation used at the
-  Common.ProtocolImplementation boundary: a step from [st0] to [st1] labelled by
+  Pulse.Lib.Protocol.Implementation boundary: a step from [st0] to [st1] labelled by
   a connection event [conn_ev] is canonical for the raw sent/received byte
   strings when it is a legal connection-state delta AND those bytes are exactly
   the seal (send) / decode (receive) projections of the event.  Both the client
   and server CanonicalProtocol implementations instantiate their
-  Common.StateMachine step relation on top of this predicate, so the TLS
+  Pulse.Lib.Protocol.StateMachine step relation on top of this predicate, so the TLS
   semantic content lives here in spec rather than being duplicated in impl.
 
   This module is part of the core semantics. It defines the exact relation

@@ -16,19 +16,19 @@ module TLS13.System.SlotMono
 
 module CS    = TLS13.Spec.StateMachine
 module SY    = TLS13.System
-module MP    = Common.MachineProduct
+module MP    = Pulse.Lib.Protocol.MachineProduct
 module WStep = TLS13.System.WireStep
 module SMR   = TLS13.Spec.StateMachine.Reachability
 module CL    = TLS13.ConnectionLog
 module B     = TLS13.Bytes
 module Seq   = FStar.Seq
-module SM    = Common.StateMachine
+module SM    = Pulse.Lib.Protocol.StateMachine
 module CW    = TLS13.Spec.Endpoint.Wire
 module CTy   = TLS13.Impl.CanonicalTypes
 module EAPI  = TLS13.Spec.Endpoint.API
 module EC    = TLS13.Spec.Endpoint.Client
-module WFSM  = Common.WireFormatStateMachine
-module WF    = Common.WireFormat
+module WFSM  = Pulse.Lib.Protocol.WireFormatStateMachine
+module WF    = Pulse.Lib.Protocol.WireFormat
 module PNTWL = TLS13.Impl.Driver.PairingNoTailWireLogs
 module R     = TLS13.Record.Spec
 

@@ -12,7 +12,7 @@ module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
-type server_transport_source = option Common.TCP.listener
+type server_transport_source = option Pulse.Lib.TCP.listener
 
 noextract
 let owns_server_transport_source
@@ -22,7 +22,7 @@ let owns_server_transport_source
   : slprop =
   match source with
   | None -> pure True
-  | Some listener -> Common.TCP.is_listener listener bind_host port
+  | Some listener -> Pulse.Lib.TCP.is_listener listener bind_host port
 
 fn accept_transport_once_from
   (source:server_transport_source)

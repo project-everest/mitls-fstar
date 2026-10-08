@@ -2,7 +2,7 @@ module YModem.Impl.Server.Log
 
 (**
   Pure ghost-log / reachable-trace machinery for the YMODEM *server* (sender)
-  `Common.ProtocolImplementation.protocol_implementation` instance, refined
+  `Pulse.Lib.Protocol.Implementation.protocol_implementation` instance, refined
   against the *reliable-delivery (ARQ)* spec state machine
   `YModem.Protocol.ymodem_server_wfsm`.
 
@@ -37,12 +37,12 @@ module LP = LowParse.Spec
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module TCP = Common.TCP
-module CPI = Common.ProtocolImplementation
-module FT = Common.FileTransfer
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module TCP = Pulse.Lib.TCP
+module CPI = Pulse.Lib.Protocol.Implementation
+module FT = Pulse.Lib.Protocol.FileTransfer
 
 module YP = YModem.Protocol
 
@@ -473,7 +473,7 @@ let lemma_server_trace_ok_step
    `ys_result` is `unfold`, so field projections of a literal result (its
    `process_status` / `process_consumed_len` / `process_produced_len`) reduce in
    SMT.  That lets the generic StepOk / no-op packaging lemmas below discharge
-   `Common.ProtocolImplementation.{network,local}_process_correct` WITHOUT the
+   `Pulse.Lib.Protocol.Implementation.{network,local}_process_correct` WITHOUT the
    `norm [delta_only …]; smt ()` tactic the client needed for its `inline_let`
    result constants.
    ─────────────────────────────────────────────────────────────────────────── *)
@@ -1016,7 +1016,7 @@ let lemma_abort_advance (received0 sent0:TCP.bytes) (st0:YP.ymodem_server_state)
 
    Because `ys_result` is `unfold`, a literal result's status/consumed/produced
    fields reduce in SMT, so these lemmas discharge the
-   `Common.ProtocolImplementation.{network,local}_process_correct` predicates
+   `Pulse.Lib.Protocol.Implementation.{network,local}_process_correct` predicates
    with NO reflection tactic.  Two StepOk shapes (network: consumes one control
    frame + emits the serialization of the step's wire outputs; local: consumes
    nothing + emits the same) and two sound no-ops (the third "no progress"

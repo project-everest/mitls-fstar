@@ -10,7 +10,7 @@ module HTTP.Impl.Server.Log
     * `HTTP.Wire.*` + `HTTP.Impl.*` — the wire codecs and Pulse loops that the
       C server actually runs (parse/serialize round-trips, framing, limits).
 
-    * `HTTP.Protocol.Length` — a `Common.StateMachine` / `Common.FileTransfer`
+    * `HTTP.Protocol.Length` — a `Pulse.Lib.Protocol.StateMachine` / `Pulse.Lib.Protocol.FileTransfer`
       model of the protocol, verified in isolation (including the capstone
       reassembly theorem `lemma_http_server_reconstitution`).
 
@@ -19,11 +19,11 @@ module HTTP.Impl.Server.Log
   abstract spec state it claims to be in) and proves that
 
     (a) the log is only ever advanced by *real spec transitions*
-        (`hs_step_rel`, closed under `Common.ProtocolImplementation.state_ahead`
+        (`hs_step_rel`, closed under `Pulse.Lib.Protocol.Implementation.state_ahead`
         and `histories_ahead`, so it is a legal monotonic-reference preorder);
 
     (b) the invariant `server_trace_ok` implies the generic refinement predicate
-        `Common.WireFormatStateMachine.valid_byte_trace` — i.e. the observed
+        `Pulse.Lib.Protocol.WireFormatStateMachine.valid_byte_trace` — i.e. the observed
         byte histories are explained by SOME reachable trace of the spec state
         machine; and
 
@@ -67,12 +67,12 @@ module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module TCP = Common.TCP
-module CPI = Common.ProtocolImplementation
-module FT = Common.FileTransfer
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module TCP = Pulse.Lib.TCP
+module CPI = Pulse.Lib.Protocol.Implementation
+module FT = Pulse.Lib.Protocol.FileTransfer
 
 module HP = HTTP.Protocol.Length
 
@@ -848,7 +848,7 @@ let lemma_server_completed_sent_is_file
   L.append_l_nil st.HP.hss_sent;
   assert (HP.http_full st == FT.ft_concat st.HP.hss_sent)
 
-(* CAPSTONE 3.  The same fact routed through the generic `Common.FileTransfer`
+(* CAPSTONE 3.  The same fact routed through the generic `Pulse.Lib.Protocol.FileTransfer`
    view, so it composes with `HP.lemma_http_server_reconstitution`: the socket
    byte history is the reassembly of the file-transfer blocks, and on completion
    that reassembly is exact. *)
@@ -867,7 +867,7 @@ let lemma_server_sent_is_reassembly
   HP.lemma_http_server_reconstitution st
 
 (* ───────────────────────────────────────────────────────────────────────────
-   Bridge to `Common.ProtocolImplementation.{local,network}_process_correct`
+   Bridge to `Pulse.Lib.Protocol.Implementation.{local,network}_process_correct`
 
    These are the obligations the Pulse `protocol_implementation` instance in
    `HTTP.Impl.Server.CanonicalProtocol` has to discharge at each of its exits.

@@ -2,7 +2,7 @@ module HTTP.Impl.Server.CanonicalProtocol
 
 (**
   The HTTP/1.1 Content-Length **response sender** as a verified instance of
-  `Common.ProtocolImplementation.protocol_implementation`, refining the spec
+  `Pulse.Lib.Protocol.Implementation.protocol_implementation`, refining the spec
   state machine `HTTP.Protocol.Length.http_server_wfsm`.
 
   This is the Pulse shell over the pure trace machinery in
@@ -42,13 +42,13 @@ module HTTP.Impl.Server.CanonicalProtocol
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI = Common.ProtocolImplementation
-module SM = Common.StateMachine
+module CPI = Pulse.Lib.Protocol.Implementation
+module SM = Pulse.Lib.Protocol.StateMachine
 module SZ = FStar.SizeT
-module TCP = Common.TCP
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module FT = Common.FileTransfer
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module FT = Pulse.Lib.Protocol.FileTransfer
 module U8 = FStar.UInt8
 module Seq = FStar.Seq
 module L = FStar.List.Tot

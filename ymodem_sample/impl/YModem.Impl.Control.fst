@@ -30,8 +30,8 @@ friend YModem.Wire.Generated.Ymodem_message
 
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
-module TCP = Common.TCP
-module WF = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
 module LP = LowParse.Spec
 module LPI = LowParse.Spec.AllIntegers
 

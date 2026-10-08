@@ -7,9 +7,9 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module A = Pulse.Lib.Array
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module C = TLS13.Impl.Client
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
@@ -21,7 +21,7 @@ module CT = TLS13.Impl.Client.Types
 module CTypes = TLS13.Impl.CanonicalTypes
 module EC = TLS13.Spec.Endpoint.Client
 module ID = FStar.IndefiniteDescription
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef

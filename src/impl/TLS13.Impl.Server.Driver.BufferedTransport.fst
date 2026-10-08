@@ -6,9 +6,9 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module DS = TLS13.Impl.Server.Driver.State
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16

@@ -3,7 +3,7 @@ module TLS13.System.Temporal
 (**
   Temporal-logic theorems about the combined TLS 1.3 client<->server system.
 
-  Using the generic path-based operators of `Common.Temporal` over the
+  Using the generic path-based operators of `Pulse.Lib.Protocol.Temporal` over the
   transition system of `TLS13.System`, we prove the flagship record-key-material
   agreement theorem in the clean LTL / `system_state` style — the scaled-up
   analogue of the calculator `Calc.System.Temporal` flagship:
@@ -25,7 +25,7 @@ module TLS13.System.Temporal
   counts, no trace splitting, unlike the retired `PairingSemanticTrace`.
 **)
 
-module T   = Common.Temporal
+module T   = Pulse.Lib.Protocol.Temporal
 module R   = FStar.ReflexiveTransitiveClosure
 module CS  = TLS13.Spec.StateMachine
 module SMKI = TLS13.Spec.StateMachine.KeyIdentifiers
@@ -33,7 +33,7 @@ module SMKM = TLS13.Spec.StateMachine.KeyMaterial
 module CD  = TLS13.Impl.Client.Driver
 module SD  = TLS13.Impl.Server.Driver
 module WFL = TLS13.Spec.WireFormatLemmas
-module MP  = Common.MachineProduct
+module MP  = Pulse.Lib.Protocol.MachineProduct
 module CCShape = TLS13.ConnectionState.ClientCanonicalShape
 
 open TLS13.System

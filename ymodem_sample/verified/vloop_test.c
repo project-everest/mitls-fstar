@@ -5,7 +5,7 @@
  * `ymodem_server_run` (sender) and `ymodem_client_run` (receiver) — NOT the
  * unverified rb/sb wrapper loops.  It connects the verified sender to the
  * verified receiver over a socketpair (a bidirectional fd, so the single-fd
- * Common.TCP channel bridges both directions), transfers a file through the
+ * Pulse.Lib.TCP channel bridges both directions), transfers a file through the
  * verified stop-and-wait ARQ (data blocks + per-block ACKs + EOT), and checks
  * that the receiver reconstructed the original bytes.
  *
@@ -19,7 +19,7 @@
  */
 
 #include "YModem_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -70,21 +70,21 @@ int main(int argc, char **argv) {
   if (pid == 0) {
     /* ── child: the VERIFIED sender ─────────────────────────────────────── */
     close(sv[1]);
-    Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[0]);
+    Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[0]);
     uint8_t *i = new_ymodem_server();
     uint8_t *blk  = malloc(YM_BLOCK);
     uint8_t *out  = malloc(YM_PKT);
     uint8_t *ctrl = malloc(1);
     uint8_t *ysnf = malloc(YM_BLOCK);
     ymodem_server_run(i, ch, infile, nblocks, blk, out, ctrl, ysnf, (size_t)FUEL);
-    Common_TCP_close(ch);
+    Pulse_Lib_TCP_close(ch);
     free(blk); free(out); free(ctrl); free(ysnf); free(infile); free(i);
     _exit(0);
   }
 
   /* ── parent: the VERIFIED receiver ────────────────────────────────────── */
   close(sv[0]);
-  Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[1]);
+  Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[1]);
   uint8_t *i = new_ymodem_client();
   ymodem_client_start(i);
   uint8_t *ctrl   = malloc(1);
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
   size_t   outcap = padded ? padded : YM_BLOCK;
   uint8_t *outbuf = calloc(outcap, 1);
   size_t nbytes = ymodem_client_run(i, ch, ctrl, soh, tail, ack, ycnf, outbuf, outcap, (size_t)FUEL);
-  Common_TCP_close(ch);
+  Pulse_Lib_TCP_close(ch);
 
   int status = 0;
   waitpid(pid, &status, 0);

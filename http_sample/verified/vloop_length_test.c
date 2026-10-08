@@ -17,7 +17,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   if (pid == 0) {
     /* ── child: the VERIFIED sender ─────────────────────────────────────── */
     close(sv[1]);
-    Common_TCP_channel ch = Common_TCP_channel_of_fd(sv[0]);
+    Pulse_Lib_TCP_channel ch = Pulse_Lib_TCP_channel_of_fd(sv[0]);
     uint8_t *scratch = malloc(flen ? flen : 1);     /* stages the body segment */
     /* http_server_run_length frames the body through http_emit_body and sends
        it, then closes the channel — all verified. */
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
 
   /* ── parent: the VERIFIED receiver ────────────────────────────────────── */
   close(sv[0]);
-  Common_TCP_channel rch = Common_TCP_channel_of_fd(sv[1]);
+  Pulse_Lib_TCP_channel rch = Pulse_Lib_TCP_channel_of_fd(sv[1]);
 
   uint8_t *body   = malloc(flen ? flen : 1);        /* raw payload off the wire */
   uint8_t *outbuf = malloc(flen ? flen : 1);
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
   /* http_client_run_length reads the agreed flen body bytes and decodes them
      through http_recv_body, returning body_ok — all verified. */
   bool vok = http_client_run_length(rch, body, outbuf, flen);
-  Common_TCP_close(rch);
+  Pulse_Lib_TCP_close(rch);
 
   int status = 0;
   waitpid(pid, &status, 0);

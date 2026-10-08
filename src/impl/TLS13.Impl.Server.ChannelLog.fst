@@ -4,7 +4,7 @@ module TLS13.Impl.Server.ChannelLog
   Application-log accounting for the server's channel surface.
 
   [TLS13.Impl.Channel.application_log] projects a connection state onto the
-  pair of application byte-message lists that [Common.ChannelImplementation]
+  pair of application byte-message lists that [Pulse.Lib.Protocol.ChannelImplementation]
   reasons about.  The server driver's primitives are specified against
   [TLS13.Impl.Server.Types.server_local_event_end_to_end_correct] and its
   network counterpart, which speak about *events* rather than about the log.
@@ -17,7 +17,7 @@ module TLS13.Impl.Server.ChannelLog
 **)
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine

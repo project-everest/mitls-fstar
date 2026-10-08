@@ -67,6 +67,22 @@ FSTAR_SOURCE_ROOT ?= $(FSTAR_HOME)
 FSTAR_ULIB      = $(FSTAR_SOURCE_ROOT)/ulib
 FSTAR_PULSE_COMMON = $(FSTAR_SOURCE_ROOT)/pulse/lib/common
 FSTAR_PULSE_LIB = $(FSTAR_SOURCE_ROOT)/pulse/lib/pulse/lib
+# The generic protocol libraries (Pulse.Lib.TCP, Pulse.Lib.BufferedTCP,
+# Pulse.Lib.BufferedStream, Pulse.Lib.Protocol.*) ship with Pulse; their sources
+# are under pulse/lib/pulse/lib/protocol and their .checked files are consumed
+# as already-cached (`--already_cached Pulse`).
+FSTAR_PULSE_PROTOCOL = $(FSTAR_PULSE_LIB)/protocol
+# C runtime for the extern Pulse.Lib.TCP / Pulse.Lib.Memmove interfaces
+# (Pulse_Lib_TCP_runtime.{c,h}, pulse_tcp_sockets.{c,h},
+# Pulse_Lib_Memmove_runtime.{c,h}).  Installed by F* under share/pulse/runtime;
+# falls back to the F* source tree.  Pulse_Lib_TCP_runtime.c must be compiled
+# with -DPULSE_RUNTIME_CUSTARD_C (in PULSE_RUNTIME_CFLAGS) to match the option
+# layout of Custard's direct-to-C backend.
+PULSE_RUNTIME_DIR ?= $(firstword $(wildcard \
+  $(FSTAR_PREFIX)/share/pulse/runtime \
+  $(FSTAR_SOURCE_ROOT)/pulse/share/pulse/runtime) \
+  $(FSTAR_PREFIX)/share/pulse/runtime)
+PULSE_RUNTIME_CFLAGS = -DPULSE_RUNTIME_CUSTARD_C -I $(PULSE_RUNTIME_DIR)
 
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
@@ -77,12 +93,11 @@ HACL_KI     = third_party/hacl-star/dist/karamel/include
 HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
 EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
-SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
+SOURCE_DIRS = $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
   $(LOWPARSE_HOME)
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
-  --include common \
   $(addprefix --include ,$(SPEC_DIRS)) \
   --include src/impl \
   --include $(EXTERN_DIR) \
@@ -130,11 +145,10 @@ FSTAR_EXTRACT_FLAGS = \
 FSTAR_EXTRACT = $(FSTAR_EXE) $(FSTAR_EXTRACT_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
-COMMON_FILES = $(wildcard common/*.fst common/*.fsti)
 SPEC_FILES = $(sort $(shell find src/spec -type f \( -name '*.fst' -o -name '*.fsti' \) -print))
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 EXTERN_FILES = $(wildcard $(EXTERN_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
+ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES) $(EXTERN_FILES)
 ROOT_FILES = \
   src/impl/TLS13.System.SlotMono.fst \
   src/impl/TLS13.System.ServerSfsRecovery.fst \
@@ -160,8 +174,7 @@ ROOT_FILES = \
   src/impl/TLS13.System.Ordering.fst \
   src/impl/TLS13.Impl.Client.Driver.fst \
   src/impl/TLS13.Impl.Server.Driver.fst \
-  src/spec/properties/TLS13.Spec.InternalEvent.Baseline.fst \
-  common/Common.ProtocolDriver.fst
+  src/spec/properties/TLS13.Spec.InternalEvent.Baseline.fst
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
@@ -369,7 +382,7 @@ verify: generated-checked $(ALL_CHECKED_FILES)
 
 # ── Sample-protocol gate ───────────────────────────────────────────
 # The sample protocols instantiate the same generic classes as TLS
-# (`Common.ProtocolImplementation`, `Common.ProtocolEndpoint`), so a change to
+# (`Pulse.Lib.Protocol.Implementation`, `Pulse.Lib.Protocol.Endpoint`), so a change to
 # those classes can break them without the root `verify` target noticing.
 # `verify-samples` closes that gap; `test` depends on it.
 SAMPLE_DIRS = ftp_sample http_sample ymodem_sample
@@ -383,7 +396,7 @@ $(addprefix verify-sample-,$(SAMPLE_DIRS)): verify-sample-%:
 	$(MAKE) -C $* verify
 
 admit-count:
-	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src common $(SAMPLE_DIRS) || true); \
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src $(SAMPLE_DIRS) || true); \
 	if [ -n "$$matches" ]; then \
 	  printf "%s\n" "$$matches"; \
 	  count=$$(printf "%s\n" "$$matches" | wc -l); \
@@ -393,7 +406,7 @@ admit-count:
 	fi
 
 check-admits:
-	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src common $(SAMPLE_DIRS) || true); \
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src $(SAMPLE_DIRS) || true); \
 	if [ -n "$$matches" ]; then \
 	  printf "%s\n" "$$matches"; \
 	  count=$$(printf "%s\n" "$$matches" | wc -l); \
@@ -591,7 +604,7 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Auth \
   TLS13.Impl.Server.App \
   TLS13.Impl.Server \
-  Common.TCP \
+  Pulse.Lib.TCP \
   TLS13.OpenSSL \
   TLS13.Impl.Server.Driver.State \
   TLS13.Impl.Server.Driver.BufferedNetwork \
@@ -620,7 +633,7 @@ GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 # definition of a module's .fsti), plus a constant read by the server runtime
 # and the key-schedule functions test/unit/test_key_schedule_bindings.c checks.
 # Everything else they reach is extracted with them; what is reached of an
-# interface-only module (src/impl/extern, Common.TCP) becomes an external,
+# interface-only module (src/impl/extern, Pulse.Lib.TCP) becomes an external,
 # realized by the C stubs.
 TLS13_CUSTARD_ENTRY_MODULES = \
   TLS13.Impl.Client.Driver \
@@ -635,8 +648,8 @@ TLS13_CUSTARD_ENTRIES = \
 # Abstract types of the interface-only modules: the C stubs' headers define
 # them, so the extracted C includes those headers instead of declaring them.
 TLS13_CUSTARD_EXTERN_TYPES = \
-  Common.TCP.channel@common_tcp_custard.h \
-  Common.TCP.listener@common_tcp_custard.h \
+  Pulse.Lib.TCP.channel@Pulse_Lib_TCP_runtime.h \
+  Pulse.Lib.TCP.listener@Pulse_Lib_TCP_runtime.h \
   TLS13.OpenSSL.auth_config@tls13_openssl_custard.h \
   TLS13.OpenSSL.auth_context@tls13_openssl_custard.h \
   TLS13.OpenSSL.server_credentials@tls13_openssl_custard.h
@@ -779,21 +792,21 @@ HACL_BENCHMARK_OBJECTS = \
 HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJECTS)
 
 ECHO_STUB_SOURCES = \
-  runtime/common_memmove.c \
+  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
   c_stubs/atlas_trace.c \
-  c_stubs/common_tcp_custard.c \
-  c_stubs/common_tcp_stubs.c \
+  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
   c_stubs/tls13_crypto_external.c \
   c_stubs/tls13_openssl_custard.c \
   c_stubs/tls13_openssl_stubs.c \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
-  runtime/common_memmove.h \
+  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.h \
   c_stubs/atlas_trace.h \
-  c_stubs/common_tcp_custard.h \
+  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.h \
   c_stubs/custard_option.h \
-  c_stubs/common_tcp_stubs.h \
+  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.h \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_hacl_stubs.h \
   c_stubs/tls13_openssl_custard.h \
@@ -808,6 +821,7 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
   -I c_stubs \
   -I runtime \
+  $(PULSE_RUNTIME_CFLAGS) \
   -I $(HACL_ACCEL_CONFIG_DIR) \
   -I $(HACL_DIR) \
   -I $(HACL_DIR)/internal \
@@ -825,7 +839,7 @@ TLS13_PROVIDER_C_SOURCES = \
   $(TLS13_ENGINE_DIR)/TLS13.c \
   c_stubs/atlas_trace.c \
   c_stubs/tls13_crypto_external.c \
-  runtime/common_memmove.c \
+  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
   runtime/tls13_client_engine.c \
   $(HACL_WRAPPER_SOURCES)
 TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
@@ -935,11 +949,11 @@ define link_benchmark
 	  $(4) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/perf/tls13_bench.c \
@@ -1010,7 +1024,7 @@ check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
 	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
 	  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
-	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
+	  -I c_stubs $(PULSE_RUNTIME_CFLAGS) -I $(HACL_ACCEL_CONFIG_DIR) \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
 	  $(ECHO_STUB_SOURCES)
@@ -1037,9 +1051,9 @@ test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
 	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_key_schedule_bindings.c \
@@ -1071,10 +1085,10 @@ test/test_extracted_client_openssl_echo: \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_client_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
@@ -1097,10 +1111,10 @@ test/test_interop_client: \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_client_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_interop_client.c \
@@ -1122,10 +1136,10 @@ test/test_extracted_client_engine_openssl_echo: \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_client_engine.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_engine_openssl_echo.c \
@@ -1462,14 +1476,14 @@ $(HTTP_SAMPLE_VTLS_BIN): \
 	@# generated header (HTTP_Verified.h), so compile them on their own rather
 	@# than against the TLS13 unit's include directory.
 	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -DHTTP_VERIFIED_TLS \
-	  -DCOMMON_TCP_CUSTARD_FULL_DECLS -include c_stubs/common_tcp_custard.h \
+	  $(PULSE_RUNTIME_CFLAGS) -include Pulse_Lib_TCP_runtime.h \
 	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
 	  -ffunction-sections -fdata-sections \
 	  -I c_stubs -I runtime -I $(HTTP_SAMPLE_EXTRACT) \
 	  -c $(HTTP_SAMPLE_DIR)/interop/http_server.c \
 	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o
 	$(CC) -std=gnu11 -D_DEFAULT_SOURCE \
-	  -DCOMMON_TCP_CUSTARD_FULL_DECLS -include c_stubs/common_tcp_custard.h \
+	  $(PULSE_RUNTIME_CFLAGS) -include Pulse_Lib_TCP_runtime.h \
 	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
 	  -ffunction-sections -fdata-sections \
 	  -I c_stubs -I $(HTTP_SAMPLE_EXTRACT) \
@@ -1482,10 +1496,10 @@ $(HTTP_SAMPLE_VTLS_BIN): \
 	  $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o \
 	  $(HTTP_SAMPLE_EXTRACT)/vtls_obj/HTTP_Verified.o \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  $(HACL_WRAPPER_SOURCES) \
@@ -1542,10 +1556,10 @@ test/test_extracted_server_openssl_client: \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_server_openssl_client.c \
@@ -1574,11 +1588,11 @@ test/test_atlas_loopback: \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_atlas_loopback.c \
@@ -1607,10 +1621,10 @@ test/test_server_interop_matrix: \
 	  $(HACL_TEST_OBJECTS) \
 	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
-	  runtime/common_memmove.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_Memmove_runtime.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_custard.c \
-	  c_stubs/common_tcp_stubs.c \
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c \
+	  $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_server_interop_matrix.c \

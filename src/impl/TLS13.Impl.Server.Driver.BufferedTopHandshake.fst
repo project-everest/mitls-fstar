@@ -5,7 +5,7 @@ module TLS13.Impl.Server.Driver.BufferedTopHandshake
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module BW = TLS13.Impl.Server.Driver.BufferedWorkflow
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine

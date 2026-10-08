@@ -15,7 +15,7 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GCert = TLS13.Wire.Generated.Certificate
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GFin = TLS13.Wire.Generated.Finished
-module SM = Common.StateMachine
+module SM = Pulse.Lib.Protocol.StateMachine
 module CW = TLS13.Spec.Endpoint.Wire
 module CTy = TLS13.Impl.CanonicalTypes
 module EAPI = TLS13.Spec.Endpoint.API
@@ -320,7 +320,7 @@ let lemma_server_step_facts
              CL.message_value = msg;
            } in
          SMCan.canonical_wire_step st0 s' conn_ev
-           (Common.WireFormat.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
+           (Pulse.Lib.Protocol.WireFormat.serialize_all CW.tls_record_wire_format out.SM.so_wire_outputs)
            (CW.wire_serialize wire) /\
          ES.server_local_outputs_match conn_ev out.SM.so_local_outputs)
       with

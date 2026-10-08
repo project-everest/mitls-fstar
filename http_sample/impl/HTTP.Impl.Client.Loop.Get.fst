@@ -5,7 +5,7 @@ module HTTP.Impl.Client.Loop.Get
 (**
   A verified, Low*-extractable HTTP/1.1 client driver for a *real* origin-server
   GET (e.g. GET http://example.com/ over port 80).  It composes three already
-  verified leaves over a connected `Common.TCP` channel:
+  verified leaves over a connected `Pulse.Lib.TCP` channel:
 
     1. HTTP.Impl.Codec.Request.http_emit_request_host — build+send the request
        "GET <target> HTTP/1.1\r\nHost: <host>\r\nConnection: close\r\n\r\n";
@@ -28,7 +28,7 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ   = FStar.SizeT
 module Seq  = FStar.Seq
-module TCP  = Common.TCP
+module TCP  = Pulse.Lib.TCP
 module U8   = FStar.UInt8
 module U16  = FStar.UInt16
 module U32  = FStar.UInt32

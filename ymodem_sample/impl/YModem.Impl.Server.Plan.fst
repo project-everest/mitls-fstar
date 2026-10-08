@@ -27,7 +27,7 @@ module YModem.Impl.Server.Plan
 module Seq = FStar.Seq
 module L = FStar.List.Tot
 module U8 = FStar.UInt8
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module Math = FStar.Math.Lemmas
 
 module YP = YModem.Protocol

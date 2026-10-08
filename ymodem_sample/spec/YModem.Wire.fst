@@ -1,14 +1,14 @@
 module YModem.Wire
 
 (**
-  Instantiation of the `Common.WireFormat.wire_format` type class for the YMODEM
+  Instantiation of the `Pulse.Lib.Protocol.WireFormat.wire_format` type class for the YMODEM
   wire messages — a single leading-byte-discriminated union of the sender's
   128-byte data/header packet (SOH) and end-of-file marker (EOT), and the
   receiver's single-byte control acknowledgements (ACK, NAK, CAN, 'C').  See
   ymodem.qd.rfc and the generated module YModem.Wire.Generated.Ymodem_message.
 
   This wraps the EverParse/QuackyDucky-generated LowParse spec parser/serializer
-  into the residual-returning `Common.WireFormat` interface and discharges the
+  into the residual-returning `Pulse.Lib.Protocol.WireFormat` interface and discharges the
   round-trip laws (`wf_parse_serialize_exact`, `wfsl_parse_serialize_prefix`).
   The union parser is variable-size (1..133 bytes) but *strong* (leading-byte
   discriminated — `strong_parser_kind 1 133`), which is exactly what the
@@ -19,8 +19,8 @@ module YModem.Wire
 module Seq = FStar.Seq
 module SP = FStar.Seq.Properties
 module LP = LowParse.Spec
-module TCP = Common.TCP
-module WF = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
 
 open YModem.Wire.Generated.Ymodem_message
 

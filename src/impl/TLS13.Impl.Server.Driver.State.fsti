@@ -5,16 +5,16 @@ module TLS13.Impl.Server.Driver.State
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
 module CryptoSpec = TLS13.Crypto.Spec
 module CTypes = TLS13.Impl.CanonicalTypes
 module ES = TLS13.Spec.Endpoint.Server
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module IM = TLS13.Impl.Messages
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
@@ -61,7 +61,7 @@ noeq type server_driver = {
   // Monotonic witness of the exact full TCP receive/send histories.  Snapshots
   // of the channel are indexed by the complete transport histories, so proving
   // monotonicity across snapshots requires remembering that the histories only
-  // ever grow (Common.ChannelImplementation.io_history_preorder).
+  // ever grow (Pulse.Lib.Protocol.ChannelImplementation.io_history_preorder).
   server_driver_tcp_history:
     MR.mref CI.io_history_preorder;
   server_driver_initial: Ghost.erased ES.server_initial_state;

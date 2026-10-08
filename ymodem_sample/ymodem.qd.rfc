@@ -32,11 +32,11 @@
  *
  * As a single message type, the union is discriminated by its first byte (the
  * tag): SOH introduces the 132-byte packet body, every control byte is the whole
- * (1-byte) message.  This is exactly what an instance of Common.WireFormat needs
+ * (1-byte) message.  This is exactly what an instance of Pulse.Lib.Protocol.WireFormat needs
  * for a protocol whose state machine both CONSUMES control bytes (as WireEvents)
  * and EMITS data packets / EOT (as wire outputs).  The union is variable-size
  * (1 or 133 bytes) but still strong (leading-byte discriminated), so the
- * strong-prefix stream law of Common.WireFormat holds.  The tag enum is closed:
+ * strong-prefix stream law of Pulse.Lib.Protocol.WireFormat holds.  The tag enum is closed:
  * an unrecognised leading byte fails parsing.
  *
  * Modeling notes (see YModem.Protocol.fst):

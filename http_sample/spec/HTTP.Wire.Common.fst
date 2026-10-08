@@ -22,7 +22,7 @@ module Seq = FStar.Seq
 module SP  = FStar.Seq.Properties
 module U8  = FStar.UInt8
 module ML  = FStar.Math.Lemmas
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 
 (* ─── ASCII byte constants ─────────────────────────────────────────────────── *)
 inline_for_extraction let bSP    : U8.t = 0x20uy  (* ' '  *)

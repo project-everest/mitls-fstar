@@ -5,15 +5,15 @@ module TLS13.Impl.Server.Driver.State
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module Bounds = TLS13.Impl.ConnectionState.Bounds
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.StateMachine
 module CTypes = TLS13.Impl.CanonicalTypes
 module ES = TLS13.Spec.Endpoint.Server
-module IO = Common.TCP
+module IO = Pulse.Lib.TCP
 module IM = TLS13.Impl.Messages
 module ID = FStar.IndefiniteDescription
 module O = TLS13.OpenSSL

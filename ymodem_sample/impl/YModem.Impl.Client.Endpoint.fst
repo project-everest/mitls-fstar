@@ -2,11 +2,11 @@ module YModem.Impl.Client.Endpoint
 
 (**
   YMODEM *client* (receiver) driver-facing endpoint: a full 28-field instance of
-  `Common.ProtocolEndpoint.protocol_endpoint` over the committed dictionary
+  `Pulse.Lib.Protocol.Endpoint.protocol_endpoint` over the committed dictionary
   `YModem.Impl.Client.CanonicalProtocol.ymodem_client_protocol_implementation`.
 
   This is the executable scheduling + resource layer that lets the GENERIC
-  verified loop `Common.ProtocolDriver.drive_steps` run the receiver.  It reuses
+  verified loop `Pulse.Lib.Protocol.Driver.drive_steps` run the receiver.  It reuses
   the driver loop verbatim (it is a typeclass argument), so NO loop is written
   here.
 
@@ -46,11 +46,11 @@ module YModem.Impl.Client.Endpoint
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI = Common.ProtocolImplementation
-module PE = Common.ProtocolEndpoint
+module CPI = Pulse.Lib.Protocol.Implementation
+module PE = Pulse.Lib.Protocol.Endpoint
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
-module TCP = Common.TCP
+module TCP = Pulse.Lib.TCP
 module U8 = FStar.UInt8
 module Vec = Pulse.Lib.Vec
 module MR = Pulse.Lib.MonotonicGhostRef

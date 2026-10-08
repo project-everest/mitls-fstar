@@ -5,7 +5,7 @@ module TLS13.Impl.Server.Driver.BufferedClose
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module DS = TLS13.Impl.Server.Driver.State
 module SZ = FStar.SizeT
 

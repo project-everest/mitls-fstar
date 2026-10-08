@@ -13,7 +13,7 @@
  *   - then writes the response head + body -- "HTTP/1.1 200 \r\nContent-Length:
  *     <8-digit>\r\n\r\n" followed by the body bytes -- via the verified head
  *     emitter http_emit_response and body copy http_emit_body, over the verified
- *     Common.TCP channel, and closes it.
+ *     Pulse.Lib.TCP channel, and closes it.
  *
  * This program is the thin, UNVERIFIED glue around that driver:
  *   1. bind a TCP socket to 0.0.0.0:<port> and listen;
@@ -21,7 +21,7 @@
  *      up to the CRLF-CRLF terminator (the socket read is glue -- the request
  *      length is not known ahead of time -- but the buffered bytes are then
  *      parsed by the VERIFIED leaf, so the parse itself is in-model);
- *   3. wrap the connected fd into a Common_TCP_channel and hand it, with the
+ *   3. wrap the connected fd into a Pulse_Lib_TCP_channel and hand it, with the
  *      request buffer, to the VERIFIED http_server_exchange_length_head.
  *
  * The server serves the SAME fixed body to every request (a built-in string, or
@@ -32,7 +32,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -92,15 +92,15 @@ static const char DEFAULT_BODY[] =
 
 /* ── Transport abstraction: plaintext TCP or TLS (OpenSSL) ─────────────────────
    The verified HTTP leaves produce and parse the bytes; the transport that
-   carries them is UNVERIFIED glue -- exactly like the Common.TCP channel already
-   is.  A plaintext connection writes through the verified Common.TCP channel and
+   carries them is UNVERIFIED glue -- exactly like the Pulse.Lib.TCP channel already
+   is.  A plaintext connection writes through the verified Pulse.Lib.TCP channel and
    reads with recv(); a TLS connection terminates OpenSSL and does
    SSL_read/SSL_write.  Both share the same request-handling code, so the verified
    HTTP server is reachable identically over http:// and https://. */
 typedef struct {
   int fd;
   SSL *ssl;                 /* NULL => not OpenSSL-TLS */
-  Common_TCP_channel ch;    /* non-NULL => plaintext writes */
+  Pulse_Lib_TCP_channel ch;    /* non-NULL => plaintext writes */
 #ifdef HTTP_VERIFIED_TLS
   tls13_server_driver *drv; /* non-NULL => verified TLS 1.3 transport */
   /* The verified driver hands back one whole TLS record's plaintext at a time,
@@ -147,7 +147,7 @@ static ssize_t io_read(io_t *io, uint8_t *buf, size_t n) {
   return recv(io->fd, buf, n, 0);
 }
 
-/* Write all n bytes (best effort).  Plaintext goes through the verified Common.TCP
+/* Write all n bytes (best effort).  Plaintext goes through the verified Pulse.Lib.TCP
    channel; TLS through SSL_write. */
 static void io_write(io_t *io, uint8_t *buf, size_t n) {
 #ifdef HTTP_VERIFIED_TLS
@@ -167,7 +167,7 @@ static void io_write(io_t *io, uint8_t *buf, size_t n) {
     }
     return;
   }
-  Common_TCP_write(io->ch, buf, n);
+  Pulse_Lib_TCP_write(io->ch, buf, n);
 }
 
 /* Close the connection exactly once. */
@@ -188,7 +188,7 @@ static void io_close(io_t *io) {
     close(io->fd);
     return;
   }
-  Common_TCP_close(io->ch);   /* closes the underlying fd */
+  Pulse_Lib_TCP_close(io->ch);   /* closes the underlying fd */
 }
 
 /* Read a whole file into a freshly malloc'd buffer; sets *out_len. */
@@ -469,7 +469,7 @@ worker:
      so after a successful response we loop to serve the next request on the same
      connection, closing only when the client closes it, asks for it with a
      verified `Connection: close`, an error occurs, or a read times out.  A single
-     verified Common.TCP channel is created per connection and closed exactly once
+     verified Pulse.Lib.TCP channel is created per connection and closed exactly once
      when the connection ends. */
   for (;;) {
     io_t io;
@@ -502,7 +502,7 @@ worker:
     { struct timeval tv; tv.tv_sec = read_timeout; tv.tv_usec = 0;
       setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv); }
 
-    /* One transport per connection (plaintext Common.TCP channel, or a TLS
+    /* One transport per connection (plaintext Pulse.Lib.TCP channel, or a TLS
        session when a certificate was configured), reused across keep-alive
        requests and closed exactly once when the inner loop ends. */
     io.fd = fd;
@@ -518,7 +518,7 @@ worker:
       }
       io.ssl = ssl;
     } else {
-      io.ch = Common_TCP_channel_of_fd(fd);
+      io.ch = Pulse_Lib_TCP_channel_of_fd(fd);
     }
     }
     int served = 0;                 /* how many requests answered on this conn */

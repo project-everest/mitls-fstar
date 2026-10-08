@@ -10,7 +10,7 @@ module HTTP.Impl.Server.Loop.Length
   body is sent verbatim (its length is agreed out of band, exactly as TFTP's
   DATA payload length is).  `http_server_run_length` frames the file body through
   the verified codec leaf `HTTP.Impl.Codec.Length.http_emit_body` into a staging
-  buffer, pushes it over the connected `Common.TCP` channel, and closes.
+  buffer, pushes it over the connected `Pulse.Lib.TCP` channel, and closes.
 *)
 
 open Pulse.Lib.Pervasives
@@ -18,7 +18,7 @@ open Pulse.Lib.Array.PtsTo
 
 module SZ    = FStar.SizeT
 module Seq   = FStar.Seq
-module TCP   = Common.TCP
+module TCP   = Pulse.Lib.TCP
 module U8    = FStar.UInt8
 module U16   = FStar.UInt16
 module U32   = FStar.UInt32

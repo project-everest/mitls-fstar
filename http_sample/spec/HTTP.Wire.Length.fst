@@ -2,7 +2,7 @@ module HTTP.Wire.Length
 
 (**
   Hand-written IETF HTTP/1.1 wire format — the *Content-Length delimited*
-  profile — as a `Common.WireFormat.wire_format` instance.
+  profile — as a `Pulse.Lib.Protocol.WireFormat.wire_format` instance.
 
   Companion of `HTTP.Wire.Chunked`.  A GET exchange with a Content-Length body
   reduces to three wire messages:
@@ -18,7 +18,7 @@ module HTTP.Wire.Length
   one transport read at a time).  So `Msg_body` is *datagram-delimited*: exactly
   like TFTP's DATA packet, `http_parse` reads "all remaining bytes" as the body
   and leaves an EMPTY residual, and we deliberately do NOT instantiate the
-  OPTIONAL `Common.WireFormat.wire_format_stream_laws` (a body segment is not a
+  OPTIONAL `Pulse.Lib.Protocol.WireFormat.wire_format_stream_laws` (a body segment is not a
   strong/prefix parser).  The driver feeds exactly one segment per read, so
   buffer-end == message-end, which is what `wf_parse_serialize_exact` needs.
 
@@ -34,8 +34,8 @@ module Seq = FStar.Seq
 module SP  = FStar.Seq.Properties
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
-module TCP = Common.TCP
-module WF  = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF  = Pulse.Lib.Protocol.WireFormat
 module W   = HTTP.Wire.Common
 
 (* ─── Fixed literals ───────────────────────────────────────────────────────── *)

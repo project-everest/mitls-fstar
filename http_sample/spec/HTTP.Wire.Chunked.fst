@@ -2,7 +2,7 @@ module HTTP.Wire.Chunked
 
 (**
   Hand-written IETF HTTP/1.1 wire format (RFC 7230/7231) — the *chunked
-  transfer-encoding* profile — as a `Common.WireFormat.wire_format` instance.
+  transfer-encoding* profile — as a `Pulse.Lib.Protocol.WireFormat.wire_format` instance.
 
   ── Why this is written and proved BY HAND (not QuackyDucky) ─────────────────
   Like TFTP, HTTP is a *text* protocol (request/status lines, CRLF-delimited
@@ -34,8 +34,8 @@ module Seq = FStar.Seq
 module SP  = FStar.Seq.Properties
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
-module TCP = Common.TCP
-module WF  = Common.WireFormat
+module TCP = Pulse.Lib.TCP
+module WF  = Pulse.Lib.Protocol.WireFormat
 module W   = HTTP.Wire.Common
 
 (* ─── Fixed literals ───────────────────────────────────────────────────────── *)

@@ -3,7 +3,7 @@ module TLS13.Impl.Server.Driver.NetworkOrdered
 #set-options ""
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.StateMachine
 module CT = TLS13.Impl.Client.Types

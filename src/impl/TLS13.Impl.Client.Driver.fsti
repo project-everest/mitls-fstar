@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CP = TLS13.Impl.Client.CanonicalProtocol
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.StateMachine
@@ -454,7 +454,7 @@ fn free (d:client_driver)
   requires client_driver_closed d 'st
   ensures client_driver_released d 'st
 
-(** The production client driver as a [Common.ChannelImplementation] instance.
+(** The production client driver as a [Pulse.Lib.Protocol.ChannelImplementation] instance.
 
     There is deliberately no separate "channel" API: [ci_send] and [ci_receive]
     are literally [send] and [receive] above, and [ci_send_usable] /

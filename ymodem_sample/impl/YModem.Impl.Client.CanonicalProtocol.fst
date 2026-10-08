@@ -2,7 +2,7 @@ module YModem.Impl.Client.CanonicalProtocol
 
 (**
   YMODEM *client* (receiver) as a verified instance of the state-machine
-  implementation type class `Common.ProtocolImplementation.protocol_implementation`,
+  implementation type class `Pulse.Lib.Protocol.Implementation.protocol_implementation`,
   the executable refinement of the *reliable-delivery (ARQ)* specification state
   machine `YModem.Protocol.ymodem_client_wfsm`.
 
@@ -52,13 +52,13 @@ module YModem.Impl.Client.CanonicalProtocol
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
-module CPI = Common.ProtocolImplementation
-module SM = Common.StateMachine
+module CPI = Pulse.Lib.Protocol.Implementation
+module SM = Pulse.Lib.Protocol.StateMachine
 module SZ = FStar.SizeT
-module TCP = Common.TCP
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module FT = Common.FileTransfer
+module TCP = Pulse.Lib.TCP
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module FT = Pulse.Lib.Protocol.FileTransfer
 module U8 = FStar.UInt8
 module Seq = FStar.Seq
 module L = FStar.List.Tot

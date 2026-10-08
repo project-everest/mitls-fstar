@@ -41,11 +41,11 @@ module Seq = FStar.Seq
 module SP = FStar.Seq.Properties
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
-module SM = Common.StateMachine
-module WF = Common.WireFormat
-module WFSM = Common.WireFormatStateMachine
-module FT = Common.FileTransfer
-module TCP = Common.TCP
+module SM = Pulse.Lib.Protocol.StateMachine
+module WF = Pulse.Lib.Protocol.WireFormat
+module WFSM = Pulse.Lib.Protocol.WireFormatStateMachine
+module FT = Pulse.Lib.Protocol.FileTransfer
+module TCP = Pulse.Lib.TCP
 
 open HTTP.Wire.Length
 

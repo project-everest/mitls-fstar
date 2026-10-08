@@ -2,7 +2,7 @@
  * get_live_test.c — OPTIONAL live smoke test of the *verified* HTTP/1.1 GET
  * client `http_get` against a real origin server over port 80.
  *
- * It connects to example.com:80 with the real Common_TCP_connect_tcp, then runs
+ * It connects to example.com:80 with the real Pulse_Lib_TCP_connect_tcp, then runs
  * the extracted verified `http_get` to emit
  *   "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n",
  * read the whole response to EOF, and parse the response head.  On a successful
@@ -15,7 +15,7 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_custard.h"
+#include "Pulse_Lib_TCP_runtime.h"
 #include "custard_option.h"
 
 #include <stdint.h>
@@ -24,13 +24,13 @@
 #include <string.h>
 #include <signal.h>
 
-/* Common_TCP_connect_tcp is defined in the hand-written c_stubs and linked in,
+/* Pulse_Lib_TCP_connect_tcp is defined in the hand-written c_stubs and linked in,
    but its option-return type and prototype are not published in a header
    (the generated code names the option type itself).  Re-declare them here
    with the layout Custard gives an option (see custard_option.h). */
-CUSTARD_OPTION_TYPE(option_channel, Common_TCP_channel);
+CUSTARD_OPTION_TYPE(option_channel, Pulse_Lib_TCP_channel);
 
-option_channel Common_TCP_connect_tcp(
+option_channel Pulse_Lib_TCP_connect_tcp(
     uint8_t *hostname, size_t hostname_len, uint16_t port);
 
 int main(void) {
@@ -40,12 +40,12 @@ int main(void) {
   size_t host_len = 11;
 
   option_channel c =
-    Common_TCP_connect_tcp(host, host_len, 80);
+    Pulse_Lib_TCP_connect_tcp(host, host_len, 80);
   if (c.tag != CUSTARD_SOME) {
     printf("live GET: could not connect to example.com:80 (no egress?) => SKIP\n");
     return 0;
   }
-  Common_TCP_channel ch = c.val.Some;
+  Pulse_Lib_TCP_channel ch = c.val.Some;
 
   uint8_t target[] = { '/' };
   size_t target_len = 1;
@@ -70,7 +70,7 @@ int main(void) {
                      reqbuf, buf, cap, tmp, tmpcap,
                      &rlen, &code, &chunked, &has_cl, &cl, &headlen);
 
-  Common_TCP_close(ch);
+  Pulse_Lib_TCP_close(ch);
 
   size_t body_len = (ok && headlen <= rlen) ? (rlen - headlen) : 0;
 

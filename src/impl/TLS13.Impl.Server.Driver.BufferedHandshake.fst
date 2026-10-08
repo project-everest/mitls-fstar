@@ -6,12 +6,12 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module BT = Common.BufferedTCP
+module BT = Pulse.Lib.BufferedTCP
 module Bounds = TLS13.Impl.ConnectionState.Bounds
-module CI = Common.ChannelImplementation
+module CI = Pulse.Lib.Protocol.ChannelImplementation
 module CL = TLS13.ConnectionLog
 module CM = TLS13.Impl.ConnectionState.Model
-module CPI = Common.ProtocolImplementation
+module CPI = Pulse.Lib.Protocol.Implementation
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
 module KEX = TLS13.KEX

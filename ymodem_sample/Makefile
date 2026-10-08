@@ -19,17 +19,25 @@
 #         control frames (EOT/ACK/NAK/CAN/'C') are single literal bytes handled
 #         directly in the wrappers, so they need no leaf.
 #       - YModem.Impl.{Server,Client}.CanonicalProtocol hold the
-#         Common.ProtocolImplementation.protocol_implementation instances (the
+#         Pulse.Lib.Protocol.Implementation.protocol_implementation instances (the
 #         verified refinement witnesses for ymodem_{server,client}_wfsm) that
 #         drive those leaves.  Like every type-class dictionary they carry
 #         separation-logic and ghost/stt fields, so they are NOT Low* — verified
 #         by `make verify` but not extracted (the extractor cannot lower a dictionary;
-#         cf. calc's calc_server_protocol_implementation).
+#         cf. calc_server_protocol_implementation in the Pulse calc example).
 
 # ── Toolchain ──────────────────────────────────────────────────────
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
+FSTAR_PREFIX = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
+# C runtime for the extern Pulse.Lib.TCP interface, shipped with Pulse.
+# Pulse_Lib_TCP_runtime.c is compiled with -DPULSE_RUNTIME_CUSTARD_C to match
+# the option layout of Custard's direct-to-C backend.
+PULSE_RUNTIME_DIR ?= $(firstword $(wildcard \
+  $(FSTAR_PREFIX)/share/pulse/runtime \
+  $(FSTAR_HOME)/pulse/share/pulse/runtime) \
+  $(FSTAR_PREFIX)/share/pulse/runtime)
 QD ?= $(EVERPARSE_HOME)/bin/everparse-qd.exe
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
@@ -49,14 +57,11 @@ endif
 CACHE_DIR   = _cache
 SPEC_DIR    = spec
 IMPL_DIR    = impl
-EXTERN_DIR  = ../src/impl/extern
 OUTPUT_DIR  = _output
 EXTRACT_DIR = _extract
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
-  --include ../common \
-  --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(SPEC_DIR) \
   --include $(IMPL_DIR)
@@ -76,11 +81,9 @@ FSTAR_FLAGS = \
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 
 # ── Source Files ───────────────────────────────────────────────────
-COMMON_FILES = $(wildcard ../common/*.fst ../common/*.fsti)
-EXTERN_FILES = $(EXTERN_DIR)/Common.Memmove.fsti
 SPEC_FILES = $(wildcard $(SPEC_DIR)/*.fst $(SPEC_DIR)/*.fsti)
 IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
-ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES) $(IMPL_FILES)
+ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
 
 .PHONY: all verify gen extract extract-c wrappers clean check-admits help
 
@@ -154,11 +157,11 @@ wrappers: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/ymodem_rb \
 	  $(INTEROP_DIR)/ymodem_rb.c \
 	  $(EXTRACT_DIR)/YModem_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/ymodem_sb \
 	  $(INTEROP_DIR)/ymodem_sb.c \
 	  $(EXTRACT_DIR)/YModem_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "Interop drivers ymodem_rb / ymodem_sb (verified loops) compiled to $(EXTRACT_DIR)/."
 
 # ── Verified driver loops → C + end-to-end test ────────────────────
@@ -173,11 +176,10 @@ wrappers: extract-loops
 # orchestration.  The TCP stub is the trusted realization of the verified
 # read/write interface.
 VERIFIED_DIR = verified
-STUBS_DIR    = ../c_stubs
-CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
+CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DPULSE_RUNTIME_CUSTARD_C \
+  -include Pulse_Lib_TCP_runtime.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(PULSE_RUNTIME_DIR)
 
 extract-loops: verify
 	@echo "Extracting the verified driver loops to C ..."
@@ -188,7 +190,7 @@ vloop-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
 	  $(VERIFIED_DIR)/vloop_test.c \
 	  $(EXTRACT_DIR)/YModem_Verified.c \
-	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(PULSE_RUNTIME_DIR)/Pulse_Lib_TCP_runtime.c $(PULSE_RUNTIME_DIR)/pulse_tcp_sockets.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server loop  ->  verified client loop  (over a socketpair)"
 	@echo "─────────────────────────────────────────────────────────────────"
