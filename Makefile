@@ -372,7 +372,7 @@ verify: generated-checked $(ALL_CHECKED_FILES)
 # (`Common.ProtocolImplementation`, `Common.ProtocolEndpoint`), so a change to
 # those classes can break them without the root `verify` target noticing.
 # `verify-samples` closes that gap; `test` depends on it.
-SAMPLE_DIRS = calc_sample ftp_sample http_sample tftp_sample ymodem_sample
+SAMPLE_DIRS = ftp_sample http_sample ymodem_sample
 
 .PHONY: verify-samples $(addprefix verify-sample-,$(SAMPLE_DIRS))
 

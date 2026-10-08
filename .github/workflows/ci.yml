@@ -22,8 +22,8 @@ jobs:
   # the project dependencies, then commits the prepared container to a
   # self-contained image and stores it in the GitHub Actions cache (not as a
   # build artifact).  The cache is keyed on the files that determine the image
-  # contents — the Dockerfile (base OS + apt packages, incl. lrzsz/tftp and the
-  # in.tftpd setcap) and the toolchain build scripts (setup.sh, the pinned
+  # contents — the Dockerfile (base OS + apt packages, incl. lrzsz) and the
+  # toolchain build scripts (setup.sh, the pinned
   # EverParse commit in scripts/build-everparse.sh, and the Z3 version pinned in
   # scripts/install-z3.sh) — so the ~1h build only re-runs when one of those
   # changes; ordinary source edits reuse the cache.
@@ -147,14 +147,10 @@ jobs:
           - name: tls-root (make test)
             cmd: for m in TLS13.ConnectionState.Lemmas TLS13.ConnectionState.ProtectedWireHead TLS13.Impl.Parser TLS13.Impl.Client.Driver.Receive TLS13.ConnectionState.ClientCanonicalShape TLS13.System TLS13.ConnectionState.ProtectedWireServerFlightInversion TLS13.ConnectionState.ProtectedWireClientFinishedInversion; do make -j"$(nproc)" "_cache/$m.fst.checked" || exit 1; done && make -j"$(nproc)" test
             cache_generated: true
-          - name: calc (test-c)
-            cmd: make -j"$(nproc)" -C calc_sample test-c
           - name: ftp (verify)
             cmd: make -j"$(nproc)" -C ftp_sample
           - name: ymodem (vloop-test + interop)
             cmd: make -j"$(nproc)" -C ymodem_sample vloop-test && make -j"$(nproc)" -C ymodem_sample/interop
-          - name: tftp (vloop-test + interop)
-            cmd: make -j"$(nproc)" -C tftp_sample vloop-test && make -j"$(nproc)" -C tftp_sample/interop
           - name: http (vloop-tests + curl interop)
             cmd: make -j"$(nproc)" -C http_sample vloop-tests && make -C http_sample/interop test
     steps:

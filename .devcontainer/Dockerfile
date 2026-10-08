@@ -23,8 +23,6 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 #   libssl-dev,openssl        - OpenSSL headers/lib + CLI for the interop echo test
 #   unzip                     - extract the downloaded Z3 release archives
 #   python3                   - agentic-tls test scripts (port picker, payload gen)
-#   tftp-hpa,tftpd-hpa         - TFTP reference client (tftp) / server (in.tftpd)
-#                               for the tftp_sample interop tests (RFC 1350)
 #   lrzsz                     - XMODEM/YMODEM/ZMODEM reference client/server (sb/rb)
 #                               for the ymodem_sample interop tests
 RUN apt-get update \
@@ -42,18 +40,8 @@ RUN apt-get update \
       openssl \
       unzip \
       python3 \
-      tftp-hpa \
-      tftpd-hpa \
       lrzsz \
-      libcap2-bin \
  && rm -rf /var/lib/apt/lists/*
-
-# tftpd-hpa (in.tftpd) drops privileges (setgroups/setuid) and, in --secure mode,
-# chroots to the served directory — all of which need root capabilities.  The
-# tftp_sample interop test (make -C tftp_sample/interop test-client) runs the
-# reference server as the ordinary devcontainer user, so grant in.tftpd the file
-# capabilities it needs to do that privilege-drop + chroot without being root.
-RUN setcap cap_net_bind_service,cap_setgid,cap_setuid,cap_sys_chroot+ep /usr/sbin/in.tftpd
 
 # Some Docker/CI hosts disallow unprivileged user namespaces, so opam's
 # bubblewrap sandbox check fails and opam would otherwise prompt interactively
