@@ -378,7 +378,7 @@ let rec lemma_advance_preserves_key_epoch (st:R.direction_state) (n:nat)
           [SMTPat (CS.advance_direction_records st n)]
   = if n = 0 then () else lemma_advance_preserves_key_epoch st (n - 1)
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 40"
+#push-options "--fuel 2 --ifuel 4 --z3rlimit 120"
 let lemma_step_record_key_epoch_coupling
   (m:CS.connection_model) (ev:CS.conn_event) (m':CS.connection_model)
   : Lemma
