@@ -278,10 +278,10 @@ fn rec drive_handshake
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
-    {
+    ({
       handshake_status = HandshakeExhausted;
       handshake_pending_len = buffered_len;
-    }
+    })
   } else {
     assert (pure (0 < SZ.v fuel));
     let snapshot = control_snapshot d;
@@ -290,17 +290,17 @@ fn rec drive_handshake
       assert (pure (CR.control_snapshot_matches snapshot 'st0));
       assert (pure (
         'st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
-      {
+      ({
         handshake_status = HandshakeOk;
         handshake_pending_len = buffered_len;
-      }
+      })
     } else {
       let failed = snapshot.CR.snapshot_control_tag = 5uy;
       if failed {
-        {
+        ({
           handshake_status = HandshakeStepFailed;
           handshake_pending_len = buffered_len;
-        }
+        })
       } else {
         let client_hello_ready =
           (snapshot.CR.snapshot_control_tag = 1uy) &&
@@ -376,29 +376,29 @@ fn rec drive_handshake
                       next_fuel
                   }
                   _ -> {
-                    {
+                    ({
                       handshake_status = HandshakeStepFailed;
                       handshake_pending_len = buffered_len;
-                    }
+                    })
                   }
                 }
               } else {
-                {
+                ({
                   handshake_status = HandshakeSentinelCollision;
                   handshake_pending_len = buffered_len;
-                }
+                })
               }
             } else {
-              {
+              ({
                 handshake_status = HandshakeSelectionNotReady;
                 handshake_pending_len = buffered_len;
-              }
+              })
             }
           } else {
-            {
+            ({
               handshake_status = HandshakeRandomFailed;
               handshake_pending_len = buffered_len;
-            }
+            })
           }
         } else {
           let local =
@@ -467,26 +467,26 @@ fn rec drive_handshake
                     next_fuel
                 }
                 BS.DriveExhausted -> {
-                  {
+                  ({
                     handshake_status = HandshakeExhausted;
                     handshake_pending_len =
                       network.BN.completed_drive_pending_len;
-                  }
+                  })
                 }
                 _ -> {
-                  {
+                  ({
                     handshake_status = HandshakeStepFailed;
                     handshake_pending_len =
                       network.BN.completed_drive_pending_len;
-                  }
+                  })
                 }
               }
             }
             _ -> {
-              {
+              ({
                 handshake_status = HandshakeStepFailed;
                 handshake_pending_len = buffered_len;
-              }
+              })
             }
           }
         }
@@ -550,10 +550,10 @@ fn run
          st1.CS.cs_model.CS.model_control == CS.ControlApplicationData))
 {
   if (fuel = 0sz) {
-    {
+    ({
       handshake_status = HandshakeExhausted;
       handshake_pending_len = buffered_len;
-    }
+    })
   } else {
     let _ =
       BH.start_server_once

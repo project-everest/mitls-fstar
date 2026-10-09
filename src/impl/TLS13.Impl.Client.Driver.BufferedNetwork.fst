@@ -1411,10 +1411,10 @@ fn process_local_event
     st1
     (Ghost.reveal 'buffered)
     (Ghost.reveal 'buffered_len));
-  {
+  ({
     local_write_resp = resp;
     local_write_written = written;
-  }
+  })
 }
 
 noextract
@@ -1874,10 +1874,10 @@ fn drive
         finish_owns
           (make_endpoint
             d network_out network_out_capacity app_out app_out_capacity);
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveProgress network consumed fuel_left -> {
       with st1 received committed model.
@@ -1912,10 +1912,10 @@ fn drive
         finish_owns
           (make_endpoint
             d network_out network_out_capacity app_out app_out_capacity);
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveYield network consumed output fuel_left -> {
       with st1 received committed model.
@@ -1950,10 +1950,10 @@ fn drive
         finish_owns
           (make_endpoint
             d network_out network_out_capacity app_out app_out_capacity);
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveReject network error fuel_left -> {
       with st1 received.
@@ -1997,10 +1997,10 @@ fn drive
         finish_owns
           (make_endpoint
             d network_out network_out_capacity app_out app_out_capacity);
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveBufferFull network fuel_left -> {
       with st1 received.
@@ -2048,10 +2048,10 @@ fn drive
         finish_owns
           (make_endpoint
             d network_out network_out_capacity app_out app_out_capacity);
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
   }
 }

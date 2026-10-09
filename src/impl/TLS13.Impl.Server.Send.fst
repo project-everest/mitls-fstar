@@ -2434,11 +2434,11 @@ fn process_send_certificate_from_credentials
       assert (pure (
         13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640));
       assert (pure False);
-      {
+      ({
         ST.network_out_len = 0sz;
         ST.app_out_len = 0sz;
         ST.status = ST.IllegalTransition;
-      }
+      })
     }
     Some lcert -> {
       let cert:erased GCert.certificate =

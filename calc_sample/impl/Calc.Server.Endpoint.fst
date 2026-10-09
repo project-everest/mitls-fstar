@@ -1328,28 +1328,28 @@ ensures
       assert (pure (status == PD.DriverNetworkStep \/ status == PD.DriverFailed));
       match status {
         PD.DriverNetworkStep -> {
-          {
+          ({
             PD.driver_status = PD.DriverNetworkStep;
             PD.driver_process_result = Some process_result;
-          }
+          })
         }
         PD.DriverFailed -> {
-          {
+          ({
             PD.driver_status = PD.DriverFailed;
             PD.driver_process_result = Some process_result;
-          }
+          })
         }
         PD.DriverLocalStep -> {
-          {
+          ({
             PD.driver_status = PD.DriverFailed;
             PD.driver_process_result = Some process_result;
-          }
+          })
         }
         PD.DriverDone -> {
-          {
+          ({
             PD.driver_status = PD.DriverFailed;
             PD.driver_process_result = Some process_result;
-          }
+          })
         }
       }
     }
@@ -1387,10 +1387,10 @@ ensures
           (Ghost.reveal received)
           (Ghost.reveal sent)
           (Ghost.reveal log));
-      {
+      ({
         PD.driver_status = PD.DriverFailed;
         PD.driver_process_result = None;
-      }
+      })
     }
     PE.EndpointDone -> {
       calc_cancel_action srv () frame log PE.EndpointDone;
@@ -1426,10 +1426,10 @@ ensures
           (Ghost.reveal received)
           (Ghost.reveal sent)
           (Ghost.reveal log));
-      {
+      ({
         PD.driver_status = PD.DriverDone;
         PD.driver_process_result = None;
-      }
+      })
     }
     PE.EndpointFailed -> {
       calc_cancel_action srv () frame log PE.EndpointFailed;
@@ -1465,10 +1465,10 @@ ensures
           (Ghost.reveal received)
           (Ghost.reveal sent)
           (Ghost.reveal log));
-      {
+      ({
         PD.driver_status = PD.DriverFailed;
         PD.driver_process_result = None;
-      }
+      })
     }
   }
 }
@@ -1720,20 +1720,20 @@ ensures
   if (nwritten = process_result.CPI.process_produced_len) {
     match status {
       CalcDriverNetworkStep -> {
-        {
+        ({
           calc_driver_status = CalcDriverNetworkStep;
-        }
+        })
       }
       CalcDriverFailed -> {
-        {
+        ({
           calc_driver_status = CalcDriverFailed;
-        }
+        })
       }
     }
   } else {
-    {
+    ({
       calc_driver_status = CalcDriverFailed;
-    }
+    })
   }
 }
 

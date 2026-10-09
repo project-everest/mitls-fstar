@@ -548,12 +548,12 @@ fn process_ready_internal_local_action_once
       assert (pure ('st0.CS.cs_model.CS.model_config ==
         'st0.CS.cs_model.CS.model_config));
       assert (pure ('st0 == 'st0));
-      {
+      ({
         ready_local_action = action;
         ready_local_processed = false;
         ready_local_resp = no_op_resp;
         ready_local_written = 0sz;
-      }
+      })
     } else {
       assert (pure (C.next_local_action_internal_input_ready 'st0 action));
       assert (pure (internal_local_action_kind action.CT.next_local_kind));
@@ -624,23 +624,23 @@ fn process_ready_internal_local_action_once
       assert (pure (write_result.local_write_resp.CT.status == CT.StepOk ==>
         SZ.v write_result.local_write_written <=
         SZ.v write_result.local_write_resp.CT.network_out_len));
-      {
+      ({
         ready_local_action = action;
         ready_local_processed = true;
         ready_local_resp = write_result.local_write_resp;
         ready_local_written = write_result.local_write_written;
-      }
+      })
     }
   } else {
     assert (pure ('st0.CS.cs_model.CS.model_config ==
       'st0.CS.cs_model.CS.model_config));
     assert (pure ('st0 == 'st0));
-    {
+    ({
       ready_local_action = action;
       ready_local_processed = false;
       ready_local_resp = no_op_resp;
       ready_local_written = 0sz;
-    }
+    })
   }
 }
 
@@ -804,10 +804,10 @@ fn rec driver_drain_local_actions
   };
   if (fuel = 0sz) {
     assert (pure (false == false /\ 0sz == 0sz));
-    {
+    ({
       driver_drain_last = no_op_last;
       driver_drain_exhausted = true;
-    }
+    })
   } else {
     assert (pure (0 < SZ.v fuel));
     let step =
@@ -848,10 +848,10 @@ fn rec driver_drain_local_actions
           next_fuel;
       result
     } else {
-      {
+      ({
         driver_drain_last = step;
         driver_drain_exhausted = false;
-      }
+      })
     }
   }
 }
@@ -1246,12 +1246,12 @@ fn top_driver_process_one_local_action
               assert (pts_to auth_payload auth_payload_bytes);
             assert (pure (B.length auth_payload_bytes == SZ.v certificate_public_key_len));
             fold (top_driver_exactly d st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
-            {
+            ({
               ready_local_action = step.ready_local_action;
               ready_local_processed = true;
               ready_local_resp = write_result.local_write_resp;
               ready_local_written = write_result.local_write_written;
-            }
+            })
           } else {
             A.to_mask auth_payload_prefix;
             with auth_payload_prefix_mask_after.
@@ -1410,12 +1410,12 @@ fn top_driver_process_one_local_action
               TChannel.application_log st2 ==
                 TChannel.application_log 'st0));
             fold (top_driver_exactly d st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
-            {
+            ({
               ready_local_action = step.ready_local_action;
               ready_local_processed = true;
               ready_local_resp = write_result.local_write_resp;
               ready_local_written = write_result.local_write_written;
-            }
+            })
           } else {
             fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             step
@@ -1533,7 +1533,7 @@ fn rec driver_handshake
     ready_local_written = 0sz;
   };
   if (fuel = 0sz) {
-    {
+    ({
       driver_workflow_status = DriverWorkflowExhausted;
       driver_workflow_rx_len = buffered_len;
       driver_workflow_local = {
@@ -1541,7 +1541,7 @@ fn rec driver_handshake
         driver_drain_exhausted = false;
       };
       driver_workflow_network = no_op_io;
-    }
+    })
   } else {
     assert (pure (0 < SZ.v fuel));
     unfold (top_driver_exactly d 'st0 'buffered buffered_len);
@@ -1562,7 +1562,7 @@ fn rec driver_handshake
       assert (pure (CR.control_snapshot_matches snapshot st_snapshot));
       assert (pure (st_snapshot.CS.cs_model.CS.model_control == CS.ControlApplicationData));
       assert (pure (CS.protected_handshake_buffer_empty st_snapshot.CS.cs_model));
-      {
+      ({
         driver_workflow_status = DriverWorkflowOk;
         driver_workflow_rx_len = buffered_len;
         driver_workflow_local = {
@@ -1570,11 +1570,11 @@ fn rec driver_handshake
           driver_drain_exhausted = false;
         };
         driver_workflow_network = no_op_io;
-      }
+      })
     } else {
       let failed = snapshot.CR.snapshot_control_tag = 5uy;
       if failed {
-        {
+        ({
           driver_workflow_status = DriverWorkflowStepFailed;
           driver_workflow_rx_len = buffered_len;
           driver_workflow_local = {
@@ -1582,7 +1582,7 @@ fn rec driver_handshake
             driver_drain_exhausted = false;
           };
           driver_workflow_network = no_op_io;
-        }
+        })
       } else {
         let local =
           top_driver_process_one_local_action
@@ -1687,7 +1687,7 @@ fn rec driver_handshake
               local_fuel
               next_fuel
           } else {
-            {
+            ({
               driver_workflow_status = DriverWorkflowStepFailed;
               driver_workflow_rx_len = buffered_len;
               driver_workflow_local = {
@@ -1695,12 +1695,12 @@ fn rec driver_handshake
                 driver_drain_exhausted = false;
               };
               driver_workflow_network = no_op_io;
-            }
+            })
           }
         } else {
           let still_ready = local.ready_local_action.CT.next_local_ready;
           if still_ready {
-            {
+            ({
               driver_workflow_status = DriverWorkflowStepFailed;
               driver_workflow_rx_len = buffered_len;
               driver_workflow_local = {
@@ -1708,7 +1708,7 @@ fn rec driver_handshake
                 driver_drain_exhausted = false;
               };
               driver_workflow_network = no_op_io;
-            }
+            })
           } else {
             let network =
               driver_progress_buffered_network_step
@@ -1776,7 +1776,7 @@ fn rec driver_handshake
                   next_fuel
               }
               BS.DriveReject network_result status fuel_left -> {
-                {
+                ({
                   driver_workflow_status = DriverWorkflowStepFailed;
                   driver_workflow_rx_len =
                     network.BN.completed_drive_pending_len;
@@ -1788,10 +1788,10 @@ fn rec driver_handshake
                     buffered_network_io_read_len = 0sz;
                     buffered_network_io_buffered = network_result;
                   };
-                }
+                })
               }
               BS.DriveBufferFull network_result fuel_left -> {
-                {
+                ({
                   driver_workflow_status = DriverWorkflowStepFailed;
                   driver_workflow_rx_len =
                     network.BN.completed_drive_pending_len;
@@ -1803,10 +1803,10 @@ fn rec driver_handshake
                     buffered_network_io_read_len = 0sz;
                     buffered_network_io_buffered = network_result;
                   };
-                }
+                })
               }
               BS.DriveExhausted -> {
-                {
+                ({
                   driver_workflow_status = DriverWorkflowExhausted;
                   driver_workflow_rx_len =
                     network.BN.completed_drive_pending_len;
@@ -1822,7 +1822,7 @@ fn rec driver_handshake
                         network.BN.completed_drive_pending_len;
                     };
                   };
-                }
+                })
               }
             }
           }

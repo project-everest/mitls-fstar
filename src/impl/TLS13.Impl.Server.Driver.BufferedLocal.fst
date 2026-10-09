@@ -664,10 +664,10 @@ fn rec drain_ready_empty_local_actions
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
-    {
+    ({
       drain_last = LocalNotReady;
       drain_exhausted = true;
-    }
+    })
   } else {
     assert (pure (0 < SZ.v fuel));
     let status =
@@ -700,22 +700,22 @@ fn rec drain_ready_empty_local_actions
           next_fuel
       }
       LocalStepFailed -> {
-        {
+        ({
           drain_last = LocalStepFailed;
           drain_exhausted = false;
-        }
+        })
       }
       LocalNotReady -> {
-        {
+        ({
           drain_last = LocalNotReady;
           drain_exhausted = false;
-        }
+        })
       }
       LocalUnsupported -> {
-        {
+        ({
           drain_last = LocalUnsupported;
           drain_exhausted = false;
-        }
+        })
       }
     }
   }

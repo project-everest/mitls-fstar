@@ -276,28 +276,28 @@ ensures
       assert (pure (status == DriverNetworkStep \/ status == DriverFailed));
       match status {
         DriverNetworkStep -> {
-          {
+          ({
             driver_status = DriverNetworkStep;
             driver_process_result = Some process_result;
-          }
+          })
         }
         DriverFailed -> {
-          {
+          ({
             driver_status = DriverFailed;
             driver_process_result = Some process_result;
-          }
+          })
         }
         DriverLocalStep -> {
-          {
+          ({
             driver_status = DriverFailed;
             driver_process_result = Some process_result;
-          }
+          })
         }
         DriverDone -> {
-          {
+          ({
             driver_status = DriverFailed;
             driver_process_result = Some process_result;
-          }
+          })
         }
       }
     }
@@ -406,46 +406,46 @@ ensures
       assert (pure (status == DriverLocalStep \/ status == DriverFailed));
       match status {
         DriverLocalStep -> {
-          {
+          ({
             driver_status = DriverLocalStep;
             driver_process_result = Some process_result;
-          }
+          })
         }
         DriverFailed -> {
-          {
+          ({
             driver_status = DriverFailed;
             driver_process_result = Some process_result;
-          }
+          })
         }
         DriverNetworkStep -> {
-          {
+          ({
             driver_status = DriverFailed;
             driver_process_result = Some process_result;
-          }
+          })
         }
         DriverDone -> {
-          {
+          ({
             driver_status = DriverFailed;
             driver_process_result = Some process_result;
-          }
+          })
         }
       }
     }
     PE.EndpointDone -> {
       let cancel_action = endpoint.PE.pe_cancel_action;
       cancel_action i cfg frame st PE.EndpointDone;
-      {
+      ({
         driver_status = DriverDone;
         driver_process_result = None;
-      }
+      })
     }
     PE.EndpointFailed -> {
       let cancel_action = endpoint.PE.pe_cancel_action;
       cancel_action i cfg frame st PE.EndpointFailed;
-      {
+      ({
         driver_status = DriverFailed;
         driver_process_result = None;
-      }
+      })
     }
   }
 }
@@ -517,10 +517,10 @@ fn rec drive_steps
   decreases (SZ.v fuel)
   {
     if (fuel = 0sz) {
-      {
+      ({
         driver_run_status = DriverRunFuelExhausted;
         driver_run_last_step = None;
-      }
+      })
     } else {
       assert (pure (0 < SZ.v fuel));
       let step = drive_once i cfg frame ch received sent st;
@@ -574,10 +574,10 @@ fn rec drive_steps
           drive_steps i cfg frame ch next_fuel received1 sent1 st1
         }
         DriverDone -> {
-          {
+          ({
             driver_run_status = DriverRunDone;
             driver_run_last_step = step.driver_process_result;
-          }
+          })
         }
         DriverFailed -> {
           with received1 sent1 st1.
@@ -599,10 +599,10 @@ fn rec drive_steps
                 (Ghost.reveal received1)
                 (Ghost.reveal sent1)
                 (Ghost.reveal st1));
-          {
+          ({
             driver_run_status = DriverRunFailed;
             driver_run_last_step = step.driver_process_result;
-          }
+          })
         }
       }
     }

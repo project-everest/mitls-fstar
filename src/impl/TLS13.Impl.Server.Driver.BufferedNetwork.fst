@@ -1474,10 +1474,10 @@ fn read
         'credential_identity
         'buffered
         'buffered_len);
-      {
+      ({
         local_write_resp = resp;
         local_write_written = written;
-      }
+      })
     }
 
     noextract
@@ -1856,10 +1856,10 @@ fn drive
       let pending_len =
         finish_owns
           e d 'certificate_chain 'credential_identity network_out app_out;
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveProgress network consumed fuel_left -> {
       with st1 received' committed' model'.
@@ -1884,10 +1884,10 @@ fn drive
       let pending_len =
         finish_owns
           e d 'certificate_chain 'credential_identity network_out app_out;
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveYield network consumed output fuel_left -> {
       with st1 received' committed' model'.
@@ -1913,10 +1913,10 @@ fn drive
       let pending_len =
         finish_owns
           e d 'certificate_chain 'credential_identity network_out app_out;
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveReject network error fuel_left -> {
       with st1 received'.
@@ -1944,10 +1944,10 @@ fn drive
       let pending_len =
         finish_owns
           e d 'certificate_chain 'credential_identity network_out app_out;
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
     BS.DriveBufferFull network fuel_left -> {
       with st1 received'.
@@ -1975,10 +1975,10 @@ fn drive
       let pending_len =
         finish_owns
           e d 'certificate_chain 'credential_identity network_out app_out;
-      {
+      ({
         completed_drive_outcome = outcome;
         completed_drive_pending_len = pending_len;
-      }
+      })
     }
   }
 }

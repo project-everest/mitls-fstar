@@ -1629,77 +1629,77 @@ fn next_local_action
     CQ.can_send_key_update_runtime c network_out_len;
 
   if start_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalStartHandshake;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if client_hello_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalSendClientHello;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if derive_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalDeriveSharedSecret;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if client_handshake_keys_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalInstallClientHandshakeTrafficKeys;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if server_handshake_keys_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalInstallServerHandshakeTrafficKeys;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if certificate_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalValidateCertificate;
       CT.next_local_payload = CT.LocalPayloadCertificatePublicKey;
-    }
+    })
   } else if certificate_signature_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalVerifyCertificateSignature;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if finished_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalVerifyFinished;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if client_application_keys_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalInstallClientApplicationTrafficKeys;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if server_application_keys_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalInstallServerApplicationTrafficKeys;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if client_finished_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalSendClientFinished;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else if key_update_ready {
-    {
+    ({
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalSendKeyUpdate;
       CT.next_local_payload = CT.LocalPayloadNone;
-    }
+    })
   } else {
     no_action
   }

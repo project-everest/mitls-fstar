@@ -167,11 +167,11 @@ fn next_local_action
       'st0.CS.cs_model
       (CS.ConnLocalEvent CS.LocalStartServer)));
     assert (pure (CM.can_start_server 'st0));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalStartServer;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if select_server_parameters_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsClientHelloReceived));
@@ -182,11 +182,11 @@ fn next_local_action
       'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
     assert (pure (Some?
       'st0.CS.cs_model.CS.model_config.CS.config_server));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSelectServerParameters;
       ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
-    }
+    })
   } else if derive_shared_secret_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsClientHelloReceived));
@@ -201,11 +201,11 @@ fn next_local_action
         'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
           Some selection.CS.server_selected_client_hello
       | None -> False));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalDeriveSharedSecret;
       ST.next_local_payload = ST.LocalPayloadServerPrivateKey;
-    }
+    })
   } else if send_server_hello_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsClientHelloReceived));
@@ -221,11 +221,11 @@ fn next_local_action
         CS.server_selected_kex_group selection == CM.stored_client_hello_kex_group 'st0 /\
         Some? selection.CS.server_key_share_private
       | None -> False));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendServerHello;
       ST.next_local_payload = ST.LocalPayloadServerRandomAndPrivateKey;
-    }
+    })
   } else if server_handshake_write_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
@@ -243,11 +243,11 @@ fn next_local_action
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret));
     assert (pure (not (Some?
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalInstallServerHandshakeTrafficKeys;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if client_handshake_read_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
@@ -265,11 +265,11 @@ fn next_local_action
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret));
     assert (pure (not (Some?
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalInstallClientHandshakeTrafficKeys;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if send_encrypted_extensions_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerHelloSent));
@@ -288,11 +288,11 @@ fn next_local_action
         CL.message_value =
           M.TlsHandshake (M.EncryptedExtensions ([] <: GEE.encryptedExtensions));
       })));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendEncryptedExtensions;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if send_certificate_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
@@ -322,11 +322,11 @@ fn next_local_action
       B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 13 +
         B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
           Bounds.max_transcript_len));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificate;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if sign_certificate_verify_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
@@ -335,11 +335,11 @@ fn next_local_action
     assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None));
     assert (pure (
       'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSignCertificateVerify;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if send_certificate_verify_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
@@ -366,11 +366,11 @@ fn next_local_action
         CL.message_direction = CL.Sent;
         CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
       })));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificateVerify;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if send_server_finished_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
@@ -383,11 +383,11 @@ fn next_local_action
     assert (pure (
       B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
         Bounds.max_transcript_len));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendServerFinished;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if server_application_write_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 16uy));
@@ -405,11 +405,11 @@ fn next_local_action
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret));
     assert (pure (not (Some?
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalInstallServerApplicationTrafficKeys;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if client_application_read_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 17uy));
@@ -427,11 +427,11 @@ fn next_local_action
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret));
     assert (pure (not (Some?
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalInstallClientApplicationTrafficKeys;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else if verify_client_finished_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 17uy));
@@ -477,17 +477,17 @@ fn next_local_action
       assert (pure (
         B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
           Bounds.max_transcript_len));
-      {
+      ({
         ST.next_local_ready = true;
         ST.next_local_kind = ST.LocalVerifyClientFinished;
         ST.next_local_payload = ST.LocalPayloadNone;
-      }
+      })
     } else {
-      {
+      ({
         ST.next_local_ready = false;
         ST.next_local_kind = ST.LocalFail;
         ST.next_local_payload = ST.LocalPayloadNone;
-      }
+      })
     }
   } else if key_update_response_ready {
     // RFC 8446 4.6.3: a received KeyUpdate with update_requested obliges us to
@@ -498,17 +498,17 @@ fn next_local_action
     assert (pure ('st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending));
     assert (pure (Some?
       'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
-    {
+    ({
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendKeyUpdate;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   } else {
-    {
+    ({
       ST.next_local_ready = false;
       ST.next_local_kind = ST.LocalFail;
       ST.next_local_payload = ST.LocalPayloadNone;
-    }
+    })
   }
 }
 

@@ -180,10 +180,10 @@ fn rec await_peer_close_notify
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
-    {
+    ({
       close_workflow_status = DriverWorkflowExhausted;
       close_workflow_pending_len = buffered_len;
-    }
+    })
   } else {
     unfold (top_driver_exactly d 'st0 'buffered buffered_len);
     let snapshot = driver_control_snapshot d.top_driver_core;
@@ -192,10 +192,10 @@ fn rec await_peer_close_notify
     let closed = snapshot.CR.snapshot_control_tag = 4uy;
     if closed {
       lemma_control_snapshot_closed snapshot 'st0;
-      {
+      ({
         close_workflow_status = DriverWorkflowClosed;
         close_workflow_pending_len = buffered_len;
-      }
+      })
     } else {
       let network =
         driver_progress_buffered_network_step
@@ -238,19 +238,19 @@ fn rec await_peer_close_notify
         }
         BS.DriveProgress _ _ _ -> {
           assert (pure False);
-          {
+          ({
             close_workflow_status = DriverWorkflowStepFailed;
             close_workflow_pending_len =
               network.BN.completed_drive_pending_len;
-          }
+          })
         }
         BS.DriveBufferFull _ _ -> {
           assert (pure False);
-          {
+          ({
             close_workflow_status = DriverWorkflowStepFailed;
             close_workflow_pending_len =
               network.BN.completed_drive_pending_len;
-          }
+          })
         }
         BS.DriveReject _ _ _ -> {
           let result = {

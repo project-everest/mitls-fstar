@@ -381,10 +381,10 @@ fn rec receive_loop
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
-    {
+    ({
       loop_status = BufferedReceiveExhausted;
       loop_len = 0sz;
-    }
+    })
   } else {
     let fuel_positive = Ghost.hide (SZ.v fuel > 0);
     assert (pure (SZ.v fuel > 0));
@@ -398,30 +398,30 @@ fn rec receive_loop
       'st0 st1 (Ghost.reveal 'old_output) output drive;
     match drive.BN.completed_drive_outcome {
       BS.DriveExhausted -> {
-        {
+        ({
           loop_status = BufferedReceiveExhausted;
           loop_len = 0sz;
-        }
+        })
       }
       BS.DriveReject _ _ _ -> {
-        {
+        ({
           loop_status = BufferedReceiveFailed;
           loop_len = 0sz;
-        }
+        })
       }
       BS.DriveProgress _ _ _ -> {
         assert (pure False);
-        {
+        ({
           loop_status = BufferedReceiveFailed;
           loop_len = 0sz;
-        }
+        })
       }
       BS.DriveBufferFull _ _ -> {
         assert (pure False);
-        {
+        ({
           loop_status = BufferedReceiveFailed;
           loop_len = 0sz;
-        }
+        })
       }
       BS.DriveYield network consumed proof response -> {
         lemma_yield_preserves_not_failed
@@ -433,20 +433,20 @@ fn rec receive_loop
         if (application_len <> 0sz) {
           assert (pure (SZ.v application_len <= SZ.v out_len));
           assert (pure (drive_delivered_len drive == SZ.v application_len));
-          {
+          ({
             loop_status = BufferedReceiveOk;
             loop_len = application_len;
-          }
+          })
         } else {
           assert (pure (drive_delivered_len drive == 0));
           let control = query_control d;
           let closed = control.CR.snapshot_control_tag = 4uy;
           if closed {
             lemma_control_snapshot_closed control st1;
-            {
+            ({
               loop_status = BufferedReceiveClosed;
               loop_len = 0sz;
-            }
+            })
           } else {
             assert (pure (SZ.v fuel > 0));
             let next_fuel = SZ.sub fuel 1sz;
@@ -614,10 +614,10 @@ fn run
   CPI.lemma_bytes_extends_refl (Ghost.reveal wire_sent0);
   let output_fits = SZ.lte DS.driver_app_out_capacity out_len;
   if (output_fits = false) {
-    {
+    ({
       receive_status = BufferedReceiveOutputBufferTooSmall;
       receive_len = 0sz;
-    }
+    })
   } else {
     CImpl.take_channel_snapshot
       d wire_received0 wire_sent0 pending0 app_log0;
@@ -658,10 +658,10 @@ fn run
           (Ghost.hide credential_identity)
           (Ghost.hide received1)
           (Ghost.hide sent1);
-        {
+        ({
           receive_status = BufferedReceiveOk;
           receive_len = loop.loop_len;
-        }
+        })
       }
       BufferedReceiveExhausted -> {
         BC.pack_connected_channel_invariant
@@ -671,10 +671,10 @@ fn run
           (Ghost.hide credential_identity)
           (Ghost.hide received1)
           (Ghost.hide sent1);
-        {
+        ({
           receive_status = BufferedReceiveExhausted;
           receive_len = loop.loop_len;
-        }
+        })
       }
       BufferedReceiveOutputBufferTooSmall -> {
         BC.pack_connected_channel_invariant
@@ -684,10 +684,10 @@ fn run
           (Ghost.hide credential_identity)
           (Ghost.hide received1)
           (Ghost.hide sent1);
-        {
+        ({
           receive_status = BufferedReceiveOutputBufferTooSmall;
           receive_len = loop.loop_len;
-        }
+        })
       }
       BufferedReceiveClosed -> {
         BC.pack_connected_channel_terminal
@@ -697,10 +697,10 @@ fn run
           (Ghost.hide credential_identity)
           (Ghost.hide received1)
           (Ghost.hide sent1);
-        {
+        ({
           receive_status = BufferedReceiveClosed;
           receive_len = loop.loop_len;
-        }
+        })
       }
       BufferedReceiveFailed -> {
         BC.pack_connected_channel_terminal
@@ -710,10 +710,10 @@ fn run
           (Ghost.hide credential_identity)
           (Ghost.hide received1)
           (Ghost.hide sent1);
-        {
+        ({
           receive_status = BufferedReceiveFailed;
           receive_len = loop.loop_len;
-        }
+        })
       }
     }
   }
