@@ -1053,7 +1053,12 @@ let lemma_step_client_start
       (requires
         CS.legal_event m0 ev /\ CS.step_model m0 ev == Some m1 /\ start_ok_model m0)
       (ensures start_ok_model m1)
-  = CSL.lemma_step_model_preserves_config m0 ev m1
+  = CSL.lemma_step_model_preserves_config m0 ev m1;
+    match ev with
+    | CS.ConnNetworkEvent _ -> ()
+    | CS.ConnProtectedHandshake _ -> ()
+    | CS.ConnLocalEvent (CS.LocalStartHandshake _) -> ()
+    | CS.ConnLocalEvent _ -> ()
 #pop-options
 
 (** A client step preserves the hello shape, hello-field values, config and the

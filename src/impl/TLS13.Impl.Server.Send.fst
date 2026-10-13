@@ -2323,6 +2323,10 @@ fn process_send_certificate_serialized
     B.empty
     network_out_bytes
     'old_app_out));
+  assert (pure (ST.local_event_kind_matches ST.LocalSendCertificate B.empty (Ghost.reveal ev)));
+  assert (pure (ST.local_payload_matches_app_sent_delta ST.LocalSendCertificate B.empty (Ghost.reveal ev)));
+  assert (pure (ST.local_event_supported_profile ST.LocalSendCertificate B.empty (Ghost.reveal ev)));
+  assert (pure (TLS13.Spec.StateMachine.Canonical.sent_event_seal_projection 'st0.CS.cs_model (Ghost.reveal ev) network_out_bytes));
   assert (pure (ST.legal_local_response
     'st0
     (CM.sent_certificate_state 'st0 (Ghost.reveal cert) network_out_bytes)
