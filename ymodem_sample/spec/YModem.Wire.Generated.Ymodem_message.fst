@@ -21,7 +21,6 @@ module PPE = LowParse.PulseParse.Enum
 module PPS = LowParse.PulseParse.Sum
 module PPBI = LowParse.PulseParse.BoundedInt
 module PPBILE = LowParse.PulseParse.BoundedIntLE
-module PPBY = LowParse.PulseParse.Bytes
 module PPBCVLI = LowParse.PulseParse.BCVLI
 module PPVG = LowParse.PulseParse.VLGen
 module PPVCL = LowParse.PulseParse.VCList
@@ -31,7 +30,6 @@ module PPLS = LowParse.PulseParse.List
 module PPAR = LowParse.PulseParse.Array
 module PPFD = LowParse.PulseParse.FLData
 module LPPS = LowParse.Pulse.Sum
-module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
@@ -259,6 +257,7 @@ let copyful_ymodem_message_cases (k: LP.sum_key ymodem_message_sum)
 
 let read_ymodem_message_sum
   : PPB.copyful_parse (PPS.vmatch_sum ymodem_message_sum ymodem_message_low ymodem_message_tag_of_low ymodem_message_mid_of_tag ymodem_message_casevmatch) ymodem_message_parser (PPS.sum_conv ymodem_message_sum ymodem_message_mid_of_tag ymodem_message_conv_of_tag) =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPS.copyful_parse_sum ymodem_message_sum ymodem_tag_repr_reader ymodem_tag_repr_jumper parse_ymodem_message_cases
     ymodem_message_low ymodem_message_tag_of_low ymodem_message_mid_of_tag ymodem_message_casevmatch ymodem_message_conv_of_tag copyful_ymodem_message_cases (_ by (LP.dep_enum_destr_tac ())) (_ by (LP.dep_maybe_enum_destr_t_tac ())) () ()
 
@@ -459,6 +458,7 @@ let ymodem_message_write_coerce_eq ()
     FStar.Classical.forall_intro ymodem_message_write_conv_eq
 
 let write_ymodem_message : PPB.l2r_safe_writer ymodem_message_vmatch ymodem_message_serializer ymodem_message_conv =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPB.l2r_safe_writer_coerce_mid write_ymodem_message_sum ymodem_message_vmatch ymodem_message_conv ymodem_message_gf (ymodem_message_write_coerce_eq ())
 
 let ymodem_message_accessor_tag : PPB.accessor ymodem_message_parser ymodem_tag_parser ymodem_message_clens_tag =
@@ -517,36 +517,42 @@ let ymodem_message_bytesize_eqn_crc_c x =
   (ymodem_empty_bytesize_eq (x))
 
 let ymodem_message_accessor_soh : PPB.accessor ymodem_message_parser ymodem_soh_body_parser ymodem_message_clens_soh =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload ymodem_message_sum ymodem_tag_repr_jumper parse_ymodem_message_cases (ymodem_tag_as_enum_key Soh) ())
     ymodem_message_clens_soh
     ()
 
 let ymodem_message_accessor_eot : PPB.accessor ymodem_message_parser ymodem_empty_parser ymodem_message_clens_eot =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload ymodem_message_sum ymodem_tag_repr_jumper parse_ymodem_message_cases (ymodem_tag_as_enum_key Eot) ())
     ymodem_message_clens_eot
     ()
 
 let ymodem_message_accessor_ack : PPB.accessor ymodem_message_parser ymodem_empty_parser ymodem_message_clens_ack =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload ymodem_message_sum ymodem_tag_repr_jumper parse_ymodem_message_cases (ymodem_tag_as_enum_key Ack) ())
     ymodem_message_clens_ack
     ()
 
 let ymodem_message_accessor_nak : PPB.accessor ymodem_message_parser ymodem_empty_parser ymodem_message_clens_nak =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload ymodem_message_sum ymodem_tag_repr_jumper parse_ymodem_message_cases (ymodem_tag_as_enum_key Nak) ())
     ymodem_message_clens_nak
     ()
 
 let ymodem_message_accessor_can : PPB.accessor ymodem_message_parser ymodem_empty_parser ymodem_message_clens_can =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload ymodem_message_sum ymodem_tag_repr_jumper parse_ymodem_message_cases (ymodem_tag_as_enum_key Can) ())
     ymodem_message_clens_can
     ()
 
 let ymodem_message_accessor_crc_c : PPB.accessor ymodem_message_parser ymodem_empty_parser ymodem_message_clens_crc_c =
+  assert_norm (LP.parse_sum_kind (LP.get_parser_kind ymodem_tag_repr_parser) ymodem_message_sum parse_ymodem_message_cases == ymodem_message_parser_kind);
   PPC.accessor_ext
     (PPS.accessor_clens_sum_payload ymodem_message_sum ymodem_tag_repr_jumper parse_ymodem_message_cases (ymodem_tag_as_enum_key Crc_c) ())
     ymodem_message_clens_crc_c

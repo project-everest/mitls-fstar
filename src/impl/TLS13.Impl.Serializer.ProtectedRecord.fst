@@ -29,7 +29,7 @@ module LP = LowParse.Spec
 module LPC = LowParse.Pulse.Combinators
 module LPS = LowParse.Pulse.Base
 module LSeqB = LowParse.Pulse.SeqBytes
-module PPBY = LowParse.PulseParse.Bytes
+module PPBY = LowParse.Pulse.SeqBytes
 module Slice = Pulse.Lib.Slice
 
 let application_data_header_bytes (n:nat) : GTot (b:B.bytes{B.length b == 5}) =

@@ -12,7 +12,6 @@ module LPS = LowParse.Pulse.Base
 module LT = LowParse.TacLib
 module PPB = LowParse.PulseParse.Base
 module PPC = LowParse.PulseParse.Combinators
-module PPBY = LowParse.PulseParse.Bytes
 module PPVD = LowParse.PulseParse.VLData
 module PPAR = LowParse.PulseParse.Array
 module PPVCL = LowParse.PulseParse.VCList
@@ -29,7 +28,6 @@ module PPDER = LowParse.Pulse.DER
 module PPLS = LowParse.PulseParse.List
 module PPFD = LowParse.PulseParse.FLData
 module LPPS = LowParse.Pulse.Sum
-module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
@@ -52,7 +50,7 @@ val clientHello_legacy_session_id_validator: LPS.validator clientHello_legacy_se
 
 val clientHello_legacy_session_id_jumper: LPS.jumper clientHello_legacy_session_id_parser
 
-let clientHello_legacy_session_id_lowtype = PPBY.lvec FStar.UInt8.t
+let clientHello_legacy_session_id_lowtype = LSeqB.lvec FStar.UInt8.t
 
 noextract let clientHello_legacy_session_id_mid = Seq.seq FStar.UInt8.t
 

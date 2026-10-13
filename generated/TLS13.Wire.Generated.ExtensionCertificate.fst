@@ -21,7 +21,6 @@ module PPE = LowParse.PulseParse.Enum
 module PPS = LowParse.PulseParse.Sum
 module PPBI = LowParse.PulseParse.BoundedInt
 module PPBILE = LowParse.PulseParse.BoundedIntLE
-module PPBY = LowParse.PulseParse.Bytes
 module PPBCVLI = LowParse.PulseParse.BCVLI
 module PPVG = LowParse.PulseParse.VLGen
 module PPVCL = LowParse.PulseParse.VCList
@@ -31,7 +30,6 @@ module PPLS = LowParse.PulseParse.List
 module PPAR = LowParse.PulseParse.Array
 module PPFD = LowParse.PulseParse.FLData
 module LPPS = LowParse.Pulse.Sum
-module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 

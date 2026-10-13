@@ -31,7 +31,7 @@ module Trade = Pulse.Lib.Trade.Util
 module LP = LowParse.Spec
 module LPS = LowParse.Pulse.Base
 module PPB = LowParse.PulseParse.Base
-module PPBY = LowParse.PulseParse.Bytes
+module PPBY = LowParse.Pulse.SeqBytes
 module LSeqB = LowParse.Pulse.SeqBytes
 
 module GHS = TLS13.Wire.Generated.Handshake
@@ -2690,7 +2690,7 @@ fn copy_session_id_prefix_into
 (* Copy a legacy_session_id / legacy_session_id_echo lvec VERBATIM into the
    prefix of a fixed 32-byte destination vec, zeroing the tail, and return the
    width.  [lvec_len] is a sound runtime stand-in for the ghost vector length
-   (see the refinement on LowParse.PulseParse.Bytes.lvec), so this needs no
+   (see the refinement on LowParse.Pulse.SeqBytes.lvec), so this needs no
    length lookup.
 
    RFC 8446 4.1.3 requires the server to echo `legacy_session_id` back

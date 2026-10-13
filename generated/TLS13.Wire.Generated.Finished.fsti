@@ -12,7 +12,6 @@ module LPS = LowParse.Pulse.Base
 module LT = LowParse.TacLib
 module PPB = LowParse.PulseParse.Base
 module PPC = LowParse.PulseParse.Combinators
-module PPBY = LowParse.PulseParse.Bytes
 module PPVD = LowParse.PulseParse.VLData
 module PPAR = LowParse.PulseParse.Array
 module PPVCL = LowParse.PulseParse.VCList
@@ -29,7 +28,6 @@ module PPDER = LowParse.Pulse.DER
 module PPLS = LowParse.PulseParse.List
 module PPFD = LowParse.PulseParse.FLData
 module LPPS = LowParse.Pulse.Sum
-module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
@@ -52,7 +50,7 @@ let finished_jumper: LPS.jumper finished_parser = LPS.jump_constant_size finishe
 
 val finished_bytesize_eqn (x: finished) : Lemma (finished_bytesize x == Seq.length x) [SMTPat (finished_bytesize x)]
 
-let finished_lowtype = PPBY.lvec FStar.UInt8.t
+let finished_lowtype = LSeqB.lvec FStar.UInt8.t
 
 noextract let finished_mid = Seq.seq FStar.UInt8.t
 

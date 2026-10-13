@@ -12,7 +12,6 @@ module LPS = LowParse.Pulse.Base
 module LT = LowParse.TacLib
 module PPB = LowParse.PulseParse.Base
 module PPC = LowParse.PulseParse.Combinators
-module PPBY = LowParse.PulseParse.Bytes
 module PPVD = LowParse.PulseParse.VLData
 module PPAR = LowParse.PulseParse.Array
 module PPVCL = LowParse.PulseParse.VCList
@@ -29,7 +28,6 @@ module PPDER = LowParse.Pulse.DER
 module PPLS = LowParse.PulseParse.List
 module PPFD = LowParse.PulseParse.FLData
 module LPPS = LowParse.Pulse.Sum
-module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
@@ -60,10 +58,24 @@ let string_of_ymodem_tag = function
     Crc_c, 67z;
   ] in
   [@inline_let] let _ =
-    assert_norm (L.noRepeats (LP.list_map fst e))
+    assert_norm (L.noRepeats (LP.list_map fst [
+    Soh, 1z;
+    Eot, 4z;
+    Ack, 6z;
+    Nak, 21z;
+    Can, 24z;
+    Crc_c, 67z;
+  ]))
   in
   [@inline_let] let _ = 
-    assert_norm (L.noRepeats (LP.list_map snd e))
+    assert_norm (L.noRepeats (LP.list_map snd [
+    Soh, 1z;
+    Eot, 4z;
+    Ack, 6z;
+    Nak, 21z;
+    Can, 24z;
+    Crc_c, 67z;
+  ]))
   in e
 
 inline_for_extraction noextract let ymodem_tag_parser_kind = LP.strong_parser_kind 1 1 None

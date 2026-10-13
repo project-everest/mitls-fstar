@@ -19,7 +19,7 @@ CACHE_DIRECTORY := cache$(LAX_EXT)
 OUTPUT_DIRECTORY := krml
 FSTAR_DEP_FILE := .depend$(LAX_EXT)
 FSTAR_FILES := $(wildcard *.fst *.fsti)
-FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice'
+FSTAR_DEP_OPTIONS :=
 
 clean_rules += clean-local
 
