@@ -66,11 +66,11 @@ build-progs:
 	@echo "Compiling TFTP interop drivers over the VERIFIED loops..."
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/tftp_server \
 	  tftp_server.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/TFTP_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/tftp_client \
 	  tftp_client.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/TFTP_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "Interop drivers tftp_server / tftp_client (verified loops) compiled to $(EXTRACT_DIR)/."
 

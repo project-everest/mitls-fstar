@@ -167,20 +167,13 @@ IMPL_MODULES = \
   Calc.Server.Endpoint \
   Calc.Server.EndpointRunner
 
-COMMON_EXTRACT_MODULES = \
-  Common.TCP \
-  Common.StateMachine \
-  Common.WireFormat \
-  Common.WireFormatStateMachine \
-  Common.ProtocolImplementation \
-  Common.ProtocolEndpoint \
-  Common.ProtocolDriver
-
-# Convert module names to .krml filenames
-KRML_FILES = \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(COMMON_EXTRACT_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES))) \
-  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+# Custard (F*'s whole-program extractor) extracts, from the checked files, the
+# endpoint runner test_main.c calls and everything it reaches, into one .krml
+# with one karamel file per F* module (--custard_split).  It takes a single file
+# on the command line and loads the other modules on demand.  Common.TCP's
+# abstract types are defined by c_stubs/common_tcp_karamel.h.
+CUSTARD_KRML = $(OUTPUT_DIR)/Custard.krml
+KRML_FILES = $(CUSTARD_KRML)
 
 $(OUTPUT_DIR):
 	@mkdir -p $@
@@ -189,33 +182,13 @@ $(EXTRACT_DIR):
 	@mkdir -p $@
 
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
-$(OUTPUT_DIR)/Common_TCP.krml: verify | $(OUTPUT_DIR)
-	@echo "Extracting Common.TCP to .krml"
-	@$(FSTAR) --codegen krml \
-	  --extract_module Common.TCP \
-	  --odir $(OUTPUT_DIR) \
-	  ../common/Common.TCP.fsti --krmloutput $@
-
-$(OUTPUT_DIR)/Common_%.krml: verify | $(OUTPUT_DIR)
-	@echo "Extracting Common.$(subst _,.,$*) to .krml"
-	@$(FSTAR) --codegen krml \
-	  --extract_module Common.$(subst _,.,$*) \
-	  --odir $(OUTPUT_DIR) \
-	  ../common/Common.$(subst _,.,$*).fst
-
-# Pattern rule: _output/Calc_Server.krml from Calc.Server
-$(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
-	@echo "Extracting $(subst _,.,$*) to .krml"
-	@$(FSTAR) --codegen krml \
-	  --extract_module $(subst _,.,$*) \
-	  --odir $(OUTPUT_DIR) \
-	  $(IMPL_DIR)/$(subst _,.,$*).fst
-
-$(OUTPUT_DIR)/FStar_Pervasives_Native.krml: | $(OUTPUT_DIR)
-	@echo "Extracting FStar.Pervasives.Native to .krml"
-	@$(FSTAR_EXE) --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
-	  --codegen krml --extract_module FStar.Pervasives.Native \
-	  $(FSTAR_LIB)/ulib/FStar.Pervasives.Native.fst --krmloutput $@
+$(CUSTARD_KRML): verify | $(OUTPUT_DIR)
+	@echo "Extracting Calc.Server.EndpointRunner to .krml"
+	@$(FSTAR) --codegen KrmlC --custard_split \
+	  --custard_entry Calc.Server.EndpointRunner.run_channel_endpoint \
+	  --custard_extern_type Common.TCP.channel \
+	  --custard_extern_type Common.TCP.listener \
+	  $(IMPL_DIR)/Calc.Server.EndpointRunner.fst -o $@
 
 extract-krml: $(KRML_FILES)
 	@echo "✅ All modules extracted to .krml"

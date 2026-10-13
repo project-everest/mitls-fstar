@@ -8,19 +8,29 @@ KRML=$EP/opt/karamel/out/bin/krml
 cd "$(dirname "$0")"
 F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include $LP/pulse --include spec --include impl"
 
-MODS="YModem.Impl.Codec YModem.Impl.Client.CanonicalProtocol YModem.Impl.Client.Loop YModem.Impl.Server.Plan YModem.Impl.Server.CanonicalProtocol YModem.Impl.Server.Loop Common.ProtocolImplementation"
+MODS="YModem.Impl.Codec YModem.Impl.Client.CanonicalProtocol YModem.Impl.Client.Loop YModem.Impl.Server.Plan YModem.Impl.Server.CanonicalProtocol YModem.Impl.Server.Loop"
 
-for M in $MODS; do
-  KM=_output/$(echo "$M" | tr . _).krml
-  case "$M" in
-    Common.ProtocolImplementation) SRC=../common/Common.ProtocolImplementation.fst ;;
-    *) SRC=impl/$M.fst ;;
-  esac
-  $FS $F --codegen krml --extract_module "$M" --odir _output "$SRC" --krmloutput "$KM" >/dev/null 2>&1
-done
-
-KRMLS=""
-for M in $MODS; do KRMLS="$KRMLS _output/$(echo "$M" | tr . _).krml"; done
+# Custard (F*'s whole-program extractor) extracts, from the checked files, the
+# functions the C drivers in verified/ and interop/ call and everything they
+# reach, into one .krml with one karamel file per F* module (--custard_split).
+# Extraction is by reachability, so these roots are the whole C surface.  Custard
+# takes a single file on the command line and loads the other modules on demand.
+ENTRIES=""
+for E in \
+  YModem.Impl.Codec.ymodem_emit_data_block \
+  YModem.Impl.Codec.ymodem_recv_data_block \
+  YModem.Impl.Client.CanonicalProtocol.new_ymodem_client \
+  YModem.Impl.Client.Loop.ymodem_client_start \
+  YModem.Impl.Client.Loop.ymodem_client_run \
+  YModem.Impl.Server.CanonicalProtocol.new_ymodem_server \
+  YModem.Impl.Server.Loop.ymodem_server_run \
+  ; do ENTRIES="$ENTRIES --custard_entry $E"; done
+EXTERN_TYPES="--custard_extern_type Common.TCP.channel --custard_extern_type Common.TCP.listener"
+set -- $MODS
+SRC=impl/$1.fst
+mkdir -p _output
+$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.krml >/dev/null
+KRMLS=_output/Custard.krml
 
 rm -rf _extract
 mkdir -p _extract

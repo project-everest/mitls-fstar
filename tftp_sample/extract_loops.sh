@@ -14,19 +14,27 @@ export PATH=$EP/opt/z3:$PATH
 cd "$(dirname "$0")"
 F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include $LP/pulse --include spec --include impl"
 
-MODS="TFTP.Impl.Codec TFTP.Impl.Client.CanonicalProtocol TFTP.Impl.Client.Loop TFTP.Impl.Server.Plan TFTP.Impl.Server.CanonicalProtocol TFTP.Impl.Server.Loop Common.ProtocolImplementation"
+MODS="TFTP.Impl.Codec TFTP.Impl.Client.CanonicalProtocol TFTP.Impl.Client.Loop TFTP.Impl.Server.Plan TFTP.Impl.Server.CanonicalProtocol TFTP.Impl.Server.Loop"
 
-for M in $MODS; do
-  KM=_output/$(echo "$M" | tr . _).krml
-  case "$M" in
-    Common.ProtocolImplementation) SRC=../common/Common.ProtocolImplementation.fst ;;
-    *) SRC=impl/$M.fst ;;
-  esac
-  $FS $F --codegen krml --extract_module "$M" --odir _output "$SRC" --krmloutput "$KM" >/dev/null 2>&1
-done
-
-KRMLS=""
-for M in $MODS; do KRMLS="$KRMLS _output/$(echo "$M" | tr . _).krml"; done
+# Custard (F*'s whole-program extractor) extracts, from the checked files, the
+# functions the C drivers in verified/ and interop/ call and everything they
+# reach, into one .krml with one karamel file per F* module (--custard_split).
+# Extraction is by reachability, so these roots are the whole C surface.  Custard
+# takes a single file on the command line and loads the other modules on demand.
+ENTRIES=""
+for E in \
+  TFTP.Impl.Client.CanonicalProtocol.new_tftp_client \
+  TFTP.Impl.Client.Loop.tftp_client_start \
+  TFTP.Impl.Client.Loop.tftp_client_run \
+  TFTP.Impl.Server.CanonicalProtocol.new_tftp_server \
+  TFTP.Impl.Server.Loop.tftp_server_run \
+  ; do ENTRIES="$ENTRIES --custard_entry $E"; done
+EXTERN_TYPES="--custard_extern_type Common.TCP.channel --custard_extern_type Common.TCP.listener"
+set -- $MODS
+SRC=impl/$1.fst
+mkdir -p _output
+$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.krml >/dev/null
+KRMLS=_output/Custard.krml
 
 rm -rf _extract
 mkdir -p _extract

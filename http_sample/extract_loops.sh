@@ -17,17 +17,70 @@ F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Pr
 
 MODS="HTTP.Impl.Codec.Chunked HTTP.Impl.Codec.Chunked.Stream HTTP.Impl.Loop.Chunked.Stream HTTP.Impl.Server.Loop HTTP.Impl.Client.Loop HTTP.Impl.Codec.Length HTTP.Impl.Server.Loop.Length HTTP.Impl.Client.Loop.Length HTTP.Impl.Codec.Request HTTP.Impl.Codec.Response HTTP.Impl.Client.Loop.Get HTTP.Impl.Codec.Header HTTP.Impl.Loop.Header HTTP.Impl.Codec.RequestLine HTTP.Impl.Loop.Request HTTP.Impl.Codec.RequestPost HTTP.Impl.Loop.RequestPost"
 
-for M in $MODS; do
-  KM=_output/$(echo "$M" | tr . _).krml
-  case "$M" in
-    HTTP.Wire.*) SRC=spec/$M.fst ;;
-    *)           SRC=impl/$M.fst ;;
-  esac
-  $FS $F --codegen krml --extract_module "$M" --odir _output "$SRC" --krmloutput "$KM" >/dev/null 2>&1
-done
-
-KRMLS=""
-for M in $MODS; do KRMLS="$KRMLS _output/$(echo "$M" | tr . _).krml"; done
+# Custard (F*'s whole-program extractor) extracts, from the checked files, the
+# functions the C drivers in verified/ and interop/ call and everything they
+# reach, into one .krml with one karamel file per F* module (--custard_split).
+# Extraction is by reachability, so these roots are the whole C surface.  Custard
+# takes a single file on the command line and loads the other modules on demand.
+ENTRIES=""
+for E in \
+  HTTP.Impl.Codec.Chunked.http_emit_chunk \
+  HTTP.Impl.Codec.Chunked.http_emit_empty_chunk \
+  HTTP.Impl.Codec.Chunked.http_peek_chunk_size \
+  HTTP.Impl.Codec.Chunked.http_recv_chunk \
+  HTTP.Impl.Codec.Chunked.Stream.http_decode_chunks \
+  HTTP.Impl.Codec.Chunked.Stream.http_decode_chunks_var \
+  HTTP.Impl.Loop.Chunked.Stream.http_server_send_stream \
+  HTTP.Impl.Loop.Chunked.Stream.http_client_recv_stream \
+  HTTP.Impl.Server.Loop.http_server_run \
+  HTTP.Impl.Client.Loop.http_client_run \
+  HTTP.Impl.Codec.Length.http_emit_body \
+  HTTP.Impl.Codec.Length.http_recv_body \
+  HTTP.Impl.Codec.Length.http_emit_request \
+  HTTP.Impl.Codec.Length.http_emit_response \
+  HTTP.Impl.Codec.Length.http_emit_response_var \
+  HTTP.Impl.Codec.Length.http_recv_response \
+  HTTP.Impl.Codec.Length.http_recv_request \
+  HTTP.Impl.Codec.Length.http_recv_request_head \
+  HTTP.Impl.Server.Loop.Length.http_server_run_length \
+  HTTP.Impl.Server.Loop.Length.http_server_run_length_full \
+  HTTP.Impl.Server.Loop.Length.http_server_exchange_length \
+  HTTP.Impl.Server.Loop.Length.http_server_exchange_length_head \
+  HTTP.Impl.Client.Loop.Length.http_client_run_length \
+  HTTP.Impl.Client.Loop.Length.http_client_run_length_full \
+  HTTP.Impl.Client.Loop.Length.http_client_exchange_length \
+  HTTP.Impl.Codec.Request.http_emit_request_host \
+  HTTP.Impl.Codec.Response.http_parse_status_line \
+  HTTP.Impl.Codec.Response.parse_dec_at \
+  HTTP.Impl.Codec.Response.http_parse_framing \
+  HTTP.Impl.Codec.Response.http_parse_response_head \
+  HTTP.Impl.Client.Loop.Get.recv_to_eof \
+  HTTP.Impl.Client.Loop.Get.http_get \
+  HTTP.Impl.Client.Loop.Get.http_get_body_chunked \
+  HTTP.Impl.Client.Loop.Get.http_get_body_chunked_var \
+  HTTP.Impl.Codec.Header.http_parse_header_field \
+  HTTP.Impl.Loop.Header.http_count_headers \
+  HTTP.Impl.Loop.Header.http_find_header \
+  HTTP.Impl.Loop.Header.http_header_dec \
+  HTTP.Impl.Loop.Header.http_parse_headers \
+  HTTP.Impl.Loop.Header.http_count_header_named \
+  HTTP.Impl.Loop.Header.http_request_framing_ok \
+  HTTP.Impl.Loop.Header.http_header_limits_ok \
+  HTTP.Impl.Loop.Header.http_connection_close \
+  HTTP.Impl.Codec.RequestLine.http_parse_request_line \
+  HTTP.Impl.Loop.Request.http_method_eq \
+  HTTP.Impl.Loop.Request.http_request_line_ok \
+  HTTP.Impl.Loop.Request.http_method_known \
+  HTTP.Impl.Loop.Request.http_method_allowed \
+  HTTP.Impl.Codec.RequestPost.http_emit_request_post \
+  HTTP.Impl.Loop.RequestPost.http_build_post_head \
+  ; do ENTRIES="$ENTRIES --custard_entry $E"; done
+EXTERN_TYPES="--custard_extern_type Common.TCP.channel --custard_extern_type Common.TCP.listener"
+set -- $MODS
+SRC=impl/$1.fst
+mkdir -p _output
+$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.krml >/dev/null
+KRMLS=_output/Custard.krml
 
 rm -rf _extract
 mkdir -p _extract

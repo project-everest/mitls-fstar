@@ -22,16 +22,14 @@ Common_TCP_channel Common_TCP_channel_of_fds(int rfd, int wfd);
 size_t Common_TCP_read_full(
     Common_TCP_channel ch,
     uint8_t *out,
-    size_t len,
-    ...);
+    size_t len);
 
 size_t Common_TCP_write(
     Common_TCP_channel ch,
     uint8_t *buf,
-    size_t len,
-    ...);
+    size_t len);
 
-void Common_TCP_close(Common_TCP_channel ch, ...);
+void Common_TCP_close(Common_TCP_channel ch);
 
 #endif
 

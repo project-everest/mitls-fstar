@@ -129,10 +129,9 @@ $(EXTRACT_DIR):
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
 $(OUTPUT_DIR)/TFTP_Impl_Codec.krml: verify | $(OUTPUT_DIR)
 	@echo "Extracting TFTP.Impl.Codec to .krml"
-	@$(FSTAR) --codegen krml \
-	  --extract_module TFTP.Impl.Codec \
-	  --odir $(OUTPUT_DIR) \
-	  $(IMPL_DIR)/TFTP.Impl.Codec.fst --krmloutput $@
+	@$(FSTAR) --codegen KrmlC --custard_split \
+	  --custard_entry_module TFTP.Impl.Codec \
+	  $(IMPL_DIR)/TFTP.Impl.Codec.fst -o $@
 
 extract-krml: $(KRML_FILES)
 	@echo "All implementation modules extracted to .krml"
@@ -185,7 +184,7 @@ vloop-test: extract-loops
 	@echo "Building the verified-loop transfer test ..."
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
 	  $(VERIFIED_DIR)/vloop_test.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/TFTP_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server loop  ->  verified client loop  (over a SOCK_DGRAM socketpair)"

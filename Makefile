@@ -90,7 +90,7 @@ INCLUDES = \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse
 
-FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*'
+FSTAR_DEP_OPTIONS :=
 
 EXTRACT_DEBUG ?= 0
 ATLAS_LOGGING ?= 0
@@ -404,18 +404,9 @@ check-admits:
 	  echo "0 admit(s) found"; \
 	fi
 
-# ── Extraction Bundles ─────────────────────────────────────────────
-# List of modules to extract (dotted names)
-EXTRACT_MODULES = \
-  $(BUNDLE_IMPL_MODULES)
-
-# Convert module names to .krml filenames
-KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
-
+# ── Extraction ─────────────────────────────────────────────────────
 .PHONY: extract-krml extract-connection \
   extract-tls13-driver-krml extract-tls13-bundle
-
-extract-krml: $(KRML_FILES)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # KaRaMeL Extraction - .krml to C
@@ -517,21 +508,12 @@ BUNDLE_INTERNAL_MODULES = \
 # Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
 # models remain under src/spec/assumptions.
 
-FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
-
-# Extract the full dependency closure so calls through .fsti interfaces (notably
-# TLS13.Impl.Parser) resolve to their verified implementations.
-BUNDLE_KRML_FILES = $(filter-out \
-  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
-  $(OUTPUT_DIR)/TLS13_OpenSSL.krml \
-  $(OUTPUT_DIR)/Common_TCP.krml,$(FULL_KRML_FILES))
-
 TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_bundle
 TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
 TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj-logging-$(ATLAS_LOGGING)
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
-TLS13_DRIVER_KRML_STAMP = $(OUTPUT_DIR)/.tls13_driver_krml.stamp
+TLS13_CUSTARD_KRML = $(OUTPUT_DIR)/Custard.krml
 CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
@@ -571,35 +553,6 @@ CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.Client.Driver.Send \
   TLS13.Impl.Client.Driver.Receive \
   TLS13.Impl.Client.Driver.Close
-CLIENT_DRIVER_KRML_FILES = \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(filter-out $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml, \
-    $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(CLIENT_DRIVER_IMPL_MODULES)))) \
-  $(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml \
-  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver_Core.krml \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
-DRIVER_EXTRACT_SELECTOR = \
-  *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
-  +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
-  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
-  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
-  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
-  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Client.CanonicalProtocol,\
-  -TLS13.Impl.Client.CanonicalQueries,\
-  -TLS13.Impl.Driver.Pairing,-TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
-SERVER_DRIVER_EXTRACT_SELECTOR = \
-  *,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,\
-  +Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*,\
-  -Common.StateMachine,-Common.WireFormat,-Common.WireFormatStateMachine,\
-  -Common.ProtocolImplementation,-Common.ProtocolEndpoint,\
-  -TLS13.Impl.ConnectionStateQuery,-TLS13.Impl.CanonicalTypes,\
-  -TLS13.Spec.Endpoint.Wire,-TLS13.Impl.Server.CanonicalProtocol,\
-  -TLS13.Impl.Server.CanonicalQueries,\
-  -TLS13.Impl.Serializer,-TLS13.Impl.Serializer.*,\
-  -TLS13.Impl.Parser,-TLS13.Impl.Parser.*
-
 SERVER_DRIVER_MODULES = \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
@@ -646,123 +599,53 @@ SERVER_DRIVER_MODULES = \
   TLS13.Impl.Server.Driver.BufferedClose \
   TLS13.Impl.Server.Driver.Local \
   TLS13.Impl.Server.Driver
-SERVER_DRIVER_KRML_FILES = \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PULSE_RUNTIME_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERVER_DRIVER_MODULES))) \
-  $(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(PARSER_MODULES))) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERIALIZER_MODULES)))
 GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
-TLS13_BUNDLE_KRML_FILES = \
-  $(OUTPUT_DIR)/Common_BufferedTCP_Internal.krml \
-  $(OUTPUT_DIR)/Common_BufferedTCP.krml \
-  $(OUTPUT_DIR)/Common_BufferedStream.krml \
-  $(OUTPUT_DIR)/Common_Memmove.krml \
-  $(OUTPUT_DIR)/TLS13_Trace.krml \
-  $(OUTPUT_DIR)/FStar_Pervasives_Native.krml \
-  $(CLIENT_DRIVER_KRML_FILES) \
-  $(filter-out $(CLIENT_DRIVER_KRML_FILES),$(SERVER_DRIVER_KRML_FILES)) \
-  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(GENERATED_RUNTIME_MODULES)))
 
-# Extract FStar.Pervasives.Native for tuple support
-$(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
+# Custard (F*'s whole-program extractor, doc/ref/custard.md in the F* tree)
+# extracts the C library in one run, from the checked files, into a single
+# .krml holding one karamel file per F* module (--custard_split), which is what
+# the -bundle/-library/-drop flags of the karamel step select on.  Extraction is
+# by reachability, so the roots are exactly what hand-written C (runtime/,
+# test/unit/, the Chromium overlay) uses: the public interfaces of the client
+# driver, server driver and client engine (--custard_entry_module roots every
+# definition of a module's .fsti), plus a constant read by the server runtime.
+# Everything else they reach is extracted with them; what is reached of an
+# interface-only module (src/impl/extern, Common.TCP) becomes an external,
+# realized by the C stubs.
+TLS13_CUSTARD_ENTRY_MODULES = \
+  TLS13.Impl.Client.Driver \
+  TLS13.Impl.Server.Driver \
+  TLS13.Impl.Client.Engine
+TLS13_CUSTARD_ENTRIES = \
+  TLS13.Impl.ConnectionState.Bounds.max_server_certificate_chain_len_sz
+# Abstract types of the interface-only modules: the C stubs
+# (c_stubs/common_tcp_karamel.h, c_stubs/tls13_openssl_karamel.h) define them,
+# so the extracted C must name them without declaring them.
+TLS13_CUSTARD_EXTERN_TYPES = \
+  Common.TCP.channel \
+  Common.TCP.listener \
+  TLS13.OpenSSL.auth_config \
+  TLS13.OpenSSL.auth_context \
+  TLS13.OpenSSL.server_credentials
+# Custard takes a single file on the command line; it loads the checked files of
+# the entry modules on demand.
+TLS13_CUSTARD_ROOTS = src/impl/TLS13.Impl.Client.Driver.fst
+
+$(TLS13_CUSTARD_KRML): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify $(OUTPUT_DIR)
 	@start=$$(date +%s); \
-	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
-	  "$@" "FStar.Pervasives.Native" "FStar.Pervasives.Native.fst" "$$(date -Is)"; \
-	$(FSTAR_EXE) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
-	  --codegen krml --extract_module FStar.Pervasives.Native \
-	  --odir $(OUTPUT_DIR) --cache_dir $(CACHE_DIR) \
-	  --already_cached Prims,FStar \
-	  FStar.Pervasives.Native.fst; \
-	status=$$?; end=$$(date +%s); \
-	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "FStar.Pervasives.Native" "$$status" "$$((end-start))" "$$(date -Is)"; \
-	exit $$status
-
-$(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml,$(ALL_KRML_FILES)): | $(OUTPUT_DIR)/FStar_SizeT.krml
-
-$(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
-	@# Extract the *stock* standard-library FStar.SizeT to .krml, reusing the F*
-	@# install's already-cached FStar.SizeT.checked (--already_cached 'Prims,FStar'
-	@# keeps FStar.SizeT cached, so F* loads it rather than re-checking and never
-	@# rewrites the install's ulib.checked/FStar.SizeT.*.checked).  No stub, no
-	@# clobber/restore: the extracted client code calls no FStar.SizeT function
-	@# (v/uint_to_t stay noextract_to "krml"; all SizeT arithmetic/casts are KaRaMeL
-	@# builtins), so the stock module — where v/uint_to_t emit no C — works as-is.
-	@start=$$(date +%s); \
-	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
-	  "$@" "FStar.SizeT" "$(FSTAR_ULIB)/FStar.SizeT.fst" "$$(date -Is)"; \
-	$(FSTAR_EXE) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
-	  --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
-	  --codegen krml --extract_module FStar.SizeT \
-	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@; \
-	status=$$?; end=$$(date +%s); \
-	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "FStar.SizeT" "$$status" "$$((end-start))" "$$(date -Is)"; \
-	exit $$status
-
-$(OUTPUT_DIR)/TLS13_Client_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Client.Driver.fst Makefile | $(OUTPUT_DIR)
-	@start=$$(date +%s); \
-	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
-	  "$@" "TLS13.Impl.Client.Driver bundle" "src/impl/TLS13.Impl.Client.Driver.fst" "$$(date -Is)"; \
+	printf '[extract] Custard start target=%s at %s\n' "$@" "$$(date -Is)"; \
 	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
-	  --codegen krml --extract '$(DRIVER_EXTRACT_SELECTOR)' \
-	  src/impl/TLS13.Impl.Client.Driver.fst --krmloutput $@; \
+	  --codegen KrmlC --custard_split \
+	  $(addprefix --custard_entry_module ,$(TLS13_CUSTARD_ENTRY_MODULES)) \
+	  $(addprefix --custard_entry ,$(TLS13_CUSTARD_ENTRIES)) \
+	  $(addprefix --custard_extern_type ,$(TLS13_CUSTARD_EXTERN_TYPES)) \
+	  $(TLS13_CUSTARD_ROOTS) -o $@.tmp; \
 	status=$$?; end=$$(date +%s); \
-	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "TLS13.Impl.Client.Driver bundle" "$$status" "$$((end-start))" "$$(date -Is)"; \
-	exit $$status
+	printf '[extract] Custard end target=%s status=%s elapsed=%ss at %s\n' \
+	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	test $$status -eq 0 && mv $@.tmp $@
 
-$(OUTPUT_DIR)/TLS13_Server_Driver_Bundle.krml: verify src/impl/TLS13.Impl.Server.Driver.fst Makefile | $(OUTPUT_DIR)
-	@start=$$(date +%s); \
-	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
-	  "$@" "TLS13.Impl.Server.Driver bundle" "src/impl/TLS13.Impl.Server.Driver.fst" "$$(date -Is)"; \
-	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
-	  --codegen krml --extract '$(SERVER_DRIVER_EXTRACT_SELECTOR)' \
-	  src/impl/TLS13.Impl.Server.Driver.fst --krmloutput $@; \
-	status=$$?; end=$$(date +%s); \
-	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "TLS13.Impl.Server.Driver bundle" "$$status" "$$((end-start))" "$$(date -Is)"; \
-	exit $$status
-
-$(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
-	@target_base=$$(basename "$@" .krml); \
-	module=; src=; \
-	for ext in fst fsti; do \
-	  for dir in $(SOURCE_DIRS) \
-	      $(FSTAR_ULIB) $(FSTAR_PULSE_COMMON) $(FSTAR_PULSE_LIB); do \
-	    test -d "$$dir" || continue; \
-	    for candidate in "$$dir"/*.$$ext; do \
-	      test -f "$$candidate" || continue; \
-	      candidate_module=$$(basename "$$candidate" .$$ext); \
-	      candidate_base=$$(printf '%s' "$$candidate_module" | tr . _); \
-	      if test "$$candidate_base" = "$$target_base"; then \
-	        module=$$candidate_module; src=$$candidate; break 3; \
-	      fi; \
-	    done; \
-	  done; \
-	done; \
-	if test -z "$$module" || test -z "$$src"; then \
-	  echo "Could not locate F* source for $@"; \
-	  exit 1; \
-	fi; \
-	start=$$(date +%s); \
-	printf '[extract] F* start target=%s module=%s src=%s at %s\n' \
-	  "$@" "$$module" "$$src" "$$(date -Is)"; \
-	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
-	  --codegen krml --extract_module "$$module" "$$src" --krmloutput "$@"; \
-	status=$$?; end=$$(date +%s); \
-	printf '[extract] F* end target=%s module=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "$$module" "$$status" "$$((end-start))" "$$(date -Is)"; \
-	exit $$status
-
-extract-krml-bundle: $(BUNDLE_KRML_FILES)
-
-extract-tls13-driver-krml: $(TLS13_DRIVER_KRML_STAMP)
-
-$(TLS13_DRIVER_KRML_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify $(OUTPUT_DIR)
-	$(MAKE) $(TLS13_BUNDLE_KRML_FILES)
-	@touch $@
+extract-krml extract-tls13-driver-krml: $(TLS13_CUSTARD_KRML)
 
 $(BUNDLE_DIR):
 	mkdir -p $@
@@ -779,7 +662,7 @@ extract-tls13-bundle: $(TLS13_BUNDLE_STAMP)
 #    / TLS13.Transcript: these are pure specification modules.  KaRaMeL emits
 #    their (ghost) datatypes into a public header that references types it keeps
 #    private, which does not compile.  Nothing in the extracted C uses them.
-$(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
+$(TLS13_BUNDLE_STAMP): $(TLS13_CUSTARD_KRML) Makefile | $(TLS13_BUNDLE_DIR)
 	@echo "Extracting TLS13 client/server driver bundle..."
 	@rm -f $(TLS13_BUNDLE_DIR)/*.c $(TLS13_BUNDLE_DIR)/*.h $(TLS13_BUNDLE_DIR)/internal/*.h
 	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
@@ -809,7 +692,7 @@ $(TLS13_BUNDLE_STAMP): $(TLS13_DRIVER_KRML_STAMP) Makefile | $(TLS13_BUNDLE_DIR)
 	  -bundle 'LowParse.*' \
 	  -bundle 'FStar.*,PulseCore.*,Prims' \
 	  -warn-error -2-9-17-6 \
-	  $(TLS13_BUNDLE_KRML_FILES); \
+	  $(TLS13_CUSTARD_KRML); \
 	status=$$?; end=$$(date +%s); \
 	printf '[extract] KaRaMeL end target=%s status=%s elapsed=%ss at %s\n' \
 	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
@@ -1611,9 +1494,9 @@ $(HTTP_SAMPLE_VTLS_BIN): \
   $(HACL_TEST_OBJECTS) | check-deps
 	@$(MAKE) --no-print-directory -C $(HTTP_SAMPLE_DIR) extract-loops
 	@mkdir -p $(HTTP_SAMPLE_EXTRACT)/vtls_obj
-	@# The HTTP translation units are extracted against the VARIADIC Common.TCP
-	@# stub declarations (they pass erased ghost arguments), which clash with the
-	@# TLS13 bundle's strict Common_TCP.h -- so compile them on their own.
+	@# The HTTP translation units come from a separate karamel run with its own
+	@# generated headers (Common_TCP.h etc.), so compile them on their own rather
+	@# than against the TLS13 bundle's include directory.
 	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -DHTTP_VERIFIED_TLS \
 	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
 	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \

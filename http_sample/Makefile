@@ -133,10 +133,9 @@ $(EXTRACT_DIR):
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
 $(OUTPUT_DIR)/HTTP_Impl_Codec_Chunked.krml: verify | $(OUTPUT_DIR)
 	@echo "Extracting HTTP.Impl.Codec.Chunked to .krml"
-	@$(FSTAR) --codegen krml \
-	  --extract_module HTTP.Impl.Codec.Chunked \
-	  --odir $(OUTPUT_DIR) \
-	  $(IMPL_DIR)/HTTP.Impl.Codec.Chunked.fst --krmloutput $@
+	@$(FSTAR) --codegen KrmlC --custard_split \
+	  --custard_entry_module HTTP.Impl.Codec.Chunked \
+	  $(IMPL_DIR)/HTTP.Impl.Codec.Chunked.fst -o $@
 
 extract-krml: $(KRML_FILES)
 	@echo "All implementation modules extracted to .krml"

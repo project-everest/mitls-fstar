@@ -13,11 +13,11 @@
 set -euo pipefail
 
 EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/project-everest/everparse}"
-EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-fstar2}"
+EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-master}"
 # Pinned EverParse commit this project is verified against.  The branch above is
 # only used as a fetch hint; the build always checks out this exact commit so the
 # toolchain is reproducible regardless of where the branch tip has moved.
-EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-d89dc7573f6136dfb0c179fcdc35adea85aa8219}"
+EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-8a1ee016d6ca80e1b749981bbed5d98c1e80393b}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Default location: tools/everparse inside the agentic-tls checkout (matches the

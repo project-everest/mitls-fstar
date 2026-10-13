@@ -141,10 +141,9 @@ $(EXTRACT_DIR):
 # ── Phase 1: F* → .krml ────────────────────────────────────────────
 $(OUTPUT_DIR)/YModem_Impl_Codec.krml: verify | $(OUTPUT_DIR)
 	@echo "Extracting YModem.Impl.Codec to .krml"
-	@$(FSTAR) --codegen krml \
-	  --extract_module YModem.Impl.Codec \
-	  --odir $(OUTPUT_DIR) \
-	  $(IMPL_DIR)/YModem.Impl.Codec.fst --krmloutput $@
+	@$(FSTAR) --codegen KrmlC --custard_split \
+	  --custard_entry_module YModem.Impl.Codec \
+	  $(IMPL_DIR)/YModem.Impl.Codec.fst -o $@
 
 extract-krml: $(KRML_FILES)
 	@echo "All implementation modules extracted to .krml"
@@ -179,11 +178,11 @@ wrappers: extract-loops
 	@echo "Compiling YMODEM interop drivers over the VERIFIED loops..."
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/ymodem_rb \
 	  $(INTEROP_DIR)/ymodem_rb.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/YModem_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(EXTRACT_DIR)/YModem_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/ymodem_sb \
 	  $(INTEROP_DIR)/ymodem_sb.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/YModem_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(EXTRACT_DIR)/YModem_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "Interop drivers ymodem_rb / ymodem_sb (verified loops) compiled to $(EXTRACT_DIR)/."
 
@@ -214,7 +213,7 @@ vloop-test: extract-loops
 	@echo "Building the verified-loop transfer test ..."
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
 	  $(VERIFIED_DIR)/vloop_test.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/YModem_Verified.c $(EXTRACT_DIR)/Common_ProtocolImplementation.c \
+	  $(EXTRACT_DIR)/YModem_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
 	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server loop  ->  verified client loop  (over a socketpair)"
