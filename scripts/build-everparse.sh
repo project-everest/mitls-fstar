@@ -13,7 +13,7 @@
 set -euo pipefail
 
 EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/project-everest/everparse}"
-EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-master}"
+EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_nik_fstar_master_custard}"
 # Pinned EverParse commit this project is verified against.  The branch above is
 # only used as a fetch hint; the build always checks out this exact commit so the
 # toolchain is reproducible regardless of where the branch tip has moved.
