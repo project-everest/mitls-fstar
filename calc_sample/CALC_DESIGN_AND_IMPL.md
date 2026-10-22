@@ -944,8 +944,8 @@ The verified Pulse code extracts to clean, portable C code via KaRaMeL. This sec
 fstar.exe --codegen KrmlC --custard_split \
   --custard_entry Calc.Server.EndpointRunner.run_channel_endpoint \
   --custard_extern_type Common.TCP.channel --custard_extern_type Common.TCP.listener \
-  impl/Calc.Server.EndpointRunner.fst -o _output/Custard.krml
-# Produces: _output/Custard.krml (one karamel file per reached F* module)
+  impl/Calc.Server.EndpointRunner.fst -o _output/Custard.json
+# Produces: _output/Custard.json (one karamel file per reached F* module)
 ```
 
 **Phase 2: .krml → C**
@@ -954,7 +954,7 @@ krml -tmpdir _extract -skip-compilation \
   -bundle 'Calc.Server=Calc.*[rename=Calc_Server]' \
   -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
   -no-prefix Calc.Server \
-  _output/Custard.krml
+  _output/Custard.json
 # Produces: _extract/Calc_Server.c, _extract/Calc_Server.h
 ```
 

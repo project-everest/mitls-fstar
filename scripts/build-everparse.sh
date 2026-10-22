@@ -5,19 +5,19 @@
 # `make quackyducky` in the EverParse tree builds everything we need:
 #   - the F* binary           at opt/FStar/out/bin/fstar.exe (symlinked opt/FStar/bin/fstar.exe)
 #   - the KaRaMeL binary       at opt/karamel/out/bin/krml
-#   - the QuackyDucky compiler at bin/qd.exe
-#   - the verified LowParse + LowParse.Pulse .checked libraries under src/lowparse
+#   - the QuackyDucky compiler at bin/everparse-qd.exe
+#   - the verified LowParse + LowParse.Pulse .checked libraries under lib/everparse/lowparse
 #
 # The agentic-tls Makefile consumes this toolchain via EVERPARSE_HOME (no separate
 # F* install is required).
 set -euo pipefail
 
 EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/project-everest/everparse}"
-EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_nik_fstar_master_custard}"
+EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_gebner_master_qd_enum}"
 # Pinned EverParse commit this project is verified against.  The branch above is
 # only used as a fetch hint; the build always checks out this exact commit so the
 # toolchain is reproducible regardless of where the branch tip has moved.
-EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-8a1ee016d6ca80e1b749981bbed5d98c1e80393b}"
+EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-2421a75b21d114de9879c76d6a7d138079da74f8}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Default location: tools/everparse inside the agentic-tls checkout (matches the
@@ -28,7 +28,7 @@ jobs="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 
 fstar_exe="$EVERPARSE_HOME/opt/FStar/out/bin/fstar.exe"
 krml_exe="$EVERPARSE_HOME/opt/karamel/out/bin/krml"
-qd_exe="$EVERPARSE_HOME/bin/qd.exe"
+qd_exe="$EVERPARSE_HOME/bin/everparse-qd.exe"
 
 for cmd in git make opam; do
   if ! command -v "$cmd" >/dev/null 2>&1; then

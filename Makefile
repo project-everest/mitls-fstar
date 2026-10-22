@@ -21,8 +21,8 @@ KRML_EXE   ?= $(KRML_HOME)/out/bin/krml
 
 # QuackyDucky: compiler for the TLS wire format spec, plus the LowParse +
 # LowParse.Pulse combinator libraries the generated modules depend on.
-QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
-LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
+QD_EXE         ?= $(EVERPARSE_HOME)/bin/everparse-qd.exe
+LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
 
 # The exact EverParse commit this project is verified against, read from the
 # build script so there is a single source of truth.  `check-toolchain` asserts
@@ -78,7 +78,7 @@ HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
 EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
 SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
-  $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse
+  $(LOWPARSE_HOME)
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
@@ -87,8 +87,7 @@ INCLUDES = \
   --include src/impl \
   --include $(EXTERN_DIR) \
   --include $(GENERATED_DIR) \
-  --include $(LOWPARSE_HOME) \
-  --include $(LOWPARSE_HOME)/pulse
+  --include $(LOWPARSE_HOME)
 
 FSTAR_DEP_OPTIONS :=
 
@@ -513,7 +512,9 @@ TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
 TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj-logging-$(ATLAS_LOGGING)
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
 TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
-TLS13_CUSTARD_KRML = $(OUTPUT_DIR)/Custard.krml
+# Custard writes JSON; KaRaMeL selects its JSON reader by the .json extension
+# (.krml selects the legacy Marshal reader), so the name matters.
+TLS13_CUSTARD_KRML = $(OUTPUT_DIR)/Custard.json
 CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
@@ -603,7 +604,7 @@ GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 
 # Custard (F*'s whole-program extractor, doc/ref/custard.md in the F* tree)
 # extracts the C library in one run, from the checked files, into a single
-# .krml holding one karamel file per F* module (--custard_split), which is what
+# JSON file holding one karamel file per F* module (--custard_split), which is what
 # the -bundle/-library/-drop flags of the karamel step select on.  Extraction is
 # by reachability, so the roots are exactly what hand-written C (runtime/,
 # test/unit/, the Chromium overlay) uses: the public interfaces of the client

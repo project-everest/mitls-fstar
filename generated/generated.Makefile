@@ -1,9 +1,9 @@
 all: depend verify
 
 EVERPARSE_HOME ?= $(realpath $(CURDIR)/../../everparse)
-EVERPARSE_SRC_PATH ?= $(EVERPARSE_HOME)/src
+EVERPARSE_LIB_PATH ?= $(EVERPARSE_HOME)/lib/everparse
 
-LOWPARSE_HOME ?= $(EVERPARSE_SRC_PATH)/lowparse
+LOWPARSE_HOME ?= $(EVERPARSE_LIB_PATH)/lowparse
 
 ifdef NO_QD_VERIFY
 LAX_EXT=.lax
@@ -13,7 +13,7 @@ LAX_EXT=
 LAX_OPT=
 endif
 
-INCLUDE_PATHS += $(LOWPARSE_HOME) $(LOWPARSE_HOME)/pulse ..
+INCLUDE_PATHS += $(LOWPARSE_HOME) ..
 ALREADY_CACHED := C,Spec.Loops,LowParse,
 CACHE_DIRECTORY := cache$(LAX_EXT)
 OUTPUT_DIRECTORY := krml
@@ -23,14 +23,6 @@ FSTAR_DEP_OPTIONS :=
 
 clean_rules += clean-local
 
-include $(EVERPARSE_SRC_PATH)/common.Makefile
-
-# --warn_error +241: the F* toolchain install may ship Pulse .checked files whose
-# dependence hashes don't match under these harness flags; downgrade the "stale
-# checked, will recheck" error (241) to a warning so F* transparently rechecks
-# them (otherwise a cold-cache run — e.g. a fresh checkout — aborts).
-FSTAR_OPTIONS += $(LAX_OPT) --warn_error @272 --warn_error +241
-
 # Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
 # Exported by the root Makefile when this is run as a sub-make.
 # Pinned in scripts/z3-version.txt at the repo root (single source of truth).
@@ -39,7 +31,18 @@ Z3_VERSION ?= $(strip $(shell cat $(Z3_VERSION_FILE)))
 ifeq ($(Z3_VERSION),)
 $(error Could not read the pinned Z3 version from $(Z3_VERSION_FILE))
 endif
-FSTAR_OPTIONS += --z3version $(Z3_VERSION)
+# EverParse's fstar.Makefile turns this into `--z3version` and, when
+# $(EVERPARSE_HOME)/opt/z3/z3-<version> exists, `--smt <that binary>`; it
+# defaults to EverParse's own Z3 version otherwise.
+EVERPARSE_Z3_VERSION := $(Z3_VERSION)
+
+include $(EVERPARSE_LIB_PATH)/common.Makefile
+
+# --warn_error +241: the F* toolchain install may ship Pulse .checked files whose
+# dependence hashes don't match under these harness flags; downgrade the "stale
+# checked, will recheck" error (241) to a warning so F* transparently rechecks
+# them (otherwise a cold-cache run — e.g. a fresh checkout — aborts).
+FSTAR_OPTIONS += $(LAX_OPT) --warn_error @272 --warn_error +241
 
 export LOWPARSE_HOME
 

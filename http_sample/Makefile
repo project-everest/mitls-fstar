@@ -35,7 +35,7 @@ FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
 KRML_HOME ?= $(firstword $(wildcard $(EVERPARSE_HOME)/opt/karamel $(FSTAR_HOME)/karamel) $(EVERPARSE_HOME)/opt/karamel)
 KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
-LOWPARSE_HOME ?= $(EVERPARSE_HOME)/src/lowparse
+LOWPARSE_HOME ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
 export PATH := $(Z3_DIR):$(PATH)
 
 # Z3 version used by every F* invocation; see the root Makefile for why 4.15.3.
@@ -61,7 +61,6 @@ INCLUDES = \
   --include ../common \
   --include $(EXTERN_DIR) \
   --include $(LOWPARSE_HOME) \
-  --include $(LOWPARSE_HOME)/pulse \
   --include $(SPEC_DIR) \
   --include $(IMPL_DIR)
 

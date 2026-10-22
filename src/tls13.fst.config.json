@@ -16,8 +16,7 @@
     "--include", "spec/properties",
     "--include", "impl",
     "--include", "../generated",
-    "--include", "../tools/everparse/src/lowparse",
-    "--include", "../tools/everparse/src/lowparse/pulse"
+    "--include", "../tools/everparse/lib/everparse/lowparse"
   ],
   "include_dirs": [
     "../common",
@@ -27,7 +26,6 @@
     "spec/properties",
     "impl",
     "../generated",
-    "../tools/everparse/src/lowparse",
-    "../tools/everparse/src/lowparse/pulse"
+    "../tools/everparse/lib/everparse/lowparse"
   ]
 }

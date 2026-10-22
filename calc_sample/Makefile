@@ -168,11 +168,12 @@ IMPL_MODULES = \
   Calc.Server.EndpointRunner
 
 # Custard (F*'s whole-program extractor) extracts, from the checked files, the
-# endpoint runner test_main.c calls and everything it reaches, into one .krml
-# with one karamel file per F* module (--custard_split).  It takes a single file
-# on the command line and loads the other modules on demand.  Common.TCP's
+# endpoint runner test_main.c calls and everything it reaches, into one JSON
+# file (KaRaMeL picks its JSON reader by the .json extension) with one karamel
+# file per F* module (--custard_split).  It takes a single file on the command
+# line and loads the other modules on demand.  Common.TCP's
 # abstract types are defined by c_stubs/common_tcp_karamel.h.
-CUSTARD_KRML = $(OUTPUT_DIR)/Custard.krml
+CUSTARD_KRML = $(OUTPUT_DIR)/Custard.json
 KRML_FILES = $(CUSTARD_KRML)
 
 $(OUTPUT_DIR):

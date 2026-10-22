@@ -3,10 +3,10 @@
 set -e
 EP=${EVERPARSE_HOME:-/home/taramana/agentic-tls/tools/everparse}
 FS=$EP/opt/FStar/bin/fstar.exe
-LP=$EP/src/lowparse
+LP=$EP/lib/everparse/lowparse
 KRML=$EP/opt/karamel/out/bin/krml
 cd "$(dirname "$0")"
-F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include $LP/pulse --include spec --include impl"
+F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include spec --include impl"
 
 MODS="YModem.Impl.Codec YModem.Impl.Client.CanonicalProtocol YModem.Impl.Client.Loop YModem.Impl.Server.Plan YModem.Impl.Server.CanonicalProtocol YModem.Impl.Server.Loop"
 
@@ -29,8 +29,8 @@ EXTERN_TYPES="--custard_extern_type Common.TCP.channel --custard_extern_type Com
 set -- $MODS
 SRC=impl/$1.fst
 mkdir -p _output
-$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.krml >/dev/null
-KRMLS=_output/Custard.krml
+$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.json >/dev/null
+KRMLS=_output/Custard.json
 
 rm -rf _extract
 mkdir -p _extract

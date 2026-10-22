@@ -8,12 +8,12 @@
 set -e
 EP=${EVERPARSE_HOME:-/workspaces/agentic-tls/tools/everparse}
 FS=$EP/opt/FStar/bin/fstar.exe
-LP=$EP/src/lowparse
+LP=$EP/lib/everparse/lowparse
 KRML=$EP/opt/FStar/karamel/out/bin/krml
 [ -x "$KRML" ] || KRML=$EP/opt/karamel/out/bin/krml
 export PATH=$EP/opt/z3:$PATH
 cd "$(dirname "$0")"
-F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include $LP/pulse --include spec --include impl"
+F="--cache_checked_modules --cache_dir _cache --odir _output --already_cached Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse --warn_error -321-241-272-288 --report_assumes warn --ext optimize_let_vc --ext fly_deps --include ../common --include $LP --include spec --include impl"
 
 MODS="HTTP.Impl.Codec.Chunked HTTP.Impl.Codec.Chunked.Stream HTTP.Impl.Loop.Chunked.Stream HTTP.Impl.Server.Loop HTTP.Impl.Client.Loop HTTP.Impl.Codec.Length HTTP.Impl.Server.Loop.Length HTTP.Impl.Client.Loop.Length HTTP.Impl.Codec.Request HTTP.Impl.Codec.Response HTTP.Impl.Client.Loop.Get HTTP.Impl.Codec.Header HTTP.Impl.Loop.Header HTTP.Impl.Codec.RequestLine HTTP.Impl.Loop.Request HTTP.Impl.Codec.RequestPost HTTP.Impl.Loop.RequestPost"
 
@@ -79,8 +79,8 @@ EXTERN_TYPES="--custard_extern_type Common.TCP.channel --custard_extern_type Com
 set -- $MODS
 SRC=impl/$1.fst
 mkdir -p _output
-$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.krml >/dev/null
-KRMLS=_output/Custard.krml
+$FS $F --codegen KrmlC --custard_split $ENTRIES $EXTERN_TYPES $SRC -o _output/Custard.json >/dev/null
+KRMLS=_output/Custard.json
 
 rm -rf _extract
 mkdir -p _extract
