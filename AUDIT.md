@@ -215,10 +215,10 @@ The active TCB surface is intentionally explicit.
 | TCB component | Files | Role |
 | --- | --- | --- |
 | Crypto primitives and entropy | `src/impl/extern/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, HACL* sources | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, and X25519. |
-| X509/signature validation | `src/impl/extern/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_karamel.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
-| TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_karamel.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. `Common_TCP.krml` is included in the bundle so KaRaMeL typechecks the exact TCP ABI; the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
+| X509/signature validation | `src/impl/extern/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_custard.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
+| TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_custard.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. The generated C includes `common_tcp_custard.h` for the TCP handle types (`--custard_extern_type`); the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
 | ATLAS trace writer | `src/impl/extern/TLS13.Trace.fsti`, `c_stubs/atlas_trace.*`, `runtime/analyze_atlas_trace.py` | Explicit observational TCB. Verified code chooses event positions and metadata under an `emp -> emp` Pulse contract; the C writer supplies timestamps and process/thread/connection correlation and emits atomic JSONL records. Callers are forbidden to pass secrets, plaintext, certificates, or payload bytes. Disabled builds macro-eliminate calls without evaluating arguments. |
-| Extracted runtime infrastructure | F*, Pulse, KaRaMeL, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
+| Extracted runtime infrastructure | F*, Pulse, Custard, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
 | Concrete C ABI wrapper | `runtime/tls13_client_driver.c` | Trusted allocation of the small wrapper object, status-to-error translation, and lifetime tracking around the extracted Pulse workflow. |
 | Browser adapter | `runtime/tls13_client_engine.c`, `runtime/chromium/tls13_client_socket.cc`, `runtime/chromium/chromium_src/net/socket/atlas_client_socket.cc` | Trusted capacity/state checks, async scheduling, partial-I/O buffering, callback translation, Chromium `CertVerifier` policy, and BoringSSL realization of the explicit CertificateVerify boundary. |
 
@@ -227,8 +227,8 @@ The active TCB surface is intentionally explicit.
 The C code is kept to glue and TCB responsibilities:
 
 - POSIX socket connect/listen/accept/read/write/close in `common_tcp_stubs.c`;
-- the tiny extracted-TCP ABI shim in `common_tcp_karamel.c`;
-- the typed OpenSSL ABI shim in `tls13_openssl_karamel.c`;
+- the tiny extracted-TCP ABI shim in `common_tcp_custard.c`;
+- the typed OpenSSL ABI shim in `tls13_openssl_custard.c`;
 - crypto/X509 bridge code;
 - optional ATLAS JSONL trace emission and runtime connection correlation;
 - the small client/server runtime ABI wrappers.
@@ -274,14 +274,14 @@ Start with these files:
 5. `common/Common.ProtocolImplementation.fst`,
    `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and
    `common/Common.TCP.fsti` for the shared endpoint/driver/TCP architecture.
-6. `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*` for the
+6. `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_custard.*` for the
    typed OpenSSL TCB boundary called by the Pulse workflow.
 7. `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` for the
    small C ABI wrappers around the extracted endpoint/canonical runtime path.
 8. `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*` for
    the verified parser/serializer facades and their `TLS13.Wire.Spec`
    postconditions.
-9. `c_stubs/common_tcp_karamel.*`, `c_stubs/common_tcp_stubs.*`,
+9. `c_stubs/common_tcp_custard.*`, `c_stubs/common_tcp_stubs.*`,
    `c_stubs/tls13_crypto_external.*`, and `c_stubs/tls13_openssl_stubs.*` for
    the remaining C boundary.
 

@@ -30,9 +30,6 @@ EXTRACT_DIR := $(PARENT)/_extract
 STUBS_DIR   := $(PARENT)/../c_stubs
 VERIFIED_DIR:= $(PARENT)/verified
 EVERPARSE_HOME ?= $(abspath $(PARENT)/../tools/everparse)
-KRML_HOME   ?= $(EVERPARSE_HOME)/opt/karamel
-KRML_INCLUDE = $(KRML_HOME)/include
-KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 
 SRV_OUR := $(abspath $(EXTRACT_DIR)/tftp_server)
 CLI_OUR := $(abspath $(EXTRACT_DIR)/tftp_client)
@@ -45,10 +42,10 @@ SRV_PORT ?= 6969
 CLI_PORT ?= 6970
 TIMEOUT ?= 30
 CC      ?= gcc
-CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_karamel.h -Wall -Wno-unused-function \
+CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
+  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
 
 SRV_DIR := _run_server
 CLI_DIR := _run_client
@@ -65,13 +62,13 @@ build-progs:
 	@$(MAKE) --no-print-directory -C $(PARENT) extract-loops
 	@echo "Compiling TFTP interop drivers over the VERIFIED loops..."
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/tftp_server \
-	  tftp_server.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/TFTP_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  tftp_server.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/tftp_client \
-	  tftp_client.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/TFTP_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  tftp_client.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "Interop drivers tftp_server / tftp_client (verified loops) compiled to $(EXTRACT_DIR)/."
 
 # ── Server test: our extracted sender  <->  tftp-hpa `tftp -c get` (receiver) ──

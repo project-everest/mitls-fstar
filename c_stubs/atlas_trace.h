@@ -5,16 +5,10 @@
 #include <stdint.h>
 
 /*
- * KaRaMeL emits the external declaration in a generated header. When that
- * header is available, include it before defining the call-site macro below.
+ * TLS13.Trace.emit is declared with [@@custard_c_header "atlas_trace.h"], so
+ * the extracted C includes this header and calls the TLS13_Trace_emit macro
+ * below, which compiles to nothing unless ATLAS_ENABLE_LOGGING is set.
  */
-#if defined(__has_include)
-#if __has_include("internal/TLS13_Trace.h")
-#include "internal/TLS13_Trace.h"
-#elif __has_include("TLS13_Trace.h")
-#include "TLS13_Trace.h"
-#endif
-#endif
 
 #ifndef ATLAS_ENABLE_LOGGING
 #define ATLAS_ENABLE_LOGGING 0

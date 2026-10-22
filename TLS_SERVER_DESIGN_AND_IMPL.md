@@ -2761,11 +2761,11 @@ Checklist:
 - [x] Credential C shim accepts in-memory PEM/DER buffers; it does not load
       credential files by path in the first verified API.
 - [x] Use concrete C stub names
-      `c_stubs/tls13_openssl_karamel.c/.h`, `c_stubs/common_tcp_karamel.c/.h`,
+      `c_stubs/tls13_openssl_custard.c/.h`, `c_stubs/common_tcp_custard.c/.h`,
       and `c_stubs/common_tcp_stubs.c/.h`; generated bounds now use their
       extracted `_sz` constants directly.
-- [x] Add server-driver extraction targets:
-      `extract-tls13-driver-krml` and `extract-tls13-bundle`.
+- [x] Add server-driver extraction targets: `extract-tls13-bundle` (alias
+      `extract-c`), which extracts directly to C with Custard (`--codegen C`).
 - [ ] Add any separate non-driver server-core extraction target if later needed.
 - [x] Add `test-extracted-server-driver-slice`.
 - [x] Add `test-openssl-sclient` harness.

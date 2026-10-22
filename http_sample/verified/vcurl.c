@@ -35,8 +35,8 @@
  */
 
 #include "HTTP_Verified.h"
-#include "common_tcp_karamel.h"
-#include "karamel_option_compat.h"
+#include "common_tcp_custard.h"
+#include "custard_option.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -46,14 +46,11 @@
 
 /* Common_TCP_connect_tcp is defined in the hand-written c_stubs and linked in,
    but its option-return type and prototype are not published in a header
-   (the option struct is emitted inside the .c).  Re-declare them here matching
-   the stub's ABI (tag 0 = None, 1 = Some; see karamel_option_compat.h). */
-typedef struct FStar_Pervasives_Native_option__Common_TCP_channel_s {
-  uint8_t tag;
-  Common_TCP_channel v;
-} FStar_Pervasives_Native_option__Common_TCP_channel;
+   (the generated code names the option type itself).  Re-declare them here
+   with the layout Custard gives an option (see custard_option.h). */
+CUSTARD_OPTION_TYPE(option_channel, Common_TCP_channel);
 
-FStar_Pervasives_Native_option__Common_TCP_channel Common_TCP_connect_tcp(
+option_channel Common_TCP_connect_tcp(
     uint8_t *hostname, size_t hostname_len, uint16_t port);
 
 static void usage(const char *prog) {
@@ -139,14 +136,14 @@ int main(int argc, char **argv) {
   fprintf(stderr, "vcurl: GET http://%.*s:%u%s  (request + parse by VERIFIED code)\n",
           (int)host_len, host_s, port, path_s);
 
-  FStar_Pervasives_Native_option__Common_TCP_channel c =
+  option_channel c =
     Common_TCP_connect_tcp((uint8_t *)host_s, host_len, port);
-  if (c.tag != FStar_Pervasives_Native_Some) {
+  if (c.tag != CUSTARD_SOME) {
     fprintf(stderr, "vcurl: could not connect to %.*s:%u\n",
             (int)host_len, host_s, port);
     return 2;
   }
-  Common_TCP_channel ch = c.v;
+  Common_TCP_channel ch = c.val.Some;
 
   /* Request head size the verified emitter will write:
        "GET " + target + " HTTP/1.1\r\n" + "Host: " + host + "\r\nConnection: close\r\n\r\n" */

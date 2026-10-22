@@ -933,66 +933,33 @@ Each: `write_*_response` + `process_*` proving `log_single_step`
 
 ---
 
-## Extraction to C via KaRaMeL
+## Extraction to C via Custard
 
-The verified Pulse code extracts to clean, portable C code via KaRaMeL. This section explains the two-phase extraction process, bundling strategy, and testing workflow.
+The verified Pulse code extracts to clean, portable C code via Custard, F*'s whole-program extractor, using its direct-to-C backend (`--codegen C`). This section explains the extraction step, how the public surface is chosen, and the testing workflow.
 
-### Two-Phase Extraction Pipeline
+### Extraction
 
-**Phase 1: F* → .krml** (Custard, F*'s whole-program extractor)
 ```bash
-fstar.exe --codegen KrmlC --custard_split \
+fstar.exe --codegen C \
   --custard_entry Calc.Server.EndpointRunner.run_channel_endpoint \
-  --custard_extern_type Common.TCP.channel --custard_extern_type Common.TCP.listener \
-  impl/Calc.Server.EndpointRunner.fst -o _output/Custard.json
-# Produces: _output/Custard.json (one karamel file per reached F* module)
-```
-
-**Phase 2: .krml → C**
-```bash
-krml -tmpdir _extract -skip-compilation \
-  -bundle 'Calc.Server=Calc.*[rename=Calc_Server]' \
-  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-  -no-prefix Calc.Server \
-  _output/Custard.json
+  --custard_c_no_prefix Calc.Server.EndpointRunner \
+  --custard_extern_type Common.TCP.channel@common_tcp_custard.h \
+  --custard_extern_type Common.TCP.listener@common_tcp_custard.h \
+  impl/Calc.Server.EndpointRunner.fst -o _extract/Calc_Server.c
 # Produces: _extract/Calc_Server.c, _extract/Calc_Server.h
 ```
 
----
+Custard loads the checked files on demand and extracts only what the entry point reaches, so there is no separate bundling step.
 
-### Bundling Strategy
+### Public Surface
 
-**Goal:** Produce a single `Calc_Server.c/.h` with only `new_server` and `process_request` exposed.
+**Goal:** Produce a single `Calc_Server.c/.h` with only `run_channel_endpoint` exposed.
 
-**Bundle 1 - API bundle (what gets exposed in C):**
-```makefile
--bundle 'Calc.Server=Calc.*[rename=Calc_Server]'
-```
-
-Breakdown:
-- `Calc.Server` - API module (public functions in header)
-- `=Calc.*` - Include all Calc.* modules in this bundle
-- `[rename=Calc_Server]` - Output filename
-
-Result: All Calc.* modules bundled into `Calc_Server.c`, only `Calc.Server` functions public.
-
-**Bundle 2 - Hide bundle (no C output):**
-```makefile
--bundle 'FStar.*,Pulse.*,PulseCore.*,Prims'
-```
-
-These modules are bundled together with NO API module, so they produce no C code. This hides:
-- Specification modules (Calc.Wire, Calc.Spec, Calc.Log use unbounded types)
-- F* standard library
-- Pulse runtime (built into KaRaMeL)
-
-**Name prefix stripping:**
-```makefile
--no-prefix Calc.Server
-```
-
-Without: `Calc_Server_new_server`, `Calc_Server_process_request`  
-With: `new_server`, `process_request`
+- `--custard_entry` names the roots. Roots get external linkage and a prototype in the generated header; everything else they reach is emitted `static` in the `.c`.
+- Specification modules, ghost code and the F*/Pulse libraries produce no C beyond what the roots actually reach.
+- `--custard_c_no_prefix Calc.Server.EndpointRunner` drops the module prefix:
+  without it the root is `Calc_Server_EndpointRunner_run_channel_endpoint`, with it `run_channel_endpoint`.
+- `--custard_extern_type Common.TCP.channel@common_tcp_custard.h` keeps the TCP handle abstract: the generated header includes `common_tcp_custard.h`, which defines it, and the C stubs implement the `Common.TCP` functions.
 
 ---
 
@@ -1017,7 +984,7 @@ size_t s = ...;
 let stack = Vec.alloc 0ul 0sz;
 
 // C (generated)
-uint32_t *stack = KRML_HOST_MALLOC(sizeof(uint32_t) * 0);
+uint32_t *stack = (uint32_t *)malloc(0 * sizeof(uint32_t));
 ```
 
 **Ghost/erased types vanish:**
@@ -1050,8 +1017,10 @@ assert (pure (property));
 #ifndef __Calc_Server_H
 #define __Calc_Server_H
 
-#include "krmllib.h"
-#include "krml/internal/target.h"
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 
 // Opaque server state type
 typedef struct Calc_Impl_Types_server_state_s Calc_Impl_Types_server_state;
@@ -1079,8 +1048,8 @@ static void process_push(...) { ... }
 
 // Public API implementations
 Calc_Impl_Types_server_state *new_server(void) {
-  uint32_t *stack = KRML_HOST_MALLOC(...);
-  size_t *count = KRML_HOST_MALLOC(...);
+  uint32_t *stack = malloc(...);
+  size_t *count = malloc(...);
   // ... initialize and return
 }
 
@@ -1139,9 +1108,9 @@ fn new_server()
 
 // C extraction (CORRECT):
 server_state *new_server(void) {
-  uint32_t *stack = KRML_HOST_MALLOC(sizeof(uint32_t) * 0);
-  size_t *count = KRML_HOST_MALLOC(sizeof(size_t) * 1);
-  server_state *result = KRML_HOST_MALLOC(sizeof(server_state));
+  uint32_t *stack = (uint32_t *)malloc(0 * sizeof(uint32_t));
+  size_t *count = (size_t *)malloc(1 * sizeof(size_t));
+  server_state *result = (server_state *)malloc(sizeof(server_state));
   result->stack = stack;
   result->count = count;
   return result;  // All heap-allocated → safe
@@ -1161,21 +1130,14 @@ make verify
 # Output: All modules verified, .checked files in _cache/
 ```
 
-**2. Extract to .krml:**
-```bash
-make extract-krml
-# Parallel extraction of 9 implementation modules
-# Output: 9 .krml files in _output/
-```
-
-**3. Run KaRaMeL:**
+**2. Extract to C:**
 ```bash
 make extract-c
-# Bundles .krml files, generates C code
+# Custard extracts the endpoint runner and everything it reaches
 # Output: Calc_Server.c, Calc_Server.h in _extract/
 ```
 
-**4. Compile C code:**
+**3. Compile C code:**
 ```bash
 make test-c
 # Compiles with gcc, links with test_main.c
@@ -1185,7 +1147,7 @@ make test-c
 **Full pipeline:**
 ```bash
 make test-c
-# Automatically runs: verify → extract-krml → extract-c → compile → test
+# Automatically runs: verify → extract-c → compile → test
 ```
 
 ---
@@ -1234,42 +1196,9 @@ int main() {
 
 ---
 
-### Extraction Warnings and Suppressions
+### Extraction Warnings
 
-**Warning -2: Function not implemented**
-```
-Warning 2: _zero_for_deref: function not implemented
-```
-
-**Cause:** `Pulse.Lib.Pervasives._zero_for_deref` is a Pulse builtin handled specially by KaRaMeL. It has no `.krml` definition but is translated to `*ptr` dereference.
-
-**Solution:** Suppress with `-warn-error -2` (safe for this specific Pulse builtin).
-
----
-
-**Warning -9: Static initializer needed**
-```
-Warning 9: some_constant will be initialized in krmlinit_globals()
-```
-
-**Cause:** A global constant (e.g., struct with default values) cannot be a C compile-time constant. KaRaMeL generates `krmlinit_globals()` to initialize it at runtime.
-
-**Solution:** Suppress with `-warn-error -9` if `krmlinit_globals()` is called before use (or not needed).
-
----
-
-**Warning -17: Static initializer declaration**
-```
-Warning 17: declaration that triggered krmlinit
-```
-
-**Cause:** Consequence of warning 9 - shows which declaration triggered runtime initialization.
-
-**Solution:** Suppress with `-warn-error -17` (same conditions as -9).
-
----
-
-**DO NOT suppress warnings blindly!** Run KaRaMeL without `-warn-error` first to see what warnings are emitted. Warnings like -4 (type error) or -6 (VLA) indicate real problems.
+Custard's warnings are on by default and none are suppressed for this sample. Run `make extract-c` and read them: a warning about a generated name in the interface, for example, means a consumer is spelling a name Custard may change.
 
 ---
 
@@ -1281,9 +1210,8 @@ make verify              # Incremental verification
 make -j4 verify          # Parallel verification
 
 # Extraction
-make extract-krml        # F* → .krml (phase 1)
-make extract-c           # .krml → C (phase 2)
-make extract             # Both phases
+make extract-c           # F* → C (Custard)
+make extract             # Same as extract-c
 
 # Testing
 make test-c              # Full pipeline: verify → extract → compile → test
@@ -1310,7 +1238,6 @@ The Makefile uses `--dep full` for proper dependency tracking:
 **Benefits:**
 - Only changed files are reverified
 - Parallel builds work correctly (`make -j4`)
-- .krml extraction is parallelized
 - Dependency order is automatic
 
 **Example:**

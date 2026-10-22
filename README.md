@@ -27,7 +27,7 @@ for the current plan.
 A `.devcontainer/` is provided. Opening the repository in a dev container (VS Code
 "Reopen in Container", or `devcontainer up`) builds a minimal image and runs
 `./setup.sh` automatically, producing a ready-to-build environment. To exercise
-the whole pipeline (QuackyDucky generation → F* verification → KaRaMeL extraction
+the whole pipeline (QuackyDucky generation → F* verification → C extraction
 → OpenSSL interop) from a clean checkout:
 
 ```sh

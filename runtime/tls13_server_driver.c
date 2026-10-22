@@ -1,8 +1,18 @@
 #include "tls13_server_driver.h"
 
-#include "TLS13_Impl_ConnectionState_Bounds.h"
-#include "TLS13_Impl_Server_Driver.h"
+#include "TLS13.h"
 #include "atlas_trace.h"
+
+/* Custard names option specializations after their payload type; alias the
+   generated names here so the rest of this file does not depend on them. */
+typedef FStar_Pervasives_Native_option__server_credentials
+    option_server_credentials;
+typedef FStar_Pervasives_Native_option__listener option_listener;
+typedef FStar_Pervasives_Native_option__top_server_driver
+    option_top_server_driver;
+#define SOME_SERVER_CREDENTIALS FSTAR_PERVASIVES_NATIVE_SOME__SERVER_CREDENTIALS
+#define SOME_LISTENER FSTAR_PERVASIVES_NATIVE_SOME__LISTENER
+#define SOME_TOP_SERVER_DRIVER FSTAR_PERVASIVES_NATIVE_SOME__TOP_SERVER_DRIVER
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,19 +57,19 @@ static int driver_fail(tls13_server_driver *driver, const char *message) {
 static const char *driver_status_message(
     TLS13_Impl_Server_Driver_server_workflow_status status) {
   switch (status) {
-    case TLS13_Impl_Server_Driver_ServerWorkflowOk:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOK:
       return "ok";
-    case TLS13_Impl_Server_Driver_ServerWorkflowNeedMoreInput:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWNEEDMOREINPUT:
       return "needs more input";
-    case TLS13_Impl_Server_Driver_ServerWorkflowStepFailed:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWSTEPFAILED:
       return "verified protocol step failed";
-    case TLS13_Impl_Server_Driver_ServerWorkflowExhausted:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWEXHAUSTED:
       return "workflow exhausted fuel";
-    case TLS13_Impl_Server_Driver_ServerWorkflowClosed:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWCLOSED:
       return "TLS channel closed";
-    case TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWPAYLOADTOOLARGE:
       return "payload exceeds the single-record limit (16384 bytes)";
-    case TLS13_Impl_Server_Driver_ServerWorkflowOutputBufferTooSmall:
+    case TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOUTPUTBUFFERTOOSMALL:
       return "output buffer is smaller than the maximum TLS record plaintext";
     default:
       return "unknown verified server driver status";
@@ -126,13 +136,13 @@ int tls13_server_config_new(
   }
   memcpy(private_key_copy, private_key_pem, private_key_pem_len);
 
-  FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials credentials =
+  option_server_credentials credentials =
       TLS13_Impl_Server_Driver_new_server_credentials(
           certificate_copy,
           certificate_chain_len,
           private_key_copy,
           private_key_pem_len);
-  if (credentials.tag != FStar_Pervasives_Native_Some) {
+  if (credentials.tag != SOME_SERVER_CREDENTIALS) {
     free(private_key_copy);
     free(certificate_copy);
     free(bind_host_copy);
@@ -140,11 +150,11 @@ int tls13_server_config_new(
     return 1;
   }
 
-  FStar_Pervasives_Native_option__Common_TCP_listener listener =
+  option_listener listener =
       TLS13_Impl_Server_Driver_new_server_listener(
           bind_host_copy, bind_host_len, port);
-  if (listener.tag != FStar_Pervasives_Native_Some) {
-    TLS13_Impl_Server_Driver_free_server_credentials(credentials.v);
+  if (listener.tag != SOME_LISTENER) {
+    TLS13_Impl_Server_Driver_free_server_credentials(credentials.val.Some);
     free(private_key_copy);
     free(certificate_copy);
     free(bind_host_copy);
@@ -152,8 +162,8 @@ int tls13_server_config_new(
     return 1;
   }
 
-  config->verified_credentials = credentials.v;
-  config->verified_listener = listener.v;
+  config->verified_credentials = credentials.val.Some;
+  config->verified_listener = listener.val.Some;
   config->bind_host = bind_host_copy;
   config->bind_host_len = bind_host_len;
   config->port = port;
@@ -198,20 +208,20 @@ int tls13_server_driver_accept_with_config(
   atlas_trace_set_connection(driver->trace_connection);
 #endif
 
-  FStar_Pervasives_Native_option__TLS13_Impl_Server_Driver_State_top_server_driver created =
+  option_top_server_driver created =
       TLS13_Impl_Server_Driver_new_server_with_credentials(
           config->verified_credentials,
           config->certificate_chain,
           config->certificate_chain_len,
           config->private_key_pem,
           config->private_key_pem_len);
-  if (created.tag != FStar_Pervasives_Native_Some) {
+  if (created.tag != SOME_TOP_SERVER_DRIVER) {
     (void)driver_fail(driver, "verified server driver allocation failed");
     free(driver);
     return 1;
   }
 
-  driver->verified_driver = created.v;
+  driver->verified_driver = created.val.Some;
   TLS13_Impl_Server_Driver_server_workflow_status status =
       TLS13_Impl_Server_Driver_accept_with_listener(
           driver->verified_driver,
@@ -221,7 +231,7 @@ int tls13_server_driver_accept_with_config(
           config->port,
           TLS13_SERVER_DRIVER_LOCAL_FUEL,
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
-  if (status != TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+  if (status != TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOK) {
     (void)driver_fail_status(driver, "accept", status);
     driver->state = TLS13_SERVER_DRIVER_CLOSED;
     TLS13_Impl_Server_Driver_free(driver->verified_driver);
@@ -282,12 +292,12 @@ int tls13_server_driver_send_application_data(
   TLS13_Impl_Server_Driver_server_workflow_status status =
       TLS13_Impl_Server_Driver_send(
           driver->verified_driver, payload_input, payload_len);
-  if (status == TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+  if (status == TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOK) {
     return 0;
   }
   (void)driver_fail_status(driver, "send", status);
   if (status ==
-      TLS13_Impl_Server_Driver_ServerWorkflowPayloadTooLarge) {
+      TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWPAYLOADTOOLARGE) {
     return 1;
   }
   driver->state = TLS13_SERVER_DRIVER_CLOSED;
@@ -308,7 +318,7 @@ int tls13_server_driver_send_key_update(
   TLS13_Impl_Server_Driver_server_workflow_status status =
       TLS13_Impl_Server_Driver_send_key_update(
           driver->verified_driver, request_peer_update);
-  if (status == TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+  if (status == TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOK) {
     return 0;
   }
   (void)driver_fail_status(driver, "key_update", status);
@@ -342,16 +352,16 @@ int tls13_server_driver_receive_application_data(
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
   *out_len = result.server_receive_len;
   if (result.server_receive_status ==
-      TLS13_Impl_Server_Driver_ServerWorkflowOk) {
+      TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOK) {
     return 0;
   }
   (void)driver_fail_status(driver, "receive", result.server_receive_status);
   if (result.server_receive_status ==
-          TLS13_Impl_Server_Driver_ServerWorkflowExhausted ||
+          TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWEXHAUSTED ||
       result.server_receive_status ==
-          TLS13_Impl_Server_Driver_ServerWorkflowNeedMoreInput ||
+          TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWNEEDMOREINPUT ||
       result.server_receive_status ==
-          TLS13_Impl_Server_Driver_ServerWorkflowOutputBufferTooSmall) {
+          TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWOUTPUTBUFFERTOOSMALL) {
     /* Verified: application_ready is preserved on exhausted/need-more-input,
        so the connection remains usable for retry. */
     return 1;
@@ -375,7 +385,7 @@ int tls13_server_driver_close(tls13_server_driver *driver, bool wait_for_peer) {
           wait_for_peer,
           TLS13_SERVER_DRIVER_NETWORK_FUEL);
   driver->state = TLS13_SERVER_DRIVER_CLOSED;
-  if (status != TLS13_Impl_Server_Driver_ServerWorkflowClosed) {
+  if (status != TLS13_IMPL_SERVER_DRIVER_SERVERWORKFLOWCLOSED) {
     return driver_fail_status(driver, "close", status);
   }
   return 0;

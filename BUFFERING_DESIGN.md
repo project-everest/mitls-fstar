@@ -60,7 +60,7 @@ refer to definitions in the corresponding module, not to informal intentions.
                          Common.TCP
                  trusted external transport contract
                                 |
-                  c_stubs/common_tcp_karamel.c
+                  c_stubs/common_tcp_custard.c
 ```
 
 The abstraction boundary is intentional:
@@ -786,7 +786,7 @@ exist, but live top-level workflows must not call their raw read helpers.
    `TLS13.Impl.Server.Driver.fsti`. Only opaque configuration/driver handles,
    workflow statuses, and top-level lifecycle/send/receive operations should be
    public.
-2. Inspect generated headers in `_extract/tls13_bundle`. Proof witnesses,
+2. Inspect generated header `_extract/tls13_c/TLS13.h`. Proof witnesses,
    raw endpoint APIs, raw receive buffers, and `FStar_SizeT_v` wrappers should
    not appear in the public driver API.
 3. Inspect `runtime/tls13_client_driver.c` and
@@ -798,9 +798,9 @@ exist, but live top-level workflows must not call their raw read helpers.
 4. Confirm C-side branches only validate inputs, map verified statuses, update
    simple wrapper flags, and release opaque objects through verified facade
    operations.
-5. Inspect the Makefile's KaRaMeL input closure and ordering. Interfaces should
-   determine the public shape, and obsolete raw driver modules should not
-   become extraction roots.
+5. Inspect the Makefile's Custard extraction roots (`--custard_entry_module`
+   and `--custard_entry`). Interfaces should determine the public shape, and
+   obsolete raw driver modules should not become extraction roots.
 6. Inspect generated C for:
    - no allocation in process/read/commit loops;
    - direct reads into the free suffix;

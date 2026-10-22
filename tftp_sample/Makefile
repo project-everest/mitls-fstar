@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# TFTP sample: Makefile (verify + KaRaMeL C extraction)
+# TFTP sample: Makefile (verify + C extraction)
 # ═══════════════════════════════════════════════════════════════════
 # Verifies the IETF TFTP (RFC 1350) reliable-delivery specification and
 # executable layer, and (in later phases) extracts the verified codec + driver
@@ -28,8 +28,6 @@
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME ?= $(EVERPARSE_HOME)/opt/karamel
-KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
 export PATH := $(Z3_DIR):$(PATH)
@@ -112,42 +110,21 @@ check-admits:
 # Extraction to C
 # ═══════════════════════════════════════════════════════════════════
 # The verified codec leaf `TFTP.Impl.Codec` is standalone (only Pulse/F* array
-# primitives + the hand-written TFTP.Wire spec it proves against), so KaRaMeL
-# bundles away the FStar/Pulse/Prims support and emits one C file with unprefixed
-# function names — the ABI the interop wrappers (P5) link against.
+# primitives + the hand-written TFTP.Wire spec it proves against), so Custard
+# (--codegen C) emits one C file with unprefixed function names — the ABI the interop wrappers (P5) link against.
 IMPL_MODULES = TFTP.Impl.Codec
 
-KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES)))
-
-$(OUTPUT_DIR):
-	@mkdir -p $@
 
 $(EXTRACT_DIR):
 	@mkdir -p $@
 
-# ── Phase 1: F* → .krml ────────────────────────────────────────────
-$(OUTPUT_DIR)/TFTP_Impl_Codec.krml: verify | $(OUTPUT_DIR)
-	@echo "Extracting TFTP.Impl.Codec to .krml"
-	@$(FSTAR) --codegen KrmlC --custard_split \
-	  --custard_entry_module TFTP.Impl.Codec \
-	  $(IMPL_DIR)/TFTP.Impl.Codec.fst -o $@
-
-extract-krml: $(KRML_FILES)
-	@echo "All implementation modules extracted to .krml"
-
-# ── Phase 2: .krml → C ─────────────────────────────────────────────
-extract-c: extract-krml | $(EXTRACT_DIR)
-	@echo "Running KaRaMeL to generate C code..."
-	@$(KRML) \
-	  -tmpdir $(EXTRACT_DIR) \
-	  -skip-compilation \
-	  -warn-error -2-9-17 \
-	  -bundle 'TFTP.Impl.Codec=[rename=TFTP_Impl_Codec]' \
-	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-	  -no-prefix TFTP.Impl.Codec \
-	  $(KRML_FILES)
-	@echo "C code generated in $(EXTRACT_DIR)/"
-	@ls -lh $(EXTRACT_DIR)/TFTP_Impl_Codec.c 2>/dev/null || true
+# ── F* → C ─────────────────────────────────────────────────────────
+extract-c: verify | $(EXTRACT_DIR)
+	@echo "Extracting TFTP.Impl.Codec to C"
+	@$(FSTAR) --codegen C --custard_monomorphize_types true \
+	  --custard_entry_module TFTP.Impl.Codec --custard_c_no_prefix TFTP.Impl.Codec \
+	  $(IMPL_DIR)/TFTP.Impl.Codec.fst -o $(EXTRACT_DIR)/TFTP_Impl_Codec.c
+	@ls -lh $(EXTRACT_DIR)/TFTP_Impl_Codec.c
 
 extract: extract-c
 
@@ -162,18 +139,14 @@ extract: extract-c
 # and checks the reconstructed bytes.  Unlike YMODEM, the socketpair is
 # SOCK_DGRAM (each Common_TCP_read returns exactly one datagram), realizing the
 # one-datagram-per-read discipline TFTP's implicit-length DATA relies on.
-# pulse_array_shim.c is the trusted C realization of the Pulse library's verified
-# memcpy_l (as the TCP stub is the trusted realization of read/write).
 VERIFIED_DIR = verified
 STUBS_DIR    = ../c_stubs
-KRML_INCLUDE = $(KRML_HOME)/include
-KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 INTEROP_DIR  = interop
 CC ?= gcc
-CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_karamel.h -Wall -Wno-unused-function \
+CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
+  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
 
 extract-loops: verify
 	@echo "Extracting the verified TFTP driver loops to C ..."
@@ -182,9 +155,9 @@ extract-loops: verify
 vloop-test: extract-loops
 	@echo "Building the verified-loop transfer test ..."
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
-	  $(VERIFIED_DIR)/vloop_test.c $(VERIFIED_DIR)/pulse_array_shim.c \
-	  $(EXTRACT_DIR)/TFTP_Verified.c $(wildcard $(EXTRACT_DIR)/Common_ProtocolImplementation.c) \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(VERIFIED_DIR)/vloop_test.c \
+	  $(EXTRACT_DIR)/TFTP_Verified.c \
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server loop  ->  verified client loop  (over a SOCK_DGRAM socketpair)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -200,9 +173,8 @@ help:
 	@echo "TFTP sample - Makefile targets:"
 	@echo "  make verify        - Verify all TFTP modules (default)"
 	@echo "  make check-admits  - List admits in spec/ and impl/"
-	@echo "  make extract-krml  - Extract the codec leaf to .krml"
-	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
-	@echo "  make extract       - verify + extract-krml + extract-c"
+	@echo "  make extract-c     - Extract the codec leaf to C (into _extract/)"
+	@echo "  make extract       - verify + extract-c"
 	@echo "  make extract-loops - Extract the verified driver loops (_extract/TFTP_Verified.c)"
 	@echo "  make vloop-test    - Build + run the verified server->client transfer test"
 	@echo "  make clean         - Remove build artifacts"

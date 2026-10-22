@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# HTTP sample: Makefile (verify + KaRaMeL C extraction)
+# HTTP sample: Makefile (verify + C extraction)
 # ═══════════════════════════════════════════════════════════════════
 # Verifies the IETF HTTP (RFC 1350) reliable-delivery specification and
 # executable layer, and (in later phases) extracts the verified codec + driver
@@ -28,12 +28,6 @@
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
-# KaRaMeL lives at opt/karamel in the EverParse toolchain built by
-# scripts/build-everparse.sh (the CI layout, shared with the other samples);
-# older local devcontainers vendor it under opt/FStar/karamel.  Prefer whichever
-# exists so the same Makefile works in CI and in a local checkout.
-KRML_HOME ?= $(firstword $(wildcard $(EVERPARSE_HOME)/opt/karamel $(FSTAR_HOME)/karamel) $(EVERPARSE_HOME)/opt/karamel)
-KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 LOWPARSE_HOME ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
 export PATH := $(Z3_DIR):$(PATH)
@@ -116,42 +110,21 @@ check-admits:
 # Extraction to C
 # ═══════════════════════════════════════════════════════════════════
 # The verified codec leaf `HTTP.Impl.Codec` is standalone (only Pulse/F* array
-# primitives + the hand-written HTTP.Wire spec it proves against), so KaRaMeL
-# bundles away the FStar/Pulse/Prims support and emits one C file with unprefixed
-# function names — the ABI the interop wrappers (P5) link against.
+# primitives + the hand-written HTTP.Wire spec it proves against), so Custard
+# (--codegen C) emits one C file with unprefixed function names — the ABI the interop wrappers (P5) link against.
 IMPL_MODULES = HTTP.Impl.Codec.Chunked
 
-KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES)))
-
-$(OUTPUT_DIR):
-	@mkdir -p $@
 
 $(EXTRACT_DIR):
 	@mkdir -p $@
 
-# ── Phase 1: F* → .krml ────────────────────────────────────────────
-$(OUTPUT_DIR)/HTTP_Impl_Codec_Chunked.krml: verify | $(OUTPUT_DIR)
-	@echo "Extracting HTTP.Impl.Codec.Chunked to .krml"
-	@$(FSTAR) --codegen KrmlC --custard_split \
-	  --custard_entry_module HTTP.Impl.Codec.Chunked \
-	  $(IMPL_DIR)/HTTP.Impl.Codec.Chunked.fst -o $@
-
-extract-krml: $(KRML_FILES)
-	@echo "All implementation modules extracted to .krml"
-
-# ── Phase 2: .krml → C ─────────────────────────────────────────────
-extract-c: extract-krml | $(EXTRACT_DIR)
-	@echo "Running KaRaMeL to generate C code..."
-	@$(KRML) \
-	  -tmpdir $(EXTRACT_DIR) \
-	  -skip-compilation \
-	  -warn-error -2-9-17 \
-	  -bundle 'HTTP.Impl.Codec.Chunked=[rename=HTTP_Impl_Codec_Chunked]' \
-	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims,HTTP.Wire.Common,HTTP.Wire.Chunked' \
-	  -no-prefix HTTP.Impl.Codec.Chunked \
-	  $(KRML_FILES)
-	@echo "C code generated in $(EXTRACT_DIR)/"
-	@ls -lh $(EXTRACT_DIR)/HTTP_Impl_Codec_Chunked.c 2>/dev/null || true
+# ── F* → C ─────────────────────────────────────────────────────────
+extract-c: verify | $(EXTRACT_DIR)
+	@echo "Extracting HTTP.Impl.Codec.Chunked to C"
+	@$(FSTAR) --codegen C --custard_monomorphize_types true \
+	  --custard_entry_module HTTP.Impl.Codec.Chunked --custard_c_no_prefix HTTP.Impl.Codec.Chunked \
+	  $(IMPL_DIR)/HTTP.Impl.Codec.Chunked.fst -o $(EXTRACT_DIR)/HTTP_Impl_Codec_Chunked.c
+	@ls -lh $(EXTRACT_DIR)/HTTP_Impl_Codec_Chunked.c
 
 extract: extract-c
 
@@ -166,18 +139,15 @@ extract: extract-c
 # that transfers a file body and checks the reconstructed bytes.  The socketpair
 # is SOCK_STREAM: HTTP runs over TCP and chunked framing is self-delimiting
 # (each chunk carries its own hex4 length prefix), so no datagram boundaries are
-# needed.  The verified loop uses only Common.TCP write/close, so no Pulse array
-# shim is required (the codec copies via a verified index loop, not memcpy_l).
+# needed.
 VERIFIED_DIR = verified
 STUBS_DIR    = ../c_stubs
-KRML_INCLUDE = $(KRML_HOME)/include
-KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 INTEROP_DIR  = interop
 CC ?= gcc
-CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_karamel.h -Wall -Wno-unused-function \
+CFLAGS_VLOOP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
+  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
 
 extract-loops: verify
 	@echo "Extracting the verified HTTP driver loop to C ..."
@@ -188,7 +158,7 @@ vloop-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_test \
 	  $(VERIFIED_DIR)/vloop_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server send loop  ->  Verified client receive loop  (over a SOCK_STREAM socketpair)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -199,7 +169,7 @@ vloop-length-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_test \
 	  $(VERIFIED_DIR)/vloop_length_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server send loop  ->  Verified client receive loop  (Content-Length body, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -213,7 +183,7 @@ vloop-chunk-stream-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_chunk_stream_test \
 	  $(VERIFIED_DIR)/vloop_chunk_stream_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server send-stream loop  ->  Verified client recv+reassemble loop  (chunked, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -224,7 +194,7 @@ vloop-length-exchange-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_exchange_test \
 	  $(VERIFIED_DIR)/vloop_length_exchange_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified client request loop  <->  Verified server request-parse+response loop  (Content-Length, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -235,7 +205,7 @@ vloop-length-full-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vloop_length_full_test \
 	  $(VERIFIED_DIR)/vloop_length_full_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified server head+body loop  ->  Verified client head-parse+body loop  (Content-Length, SOCK_STREAM)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -246,7 +216,7 @@ head-emit-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/head_emit_test \
 	  $(VERIFIED_DIR)/head_emit_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_response / http_emit_request  ->  byte-exact reference"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -257,7 +227,7 @@ chunk-stream-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/chunk_stream_test \
 	  $(VERIFIED_DIR)/chunk_stream_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_chunk/empty  ->  Verified http_decode_chunks reassembly"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -268,7 +238,7 @@ request-emit-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_emit_test \
 	  $(VERIFIED_DIR)/request_emit_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_request_host  ->  byte-exact reference"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -279,7 +249,7 @@ response-parse-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/response_parse_test \
 	  $(VERIFIED_DIR)/response_parse_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_parse_response_head  ->  (code, framing, length)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -290,7 +260,7 @@ response-emit-var-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/response_emit_var_test \
 	  $(VERIFIED_DIR)/response_emit_var_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_response_var  ->  ser_response_var (minimal CL)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -301,7 +271,7 @@ header-parse-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/header_parse_test \
 	  $(VERIFIED_DIR)/header_parse_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_parse_header_field / http_count_headers -> parse_field"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -312,7 +282,7 @@ request-line-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_line_test \
 	  $(VERIFIED_DIR)/request_line_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_parse_request_line  ->  parse_request_line_m"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -323,7 +293,7 @@ request-post-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/request_post_test \
 	  $(VERIFIED_DIR)/request_post_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_emit_request_post  ->  ser_request_post"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -334,7 +304,7 @@ framing-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/framing_test \
 	  $(VERIFIED_DIR)/framing_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_request_framing_ok / http_count_header_named"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -345,7 +315,7 @@ method-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/method_test \
 	  $(VERIFIED_DIR)/method_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_request_line_ok / http_method_known"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -356,7 +326,7 @@ limits-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/limits_test \
 	  $(VERIFIED_DIR)/limits_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_header_limits_ok"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -367,7 +337,7 @@ connclose-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/connclose_test \
 	  $(VERIFIED_DIR)/connclose_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_connection_close"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -379,7 +349,7 @@ get-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_test \
 	  $(VERIFIED_DIR)/get_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get  ->  GET / against a mock example.com server"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -390,7 +360,7 @@ get-chunked-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_chunked_test \
 	  $(VERIFIED_DIR)/get_chunked_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get + http_get_body_chunked  ->  chunked GET decode"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -401,7 +371,7 @@ get-chunked-var-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_chunked_var_test \
 	  $(VERIFIED_DIR)/get_chunked_var_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get + http_get_body_chunked_var -> min-hex decode"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -412,7 +382,7 @@ get-live-test: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/get_live_test \
 	  $(VERIFIED_DIR)/get_live_test.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "─────────────────────────────────────────────────────────────────"
 	@echo " Verified http_get  ->  live GET http://example.com/ (guarded)"
 	@echo "─────────────────────────────────────────────────────────────────"
@@ -428,7 +398,7 @@ vcurl: extract-loops
 	$(CC) $(CFLAGS_VLOOP) -o $(EXTRACT_DIR)/vcurl \
 	  $(VERIFIED_DIR)/vcurl.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c
 	@echo "Built $(EXTRACT_DIR)/vcurl.  Try:  $(EXTRACT_DIR)/vcurl http://example.com/"
 
 vcurl-demo: vcurl
@@ -449,9 +419,8 @@ help:
 	@echo "HTTP sample - Makefile targets:"
 	@echo "  make verify        - Verify all HTTP modules (default)"
 	@echo "  make check-admits  - List admits in spec/ and impl/"
-	@echo "  make extract-krml  - Extract the codec leaf to .krml"
-	@echo "  make extract-c     - Run KaRaMeL to generate C (into _extract/)"
-	@echo "  make extract       - verify + extract-krml + extract-c"
+	@echo "  make extract-c     - Extract the codec leaf to C (into _extract/)"
+	@echo "  make extract       - verify + extract-c"
 	@echo "  make extract-loops - Extract the verified driver loops (_extract/HTTP_Verified.c)"
 	@echo "  make vloop-test    - Build + run the verified chunked server->client transfer test"
 	@echo "  make vloop-length-test - Build + run the verified Content-Length transfer test"

@@ -94,7 +94,7 @@ The implementation milestones are:
 | Endpoint-owned `close` | Done for the endpoint close-notify local action.  The C runtime may optionally follow this with an endpoint workflow wait for the peer close when requested. | Done for the verified close-notify API surface; model the optional wait-for-peer workflow only if the public proof API needs it. |
 | Public audit lemmas | Done for the canonical trace bridge: endpoint-owned connected client/server states now expose `WFSM.valid_byte_trace` for the corresponding canonical systems. | Add any remaining transport-history convenience lemmas only if the pairing theorem needs them at the final call site. |
 | Retire legacy public workflow surface | Done; direct `connect`/`accept`/`send`/`receive`/`close` specs are no longer exported from the driver interfaces.  Legacy direct helpers remain private implementation code. | Done. |
-| Final gates | Pending. | `make -j128`, `make extract-tls13-driver-krml`, `make extract-tls13-bundle`, and extracted OpenSSL tests pass. |
+| Final gates | Pending. | `make -j128`, `make extract-tls13-bundle`, and extracted OpenSSL tests pass. |
 
 The important audit distinction is now explicit in the interfaces: endpoint-owned
 predicates are the exported proof-facing workflow state, while the older
@@ -555,11 +555,10 @@ experiment after the TLS endpoint path is already green.
 After each side is ported, run the normal proof and C gates:
 
 1. `make -j128`
-2. `make extract-tls13-driver-krml`
-3. `make extract-tls13-bundle`
-4. the existing extracted client/server OpenSSL tests
+2. `make extract-tls13-bundle`
+3. the existing extracted client/server OpenSSL tests
 
-If KaRaMeL reports non-Low* code, unresolved polymorphic functions, or missing
+If Custard reports unextractable code, unresolved polymorphic functions, or missing
 class dictionary code, treat that as a design failure in the extractable path:
 move the offending value behind `Ghost.erased` / `noextract`, or replace the
 generic runtime call with a concrete monomorphic wrapper.

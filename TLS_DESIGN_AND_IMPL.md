@@ -22,7 +22,7 @@ and application-log projection.
 | Public extracted API | `src/impl/TLS13.Impl.Client.fsti`, `src/impl/TLS13.Impl.Client.fst` | Constructor, driver-hint, network-input, local-event, and observation/copyout entry points. |
 | Response/event types | `src/impl/TLS13.Impl.Client.Types.fst` | Extraction-facing response types plus legal-response predicates. |
 | Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h`, `runtime/tls13_server_driver.c`, `runtime/tls13_server_driver.h` | Stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Common.TCP` channels, endpoint scheduling, residual input buffering before fresh reads, canonical network/local handlers, and endpoint finish hooks. |
-| Common endpoint driver contract | `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, `common/Common.TCP.fsti`, `c_stubs/common_tcp_karamel.*` | Shared calc/TLS architecture: the core implementation relates handlers, TCP histories, wire messages, and the protocol state machine; endpoints add frames, concrete buffers, and first-order `NeedInput`/`Local`/`Done`/`Failed` scheduling; the generic driver is verified and fuel-bounded, while TLS extraction uses monomorphic runtime wrappers against the same endpoint contract. |
+| Common endpoint driver contract | `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, `common/Common.TCP.fsti`, `c_stubs/common_tcp_custard.*` | Shared calc/TLS architecture: the core implementation relates handlers, TCP histories, wire messages, and the protocol state machine; endpoints add frames, concrete buffers, and first-order `NeedInput`/`Local`/`Done`/`Failed` scheduling; the generic driver is verified and fuel-bounded, while TLS extraction uses monomorphic runtime wrappers against the same endpoint contract. |
 | Concrete state representation | `src/impl/TLS13.Impl.ConnectionState.Repr.fst` | Concrete storage records, allocation helpers, ownership predicates, low-level copy helpers, and `connection_exactly`. |
 | State queries | `src/impl/TLS13.Impl.ConnectionState.Queries.fst` | Read-only runtime checks, snapshots, and driver copyout helpers. |
 | State model helpers | `src/impl/TLS13.Impl.ConnectionState.{Bounds,Model,Tags}.fst` | Constants, pure transition constructors/evolution lemmas, and proof-only control/tag predicates. |
@@ -333,12 +333,12 @@ Other trusted runtime boundaries remain:
 - entropy and X25519 key generation;
 - OpenSSL-backed certificate-chain validation and CertificateVerify signature
   checking, now isolated behind the typed `TLS13.OpenSSL.fsti` interface and
-  implemented by `c_stubs/tls13_openssl_karamel.*` plus
+  implemented by `c_stubs/tls13_openssl_custard.*` plus
   `c_stubs/tls13_openssl_stubs.c`; certificate validation hands the verified
   local event only the exact returned identity prefix;
 - Pulse/F*/KaRaMeL/runtime infrastructure, allocation, and C platform behavior;
 - the TCP bridge in `c_stubs/common_tcp_stubs.c` and
-  `c_stubs/common_tcp_karamel.*` that connects explicit input/output buffers to
+  `c_stubs/common_tcp_custard.*` that connects explicit input/output buffers to
   socket reads and writes under the shared `Common.TCP` F*/Pulse interface.
   The endpoint runtime wrappers perform residual-buffer prefix processing,
   read-append, suffix compaction, and exact response writes before returning to

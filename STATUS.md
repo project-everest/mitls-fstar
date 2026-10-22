@@ -32,7 +32,7 @@ The current committed proof surface is centered on `TLS13.Impl.Client`, not the 
 - `runtime/tls13_client_driver.c` and `runtime/tls13_server_driver.c` are stable C ABI wrappers over the extracted endpoint/canonical protocol surface. They use `Common.TCP` channels, endpoint scheduling, local/API events, residual input buffering before fresh reads, and generated canonical network/local handlers.
 - `Common.ProtocolImplementation` is the core refinement contract; `Common.ProtocolEndpoint` adds endpoint frames, concrete buffer preparation, first-order scheduling actions, and TCP I/O resources; `Common.ProtocolDriver` provides the verified fuel-bounded endpoint loop used by the calc socket sample and as the proof contract for TLS monomorphic runtime wrappers.
 - TLS endpoint-local callback outcomes are represented as local/API events, not external actions. Certificate validation/signature verification, server parameter selection, shared-secret derivation, signing, application send, and close_notify all go through the canonical local handler path.
-- The shared TCP bridge is `Common.TCP` plus `c_stubs/common_tcp_karamel.*`/`common_tcp_stubs.*`. The C shim accepts both generated erased-argument shapes for bundles that erase ghost histories differently.
+- The shared TCP bridge is `Common.TCP` plus `c_stubs/common_tcp_custard.*`/`common_tcp_stubs.*`. The C shim accepts both generated erased-argument shapes for bundles that erase ghost histories differently.
 
 The invariant now includes:
 
@@ -92,7 +92,7 @@ Recent committed increments:
 - `54bb923` strengthens live serializer contracts.
 - `612d299` requires raw-record parse facts for every nonzero consumed network prefix.
 - `b39efa6` adds the first extracted Pulse driver facade and concrete runtime driver.
-- current increment: the OpenSSL interop runtime now goes through the top-level verified Pulse workflow, with auth assumptions isolated in `TLS13.OpenSSL.fsti` and implemented by `c_stubs/tls13_openssl_karamel.*`.
+- current increment: the OpenSSL interop runtime now goes through the top-level verified Pulse workflow, with auth assumptions isolated in `TLS13.OpenSSL.fsti` and implemented by `c_stubs/tls13_openssl_custard.*`.
 
 ## What remains to prove
 
@@ -187,8 +187,8 @@ Start with these files:
 - `src/impl/TLS13.Impl.Client.Types.fst`: definitions of `client_state_correct`, `client_end_to_end_invariant`, `network_bytes_end_to_end_correct`, `local_event_end_to_end_correct`, and the `driver_trace_end_to_end` theorem surface.
 - `runtime/tls13_client_driver.c`, `runtime/tls13_server_driver.c`, and their headers: stable concrete C APIs over the extracted endpoint/canonical protocol runtime path.
 - `common/Common.ProtocolImplementation.fst`, `common/Common.ProtocolEndpoint.fst`, `common/Common.ProtocolDriver.fst`, and `common/Common.TCP.fsti`: shared protocol refinement, endpoint scheduling, generic fuel-bounded driver, and TCP-history interface.
-- `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*`: typed OpenSSL auth TCB used by the verified workflow.
-- `c_stubs/common_tcp_karamel.*`, `c_stubs/common_tcp_stubs.*`, and the OpenSSL interop tests in `test/unit/`: C ABI bridge and smoke tests for the endpoint-driven runtime path.
+- `src/impl/extern/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_custard.*`: typed OpenSSL auth TCB used by the verified workflow.
+- `c_stubs/common_tcp_custard.*`, `c_stubs/common_tcp_stubs.*`, and the OpenSSL interop tests in `test/unit/`: C ABI bridge and smoke tests for the endpoint-driven runtime path.
 - `src/spec/core/TLS13.Spec.StateMachine.fst`: audit-facing core connection-state model and legal deltas. Client/server endpoint machines and exact wire semantics are in `src/spec/core/TLS13.Spec.Endpoint.*` and `TLS13.Spec.StateMachine.Canonical`; replay and preservation properties are isolated under `src/spec/properties`.
 - `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*`: verified parser/serializer facades and their `TLS13.Wire.Spec` postconditions.
 - `TLS_DESIGN_AND_IMPL.md`: high-level description of the current proof architecture and remaining gaps.

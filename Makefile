@@ -404,11 +404,10 @@ check-admits:
 	fi
 
 # ── Extraction ─────────────────────────────────────────────────────
-.PHONY: extract-krml extract-connection \
-  extract-tls13-driver-krml extract-tls13-bundle
+.PHONY: extract-c extract-tls13-bundle
 
 # ──────────────────────────────────────────────────────────────────────────────
-# KaRaMeL Extraction - .krml to C
+# C Extraction
 # ──────────────────────────────────────────────────────────────────────────────
 
 EXTRACT_DIR = _extract
@@ -507,14 +506,23 @@ BUNDLE_INTERNAL_MODULES = \
 # Executable foreign-function interfaces live in $(EXTERN_DIR); pure axiomatic
 # models remain under src/spec/assumptions.
 
-TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_bundle
+# The extracted C library: one translation unit, TLS13.c, and its header
+# TLS13.h, written directly by Custard's C backend.
+TLS13_BUNDLE_DIR = $(EXTRACT_DIR)/tls13_c
+TLS13_BUNDLE_C = $(TLS13_BUNDLE_DIR)/TLS13.c
 TLS13_BUNDLE_STAMP = $(TLS13_BUNDLE_DIR)/.generated
 TLS13_BUNDLE_OBJ_DIR = $(TLS13_BUNDLE_DIR)/obj-logging-$(ATLAS_LOGGING)
 TLS13_BUNDLE_OBJS_STAMP = $(TLS13_BUNDLE_OBJ_DIR)/.built
-TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR) -I$(TLS13_BUNDLE_DIR)/internal
-# Custard writes JSON; KaRaMeL selects its JSON reader by the .json extension
-# (.krml selects the legacy Marshal reader), so the name matters.
-TLS13_CUSTARD_KRML = $(OUTPUT_DIR)/Custard.json
+TLS13_BUNDLE_INCLUDES = -I$(TLS13_BUNDLE_DIR)
+# Compiled with the library: runs custard_init_globals() at load time.
+TLS13_BUNDLE_INIT = runtime/tls13_globals.c
+# The client engine alone, for the Chromium provider archive: it is sans-I/O,
+# so this unit references neither the TCP nor the OpenSSL externs.  Same file
+# names as the full library, so runtime/tls13_client_engine.c builds against
+# either.
+TLS13_ENGINE_DIR = $(EXTRACT_DIR)/tls13_engine_c
+TLS13_ENGINE_STAMP = $(TLS13_ENGINE_DIR)/.generated
+TLS13_ENGINE_INCLUDES = -I$(TLS13_ENGINE_DIR)
 CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
@@ -603,13 +611,14 @@ SERVER_DRIVER_MODULES = \
 GENERATED_RUNTIME_MODULES = TLS13.Wire.Generated.ChangeCipherSpec
 
 # Custard (F*'s whole-program extractor, doc/ref/custard.md in the F* tree)
-# extracts the C library in one run, from the checked files, into a single
-# JSON file holding one karamel file per F* module (--custard_split), which is what
-# the -bundle/-library/-drop flags of the karamel step select on.  Extraction is
-# by reachability, so the roots are exactly what hand-written C (runtime/,
+# extracts the C library in one run, from the checked files, straight to C
+# (--codegen C): TLS13.c holds every definition, TLS13.h the types and the
+# prototypes of the roots; everything else is static.  Extraction is by
+# reachability, so the roots are exactly what hand-written C (runtime/,
 # test/unit/, the Chromium overlay) uses: the public interfaces of the client
 # driver, server driver and client engine (--custard_entry_module roots every
-# definition of a module's .fsti), plus a constant read by the server runtime.
+# definition of a module's .fsti), plus a constant read by the server runtime
+# and the key-schedule functions test/unit/test_key_schedule_bindings.c checks.
 # Everything else they reach is extracted with them; what is reached of an
 # interface-only module (src/impl/extern, Common.TCP) becomes an external,
 # realized by the C stubs.
@@ -618,87 +627,50 @@ TLS13_CUSTARD_ENTRY_MODULES = \
   TLS13.Impl.Server.Driver \
   TLS13.Impl.Client.Engine
 TLS13_CUSTARD_ENTRIES = \
-  TLS13.Impl.ConnectionState.Bounds.max_server_certificate_chain_len_sz
-# Abstract types of the interface-only modules: the C stubs
-# (c_stubs/common_tcp_karamel.h, c_stubs/tls13_openssl_karamel.h) define them,
-# so the extracted C must name them without declaring them.
+  TLS13.Impl.ConnectionState.Bounds.max_server_certificate_chain_len_sz \
+  TLS13.KeySchedule.handshake_secret \
+  TLS13.KeySchedule.client_handshake_traffic_secret \
+  TLS13.KeySchedule.derive_traffic_key \
+  TLS13.KeySchedule.derive_traffic_iv
+# Abstract types of the interface-only modules: the C stubs' headers define
+# them, so the extracted C includes those headers instead of declaring them.
 TLS13_CUSTARD_EXTERN_TYPES = \
-  Common.TCP.channel \
-  Common.TCP.listener \
-  TLS13.OpenSSL.auth_config \
-  TLS13.OpenSSL.auth_context \
-  TLS13.OpenSSL.server_credentials
+  Common.TCP.channel@common_tcp_custard.h \
+  Common.TCP.listener@common_tcp_custard.h \
+  TLS13.OpenSSL.auth_config@tls13_openssl_custard.h \
+  TLS13.OpenSSL.auth_context@tls13_openssl_custard.h \
+  TLS13.OpenSSL.server_credentials@tls13_openssl_custard.h
 # Custard takes a single file on the command line; it loads the checked files of
 # the entry modules on demand.
 TLS13_CUSTARD_ROOTS = src/impl/TLS13.Impl.Client.Driver.fst
+TLS13_CUSTARD_C_FLAGS = --codegen C --custard_monomorphize_types true \
+  $(addprefix --custard_extern_type ,$(TLS13_CUSTARD_EXTERN_TYPES))
 
-$(TLS13_CUSTARD_KRML): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify $(OUTPUT_DIR)
+# $(1): output directory, $(2): Custard root options
+define custard_extract_c
+	@rm -rf $(1)
+	@mkdir -p $(1)
 	@start=$$(date +%s); \
-	printf '[extract] Custard start target=%s at %s\n' "$@" "$$(date -Is)"; \
-	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) \
-	  --codegen KrmlC --custard_split \
-	  $(addprefix --custard_entry_module ,$(TLS13_CUSTARD_ENTRY_MODULES)) \
-	  $(addprefix --custard_entry ,$(TLS13_CUSTARD_ENTRIES)) \
-	  $(addprefix --custard_extern_type ,$(TLS13_CUSTARD_EXTERN_TYPES)) \
-	  $(TLS13_CUSTARD_ROOTS) -o $@.tmp; \
+	printf '[extract] Custard start target=%s at %s\n' "$(1)" "$$(date -Is)"; \
+	$(FSTAR_EXTRACT) $(FSTAR_EXTRACT_DEBUG_FLAGS) $(TLS13_CUSTARD_C_FLAGS) $(2) \
+	  $(TLS13_CUSTARD_ROOTS) -o $(1)/TLS13.c; \
 	status=$$?; end=$$(date +%s); \
 	printf '[extract] Custard end target=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
-	test $$status -eq 0 && mv $@.tmp $@
-
-extract-krml extract-tls13-driver-krml: $(TLS13_CUSTARD_KRML)
-
-$(BUNDLE_DIR):
-	mkdir -p $@
-
-$(TLS13_BUNDLE_DIR):
-	mkdir -p $@ $@/internal
-
-extract-tls13-bundle: $(TLS13_BUNDLE_STAMP)
-
-# KaRaMeL bundling notes:
-#  * -bundle 'Common.BufferedStream': the module is specification-only; without
-#    a bundle of its own KaRaMeL emits a .c file for it with no matching .h.
-#  * -drop of TLS13.ConnectionLog / TLS13.Spec.StateMachine* / TLS13.Spec.Endpoint*
-#    / TLS13.Transcript: these are pure specification modules.  KaRaMeL emits
-#    their (ghost) datatypes into a public header that references types it keeps
-#    private, which does not compile.  Nothing in the extracted C uses them.
-$(TLS13_BUNDLE_STAMP): $(TLS13_CUSTARD_KRML) Makefile | $(TLS13_BUNDLE_DIR)
-	@echo "Extracting TLS13 client/server driver bundle..."
-	@rm -f $(TLS13_BUNDLE_DIR)/*.c $(TLS13_BUNDLE_DIR)/*.h $(TLS13_BUNDLE_DIR)/internal/*.h
-	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
-	@mkdir -p $(TLS13_BUNDLE_DIR)/internal
-	@start=$$(date +%s); \
-	printf '[extract] KaRaMeL start target=%s at %s\n' "$@" "$$(date -Is)"; \
-	$(KRML_EXE) $(KRML_DEBUG_FLAGS) \
-	  -tmpdir $(TLS13_BUNDLE_DIR) \
-	  -skip-compilation \
-	  -static-header TLS13.Impl.Serializer \
-	  -add-include '<stdbool.h>' \
-	  -add-include '"krml/internal/compat.h"' \
-	  -add-include '"../../c_stubs/common_tcp_karamel.h"' \
-	  -add-include '"../../c_stubs/tls13_bytes_karamel.h"' \
-	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
-	  -add-include '"../../c_stubs/atlas_trace.h"' \
-	  -drop 'FStar.Tactics.*' -drop FStar.Tactics -drop 'FStar.Reflection.*' \
-	  -library TLS13.Crypto -library Common.Memmove -library Common.TCP \
-	  -library TLS13.OpenSSL -library TLS13.Trace \
-	  -bundle 'Common.BufferedStream' \
-	  -bundle 'TLS13.Trace' \
-	  -bundle 'TLS13.Bytes,TLS13.Types,TLS13.Keys,TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*,TLS13.Wire.Semantics' \
-	  -bundle 'TLS13.ConnectionLog,TLS13.Spec.StateMachine,TLS13.Spec.StateMachine.*,TLS13.Spec.Endpoint.*,TLS13.Transcript' \
-	  -drop TLS13.ConnectionLog -drop TLS13.Spec.StateMachine -drop 'TLS13.Spec.StateMachine.*' \
-	  -drop 'TLS13.Spec.Endpoint.*' -drop TLS13.Transcript \
-	  -bundle 'TLS13.Wire.Generated.*' \
-	  -bundle 'LowParse.*' \
-	  -bundle 'FStar.*,PulseCore.*,Prims' \
-	  -warn-error -2-9-17-6 \
-	  $(TLS13_CUSTARD_KRML); \
-	status=$$?; end=$$(date +%s); \
-	printf '[extract] KaRaMeL end target=%s status=%s elapsed=%ss at %s\n' \
-	  "$@" "$$status" "$$((end-start))" "$$(date -Is)"; \
+	  "$(1)" "$$status" "$$((end-start))" "$$(date -Is)"; \
 	exit $$status
-	@touch $@
+	@touch $(1)/.generated
+endef
+
+$(TLS13_BUNDLE_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify
+	$(call custard_extract_c,$(TLS13_BUNDLE_DIR),\
+	  $(addprefix --custard_entry_module ,$(TLS13_CUSTARD_ENTRY_MODULES)) \
+	  $(addprefix --custard_entry ,$(TLS13_CUSTARD_ENTRIES)))
+
+$(TLS13_ENGINE_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify
+	$(call custard_extract_c,$(TLS13_ENGINE_DIR),\
+	  --custard_entry_module TLS13.Impl.Client.Engine)
+
+extract-tls13-bundle extract-c: $(TLS13_BUNDLE_STAMP)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # C Stubs and Dependencies
@@ -809,22 +781,22 @@ HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJE
 ECHO_STUB_SOURCES = \
   runtime/common_memmove.c \
   c_stubs/atlas_trace.c \
-  c_stubs/common_tcp_karamel.c \
+  c_stubs/common_tcp_custard.c \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
-  c_stubs/tls13_openssl_karamel.c \
+  c_stubs/tls13_openssl_custard.c \
   c_stubs/tls13_openssl_stubs.c \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
   runtime/common_memmove.h \
   c_stubs/atlas_trace.h \
-  c_stubs/common_tcp_karamel.h \
+  c_stubs/common_tcp_custard.h \
+  c_stubs/custard_option.h \
   c_stubs/common_tcp_stubs.h \
-  c_stubs/tls13_bytes_karamel.h \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_hacl_stubs.h \
-  c_stubs/tls13_openssl_karamel.h \
+  c_stubs/tls13_openssl_custard.h \
   c_stubs/tls13_openssl_stubs.h
 
 # Common C flags for all test builds
@@ -837,8 +809,6 @@ CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -I c_stubs \
   -I runtime \
   -I $(HACL_ACCEL_CONFIG_DIR) \
-  -I $(KRML_HOME)/include \
-  -I $(KRML_HOME)/krmllib/dist/minimal \
   -I $(HACL_DIR) \
   -I $(HACL_DIR)/internal \
   -I $(HACL_KI) \
@@ -849,13 +819,15 @@ LDFLAGS_COMMON = -Wl,--gc-sections
 TLS13_PROVIDER_DIR = $(EXTRACT_DIR)/atlas_provider/logging-$(ATLAS_LOGGING)
 TLS13_PROVIDER_OBJ_DIR = $(TLS13_PROVIDER_DIR)/obj
 TLS13_PROVIDER_ARCHIVE = $(TLS13_PROVIDER_DIR)/libatlas_tls13_client_engine.a
+# The provider links the engine-only Custard unit, which does not reference the
+# TCP/OpenSSL externs of the drivers.
 TLS13_PROVIDER_C_SOURCES = \
+  $(TLS13_ENGINE_DIR)/TLS13.c \
   c_stubs/atlas_trace.c \
   c_stubs/tls13_crypto_external.c \
   runtime/common_memmove.c \
   runtime/tls13_client_engine.c \
-  $(HACL_WRAPPER_SOURCES) \
-  $(KRML_HOME)/krmllib/c/fstar_uint32.c
+  $(HACL_WRAPPER_SOURCES)
 TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
 
 CHROMIUM_SRC ?= $(abspath ../chromium/src)
@@ -936,20 +908,20 @@ BENCHMARK_PROFILE_OBJ_STAMP = $(BENCHMARK_PROFILE_OBJ_DIR)/.built-$(BENCHMARK_PR
 BENCHMARK_BINARY = test/perf/tls13_bench
 BENCHMARK_PROFILE_BINARY = test/perf/tls13_bench-gprof
 
-$(BENCHMARK_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+$(BENCHMARK_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(TLS13_BUNDLE_INIT) $(ECHO_STUB_HEADERS) Makefile
 	@rm -rf $(BENCHMARK_OBJ_DIR)
 	@mkdir -p $(BENCHMARK_OBJ_DIR)
-	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	@set -e; for src in $(TLS13_BUNDLE_C) $(TLS13_BUNDLE_INIT); do \
 	  obj="$(BENCHMARK_OBJ_DIR)/$$(basename "$$src" .c).o"; \
 	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
 	    -c "$$src" -o "$$obj"; \
 	done
 	@touch $@
 
-$(BENCHMARK_PROFILE_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile
+$(BENCHMARK_PROFILE_OBJ_STAMP): $(TLS13_BUNDLE_STAMP) $(TLS13_BUNDLE_INIT) $(ECHO_STUB_HEADERS) Makefile
 	@rm -rf $(BENCHMARK_PROFILE_OBJ_DIR)
 	@mkdir -p $(BENCHMARK_PROFILE_OBJ_DIR)
-	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	@set -e; for src in $(TLS13_BUNDLE_C) $(TLS13_BUNDLE_INIT); do \
 	  obj="$(BENCHMARK_PROFILE_OBJ_DIR)/$$(basename "$$src" .c).o"; \
 	  $(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(TLS13_BUNDLE_INCLUDES) \
 	    -c "$$src" -o "$$obj"; \
@@ -966,13 +938,12 @@ define link_benchmark
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/perf/tls13_bench.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) $(1) -lssl -lcrypto -o $(3)
 endef
 
@@ -1003,10 +974,10 @@ benchmark: benchmark-build
 profile: benchmark-profile-build
 	scripts/profile-tls13.sh
 
-$(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(ECHO_STUB_HEADERS) Makefile | check-deps
+$(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(TLS13_BUNDLE_INIT) $(ECHO_STUB_HEADERS) Makefile | check-deps
 	@rm -rf $(TLS13_BUNDLE_OBJ_DIR)
 	@mkdir -p $(TLS13_BUNDLE_OBJ_DIR)
-	@set -e; for src in $(TLS13_BUNDLE_DIR)/*.c; do \
+	@set -e; for src in $(TLS13_BUNDLE_C) $(TLS13_BUNDLE_INIT); do \
 	  obj="$(TLS13_BUNDLE_OBJ_DIR)/$$(basename "$$src" .c).o"; \
 	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
 	    -c "$$src" -o "$$obj"; \
@@ -1042,7 +1013,6 @@ check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
 	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
 	  -I $(HACL_KI) -I $(HACL_KL) \
-	  -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
 	  $(ECHO_STUB_SOURCES)
 
 # ── HACL* Wrapper Tests ─────────────────────────────────────────────
@@ -1059,23 +1029,22 @@ test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
 
 test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
-  $(TLS13_BUNDLE_OBJS_STAMP) c_stubs/tls13_crypto_external.c \
+  $(TLS13_BUNDLE_OBJS_STAMP) $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) \
   $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(HACL_TEST_OBJECTS) \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_KeySchedule.o \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Record.o \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_AEAD.o \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_ArrayCopy.o \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Serializer_Common.o \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Impl_Server_Material.o \
-	  $(TLS13_BUNDLE_OBJ_DIR)/TLS13_Wire_Generated.o \
+	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
+	  c_stubs/atlas_trace.c \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
+	  c_stubs/common_tcp_custard.c \
+	  c_stubs/common_tcp_stubs.c \
+	  c_stubs/tls13_openssl_custard.c \
+	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_key_schedule_bindings.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(LDFLAGS_COMMON) -o $@
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-key-schedule-bindings: test/test_key_schedule_bindings
 	./test/test_key_schedule_bindings
@@ -1104,13 +1073,12 @@ test/test_extracted_client_openssl_echo: \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-client-openssl-echo: test-openssl-echo
@@ -1131,13 +1099,12 @@ test/test_interop_client: \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_interop_client.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 .PHONY: interop-client
@@ -1157,13 +1124,12 @@ test/test_extracted_client_engine_openssl_echo: \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_engine.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_engine_openssl_echo.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test/openssl_echo_server: test/openssl_echo_server.c
@@ -1220,22 +1186,20 @@ test-client-engine-openssl-echo: test/openssl_echo_server \
 # ── Chromium-style Async HTTPS Demo ────────────────────────────────
 $(TLS13_PROVIDER_OBJ_STAMP): $(TLS13_PROVIDER_C_SOURCES) \
   runtime/tls13_client_engine.h $(ECHO_STUB_HEADERS) \
-  $(TLS13_BUNDLE_STAMP) $(HACL_ACCEL_CONFIG_DEP) Makefile | check-deps
+  $(TLS13_ENGINE_STAMP) $(HACL_ACCEL_CONFIG_DEP) Makefile | check-deps
 	@rm -rf $(TLS13_PROVIDER_OBJ_DIR)
 	@mkdir -p $(TLS13_PROVIDER_OBJ_DIR)
 	@set -e; for src in $(TLS13_PROVIDER_C_SOURCES); do \
 	  obj="$(TLS13_PROVIDER_OBJ_DIR)/$$(basename "$$src" .c).o"; \
-	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
+	  $(CC) $(CFLAGS_COMMON) $(TLS13_ENGINE_INCLUDES) \
 	    -c "$$src" -o "$$obj"; \
 	done
 	@touch $@
 
-$(TLS13_PROVIDER_ARCHIVE): $(TLS13_BUNDLE_OBJS_STAMP) \
-  $(TLS13_PROVIDER_OBJ_STAMP) $(HACL_TEST_OBJECTS)
+$(TLS13_PROVIDER_ARCHIVE): $(TLS13_PROVIDER_OBJ_STAMP) $(HACL_TEST_OBJECTS)
 	@mkdir -p $(TLS13_PROVIDER_DIR)
 	rm -f $@
 	$(AR) rcs $@ \
-	  $(TLS13_BUNDLE_OBJ_DIR)/*.o \
 	  $(TLS13_PROVIDER_OBJ_DIR)/*.o \
 	  $(HACL_TEST_OBJECTS)
 
@@ -1398,7 +1362,7 @@ $(CHROMIUM_DEMO_OBJ_STAMP): $(CHROMIUM_DEMO_C_SOURCES) \
 	@mkdir -p $(CHROMIUM_DEMO_OBJ_DIR)
 	@set -e; for src in $(CHROMIUM_DEMO_C_SOURCES); do \
 	  obj="$(CHROMIUM_DEMO_OBJ_DIR)/$$(basename "$$src" .c).o"; \
-	  $(CC) $(CFLAGS_COMMON) $(TLS13_BUNDLE_INCLUDES) \
+	  $(CC) $(CFLAGS_COMMON) \
 	    -c "$$src" -o "$$obj"; \
 	done
 	@touch $@
@@ -1410,7 +1374,6 @@ test/test_chromium_client_socket_demo: \
   runtime/tls13_client_engine.h \
   $(TLS13_PROVIDER_ARCHIVE) $(CHROMIUM_DEMO_OBJ_STAMP) | check-deps
 	$(CXX) -std=c++17 $(CFLAGS_COMMON) \
-	  $(TLS13_BUNDLE_INCLUDES) \
 	  runtime/chromium/tls13_client_socket.cc \
 	  test/unit/test_chromium_client_socket_demo.cc \
 	  $(CHROMIUM_DEMO_OBJ_DIR)/*.o \
@@ -1495,25 +1458,21 @@ $(HTTP_SAMPLE_VTLS_BIN): \
   $(HACL_TEST_OBJECTS) | check-deps
 	@$(MAKE) --no-print-directory -C $(HTTP_SAMPLE_DIR) extract-loops
 	@mkdir -p $(HTTP_SAMPLE_EXTRACT)/vtls_obj
-	@# The HTTP translation units come from a separate karamel run with its own
-	@# generated headers (Common_TCP.h etc.), so compile them on their own rather
-	@# than against the TLS13 bundle's include directory.
+	@# The HTTP translation units come from a separate Custard run with its own
+	@# generated header (HTTP_Verified.h), so compile them on their own rather
+	@# than against the TLS13 unit's include directory.
 	$(CC) -std=gnu11 -D_DEFAULT_SOURCE -DHTTP_VERIFIED_TLS \
-	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
+	  -DCOMMON_TCP_CUSTARD_FULL_DECLS -include c_stubs/common_tcp_custard.h \
 	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
 	  -ffunction-sections -fdata-sections \
 	  -I c_stubs -I runtime -I $(HTTP_SAMPLE_EXTRACT) \
-	  -I $(KRML_HOME)/include -I $(KRML_HOME)/include/krml \
-	  -I $(KRML_HOME)/krmllib/dist/minimal \
 	  -c $(HTTP_SAMPLE_DIR)/interop/http_server.c \
 	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/http_server.o
 	$(CC) -std=gnu11 -D_DEFAULT_SOURCE \
-	  -DCOMMON_TCP_KARAMEL_FULL_DECLS -include c_stubs/common_tcp_karamel.h \
+	  -DCOMMON_TCP_CUSTARD_FULL_DECLS -include c_stubs/common_tcp_custard.h \
 	  -Wall -Wno-unused-function -Wno-unused-parameter -Wno-parentheses \
 	  -ffunction-sections -fdata-sections \
 	  -I c_stubs -I $(HTTP_SAMPLE_EXTRACT) \
-	  -I $(KRML_HOME)/include -I $(KRML_HOME)/include/krml \
-	  -I $(KRML_HOME)/krmllib/dist/minimal \
 	  -c $(HTTP_SAMPLE_EXTRACT)/HTTP_Verified.c \
 	  -o $(HTTP_SAMPLE_EXTRACT)/vtls_obj/HTTP_Verified.o
 	$(CC) $(CFLAGS_COMMON) \
@@ -1525,12 +1484,11 @@ $(HTTP_SAMPLE_VTLS_BIN): \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 	@echo "Built $@ (verified HTTP/1.1 over verified TLS 1.3)"
 
@@ -1586,13 +1544,12 @@ test/test_extracted_server_openssl_client: \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_server_openssl_client.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-openssl-sclient: test/test_extracted_server_openssl_client \
@@ -1620,13 +1577,12 @@ test/test_atlas_loopback: \
 	  runtime/common_memmove.c \
 	  runtime/tls13_client_driver.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_atlas_loopback.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-atlas-loopback: test/test_atlas_loopback \
@@ -1653,13 +1609,12 @@ test/test_server_interop_matrix: \
 	  c_stubs/tls13_crypto_external.c \
 	  runtime/common_memmove.c \
 	  runtime/tls13_server_driver.c \
-	  c_stubs/common_tcp_karamel.c \
+	  c_stubs/common_tcp_custard.c \
 	  c_stubs/common_tcp_stubs.c \
-	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_server_interop_matrix.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(KRML_HOME)/krmllib/c/fstar_uint32.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-server-matrix: test/test_server_interop_matrix \
@@ -1771,8 +1726,7 @@ quick:
 	  $(FILE)
 	@rm -f $(QUICK_CACHE)/$(notdir $(FILE)).checked
 
-.PHONY: all verify test extract-krml extract-connection \
-  extract-tls13-driver-krml extract-tls13-bundle \
+.PHONY: all verify test extract-c extract-tls13-bundle \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \

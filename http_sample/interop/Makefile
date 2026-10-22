@@ -22,19 +22,16 @@ EXTRACT_DIR  := $(PARENT)/_extract
 STUBS_DIR    := $(PARENT)/../c_stubs
 VERIFIED_DIR := $(PARENT)/verified
 EVERPARSE_HOME ?= $(abspath $(PARENT)/../tools/everparse)
-KRML_HOME   ?= $(firstword $(wildcard $(EVERPARSE_HOME)/opt/karamel $(EVERPARSE_HOME)/opt/FStar/karamel) $(EVERPARSE_HOME)/opt/karamel)
-KRML_INCLUDE = $(KRML_HOME)/include
-KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
 
 SRV_OUR := $(abspath $(EXTRACT_DIR)/http_server)
 
 PORT    ?= 8080
 TIMEOUT ?= 30
 CC      ?= gcc
-CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_KARAMEL_FULL_DECLS \
-  -include $(STUBS_DIR)/common_tcp_karamel.h -Wall -Wno-unused-function \
+CFLAGS_INTEROP = -std=c11 -D_DEFAULT_SOURCE -DCOMMON_TCP_CUSTARD_FULL_DECLS \
+  -include $(STUBS_DIR)/common_tcp_custard.h -Wall -Wno-unused-function \
   -Wno-unused-parameter -Wno-implicit-function-declaration \
-  -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I$(STUBS_DIR)
+  -I$(EXTRACT_DIR) -I$(STUBS_DIR)
 
 RUN_DIR := _run_http
 RUN_DIR_ABS := $(abspath $(RUN_DIR))
@@ -77,7 +74,7 @@ build-progs:
 	$(CC) $(CFLAGS_INTEROP) -o $(EXTRACT_DIR)/http_server \
 	  http_server.c \
 	  $(EXTRACT_DIR)/HTTP_Verified.c \
-	  $(STUBS_DIR)/common_tcp_karamel.c $(STUBS_DIR)/common_tcp_stubs.c \
+	  $(STUBS_DIR)/common_tcp_custard.c $(STUBS_DIR)/common_tcp_stubs.c \
 	  -lssl -lcrypto
 	@echo "Server http_server (verified response) compiled to $(EXTRACT_DIR)/."
 

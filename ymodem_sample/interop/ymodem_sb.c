@@ -20,7 +20,7 @@
  */
 
 #include "YModem_Verified.h"
-#include "common_tcp_karamel.h"
+#include "common_tcp_custard.h"
 
 #include <errno.h>
 #include <stdint.h>

@@ -4,13 +4,11 @@
 # Uses F* --dep full for proper incremental and parallel builds
 
 # ── Toolchain ──────────────────────────────────────────────────────
-# Use the same Pulse-capable EverParse/F*/KaRaMeL toolchain as the root build.
+# Use the same Pulse-capable EverParse/F* toolchain as the root build.
 # Override these variables to test with a different compatible toolchain.
 EVERPARSE_HOME ?= $(abspath ../tools/everparse)
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
-KRML_HOME ?= $(EVERPARSE_HOME)/opt/karamel
-KRML ?= $(KRML_HOME)/out/bin/krml
 Z3_DIR ?= $(EVERPARSE_HOME)/opt/z3
 FSTAR_LIB ?= $(shell $(FSTAR_EXE) --locate_lib)
 export PATH := $(Z3_DIR):$(PATH)
@@ -62,7 +60,7 @@ IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
 ALL_FILES  = $(COMMON_FILES) $(EXTERN_FILES) $(SPEC_FILES) $(IMPL_FILES)
 
 # ── Main Targets (MUST come before .depend include) ───────────────
-.PHONY: all verify clean check-admits stats help extract extract-krml extract-c test-c
+.PHONY: all verify clean check-admits stats help extract extract-c test-c
 
 # Default target (defined before including .depend to ensure it's the default)
 all: verify
@@ -135,9 +133,8 @@ help:
 	@echo "  make verify       - Verify all modules (incremental, supports -j)"
 	@echo "  make check-admits - Check for admits (should be 0)"
 	@echo "  make stats        - Show project statistics"
-	@echo "  make extract      - Extract to C (verify + extract-krml + extract-c)"
-	@echo "  make extract-krml - Extract F* to .krml files"
-	@echo "  make extract-c    - Run KaRaMeL to generate C code"
+	@echo "  make extract      - Extract to C (same as extract-c)"
+	@echo "  make extract-c    - Extract F* to C with Custard's C backend"
 	@echo "  make test-c       - Compile and run C test"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make help         - Show this help"
@@ -168,62 +165,40 @@ IMPL_MODULES = \
   Calc.Server.EndpointRunner
 
 # Custard (F*'s whole-program extractor) extracts, from the checked files, the
-# endpoint runner test_main.c calls and everything it reaches, into one JSON
-# file (KaRaMeL picks its JSON reader by the .json extension) with one karamel
-# file per F* module (--custard_split).  It takes a single file on the command
-# line and loads the other modules on demand.  Common.TCP's
-# abstract types are defined by c_stubs/common_tcp_karamel.h.
-CUSTARD_KRML = $(OUTPUT_DIR)/Custard.json
-KRML_FILES = $(CUSTARD_KRML)
-
-$(OUTPUT_DIR):
-	@mkdir -p $@
+# endpoint runner test_main.c calls and everything it reaches, straight to one
+# C file (--codegen C).  It takes a single file on the command line and loads
+# the other modules on demand.  Common.TCP's abstract types are defined by
+# c_stubs/common_tcp_custard.h, which the generated header includes.
+CALC_C = $(EXTRACT_DIR)/Calc_Server.c
 
 $(EXTRACT_DIR):
 	@mkdir -p $@
 
-# ── Phase 1: F* → .krml ────────────────────────────────────────────
-$(CUSTARD_KRML): verify | $(OUTPUT_DIR)
-	@echo "Extracting Calc.Server.EndpointRunner to .krml"
-	@$(FSTAR) --codegen KrmlC --custard_split \
+$(CALC_C): verify | $(EXTRACT_DIR)
+	@echo "Extracting Calc.Server.EndpointRunner to C"
+	@$(FSTAR) --codegen C \
 	  --custard_entry Calc.Server.EndpointRunner.run_channel_endpoint \
-	  --custard_extern_type Common.TCP.channel \
-	  --custard_extern_type Common.TCP.listener \
+	  --custard_c_no_prefix Calc.Server.EndpointRunner \
+	  --custard_extern_type Common.TCP.channel@common_tcp_custard.h \
+	  --custard_extern_type Common.TCP.listener@common_tcp_custard.h \
 	  $(IMPL_DIR)/Calc.Server.EndpointRunner.fst -o $@
-
-extract-krml: $(KRML_FILES)
-	@echo "✅ All modules extracted to .krml"
-
-# ── Phase 2: .krml → C ─────────────────────────────────────────────
-extract-c: extract-krml | $(EXTRACT_DIR)
-	@echo "Running KaRaMeL to generate C code..."
-	@$(KRML) \
-	  -tmpdir $(EXTRACT_DIR) \
-	  -skip-compilation \
-	  -warn-error -2-9-17 \
-	  -add-include '"common_tcp_karamel_compat.h"' \
-	  -library Common.TCP \
-	  -bundle 'Calc.Server.EndpointRunner=Calc.*[rename=Calc_Server]' \
-	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-	  -no-prefix Calc.Server.EndpointRunner \
-	  $(KRML_FILES)
 	@echo "✅ C code generated in $(EXTRACT_DIR)/"
 	@ls -lh $(EXTRACT_DIR)/Calc_Server.c $(EXTRACT_DIR)/Calc_Server.h
+
+extract-c: $(CALC_C)
 
 extract: extract-c
 
 # ── C Compilation and Testing ──────────────────────────────────────
-KRML_INCLUDE = $(KRML_HOME)/include
-KRML_RUNTIME = $(KRML_HOME)/krmllib/dist/minimal
+CFLAGS_C = -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -I$(EXTRACT_DIR) -I../c_stubs
 
 test-c: extract-c
 	@echo "Compiling C test..."
-	@gcc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I../c_stubs \
-	  -c $(EXTRACT_DIR)/Calc_Server.c -o $(EXTRACT_DIR)/Calc_Server.o
-	@gcc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -I$(KRML_INCLUDE) -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I../c_stubs \
+	@gcc $(CFLAGS_C) -c $(CALC_C) -o $(EXTRACT_DIR)/Calc_Server.o
+	@gcc $(CFLAGS_C) \
 	  -o $(EXTRACT_DIR)/calc_test \
 	  $(EXTRACT_DIR)/Calc_Server.o \
-	  ../c_stubs/common_tcp_karamel.c \
+	  ../c_stubs/common_tcp_custard.c \
 	  ../c_stubs/common_tcp_stubs.c \
 	  test_main.c \
 	  -pthread

@@ -1,27 +1,13 @@
-#include "tls13_openssl_karamel.h"
+#include "tls13_openssl_custard.h"
 
-#if __has_include("TLS13_OpenSSL.h")
-#include "TLS13_OpenSSL.h"
-#else
+#include "custard_option.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#ifndef FStar_Pervasives_Native_None
-#define FStar_Pervasives_Native_None 0
-#endif
-#ifndef FStar_Pervasives_Native_Some
-#define FStar_Pervasives_Native_Some 1
-#endif
-typedef uint8_t FStar_Pervasives_Native_option_tag;
-typedef struct FStar_Pervasives_Native_option__size_t_s {
-  FStar_Pervasives_Native_option_tag tag;
-  size_t v;
-} FStar_Pervasives_Native_option__size_t;
-typedef struct FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials_s {
-  FStar_Pervasives_Native_option_tag tag;
-  TLS13_OpenSSL_server_credentials v;
-} FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials;
-#endif
+
+CUSTARD_OPTION_TYPE(option_size, size_t);
+CUSTARD_OPTION_TYPE(option_server_credentials, TLS13_OpenSSL_server_credentials);
 
 #include "tls13_openssl_stubs.h"
 
@@ -222,15 +208,15 @@ bool TLS13_OpenSSL_verify_certificate_signature_for_local_event(
       signature_len);
 }
 
-FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials
+option_server_credentials
 TLS13_OpenSSL_server_credentials_new(
     uint8_t *certificate_chain,
     size_t certificate_chain_len,
     uint8_t *private_key,
     size_t private_key_len) {
-  FStar_Pervasives_Native_option__TLS13_OpenSSL_server_credentials result = {
-      .tag = FStar_Pervasives_Native_None,
-      .v = NULL,
+  option_server_credentials result = {
+      .tag = CUSTARD_NONE,
+      .val.Some = NULL,
   };
   tls13_server_credentials *raw =
       tls13_openssl_server_credentials_new(
@@ -249,8 +235,8 @@ TLS13_OpenSSL_server_credentials_new(
   }
   atomic_init(&creds->references, (size_t)1u);
   creds->raw = raw;
-  result.tag = FStar_Pervasives_Native_Some;
-  result.v = creds;
+  result.tag = CUSTARD_SOME;
+  result.val.Some = creds;
   return result;
 }
 
@@ -265,16 +251,16 @@ TLS13_OpenSSL_server_credentials_clone(
   return creds;
 }
 
-FStar_Pervasives_Native_option__size_t
+option_size
 TLS13_OpenSSL_sign_certificate_verify(
     TLS13_OpenSSL_server_credentials creds,
     uint8_t *input,
     size_t input_len,
     uint8_t *signature,
     size_t signature_capacity) {
-  FStar_Pervasives_Native_option__size_t result = {
-      .tag = FStar_Pervasives_Native_None,
-      .v = 0,
+  option_size result = {
+      .tag = CUSTARD_NONE,
+      .val.Some = 0,
   };
   size_t signature_len = 0;
   if (creds != NULL &&
@@ -285,8 +271,8 @@ TLS13_OpenSSL_sign_certificate_verify(
           signature,
           signature_capacity,
           &signature_len)) {
-    result.tag = FStar_Pervasives_Native_Some;
-    result.v = signature_len;
+    result.tag = CUSTARD_SOME;
+    result.val.Some = signature_len;
   }
   return result;
 }
@@ -302,14 +288,14 @@ TLS13_OpenSSL_server_credential_signature_scheme(
   return tls13_openssl_server_credential_signature_scheme(creds->raw);
 }
 
-FStar_Pervasives_Native_option__size_t
+option_size
 TLS13_OpenSSL_copy_server_certificate_chain(
     TLS13_OpenSSL_server_credentials creds,
     uint8_t *out,
     size_t out_capacity) {
-  FStar_Pervasives_Native_option__size_t result = {
-      .tag = FStar_Pervasives_Native_None,
-      .v = 0,
+  option_size result = {
+      .tag = CUSTARD_NONE,
+      .val.Some = 0,
   };
   size_t out_len = 0;
   if (creds != NULL &&
@@ -318,8 +304,8 @@ TLS13_OpenSSL_copy_server_certificate_chain(
           out,
           out_capacity,
           &out_len)) {
-    result.tag = FStar_Pervasives_Native_Some;
-    result.v = out_len;
+    result.tag = CUSTARD_SOME;
+    result.val.Some = out_len;
   }
   return result;
 }

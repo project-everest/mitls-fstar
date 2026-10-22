@@ -5,7 +5,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "karamel_option_compat.h"
 
 typedef struct tls13_server_driver_s tls13_server_driver;
 typedef struct tls13_server_config_s tls13_server_config;

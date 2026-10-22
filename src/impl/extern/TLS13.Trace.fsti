@@ -67,7 +67,10 @@ inline_for_extraction let server_network_end : U32.t = 3024ul
 inline_for_extraction let server_handshake_message : U32.t = 3040ul
 
 (** Runtime-only observational effect. Its empty separation-logic contract makes
-    tracing irrelevant to TLS memory ownership and protocol proofs. **)
+    tracing irrelevant to TLS memory ownership and protocol proofs.  In C it
+    is a macro of atlas_trace.h (a no-op unless ATLAS_ENABLE_LOGGING), so the
+    extracted code includes that header instead of declaring it. **)
+[@@FStar.Attributes.custard_extern ""; FStar.Attributes.custard_c_header "atlas_trace.h"]
 fn emit (event:U32.t) (arg0:U64.t) (arg1:U64.t) (arg2:U64.t)
   requires emp
   ensures emp

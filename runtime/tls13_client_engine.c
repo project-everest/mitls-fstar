@@ -1,6 +1,6 @@
 #include "tls13_client_engine.h"
 
-#include "TLS13_Impl_Client_Engine.h"
+#include "TLS13.h"
 #include "atlas_trace.h"
 
 #include <stdbool.h>
@@ -47,25 +47,25 @@ static bool output_buffers_valid(
 static tls13_client_engine_action map_action(
     TLS13_Impl_Client_Engine_engine_action action) {
   switch (action) {
-    case TLS13_Impl_Client_Engine_EngineProgress:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINEPROGRESS:
       return TLS13_CLIENT_ENGINE_PROGRESS;
-    case TLS13_Impl_Client_Engine_EngineNeedNetworkInput:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINENEEDNETWORKINPUT:
       return TLS13_CLIENT_ENGINE_NEED_NETWORK_INPUT;
-    case TLS13_Impl_Client_Engine_EngineNeedCertificateVerification:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINENEEDCERTIFICATEVERIFICATION:
       return TLS13_CLIENT_ENGINE_NEED_CERTIFICATE_VERIFICATION;
-    case TLS13_Impl_Client_Engine_EngineNeedCertificateSignatureVerification:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINENEEDCERTIFICATESIGNATUREVERIFICATION:
       return TLS13_CLIENT_ENGINE_NEED_CERTIFICATE_SIGNATURE_VERIFICATION;
-    case TLS13_Impl_Client_Engine_EngineNetworkOutput:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINENETWORKOUTPUT:
       return TLS13_CLIENT_ENGINE_NETWORK_OUTPUT;
-    case TLS13_Impl_Client_Engine_EngineApplicationData:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINEAPPLICATIONDATA:
       return TLS13_CLIENT_ENGINE_APPLICATION_DATA;
-    case TLS13_Impl_Client_Engine_EngineReady:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINEREADY:
       return TLS13_CLIENT_ENGINE_READY;
-    case TLS13_Impl_Client_Engine_EngineClosing:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINECLOSING:
       return TLS13_CLIENT_ENGINE_CLOSING;
-    case TLS13_Impl_Client_Engine_EngineClosed:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINECLOSED:
       return TLS13_CLIENT_ENGINE_CLOSED;
-    case TLS13_Impl_Client_Engine_EngineFailed:
+    case TLS13_IMPL_CLIENT_ENGINE_ENGINEFAILED:
     default:
       return TLS13_CLIENT_ENGINE_FAILED;
   }
@@ -74,17 +74,17 @@ static tls13_client_engine_action map_action(
 static tls13_client_engine_status map_status(
     TLS13_Impl_Endpoint_Types_endpoint_status status) {
   switch (status) {
-    case TLS13_Impl_Endpoint_Types_StepOk:
+    case TLS13_IMPL_ENDPOINT_TYPES_STEPOK:
       return TLS13_CLIENT_ENGINE_STATUS_OK;
-    case TLS13_Impl_Endpoint_Types_NeedMoreInput:
+    case TLS13_IMPL_ENDPOINT_TYPES_NEEDMOREINPUT:
       return TLS13_CLIENT_ENGINE_STATUS_NEED_MORE_INPUT;
-    case TLS13_Impl_Endpoint_Types_DecodeError:
+    case TLS13_IMPL_ENDPOINT_TYPES_DECODEERROR:
       return TLS13_CLIENT_ENGINE_STATUS_DECODE_ERROR;
-    case TLS13_Impl_Endpoint_Types_IllegalTransition:
+    case TLS13_IMPL_ENDPOINT_TYPES_ILLEGALTRANSITION:
       return TLS13_CLIENT_ENGINE_STATUS_ILLEGAL_TRANSITION;
-    case TLS13_Impl_Endpoint_Types_OutputBufferTooSmall:
+    case TLS13_IMPL_ENDPOINT_TYPES_OUTPUTBUFFERTOOSMALL:
       return TLS13_CLIENT_ENGINE_STATUS_OUTPUT_BUFFER_TOO_SMALL;
-    case TLS13_Impl_Endpoint_Types_ConnectionFailed:
+    case TLS13_IMPL_ENDPOINT_TYPES_CONNECTIONFAILED:
     default:
       return TLS13_CLIENT_ENGINE_STATUS_CONNECTION_FAILED;
   }
