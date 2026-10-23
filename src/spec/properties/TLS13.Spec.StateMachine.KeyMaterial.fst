@@ -418,7 +418,7 @@ let expected_traffic_secret_for_state
 let rec application_traffic_secret_after
   (secret:K.traffic_secret)
   (n:nat)
-  : Tot K.traffic_secret (decreases n) =
+  : GTot K.traffic_secret (decreases n) =
   if n = 0 then secret
   else application_traffic_secret_after (K.application_traffic_secret_update secret) (n - 1)
 

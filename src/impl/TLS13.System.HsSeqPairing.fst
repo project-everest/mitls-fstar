@@ -913,7 +913,7 @@ let cr_ctrl_shape (model:CS.connection_model) : prop =
      | CS.ControlHandshaking st -> client_read_hs_control st
      | _ -> False)
 
-#push-options "--fuel 2 --ifuel 8 --z3rlimit 60"
+#push-options "--fuel 2 --ifuel 8 --z3rlimit 200"
 let lemma_step_cr_ctrl_shape (model:CS.connection_model) (ev:CS.conn_event) (model':CS.connection_model)
   : Lemma
       (requires cr_ctrl_shape model /\ CS.legal_event model ev /\ CS.step_model model ev == Some model')

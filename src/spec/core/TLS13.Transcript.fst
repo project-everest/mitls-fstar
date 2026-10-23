@@ -10,6 +10,6 @@ let empty : transcript = B.empty
 let append (t:transcript) (handshake_bytes:B.bytes) : transcript =
   B.append t handshake_bytes
 
-let hash (t:transcript) : C.digest32 =
+let hash (t:transcript) : GTot C.digest32 =
   C.sha256 t
 

@@ -72,72 +72,72 @@ let label_traffic_update : B.bytes =
 
 let zero_secret : C.secret = B.zeros 32
 
-let empty_hash : C.digest32 = C.sha256 B.empty
+let empty_hash () : GTot C.digest32 = C.sha256 B.empty
 
 let derive_secret
   (secret:B.bytes)
   (label:B.bytes)
   (context:B.bytes)
-  : traffic_secret =
+  : GTot traffic_secret =
   C.hkdf_expand_label secret label context 32
 
-let early_secret (psk:B.bytes) : C.secret =
+let early_secret (psk:B.bytes) : GTot C.secret =
   C.hkdf_extract B.empty (if B.length psk = 0 then zero_secret else psk)
 
-let derived_secret (secret:B.bytes) : C.secret =
-  derive_secret secret label_derived empty_hash
+let derived_secret (secret:B.bytes) : GTot C.secret =
+  derive_secret secret label_derived (empty_hash ())
 
-let handshake_secret (early:B.bytes) (shared_secret:B.bytes) : C.secret =
+let handshake_secret (early:B.bytes) (shared_secret:B.bytes) : GTot C.secret =
   C.hkdf_extract (derived_secret early) shared_secret
 
-let master_secret (handshake:B.bytes) : C.secret =
+let master_secret (handshake:B.bytes) : GTot C.secret =
   C.hkdf_extract (derived_secret handshake) zero_secret
 
 let client_handshake_traffic_secret
   (handshake:B.bytes)
   (transcript_hash:B.bytes)
-  : traffic_secret =
+  : GTot traffic_secret =
   derive_secret handshake label_c_hs_traffic transcript_hash
 
 let server_handshake_traffic_secret
   (handshake:B.bytes)
   (transcript_hash:B.bytes)
-  : traffic_secret =
+  : GTot traffic_secret =
   derive_secret handshake label_s_hs_traffic transcript_hash
 
 let client_application_traffic_secret
   (master:B.bytes)
   (transcript_hash:B.bytes)
-  : traffic_secret =
+  : GTot traffic_secret =
   derive_secret master label_c_ap_traffic transcript_hash
 
 let server_application_traffic_secret
   (master:B.bytes)
   (transcript_hash:B.bytes)
-  : traffic_secret =
+  : GTot traffic_secret =
   derive_secret master label_s_ap_traffic transcript_hash
 
 let application_traffic_secret_update
   (old_secret:B.bytes)
-  : traffic_secret =
+  : GTot traffic_secret =
   C.hkdf_expand_label old_secret label_traffic_update B.empty 32
 
 let exporter_master_secret
   (master:B.bytes)
   (transcript_hash:B.bytes)
-  : C.secret =
+  : GTot C.secret =
   derive_secret master label_exp_master transcript_hash
 
 let resumption_master_secret
   (master:B.bytes)
   (transcript_hash:B.bytes)
-  : C.secret =
+  : GTot C.secret =
   derive_secret master label_res_master transcript_hash
 
-let finished_key (base_key:B.bytes) : C.secret =
+let finished_key (base_key:B.bytes) : GTot C.secret =
   derive_secret base_key label_finished B.empty
 
-let finished_verify_data (base_key:B.bytes) (transcript_hash:B.bytes) : C.digest32 =
+let finished_verify_data (base_key:B.bytes) (transcript_hash:B.bytes) : GTot C.digest32 =
   C.hmac_sha256 (finished_key base_key) transcript_hash
 
 (**
@@ -146,8 +146,8 @@ let finished_verify_data (base_key:B.bytes) (transcript_hash:B.bytes) : C.digest
   ChaCha20-Poly1305 key: the algorithm must be threaded here rather than
   recovered by truncation.
 **)
-let derive_aead_key (a:C.aead_alg) (secret:B.bytes) : C.aead_key a =
+let derive_aead_key (a:C.aead_alg) (secret:B.bytes) : GTot (C.aead_key a) =
   C.hkdf_expand_label secret label_key B.empty (C.aead_key_len a)
 
-let derive_aead_iv (secret:B.bytes) : C.aead_nonce =
+let derive_aead_iv (secret:B.bytes) : GTot C.aead_nonce =
   C.hkdf_expand_label secret label_iv B.empty 12

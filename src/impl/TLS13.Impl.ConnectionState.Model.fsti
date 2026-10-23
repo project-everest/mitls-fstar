@@ -959,7 +959,7 @@ noextract
 let derived_shared_secret_state
   (st:CS.connection_state)
   (shared:TLS13.Crypto.Spec.x25519_shared_secret)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   let early = K.early_secret B.empty in
@@ -2155,7 +2155,7 @@ let received_key_update_state
   (st:CS.connection_state)
   (req:M.key_update_request)
   (raw_received:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   match hs0.CS.hs_keys.CS.ks_server_application_traffic with
@@ -2209,7 +2209,7 @@ let server_received_key_update_state
   (st:CS.connection_state)
   (req:M.key_update_request)
   (raw_received:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   match hs0.CS.hs_keys.CS.ks_client_application_traffic with
@@ -2258,7 +2258,7 @@ noextract
 let received_key_update_not_requested_state
   (st:CS.connection_state)
   (raw_received:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   received_key_update_state st M.UpdateNotRequested raw_received
 
 noextract
@@ -2266,7 +2266,7 @@ let sent_key_update_state
   (st:CS.connection_state)
   (req:M.key_update_request)
   (raw_sent:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   match hs0.CS.hs_keys.CS.ks_client_application_traffic with
@@ -2313,7 +2313,7 @@ noextract
 let sent_key_update_response_state
   (st:CS.connection_state)
   (raw_sent:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   sent_key_update_state st M.UpdateNotRequested raw_sent
 
 (* Server mirror of [sent_key_update_state].  A KeyUpdate rotates the
@@ -2323,7 +2323,7 @@ let server_sent_key_update_state
   (st:CS.connection_state)
   (req:M.key_update_request)
   (raw_sent:B.bytes)
-  : CS.connection_state =
+  : GTot CS.connection_state =
   let model0 = st.CS.cs_model in
   let hs0 = model0.CS.model_handshake in
   match hs0.CS.hs_keys.CS.ks_server_application_traffic with

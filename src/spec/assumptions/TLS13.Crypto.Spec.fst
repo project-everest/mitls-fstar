@@ -10,11 +10,9 @@ module TLS13.Crypto.Spec
     [Spec.Byte.elem] for AES-GCM) while TLS uses public [FStar.UInt8.t]
     bytes.  [TLS13.Crypto.Secret] converts; underneath the two are the same.
 
-  - hacl-pulse's specifications are ghost ([GTot]), but the model's
-    primitives are total ([Tot]), because the TLS specification computes
-    with them in total code.  [tot_of_ghost] below is the one assumption
-    that closes this gap: a ghost function has a total counterpart that
-    agrees with it everywhere.  It is [noextract] and is never run.
+  - hacl-pulse's specifications are ghost ([GTot]): the value of a secret
+    byte is ghost.  The model's primitives are therefore ghost too; the
+    model only ever uses them in specifications and proofs.
 
   hacl-pulse's specifications are also partial: each is defined only for
   inputs within its length limits (and with exact key and nonce lengths).
@@ -50,14 +48,6 @@ module AES = Spec.AES
 
 open Hacl.Secret.Word.Instances
 
-(** Assumption: every ghost function has a total counterpart.  This is
-    consistent (F*'s ghost functions are functions; only their computational
-    content is withheld), and it is the price of keeping the TLS model total
-    while the hacl-pulse specifications are ghost. *)
-noextract
-assume val tot_of_ghost (#a #b: Type) (f: a -> GTot b)
-  : Tot (g: (a -> Tot b) { forall x. g x == f x })
-
 noextract
 let c (s: B.bytes) : GTot (r: Seq.seq S8.t { Seq.length r == B.length s }) = CS.classify_seq s
 
@@ -81,7 +71,7 @@ let sha256_g (msg: B.bytes) : GTot digest32 =
   then d (SHA.hash SC.sha2_256 (c msg))
   else B.zeros 32
 
-let sha256 msg = tot_of_ghost sha256_g msg
+let sha256 msg = sha256_g msg
 
 let sha256_eq (msg: B.bytes) : Lemma (sha256 msg == sha256_g msg) = ()
 
@@ -105,10 +95,7 @@ let hmac_g2 (key msg: B.bytes) : GTot digest32 =
   end
   else B.zeros 32
 
-noextract
-let hmac_g (km: B.bytes & B.bytes) : GTot digest32 = hmac_g2 (fst km) (snd km)
-
-let hmac_sha256 key msg = tot_of_ghost hmac_g (key, msg)
+let hmac_sha256 key msg = hmac_g2 key msg
 
 let hmac_sha256_eq (key msg: B.bytes) : Lemma (hmac_sha256 key msg == hmac_g2 key msg) = ()
 
@@ -127,10 +114,7 @@ let hkdf_extract_g2 (salt ikm: B.bytes) : GTot secret =
   end
   else B.zeros 32
 
-noextract
-let hkdf_extract_g (si: B.bytes & B.bytes) : GTot secret = hkdf_extract_g2 (fst si) (snd si)
-
-let hkdf_extract salt ikm = tot_of_ghost hkdf_extract_g (salt, ikm)
+let hkdf_extract salt ikm = hkdf_extract_g2 salt ikm
 
 let hkdf_extract_eq (salt ikm: B.bytes)
   : Lemma (hkdf_extract salt ikm == hkdf_extract_g2 salt ikm) = ()
@@ -141,7 +125,7 @@ noextract
 let x25519_public_from_private_g (sk: B.bytes) : GTot x25519_public =
   if B.length sk = 32 then d (X.secret_to_public (c sk)) else B.zeros 32
 
-let x25519_public_from_private sk = tot_of_ghost x25519_public_from_private_g sk
+let x25519_public_from_private sk = x25519_public_from_private_g sk
 
 let x25519_public_from_private_eq (sk: B.bytes)
   : Lemma (x25519_public_from_private sk == x25519_public_from_private_g sk) = ()
@@ -157,7 +141,7 @@ let x25519_shared_g (skpk: B.bytes & B.bytes) : GTot (option x25519_shared_secre
   then map_d (HP.dh HP.DH_X25519 (c sk) (c pk))
   else None
 
-let x25519_shared sk pk = tot_of_ghost x25519_shared_g (sk, pk)
+let x25519_shared sk pk = x25519_shared_g (sk, pk)
 
 let x25519_shared_eq (sk pk: B.bytes)
   : Lemma (x25519_shared sk pk == x25519_shared_g (sk, pk)) = ()
@@ -173,7 +157,7 @@ let p256_public_from_private_g (sk: B.bytes) : GTot p256_public =
         | None -> B.zeros 65)
   else B.zeros 65
 
-let p256_public_from_private sk = tot_of_ghost p256_public_from_private_g sk
+let p256_public_from_private sk = p256_public_from_private_g sk
 
 let p256_public_from_private_eq (sk: B.bytes)
   : Lemma (p256_public_from_private sk == p256_public_from_private_g sk) = ()
@@ -185,7 +169,7 @@ let p256_shared_g (skpk: B.bytes & B.bytes) : GTot (option x25519_shared_secret)
   then map_d (HP.dh HP.DH_P256 (c sk) (c pk))
   else None
 
-let p256_shared sk pk = tot_of_ghost p256_shared_g (sk, pk)
+let p256_shared sk pk = p256_shared_g (sk, pk)
 
 let p256_shared_eq (sk pk: B.bytes)
   : Lemma (p256_shared sk pk == p256_shared_g (sk, pk)) = ()
@@ -241,16 +225,8 @@ let hkdf_expand_label_g4 (secret label context: B.bytes) (len: nat)
   then d (HK.expand SC.sha2_256 (c secret) (c (hkdf_info label context len)) len)
   else B.zeros len
 
-noextract
-let hkdf_expand_label_g (x: B.bytes & B.bytes & B.bytes & nat) : GTot B.bytes =
-  let (secret, label, context, len) = x in
-  hkdf_expand_label_g4 secret label context len
-
 let hkdf_expand_label secret label context len =
-  let g = tot_of_ghost #(B.bytes & B.bytes & B.bytes & nat) #B.bytes hkdf_expand_label_g in
-  let r = g (secret, label, context, len) in
-  assert (r == hkdf_expand_label_g4 secret label context len);
-  r
+  hkdf_expand_label_g4 secret label context len
 
 let hkdf_expand_label_eq (secret label context: B.bytes) (len: nat)
   : Lemma (hkdf_expand_label secret label context len ==
@@ -301,16 +277,8 @@ let aead_seal_g5 (alg: aead_alg) (key nonce aad plaintext: B.bytes)
     | AEAD_AES128_GCM -> gcm_seal key nonce aad plaintext
   else B.zeros (B.length plaintext + 16)
 
-noextract
-let aead_seal_g (x: aead_alg & B.bytes & B.bytes & B.bytes & B.bytes) : GTot B.bytes =
-  let (alg, key, nonce, aad, plaintext) = x in
-  aead_seal_g5 alg key nonce aad plaintext
-
 let aead_seal alg key nonce aad plaintext =
-  let g = tot_of_ghost #(aead_alg & B.bytes & B.bytes & B.bytes & B.bytes) #B.bytes aead_seal_g in
-  let r = g (alg, key, nonce, aad, plaintext) in
-  assert (r == aead_seal_g5 alg key nonce aad plaintext);
-  r
+  aead_seal_g5 alg key nonce aad plaintext
 
 let aead_seal_eq (alg: aead_alg) (key nonce aad plaintext: B.bytes)
   : Lemma (aead_seal alg key nonce aad plaintext == aead_seal_g5 alg key nonce aad plaintext) = ()
@@ -355,19 +323,9 @@ let aead_open_g5 (alg: aead_alg) (key nonce aad ciphertext: B.bytes)
     | AEAD_AES128_GCM -> gcm_open key nonce aad ciphertext
   else None
 
-noextract
-let aead_open_g (x: aead_alg & B.bytes & B.bytes & B.bytes & B.bytes)
-  : GTot (option B.bytes) =
-  let (alg, key, nonce, aad, ciphertext) = x in
+let aead_open alg key nonce aad ciphertext =
   match aead_open_g5 alg key nonce aad ciphertext with
   | Some p -> Some (p <: B.bytes)
-  | None -> None
-
-let aead_open alg key nonce aad ciphertext =
-  let g = tot_of_ghost #(aead_alg & B.bytes & B.bytes & B.bytes & B.bytes)
-                       #(option B.bytes) aead_open_g in
-  match g (alg, key, nonce, aad, ciphertext) with
-  | Some p -> if B.length p + 16 = B.length ciphertext then Some p else None
   | None -> None
 
 let aead_open_eq (alg: aead_alg) (key nonce aad ciphertext: B.bytes)

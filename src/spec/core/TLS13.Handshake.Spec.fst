@@ -47,7 +47,7 @@ let verify_certificate_verify
     (certificate_verify_input transcript_hash)
     (Sem.certificateVerify_signature_bytes cv)
 
-let expected_finished (base_key:C.secret) (transcript_hash:C.digest32) : GFin.finished =
+let expected_finished (base_key:C.secret) (transcript_hash:C.digest32) : GTot GFin.finished =
   K.finished_verify_data base_key transcript_hash
 
 let verify_finished

@@ -102,20 +102,20 @@ type x25519_shared_secret = secret
 type public_key = B.bytes
 type signature = B.bytes
 
-val sha256: msg:B.bytes -> Tot digest32
+val sha256: msg:B.bytes -> GTot digest32
 
-val hmac_sha256: key:B.bytes -> msg:B.bytes -> Tot digest32
+val hmac_sha256: key:B.bytes -> msg:B.bytes -> GTot digest32
 
-val hkdf_extract: salt:B.bytes -> ikm:B.bytes -> Tot secret
+val hkdf_extract: salt:B.bytes -> ikm:B.bytes -> GTot secret
 
 val x25519_public_from_private:
   sk:B.bytes ->
-  Tot x25519_public
+  GTot x25519_public
 
 val x25519_shared:
   sk:B.bytes ->
   pk:B.bytes ->
-  Tot (option x25519_shared_secret)
+  GTot (option x25519_shared_secret)
 
 val lemma_x25519_shared_agreement:
   client_sk:x25519_private ->
@@ -146,12 +146,12 @@ type p256_public = bytes_of_len 65
 
 val p256_public_from_private:
   sk:B.bytes ->
-  Tot p256_public
+  GTot p256_public
 
 val p256_shared:
   sk:B.bytes ->
   pk:B.bytes ->
-  Tot (option x25519_shared_secret)
+  GTot (option x25519_shared_secret)
 
 val lemma_p256_shared_agreement:
   client_sk:p256_private ->
@@ -185,12 +185,12 @@ type kex_private = bytes_of_len 32
 type kex_public (g:kex_group) = bytes_of_len (kex_public_len g)
 type kex_shared_secret = x25519_shared_secret
 
-let kex_public_from_private (g:kex_group) (sk:B.bytes) : kex_public g =
+let kex_public_from_private (g:kex_group) (sk:B.bytes) : GTot (kex_public g) =
   match g with
   | KexX25519 -> x25519_public_from_private sk
   | KexP256 -> p256_public_from_private sk
 
-let kex_shared (g:kex_group) (sk:B.bytes) (pk:B.bytes) : option kex_shared_secret =
+let kex_shared (g:kex_group) (sk:B.bytes) (pk:B.bytes) : GTot (option kex_shared_secret) =
   match g with
   | KexX25519 -> x25519_shared sk pk
   | KexP256 -> p256_shared sk pk
@@ -313,7 +313,7 @@ val hkdf_expand_label:
   label:B.bytes ->
   context:B.bytes ->
   len:nat ->
-  Tot (bytes_of_len len)
+  GTot (bytes_of_len len)
 
 [@@ "opaque_to_smt"]
 let record_nonce_from_bytes
@@ -365,7 +365,7 @@ val aead_seal:
   nonce:B.bytes ->
   aad:B.bytes ->
   plaintext:B.bytes ->
-  Tot (bytes_of_len (B.length plaintext + 16))
+  GTot (bytes_of_len (B.length plaintext + 16))
 
 val aead_open:
   alg:aead_alg ->
@@ -373,7 +373,7 @@ val aead_open:
   nonce:B.bytes ->
   aad:B.bytes ->
   ciphertext:B.bytes ->
-  Tot (option (plaintext:B.bytes{B.length plaintext + 16 == B.length ciphertext}))
+  GTot (option (plaintext:B.bytes{B.length plaintext + 16 == B.length ciphertext}))
 
 (**
   AEAD correctness for honest encryption/decryption with the same algorithm,

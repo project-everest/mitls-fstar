@@ -122,7 +122,7 @@ type traffic_key_material = {
 let traffic_key_material_for_secret
   (a:C.aead_alg)
   (secret:K.traffic_secret)
-  : traffic_key_material =
+  : GTot traffic_key_material =
   {
     traffic_secret = secret;
     traffic_alg = a;
@@ -137,7 +137,7 @@ let traffic_key_material_for_secret
 **)
 let updated_traffic_key_material
   (old:traffic_key_material)
-  : traffic_key_material =
+  : GTot traffic_key_material =
   traffic_key_material_for_secret
     old.traffic_alg
     (K.application_traffic_secret_update old.traffic_secret)
@@ -725,7 +725,7 @@ let derive_shared_secret_model
   (model:connection_model)
   (hs:handshake_state)
   (shared:C.x25519_shared_secret)
-  : connection_model =
+  : GTot connection_model =
   let early = K.early_secret B.empty in
   let handshake = K.handshake_secret early shared in
   let master = K.master_secret handshake in
@@ -1099,7 +1099,7 @@ unfold
 let rotate_application_traffic
   (model:connection_model)
   (tdir:traffic_direction)
-  : option connection_model =
+  : GTot (option connection_model) =
   let hs = model.model_handshake in
   let label =
     traffic_label_for_endpoint_direction model.model_config.config_role tdir in
