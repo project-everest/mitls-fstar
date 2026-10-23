@@ -33,6 +33,8 @@ LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/lib/everparse/lowparse
 # verifies happily against the wrong F*/Pulse and does not reproduce in CI.
 EVERPARSE_COMMIT := $(shell sed -n 's/.*EVERPARSE_COMMIT:-\([0-9a-f]*\).*/\1/p' \
                       $(CURDIR)/scripts/build-everparse.sh | head -1)
+HACL_PULSE_COMMIT := $(shell sed -n 's/.*HACL_PULSE_COMMIT:-\([0-9a-f]*\).*/\1/p' \
+                      $(CURDIR)/scripts/build-hacl-pulse.sh | head -1)
 
 # F* locates Z3 by looking for `z3-<version>` on PATH.  The EverParse toolchain
 # ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.15.3); make them visible
@@ -72,9 +74,11 @@ FSTAR_PULSE_LIB = $(FSTAR_SOURCE_ROOT)/pulse/lib/pulse/lib
 CACHE_DIR   = _cache
 OUTPUT_DIR  = _output
 EXTRACT_DIR = _extract
-HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
-HACL_KI     = third_party/hacl-star/dist/karamel/include
-HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
+# hacl-pulse, built by scripts/build-hacl-pulse.sh: dist/ holds the extracted
+# Hacl.c/Hacl.h, c/ the handwritten entropy shim and the headers Hacl.h includes.
+HACL_PULSE_HOME ?= $(CURDIR)/tools/hacl-pulse
+HACL_DIST_DIR = $(HACL_PULSE_HOME)/dist
+HACL_C_DIR    = $(HACL_PULSE_HOME)/c
 EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
 SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
@@ -672,111 +676,31 @@ $(TLS13_ENGINE_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefil
 
 extract-tls13-bundle extract-c: $(TLS13_BUNDLE_STAMP)
 
+# The provider compiles the engine unit's source directly; it is produced by
+# the stamp's Custard run.
+$(TLS13_ENGINE_DIR)/TLS13.c $(TLS13_ENGINE_DIR)/TLS13.h: $(TLS13_ENGINE_STAMP)
+	@test -f $@
+
 # ──────────────────────────────────────────────────────────────────────────────
 # C Stubs and Dependencies
 # ──────────────────────────────────────────────────────────────────────────────
 
+# hacl-pulse is one translation unit; it is compiled once per flavour (tests,
+# benchmark, gprof profile) and linked as an object.  It picks its AES-NI,
+# SHA-extension and AVX2 code paths at run time, so no build-time CPU probing
+# is needed.
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
-  $(HACL_DIR)/Hacl_Hash_MD5.c \
-  $(HACL_DIR)/Hacl_Hash_SHA1.c \
-  $(HACL_DIR)/Hacl_Hash_SHA2.c \
-  $(HACL_DIR)/Hacl_Hash_SHA3.c \
-  $(HACL_DIR)/Hacl_Hash_Blake2b.c \
-  $(HACL_DIR)/Hacl_Hash_Blake2s.c \
-  $(HACL_DIR)/Hacl_HMAC.c \
-  $(HACL_DIR)/Hacl_HKDF.c \
-  $(HACL_DIR)/Hacl_Curve25519_51.c \
-  $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
-  $(HACL_DIR)/Hacl_Chacha20.c \
-  $(HACL_DIR)/Hacl_MAC_Poly1305.c \
-  $(HACL_DIR)/Lib_Memzero0.c \
-  $(HACL_DIR)/Lib_RandomBuffer_System.c
+  $(HACL_C_DIR)/Hacl_Random.c
 
-HACL_SIMD256 ?= $(shell \
-  printf '%s\n' '#include <immintrin.h>' \
-    'int main(void) { __m256i x = _mm256_setzero_si256(); return __builtin_cpu_supports("avx2") ? _mm256_extract_epi32(x, 0) : 0; }' | \
-  $(CC) -mavx2 -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
-HACL_SIMD256_CFLAGS = -mavx2 -DHACL_CAN_COMPILE_VEC256=1
-HACL_SIMD256_SOURCES = \
-  $(HACL_DIR)/Hacl_Chacha20_Vec256.c \
-  $(HACL_DIR)/Hacl_MAC_Poly1305_Simd256.c \
-  $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305_Simd256.c
-HACL_SIMD256_MODULES = \
-  Hacl_Chacha20_Vec256 \
-  Hacl_MAC_Poly1305_Simd256 \
-  Hacl_AEAD_Chacha20Poly1305_Simd256
-HACL_SIMD256_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_obj
-HACL_SIMD256_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_benchmark_obj
-HACL_SIMD256_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_simd256_profile_obj
-
-ifeq ($(HACL_SIMD256),1)
-HACL_SIMD256_TEST_OBJECTS = \
-  $(addprefix $(HACL_SIMD256_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
-HACL_SIMD256_BENCHMARK_OBJECTS = \
-  $(addprefix $(HACL_SIMD256_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
-HACL_SIMD256_PROFILE_OBJECTS = \
-  $(addprefix $(HACL_SIMD256_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_SIMD256_MODULES)))
-else
-HACL_SIMD256_TEST_OBJECTS =
-HACL_SIMD256_BENCHMARK_OBJECTS =
-HACL_SIMD256_PROFILE_OBJECTS =
-endif
-
-HACL_ACCEL ?= $(shell \
-  printf '%s\n' \
-    '#if !defined(__linux__) || !defined(__x86_64__)' \
-    '#error unsupported HACL acceleration target' \
-    '#endif' \
-    'int main(void) { return 0; }' | \
-  $(CC) -x c -c -o /dev/null - >/dev/null 2>&1 && echo 1 || echo 0)
-HACL_ACCEL_CONFIG_DIR = $(EXTRACT_DIR)/hacl_accel_config
-HACL_ACCEL_CONFIG = $(HACL_ACCEL_CONFIG_DIR)/config.h
-HACL_ACCEL_CFLAGS = -I $(HACL_ACCEL_CONFIG_DIR)
-HACL_ACCEL_C_MODULES = \
-  EverCrypt_AutoConfig2 \
-  EverCrypt_Hash \
-  EverCrypt_HMAC \
-  EverCrypt_HKDF \
-  EverCrypt_Curve25519 \
-  EverCrypt_AEAD \
-  EverCrypt_Chacha20Poly1305 \
-  Hacl_Curve25519_64 \
-  Hacl_P256 \
-  Hacl_Bignum
-HACL_ACCEL_ASM_MODULES = \
-  cpuid-x86_64-linux \
-  sha256-x86_64-linux \
-  curve25519-x86_64-linux \
-  aesgcm-x86_64-linux
-HACL_ACCEL_MODULES = $(HACL_ACCEL_C_MODULES) $(HACL_ACCEL_ASM_MODULES)
-HACL_ACCEL_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_obj
-HACL_ACCEL_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_benchmark_obj
-HACL_ACCEL_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_accel_profile_obj
-
-ifeq ($(HACL_ACCEL),1)
-HACL_ACCEL_CONFIG_DEP = $(HACL_ACCEL_CONFIG)
-HACL_ACCEL_TEST_OBJECTS = \
-  $(addprefix $(HACL_ACCEL_TEST_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
-HACL_ACCEL_BENCHMARK_OBJECTS = \
-  $(addprefix $(HACL_ACCEL_BENCHMARK_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
-HACL_ACCEL_PROFILE_OBJECTS = \
-  $(addprefix $(HACL_ACCEL_PROFILE_OBJ_DIR)/,$(addsuffix .o,$(HACL_ACCEL_MODULES)))
-else
-HACL_ACCEL_CONFIG_DEP =
-HACL_ACCEL_TEST_OBJECTS =
-HACL_ACCEL_BENCHMARK_OBJECTS =
-HACL_ACCEL_PROFILE_OBJECTS =
-# Hacl_P256 supplies the secp256r1 key exchange.  When HACL_ACCEL=1 it is
-# already built as an accelerated object (HACL_ACCEL_C_MODULES), so compiling it
-# again here would give duplicate definitions at link time.
-HACL_WRAPPER_SOURCES += $(HACL_DIR)/Hacl_P256.c
-endif
-
-HACL_TEST_OBJECTS = $(HACL_SIMD256_TEST_OBJECTS) $(HACL_ACCEL_TEST_OBJECTS)
-HACL_BENCHMARK_OBJECTS = \
-  $(HACL_SIMD256_BENCHMARK_OBJECTS) $(HACL_ACCEL_BENCHMARK_OBJECTS)
-HACL_PROFILE_OBJECTS = $(HACL_SIMD256_PROFILE_OBJECTS) $(HACL_ACCEL_PROFILE_OBJECTS)
+HACL_PULSE_CFLAGS = -std=c11 -Wall -Wextra -ffunction-sections -fdata-sections \
+  -I $(HACL_DIST_DIR) -I $(HACL_C_DIR)
+HACL_TEST_OBJ_DIR = $(EXTRACT_DIR)/hacl_obj
+HACL_BENCHMARK_OBJ_DIR = $(EXTRACT_DIR)/hacl_benchmark_obj
+HACL_PROFILE_OBJ_DIR = $(EXTRACT_DIR)/hacl_profile_obj
+HACL_TEST_OBJECTS = $(HACL_TEST_OBJ_DIR)/Hacl.o
+HACL_BENCHMARK_OBJECTS = $(HACL_BENCHMARK_OBJ_DIR)/Hacl.o
+HACL_PROFILE_OBJECTS = $(HACL_PROFILE_OBJ_DIR)/Hacl.o
 
 ECHO_STUB_SOURCES = \
   runtime/common_memmove.c \
@@ -803,16 +727,10 @@ ECHO_STUB_HEADERS = \
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
   -DATLAS_ENABLE_LOGGING=$(ATLAS_LOGGING) \
-  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
-  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
-  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
   -I c_stubs \
   -I runtime \
-  -I $(HACL_ACCEL_CONFIG_DIR) \
-  -I $(HACL_DIR) \
-  -I $(HACL_DIR)/internal \
-  -I $(HACL_KI) \
-  -I $(HACL_KL)
+  -I $(HACL_DIST_DIR) \
+  -I $(HACL_C_DIR)
 
 LDFLAGS_COMMON = -Wl,--gc-sections
 
@@ -851,49 +769,17 @@ CHROMIUM_DEMO_OBJ_DIR = $(EXTRACT_DIR)/chromium_demo_obj
 CHROMIUM_DEMO_C_SOURCES = c_stubs/tls13_openssl_stubs.c
 CHROMIUM_DEMO_OBJ_STAMP = $(CHROMIUM_DEMO_OBJ_DIR)/.built
 
-$(HACL_SIMD256_TEST_OBJ_DIR) \
-$(HACL_SIMD256_BENCHMARK_OBJ_DIR) \
-$(HACL_SIMD256_PROFILE_OBJ_DIR) \
-$(HACL_ACCEL_CONFIG_DIR) \
-$(HACL_ACCEL_TEST_OBJ_DIR) \
-$(HACL_ACCEL_BENCHMARK_OBJ_DIR) \
-$(HACL_ACCEL_PROFILE_OBJ_DIR):
+$(HACL_TEST_OBJ_DIR) $(HACL_BENCHMARK_OBJ_DIR) $(HACL_PROFILE_OBJ_DIR):
 	mkdir -p $@
 
-$(HACL_ACCEL_CONFIG): Makefile | $(HACL_ACCEL_CONFIG_DIR)
-	printf '%s\n' \
-	  '#define TARGET_ARCHITECTURE 2' \
-	  '#define HACL_CAN_COMPILE_VALE 1' \
-	  '#define HACL_CAN_COMPILE_INLINE_ASM 0' \
-	  '#define HACL_CAN_COMPILE_VEC128 0' \
-	  '#define HACL_CAN_COMPILE_VEC256 0' > $@
+$(HACL_TEST_OBJ_DIR)/Hacl.o: $(HACL_DIST_DIR)/Hacl.c Makefile | check-deps $(HACL_TEST_OBJ_DIR)
+	$(CC) $(HACL_PULSE_CFLAGS) -O2 -c $< -o $@
 
-$(HACL_SIMD256_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_TEST_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(HACL_SIMD256_CFLAGS) -c $< -o $@
+$(HACL_BENCHMARK_OBJ_DIR)/Hacl.o: $(HACL_DIST_DIR)/Hacl.c Makefile | check-deps $(HACL_BENCHMARK_OBJ_DIR)
+	$(CC) $(HACL_PULSE_CFLAGS) $(BENCHMARK_CFLAGS) -c $< -o $@
 
-$(HACL_SIMD256_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_BENCHMARK_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
-
-$(HACL_SIMD256_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c Makefile | $(HACL_SIMD256_PROFILE_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_SIMD256_CFLAGS) -c $< -o $@
-
-$(HACL_ACCEL_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_TEST_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(HACL_ACCEL_CFLAGS) -c $< -o $@
-
-$(HACL_ACCEL_TEST_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_TEST_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(HACL_ACCEL_CFLAGS) -c $< -o $@
-
-$(HACL_ACCEL_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_BENCHMARK_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
-
-$(HACL_ACCEL_BENCHMARK_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_BENCHMARK_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
-
-$(HACL_ACCEL_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.c $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_PROFILE_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
-
-$(HACL_ACCEL_PROFILE_OBJ_DIR)/%.o: $(HACL_DIR)/%.S $(HACL_ACCEL_CONFIG) Makefile | $(HACL_ACCEL_PROFILE_OBJ_DIR)
-	$(CC) $(CFLAGS_COMMON) $(BENCHMARK_PROFILE_CFLAGS) $(HACL_ACCEL_CFLAGS) -c $< -o $@
+$(HACL_PROFILE_OBJ_DIR)/Hacl.o: $(HACL_DIST_DIR)/Hacl.c Makefile | check-deps $(HACL_PROFILE_OBJ_DIR)
+	$(CC) $(HACL_PULSE_CFLAGS) $(BENCHMARK_PROFILE_CFLAGS) -c $< -o $@
 
 # Benchmark builds keep symbols and frame pointers for profiling while using
 # production optimization. Override these variables to compare compiler flags.
@@ -1005,17 +891,12 @@ test: verify verify-samples check-c-stubs test-hacl-stubs test-key-schedule-bind
   test-atlas-loopback test-server-matrix
 
 # ── Echo C Stub Syntax Check ───────────────────────────────────────
-check-c-stubs: $(HACL_ACCEL_CONFIG_DEP) | check-deps
+check-c-stubs: | check-deps
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
-	  -DTLS13_HACL_HAS_SIMD256=$(HACL_SIMD256) \
-	  -DTLS13_HACL_HAS_ACCEL=$(HACL_ACCEL) \
-	  -DTLS13_HACL_HAS_AESGCM=$(HACL_ACCEL) \
-	  -I c_stubs -I $(HACL_ACCEL_CONFIG_DIR) \
-	  -I $(HACL_DIR) -I $(HACL_DIR)/internal \
-	  -I $(HACL_KI) -I $(HACL_KL) \
+	  -I c_stubs -I $(HACL_DIST_DIR) -I $(HACL_C_DIR) \
 	  $(ECHO_STUB_SOURCES)
 
-# ── HACL* Wrapper Tests ─────────────────────────────────────────────
+# ── HACL Wrapper Tests ─────────────────────────────────────────────
 test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
   c_stubs/tls13_hacl_stubs.c c_stubs/tls13_hacl_stubs.h \
   $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
@@ -1186,7 +1067,7 @@ test-client-engine-openssl-echo: test/openssl_echo_server \
 # ── Chromium-style Async HTTPS Demo ────────────────────────────────
 $(TLS13_PROVIDER_OBJ_STAMP): $(TLS13_PROVIDER_C_SOURCES) \
   runtime/tls13_client_engine.h $(ECHO_STUB_HEADERS) \
-  $(TLS13_ENGINE_STAMP) $(HACL_ACCEL_CONFIG_DEP) Makefile | check-deps
+  $(TLS13_ENGINE_STAMP) Makefile | check-deps
 	@rm -rf $(TLS13_PROVIDER_OBJ_DIR)
 	@mkdir -p $(TLS13_PROVIDER_OBJ_DIR)
 	@set -e; for src in $(TLS13_PROVIDER_C_SOURCES); do \
@@ -1662,8 +1543,16 @@ check-toolchain:
 
 check-deps:
 	@scripts/check-openssl.sh >/dev/null
-	@test -d third_party/hacl-star/dist/gcc-compatible || \
-	  { echo "Missing HACL* C snapshot; run scripts/fetch-hacl-star.sh"; exit 1; }
+	@test -f $(HACL_DIST_DIR)/Hacl.c || \
+	  { echo "Missing hacl-pulse C distribution; run scripts/build-hacl-pulse.sh"; exit 1; }
+	@if [ "$(CHECK_HACL_PULSE_PIN)" != "0" ] && [ -f $(HACL_DIST_DIR)/.commit ] && \
+	    [ "$$(cat $(HACL_DIST_DIR)/.commit)" != "$(HACL_PULSE_COMMIT)" ]; then \
+	  echo "hacl-pulse dist in $(HACL_DIST_DIR) was built from $$(cat $(HACL_DIST_DIR)/.commit),"; \
+	  echo "but scripts/build-hacl-pulse.sh pins $(HACL_PULSE_COMMIT)."; \
+	  echo "Rebuild it with:  bash scripts/build-hacl-pulse.sh"; \
+	  echo "Set CHECK_HACL_PULSE_PIN=0 to bypass this check deliberately."; \
+	  exit 1; \
+	fi
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:

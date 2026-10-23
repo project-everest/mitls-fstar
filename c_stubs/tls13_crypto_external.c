@@ -5,28 +5,15 @@
 
 #include "tls13_hacl_stubs.h"
 
-/* ATLAS's default ClientHello offers TLS_AES_128_GCM_SHA256 alongside
-   TLS_CHACHA20_POLY1305_SHA256 (see [default_connection_config] in
-   TLS13.Impl.ConnectionState.Repr.fsti).  HACL* ships AES-GCM only as Vale
-   assembly, so a build without the accelerated modules cannot honour an offer
-   it makes.  Fail at compile time rather than emit a client that negotiates a
-   suite it cannot implement. */
-#ifndef TLS13_HACL_HAS_AESGCM
-#define TLS13_HACL_HAS_AESGCM 0
-#endif
-#if !TLS13_HACL_HAS_AESGCM
-#error "ATLAS offers TLS_AES_128_GCM_SHA256; build with HACL_ACCEL=1 (x86_64 Linux)"
-#endif
-
 /* The seal bindings are assumed *total* functions in F*: their postconditions
    pin the output buffer to [C.aead_seal ...] unconditionally.
-   The only way the backend can fail is if the running CPU lacks AES-NI /
-   PCLMULQDQ, in which case EverCrypt refuses to create the AEAD state.  Silently
-   returning leaves the caller reading uninitialised memory, so abort instead:
-   an assumption that cannot be met must be loud. */
+   The HACL stub only fails on arguments outside the bounds the verified code
+   accepts, which the record layer never produces.  Silently returning would
+   leave the caller reading uninitialised memory, so abort instead: an
+   assumption that cannot be met must be loud. */
 static void tls13_aead_backend_failed(const char *what) {
-  fprintf(stderr, "ATLAS: %s failed; the CPU does not provide the required "
-                  "AEAD backend\n", what);
+  fprintf(stderr, "ATLAS: %s failed; the AEAD backend rejected its "
+                  "arguments\n", what);
   abort();
 }
 

@@ -9,8 +9,8 @@ Usage:
   ./setup.sh [--everparse-home DIR] [--jobs N]
 
 Builds the EverParse toolchain (QuackyDucky + LowParse + the F*/KaRaMeL binaries
-it vendors) from the fork/branch used by this project, then fetches the HACL*
-snapshot and checks OpenSSL.  The Makefile consumes this toolchain via
+it vendors) from the fork/branch used by this project, then builds the
+hacl-pulse C library with it and checks OpenSSL.  The Makefile consumes this toolchain via
 EVERPARSE_HOME; no separate F* installation is required.
 
 Environment overrides:
@@ -52,7 +52,7 @@ done
 "$repo_root/scripts/install-z3.sh"
 
 # 3. Project dependencies.
-"$repo_root/scripts/fetch-hacl-star.sh"
+"$repo_root/scripts/build-hacl-pulse.sh"
 "$repo_root/scripts/check-openssl.sh"
 
 echo "Setup complete.  Run 'make verify' to check the F* development."

@@ -42,8 +42,10 @@ the whole pipeline (QuackyDucky generation → F* verification → C extraction
 
 `./setup.sh` builds the EverParse toolchain (QuackyDucky + LowParse + the
 F*/KaRaMeL binaries it vendors) from the pinned fork/commit into
-`tools/everparse` (gitignored), then initializes the HACL* submodule and fetches
-the RFC and OpenSSL dependencies. No separate F* installation is required; the
+`tools/everparse` (gitignored), then uses its F* to verify and extract the
+[hacl-pulse](https://github.com/FStarLang/hacl-pulse) cryptographic library at
+the commit pinned in `scripts/build-hacl-pulse.sh` into `tools/hacl-pulse`
+(gitignored), and fetches the RFC and OpenSSL dependencies. No separate F* installation is required; the
 `make` toolchain is derived from `EVERPARSE_HOME` (default `tools/everparse`).
 
 Environment overrides: `EVERPARSE_HOME`, `EVERPARSE_REPO`, `EVERPARSE_BRANCH`,

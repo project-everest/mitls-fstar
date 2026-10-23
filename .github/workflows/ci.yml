@@ -49,7 +49,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: devcontainer.tgz
-          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/build-hacl-pulse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
           lookup-only: true
 
       - name: Build the dev container image + toolchain
@@ -73,6 +73,9 @@ jobs:
             'cd /workspaces/agentic-tls && find . -mindepth 1 -maxdepth 1 \
                ! -name tools ! -name third_party -exec rm -rf {} +'
           docker exec -u root prep rm -rf /workspaces/agentic-tls/tools/everparse/.git
+          # hacl-pulse is consumed only through its dist/ and c/ directories.
+          docker exec -u root prep rm -rf /workspaces/agentic-tls/tools/hacl-pulse/.git \
+            /workspaces/agentic-tls/tools/hacl-pulse/obj
           docker commit -c 'WORKDIR /workspaces/agentic-tls' prep agentic-tls-ci
           docker rm -f prep
           docker save agentic-tls-ci | gzip > devcontainer.tgz
@@ -82,7 +85,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: devcontainer.tgz
-          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/build-hacl-pulse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
 
   # ── 2. Parallel test jobs ─────────────────────────────────────────────────
   # Each matrix leg restores the cached toolchain image and injects the FRESH
@@ -172,7 +175,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: devcontainer.tgz
-          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
+          key: agentic-tls-devcontainer-${{ hashFiles('.devcontainer/Dockerfile', 'setup.sh', 'scripts/build-everparse.sh', 'scripts/build-hacl-pulse.sh', 'scripts/install-z3.sh', 'scripts/z3-version.txt') }}
           fail-on-cache-miss: true
 
       - name: Load the dev container image

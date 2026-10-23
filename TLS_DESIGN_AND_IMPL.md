@@ -328,7 +328,7 @@ rather than expanding the extracted surface.
 
 Other trusted runtime boundaries remain:
 
-- HACL*/backend crypto wrappers for primitive behavior matching
+- hacl-pulse crypto wrappers for primitive behavior matching
   `TLS13.Crypto.Spec`;
 - entropy and X25519 key generation;
 - OpenSSL-backed certificate-chain validation and CertificateVerify signature

@@ -448,6 +448,6 @@ int main(void) {
   if (failed != 0) {
     return 1;
   }
-  printf("HACL* stub tests passed\n");
+  printf("hacl-pulse stub tests passed\n");
   return 0;
 }

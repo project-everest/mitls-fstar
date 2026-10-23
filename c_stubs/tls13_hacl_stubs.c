@@ -1,51 +1,27 @@
 #include "tls13_hacl_stubs.h"
 
-#include <limits.h>
-#include <threads.h>
+#include <string.h>
 
-#include "Hacl_AEAD_Chacha20Poly1305.h"
-#if TLS13_HACL_HAS_SIMD256
-#include "Hacl_AEAD_Chacha20Poly1305_Simd256.h"
-#endif
-#include "Hacl_Curve25519_51.h"
-#include "Hacl_HKDF.h"
-#include "Hacl_HMAC.h"
-#include "Hacl_Hash_SHA2.h"
-#include "Hacl_P256.h"
-#include "Lib_RandomBuffer_System.h"
+#include "Hacl.h"
+#include "Hacl_Random.h"
 
-#ifndef TLS13_HACL_HAS_ACCEL
-#define TLS13_HACL_HAS_ACCEL 0
-#endif
+/* hacl-pulse (dist/Hacl.c) is extracted from Pulse, and its entry points do no
+   argument checking of their own: each one assumes the precondition of its
+   Pulse signature.  The guards below establish those preconditions -- buffer
+   lengths, the 2^61 hash-input bound, the AEAD message bounds -- and Pulse's
+   separation logic also requires every buffer written to be disjoint from the
+   others, which our callers guarantee.  CPU feature dispatch (AES-NI, SHA
+   extensions, AVX2) happens inside Hacl.c at run time. */
 
-#if TLS13_HACL_HAS_ACCEL
-#include "EverCrypt_AutoConfig2.h"
-#include "EverCrypt_Curve25519.h"
-#include "EverCrypt_HKDF.h"
-#include "internal/EverCrypt_HMAC.h"
-#include "internal/EverCrypt_Hash.h"
-#endif
-
-/* AES-128-GCM is provided by EverCrypt, which on x86_64 dispatches to the Vale
-   verified assembly in aesgcm-x86_64-linux.S.  That code path requires AES-NI
-   and PCLMULQDQ; EverCrypt_AEAD_create_in reports UnsupportedAlgorithm when
-   they are absent, which tls13_hacl_aes128_gcm_available() surfaces so the
-   ClientHello can drop TLS_AES_128_GCM_SHA256 from its offer rather than
-   negotiating a suite we cannot run. */
-#ifndef TLS13_HACL_HAS_AESGCM
-#define TLS13_HACL_HAS_AESGCM 0
-#endif
-
-#if TLS13_HACL_HAS_AESGCM
-#include "EverCrypt_AEAD.h"
-#include "EverCrypt_Error.h"
-#include "Hacl_Spec.h"
-#endif
+#define TLS13_HACL_HASH_MAX_INPUT ((uint64_t)1 << 61)
+#define TLS13_HACL_SHA256_BLOCK 64u
+#define TLS13_HACL_AEAD_MAX_PLAIN ((size_t)UINT32_MAX)
 
 static uint8_t empty_input;
 
-static bool fits_u32(size_t len) {
-  return len <= UINT32_MAX;
+static bool hash_input_ok(size_t len, size_t extra) {
+  return (uint64_t)len < TLS13_HACL_HASH_MAX_INPUT - extra &&
+         len <= SIZE_MAX - extra;
 }
 
 static uint8_t *read_ptr(const uint8_t *p, size_t len) {
@@ -56,38 +32,19 @@ static uint8_t *write_ptr(uint8_t *p, size_t len) {
   return len == 0 ? &empty_input : p;
 }
 
-#if TLS13_HACL_HAS_ACCEL
-static once_flag tls13_hacl_accel_init_once = ONCE_FLAG_INIT;
-
-static void tls13_hacl_init_acceleration(void) {
-  call_once(&tls13_hacl_accel_init_once, EverCrypt_AutoConfig2_init);
-}
-#endif
-
-#if TLS13_HACL_HAS_SIMD256
-static bool tls13_hacl_has_simd256(void) {
-  return __builtin_cpu_supports("avx2");
-}
-#endif
-
 bool tls13_hacl_random_bytes(uint8_t *out, size_t out_len) {
-  if ((out_len != 0 && out == NULL) || !fits_u32(out_len)) {
+  if (out_len != 0 && out == NULL) {
     return false;
   }
-  return Lib_RandomBuffer_System_randombytes(write_ptr(out, out_len), (uint32_t)out_len);
+  return Hacl_Random_bytes(write_ptr(out, out_len), out_len);
 }
 
 bool tls13_hacl_sha256(uint8_t out[32], const uint8_t *input, size_t input_len) {
-  if (out == NULL || (input_len != 0 && input == NULL) || !fits_u32(input_len)) {
+  if (out == NULL || (input_len != 0 && input == NULL) ||
+      !hash_input_ok(input_len, 0)) {
     return false;
   }
-#if TLS13_HACL_HAS_ACCEL
-  tls13_hacl_init_acceleration();
-  EverCrypt_Hash_Incremental_hash_256(
-      out, read_ptr(input, input_len), (uint32_t)input_len);
-#else
-  Hacl_Hash_SHA2_hash_256(out, read_ptr(input, input_len), (uint32_t)input_len);
-#endif
+  Hacl_Hash_SHA2_sha256(out, read_ptr(input, input_len), input_len);
   return true;
 }
 
@@ -98,21 +55,16 @@ bool tls13_hacl_hmac_sha256(
     const uint8_t *input,
     size_t input_len) {
   if (out == NULL || (key_len != 0 && key == NULL) ||
-      (input_len != 0 && input == NULL) || !fits_u32(key_len) ||
-      input_len > UINT32_MAX - 64u) {
+      (input_len != 0 && input == NULL) || !hash_input_ok(key_len, 0) ||
+      !hash_input_ok(input_len, TLS13_HACL_SHA256_BLOCK)) {
     return false;
   }
-#if TLS13_HACL_HAS_ACCEL
-  tls13_hacl_init_acceleration();
-  EverCrypt_HMAC_compute_sha2_256(
-#else
-  Hacl_HMAC_compute_sha2_256(
-#endif
+  Hacl_HMAC_hmac_sha256(
       out,
       read_ptr(key, key_len),
-      (uint32_t)key_len,
+      key_len,
       read_ptr(input, input_len),
-      (uint32_t)input_len);
+      input_len);
   return true;
 }
 
@@ -123,22 +75,16 @@ bool tls13_hacl_hkdf_extract_sha256(
     const uint8_t *ikm,
     size_t ikm_len) {
   if (out == NULL || (salt_len != 0 && salt == NULL) ||
-      (ikm_len != 0 && ikm == NULL) || !fits_u32(salt_len) ||
-      ikm_len > UINT32_MAX - 64u) {
+      (ikm_len != 0 && ikm == NULL) || !hash_input_ok(salt_len, 0) ||
+      !hash_input_ok(ikm_len, TLS13_HACL_SHA256_BLOCK)) {
     return false;
   }
-#if TLS13_HACL_HAS_ACCEL
-  tls13_hacl_init_acceleration();
-  EverCrypt_HKDF_extract(
-      Spec_Hash_Definitions_SHA2_256,
-#else
-  Hacl_HKDF_extract_sha2_256(
-#endif
+  Hacl_HKDF_extract_sha256(
       out,
       read_ptr(salt, salt_len),
-      (uint32_t)salt_len,
+      salt_len,
       read_ptr(ikm, ikm_len),
-      (uint32_t)ikm_len);
+      ikm_len);
   return true;
 }
 
@@ -150,22 +96,16 @@ bool tls13_hacl_hkdf_expand_sha256(
     size_t info_len) {
   if ((out_len != 0 && out == NULL) || prk == NULL ||
       (info_len != 0 && info == NULL) || out_len > 255u * 32u ||
-      info_len > UINT32_MAX - 97u) {
+      !hash_input_ok(info_len, TLS13_HACL_SHA256_BLOCK + 32u + 1u)) {
     return false;
   }
-#if TLS13_HACL_HAS_ACCEL
-  tls13_hacl_init_acceleration();
-  EverCrypt_HKDF_expand(
-      Spec_Hash_Definitions_SHA2_256,
-#else
-  Hacl_HKDF_expand_sha2_256(
-#endif
+  Hacl_HKDF_expand_sha256(
       write_ptr(out, out_len),
+      out_len,
       (uint8_t *)prk,
       32u,
       read_ptr(info, info_len),
-      (uint32_t)info_len,
-      (uint32_t)out_len);
+      info_len);
   return true;
 }
 
@@ -173,12 +113,7 @@ bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]
   if (out == NULL || sk == NULL) {
     return false;
   }
-#if TLS13_HACL_HAS_ACCEL
-  tls13_hacl_init_acceleration();
-  EverCrypt_Curve25519_secret_to_public(out, (uint8_t *)sk);
-#else
-  Hacl_Curve25519_51_secret_to_public(out, (uint8_t *)sk);
-#endif
+  Hacl_Curve25519_secret_to_public(out, (uint8_t *)sk);
   return true;
 }
 
@@ -186,30 +121,25 @@ bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8
   if (out == NULL || sk == NULL || pk == NULL) {
     return false;
   }
-#if TLS13_HACL_HAS_ACCEL
-  tls13_hacl_init_acceleration();
-  return EverCrypt_Curve25519_ecdh(out, (uint8_t *)sk, (uint8_t *)pk);
-#else
-  return Hacl_Curve25519_51_ecdh(out, (uint8_t *)sk, (uint8_t *)pk);
-#endif
+  return Hacl_Curve25519_ecdh(out, (uint8_t *)sk, (uint8_t *)pk);
 }
 
 /* secp256r1 (NIST P-256) ECDH.
 
    TLS 1.3 puts the peer's share on the wire in the uncompressed SEC1 encoding,
-   0x04 || X || Y, so 65 bytes; HACL* works with the 64-byte raw X || Y form,
+   0x04 || X || Y, so 65 bytes; HACL works with the 64-byte raw X || Y form,
    hence the conversions.  RFC 8446 section 7.4.2 takes the shared secret to be
-   the 32-byte X coordinate only, so the low 32 bytes of the 64-byte HACL*
+   the 32-byte X coordinate only, so the low 32 bytes of the 64-byte HACL
    output are what feeds the key schedule. */
 bool tls13_hacl_p256_public_from_private(uint8_t out[65], const uint8_t sk[32]) {
   uint8_t raw[64];
   if (out == NULL || sk == NULL) {
     return false;
   }
-  if (!Hacl_P256_dh_initiator(raw, (uint8_t *)sk)) {
+  if (!Hacl_P256_Ecdh_dh_initiator(raw, (uint8_t *)sk)) {
     return false;
   }
-  Hacl_P256_raw_to_uncompressed(raw, out);
+  Hacl_P256_Sec1_raw_to_uncompressed(out, raw);
   return true;
 }
 
@@ -220,17 +150,34 @@ bool tls13_hacl_p256_shared(uint8_t out[32], const uint8_t sk[32],
   if (out == NULL || sk == NULL || pk == NULL) {
     return false;
   }
-  if (!Hacl_P256_uncompressed_to_raw((uint8_t *)pk, their_raw)) {
+  if (!Hacl_P256_Sec1_uncompressed_to_raw(their_raw, (uint8_t *)pk)) {
     return false;
   }
-  if (!Hacl_P256_validate_public_key(their_raw)) {
+  if (!Hacl_P256_Key_Public_validate_public_key(their_raw)) {
     return false;
   }
-  if (!Hacl_P256_dh_responder(shared, their_raw, (uint8_t *)sk)) {
+  if (!Hacl_P256_Ecdh_dh_responder(shared, their_raw, (uint8_t *)sk)) {
     return false;
   }
   memcpy(out, shared, 32);
   return true;
+}
+
+static bool aead_args_ok(
+    size_t plaintext_len,
+    size_t ciphertext_and_tag_len,
+    const uint8_t *key,
+    const uint8_t *nonce,
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *plaintext,
+    const uint8_t *ciphertext_and_tag) {
+  return plaintext_len <= TLS13_HACL_AEAD_MAX_PLAIN &&
+         aad_len <= TLS13_HACL_AEAD_MAX_PLAIN &&
+         ciphertext_and_tag_len == plaintext_len + 16 &&
+         ciphertext_and_tag != NULL && key != NULL && nonce != NULL &&
+         (aad_len == 0 || aad != NULL) &&
+         (plaintext_len == 0 || plaintext != NULL);
 }
 
 bool tls13_hacl_chacha20_poly1305_seal_combined(
@@ -242,34 +189,17 @@ bool tls13_hacl_chacha20_poly1305_seal_combined(
     size_t aad_len,
     const uint8_t *plaintext,
     size_t plaintext_len) {
-  if (plaintext_len > UINT32_MAX || aad_len > UINT32_MAX ||
-      plaintext_len > SIZE_MAX - 16 ||
-      ciphertext_and_tag_len != plaintext_len + 16 ||
-      ciphertext_and_tag == NULL || key == NULL || nonce == NULL ||
-      (aad_len != 0 && aad == NULL) || (plaintext_len != 0 && plaintext == NULL)) {
+  if (!aead_args_ok(plaintext_len, ciphertext_and_tag_len, key, nonce, aad,
+                    aad_len, plaintext, ciphertext_and_tag)) {
     return false;
   }
-#if TLS13_HACL_HAS_SIMD256
-  if (tls13_hacl_has_simd256()) {
-    Hacl_AEAD_Chacha20Poly1305_Simd256_encrypt(
-        ciphertext_and_tag,
-        ciphertext_and_tag + plaintext_len,
-        read_ptr(plaintext, plaintext_len),
-        (uint32_t)plaintext_len,
-        read_ptr(aad, aad_len),
-        (uint32_t)aad_len,
-        (uint8_t *)key,
-        (uint8_t *)nonce);
-    return true;
-  }
-#endif
-  Hacl_AEAD_Chacha20Poly1305_encrypt(
-      ciphertext_and_tag,
+  Hacl_Chacha20Poly1305_encrypt(
+      write_ptr(ciphertext_and_tag, plaintext_len),
       ciphertext_and_tag + plaintext_len,
       read_ptr(plaintext, plaintext_len),
-      (uint32_t)plaintext_len,
+      plaintext_len,
       read_ptr(aad, aad_len),
-      (uint32_t)aad_len,
+      aad_len,
       (uint8_t *)key,
       (uint8_t *)nonce);
   return true;
@@ -284,58 +214,30 @@ bool tls13_hacl_chacha20_poly1305_open_combined(
     size_t aad_len,
     const uint8_t *ciphertext_and_tag,
     size_t ciphertext_and_tag_len) {
-  if (plaintext_len > UINT32_MAX || aad_len > UINT32_MAX ||
-      plaintext_len > SIZE_MAX - 16 ||
-      ciphertext_and_tag_len != plaintext_len + 16 ||
-      (plaintext_len != 0 && plaintext == NULL) || key == NULL || nonce == NULL ||
-      (aad_len != 0 && aad == NULL) || ciphertext_and_tag == NULL) {
+  if (!aead_args_ok(plaintext_len, ciphertext_and_tag_len, key, nonce, aad,
+                    aad_len, plaintext, ciphertext_and_tag)) {
     return false;
   }
-#if TLS13_HACL_HAS_SIMD256
-  if (tls13_hacl_has_simd256()) {
-    return Hacl_AEAD_Chacha20Poly1305_Simd256_decrypt(
-               write_ptr(plaintext, plaintext_len),
-               (uint8_t *)ciphertext_and_tag,
-               (uint32_t)plaintext_len,
-               read_ptr(aad, aad_len),
-               (uint32_t)aad_len,
-               (uint8_t *)key,
-               (uint8_t *)nonce,
-               (uint8_t *)(ciphertext_and_tag + plaintext_len)) == 0;
-  }
-#endif
-  return Hacl_AEAD_Chacha20Poly1305_decrypt(
-             write_ptr(plaintext, plaintext_len),
-             (uint8_t *)ciphertext_and_tag,
-             (uint32_t)plaintext_len,
-             read_ptr(aad, aad_len),
-             (uint32_t)aad_len,
-             (uint8_t *)key,
-             (uint8_t *)nonce,
-             (uint8_t *)(ciphertext_and_tag + plaintext_len)) == 0;
+  return Hacl_Chacha20Poly1305_decrypt(
+      write_ptr(plaintext, plaintext_len),
+      read_ptr(ciphertext_and_tag, plaintext_len),
+      plaintext_len,
+      (uint8_t *)(ciphertext_and_tag + plaintext_len),
+      read_ptr(aad, aad_len),
+      aad_len,
+      (uint8_t *)key,
+      (uint8_t *)nonce);
 }
 
 /* ── AES-128-GCM ───────────────────────────────────────────────────────────
-   EverCrypt owns the key schedule, so each call expands the key.  TLS record
-   protection installs a traffic key once and then uses it for many records;
-   the expansion is a handful of AES rounds against a per-record cost that is
-   linear in the record size, so this stays off the hot path's critical term
-   while keeping the stub stateless (and therefore trivially thread-safe).  */
+   hacl-pulse has a portable AES-GCM and an AES-NI/PCLMULQDQ one, chosen at run
+   time, so the suite is always available.  Its GCM works in place: the message
+   buffer is encrypted or decrypted where it stands, so the input is copied to
+   the output first.  Each call expands the key; the stub stays stateless (and
+   therefore trivially thread-safe). */
 
 bool tls13_hacl_aes128_gcm_available(void) {
-#if TLS13_HACL_HAS_AESGCM
-  EverCrypt_AEAD_state_s *st = NULL;
-  uint8_t probe_key[16] = {0};
-  tls13_hacl_init_acceleration();
-  if (EverCrypt_AEAD_create_in(Spec_Agile_AEAD_AES128_GCM, &st, probe_key) !=
-      EverCrypt_Error_Success) {
-    return false;
-  }
-  EverCrypt_AEAD_free(st);
   return true;
-#else
-  return false;
-#endif
 }
 
 bool tls13_hacl_aes128_gcm_seal_combined(
@@ -347,38 +249,23 @@ bool tls13_hacl_aes128_gcm_seal_combined(
     size_t aad_len,
     const uint8_t *plaintext,
     size_t plaintext_len) {
-#if TLS13_HACL_HAS_AESGCM
-  EverCrypt_AEAD_state_s *st = NULL;
-  EverCrypt_Error_error_code rc;
-  if (plaintext_len > UINT32_MAX || aad_len > UINT32_MAX ||
-      plaintext_len > SIZE_MAX - 16 ||
-      ciphertext_and_tag_len != plaintext_len + 16 ||
-      ciphertext_and_tag == NULL || key == NULL || nonce == NULL ||
-      (aad_len != 0 && aad == NULL) || (plaintext_len != 0 && plaintext == NULL)) {
+  if (!aead_args_ok(plaintext_len, ciphertext_and_tag_len, key, nonce, aad,
+                    aad_len, plaintext, ciphertext_and_tag)) {
     return false;
   }
-  tls13_hacl_init_acceleration();
-  if (EverCrypt_AEAD_create_in(Spec_Agile_AEAD_AES128_GCM, &st, (uint8_t *)key) !=
-      EverCrypt_Error_Success) {
-    return false;
+  if (plaintext_len != 0) {
+    memmove(ciphertext_and_tag, plaintext, plaintext_len);
   }
-  rc = EverCrypt_AEAD_encrypt(
-      st,
+  Hacl_AES_GCM_aes128_encrypt(
+      ciphertext_and_tag + plaintext_len,
+      write_ptr(ciphertext_and_tag, plaintext_len),
+      plaintext_len,
+      (uint8_t *)key,
       (uint8_t *)nonce,
-      12U,
+      12u,
       read_ptr(aad, aad_len),
-      (uint32_t)aad_len,
-      read_ptr(plaintext, plaintext_len),
-      (uint32_t)plaintext_len,
-      ciphertext_and_tag,
-      ciphertext_and_tag + plaintext_len);
-  EverCrypt_AEAD_free(st);
-  return rc == EverCrypt_Error_Success;
-#else
-  (void)ciphertext_and_tag; (void)ciphertext_and_tag_len; (void)key;
-  (void)nonce; (void)aad; (void)aad_len; (void)plaintext; (void)plaintext_len;
-  return false;
-#endif
+      aad_len);
+  return true;
 }
 
 bool tls13_hacl_aes128_gcm_open_combined(
@@ -390,36 +277,26 @@ bool tls13_hacl_aes128_gcm_open_combined(
     size_t aad_len,
     const uint8_t *ciphertext_and_tag,
     size_t ciphertext_and_tag_len) {
-#if TLS13_HACL_HAS_AESGCM
-  EverCrypt_AEAD_state_s *st = NULL;
-  EverCrypt_Error_error_code rc;
-  if (plaintext_len > UINT32_MAX || aad_len > UINT32_MAX ||
-      plaintext_len > SIZE_MAX - 16 ||
-      ciphertext_and_tag_len != plaintext_len + 16 ||
-      (plaintext_len != 0 && plaintext == NULL) || key == NULL || nonce == NULL ||
-      (aad_len != 0 && aad == NULL) || ciphertext_and_tag == NULL) {
+  if (!aead_args_ok(plaintext_len, ciphertext_and_tag_len, key, nonce, aad,
+                    aad_len, plaintext, ciphertext_and_tag)) {
     return false;
   }
-  tls13_hacl_init_acceleration();
-  if (EverCrypt_AEAD_create_in(Spec_Agile_AEAD_AES128_GCM, &st, (uint8_t *)key) !=
-      EverCrypt_Error_Success) {
+  if (plaintext_len != 0) {
+    memmove(plaintext, ciphertext_and_tag, plaintext_len);
+  }
+  if (!Hacl_AES_GCM_aes128_decrypt(
+          write_ptr(plaintext, plaintext_len),
+          plaintext_len,
+          (uint8_t *)(ciphertext_and_tag + plaintext_len),
+          (uint8_t *)key,
+          (uint8_t *)nonce,
+          12u,
+          read_ptr(aad, aad_len),
+          aad_len)) {
+    if (plaintext_len != 0) {
+      memset(plaintext, 0, plaintext_len);
+    }
     return false;
   }
-  rc = EverCrypt_AEAD_decrypt(
-      st,
-      (uint8_t *)nonce,
-      12U,
-      read_ptr(aad, aad_len),
-      (uint32_t)aad_len,
-      (uint8_t *)ciphertext_and_tag,
-      (uint32_t)plaintext_len,
-      (uint8_t *)(ciphertext_and_tag + plaintext_len),
-      write_ptr(plaintext, plaintext_len));
-  EverCrypt_AEAD_free(st);
-  return rc == EverCrypt_Error_Success;
-#else
-  (void)plaintext; (void)plaintext_len; (void)key; (void)nonce;
-  (void)aad; (void)aad_len; (void)ciphertext_and_tag; (void)ciphertext_and_tag_len;
-  return false;
-#endif
+  return true;
 }
