@@ -683,6 +683,9 @@ $(TLS13_ENGINE_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefil
 	$(call custard_extract_c,$(TLS13_ENGINE_DIR),\
 	  --custard_entry_module TLS13.Impl.Client.Engine)
 
+# TLS13.c is produced by the stamp rule above; make needs a rule for it.
+$(TLS13_ENGINE_DIR)/TLS13.c: $(TLS13_ENGINE_STAMP) ;
+
 extract-tls13-bundle extract-c: $(TLS13_BUNDLE_STAMP)
 
 # ──────────────────────────────────────────────────────────────────────────────
