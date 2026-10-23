@@ -4169,7 +4169,7 @@ let lemma_s2_server_local (a b:SY.tls_system_state)
 (** DELIVER TO CLIENT.  `HSP`'s two families are UNBUNDLED, so the shape is opened
     once more here (the `app_extras` half already opened it inside
     `lemma_ae_deliver_to_client`; the two openings are independent). **)
-#push-options "--fuel 1 --ifuel 2 --z3rlimit 60"
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 120"
 let lemma_s2_deliver_to_client (a b:SY.tls_system_state)
   : Lemma
       (requires

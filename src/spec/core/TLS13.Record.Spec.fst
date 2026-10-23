@@ -74,7 +74,9 @@ let lemma_open_record_after_seal
   (aad:B.bytes)
   (pt:plaintext)
   : Lemma
-      (requires Some? st.key /\ Some? st.static_iv)
+      (requires Some? st.key /\ Some? st.static_iv /\
+                B.length pt.fragment <= C.aead_max_len /\
+                B.length aad <= C.aead_max_len)
       (ensures (
         match seal st aad pt with
         | Some (ct, st') -> open_record st aad ct == Some (pt.fragment, st')
@@ -98,6 +100,8 @@ let lemma_open_record_after_seal_peer
   : Lemma
       (requires
         write_st.seq == read_st.seq /\
+        B.length pt.fragment <= C.aead_max_len /\
+        B.length aad <= C.aead_max_len /\
         (match
           write_st.key,
           write_st.static_iv,

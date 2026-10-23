@@ -214,7 +214,8 @@ The active TCB surface is intentionally explicit.
 
 | TCB component | Files | Role |
 | --- | --- | --- |
-| Crypto primitives and entropy | `src/impl/extern/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, hacl-pulse (`tools/hacl-pulse/dist/Hacl.c`, entropy shim `c/Hacl_Random.c`) | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, X25519 and P-256. hacl-pulse is itself verified against its own specifications, which are not linked to `TLS13.Crypto.Spec`. |
+| Crypto primitives | `src/impl/TLS13.Crypto.fst` (verified), hacl-pulse (`tools/hacl-pulse`, linked via `--custard_link obj/build/Hacl.cui` into `dist/Hacl.c`), `tot_of_ghost` in `src/spec/assumptions/TLS13.Crypto.Spec.fst` | Not trusted beyond hacl-pulse itself: `TLS13.Crypto.Spec` defines hashing, HMAC, HKDF, X25519, P-256 and AEAD from hacl-pulse's specifications, and the Pulse bindings in `TLS13.Crypto` call hacl-pulse directly and are proved against them. The one added assumption is `tot_of_ghost`, which lifts hacl-pulse's `GTot` specs to the `Tot` functions the TLS model uses. |
+| Entropy | `src/impl/extern/TLS13.Crypto.Random.fsti`, `c_stubs/tls13_crypto_external.c`, hacl-pulse entropy shim `c/Hacl_Random.c` | Trusted to fill the buffer with random bytes; the contract only fixes the length. |
 | X509/signature validation | `src/impl/extern/TLS13.OpenSSL.fsti`, `c_stubs/tls13_openssl_custard.*`, `c_stubs/tls13_openssl_stubs.c` | Typed OpenSSL auth TCB. The Pulse workflow calls this interface directly; successful returns are trusted to establish `CT.local_input_wf` for certificate validation over the exact returned peer-identity prefix and for CertificateVerify. |
 | TCP bridge | `common/Common.TCP.fsti`, `c_stubs/common_tcp_stubs.c`, `c_stubs/common_tcp_custard.*` | Trusted connect/listen/accept/read/write/close bridge with ghost-indexed received/sent byte histories. Endpoint predicates expose those histories and relate their contents to the protocol wire log: sent transport bytes equal the protocol raw-sent log, while received transport bytes split into consumed bytes plus retained read-ahead, with the protocol raw-received log content-accounted inside the consumed prefix. The generated C includes `common_tcp_custard.h` for the TCP handle types (`--custard_extern_type`); the C shim is deliberately small. Read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
 | ATLAS trace writer | `src/impl/extern/TLS13.Trace.fsti`, `c_stubs/atlas_trace.*`, `runtime/analyze_atlas_trace.py` | Explicit observational TCB. Verified code chooses event positions and metadata under an `emp -> emp` Pulse contract; the C writer supplies timestamps and process/thread/connection correlation and emits atomic JSONL records. Callers are forbidden to pass secrets, plaintext, certificates, or payload bytes. Disabled builds macro-eliminate calls without evaluating arguments. |
@@ -282,8 +283,8 @@ Start with these files:
    the verified parser/serializer facades and their `TLS13.Wire.Spec`
    postconditions.
 9. `c_stubs/common_tcp_custard.*`, `c_stubs/common_tcp_stubs.*`,
-   `c_stubs/tls13_crypto_external.*`, and `c_stubs/tls13_openssl_stubs.*` for
-   the remaining C boundary.
+   `c_stubs/tls13_crypto_external.*` (entropy only), and
+   `c_stubs/tls13_openssl_stubs.*` for the remaining C boundary.
 
 ## Validation commands
 

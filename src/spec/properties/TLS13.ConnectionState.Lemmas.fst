@@ -9196,6 +9196,9 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal
     } in
     match st.R.key, st.R.static_iv with
     | Some _, Some _ ->
+      W.lemma_parse_record_fragment_bound raw;
+      assert (B.length ciphertext == B.length pt.R.fragment + 16);
+      assert (B.length aad <= 5);
       R.lemma_open_record_after_seal st aad pt;
       assert (R.open_record st aad ciphertext ==
         Some (sent_tls_inner_plaintext_fragment msg, R.next_seq st));
@@ -9338,6 +9341,9 @@ let lemma_received_record_opened_from_sent_single_protected_message_seal_peer
       assert (write_st.R.alg == read_st.R.alg);
       assert (Seq.equal write_key read_key);
       assert (Seq.equal write_iv read_iv);
+      W.lemma_parse_record_fragment_bound raw;
+      assert (B.length ciphertext == B.length pt.R.fragment + 16);
+      assert (B.length aad <= 5);
       R.lemma_open_record_after_seal_peer write_st read_st aad pt;
       assert (R.open_record read_st aad ciphertext ==
         Some (sent_tls_inner_plaintext_fragment msg, R.next_seq read_st));

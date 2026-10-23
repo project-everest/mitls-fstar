@@ -6,7 +6,9 @@
 # hacl-pulse does not commit dist/: `make extract` verifies the library and
 # extracts it with Custard.  The agentic-tls Makefile compiles dist/Hacl.c
 # together with c/Hacl_Random.c (the platform entropy shim) and never re-runs
-# hacl-pulse's own make, so the .checked cache can be deleted afterwards.
+# hacl-pulse's own make.  TLS13.Crypto calls hacl-pulse from Pulse, so the
+# Makefile also needs the checked files in obj/cache and the Custard unit
+# interface obj/build/Hacl.cui that extraction links against: keep them.
 set -euo pipefail
 
 HACL_PULSE_REPO="${HACL_PULSE_REPO:-https://github.com/FStarLang/hacl-pulse}"
@@ -50,7 +52,8 @@ rm -f "$stamp"
 echo "Verifying and extracting hacl-pulse (make extract -j$jobs) ..."
 make -C "$HACL_PULSE_HOME" -j"$jobs" extract FSTAR_EXE="$FSTAR_EXE"
 
-for f in "$dist/Hacl.c" "$dist/Hacl.h" "$HACL_PULSE_HOME/c/Hacl_Random.c"; do
+for f in "$dist/Hacl.c" "$dist/Hacl.h" "$HACL_PULSE_HOME/c/Hacl_Random.c" \
+         "$HACL_PULSE_HOME/obj/build/Hacl.cui"; do
   if [ ! -f "$f" ]; then
     echo "hacl-pulse build did not produce $f" >&2
     exit 1

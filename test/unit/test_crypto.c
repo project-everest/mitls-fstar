@@ -1,4 +1,7 @@
-#include "tls13_hacl_stubs.h"
+/* Known-answer tests for TLS13.Crypto, the verified Pulse bindings to
+   hacl-pulse, as extracted by Custard (see the test/test_crypto rule). */
+#include "TLS13.h"
+#include "Hacl.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -10,6 +13,16 @@ static int expect_bytes(const char *name, const uint8_t *got, const uint8_t *wan
   }
   fprintf(stderr, "%s mismatch\n", name);
   return 1;
+}
+
+static int expect_untouched(const char *name, const uint8_t *buf, size_t len) {
+  for (size_t i = 0; i < len; ++i) {
+    if (buf[i] != 0x5a) {
+      fprintf(stderr, "%s modified its output\n", name);
+      return 1;
+    }
+  }
+  return 0;
 }
 
 static int hex_value(char c) {
@@ -47,6 +60,15 @@ static bool decode_hex_string(const char *hex, uint8_t *out, size_t out_len) {
   return high < 0 && produced == out_len;
 }
 
+/* TLS13.Crypto.hkdf_expand reads its HkdfLabel from a 520-byte buffer. */
+static void hkdf_expand_label(uint8_t *secret, const uint8_t *info, size_t info_len,
+                              uint8_t *out, size_t out_len) {
+  uint8_t buf[520];
+  memset(buf, 0, sizeof buf);
+  memcpy(buf, info, info_len);
+  TLS13_Crypto_hkdf_expand(secret, buf, info_len, out, out_len);
+}
+
 static int test_sha256_empty(void) {
   static const uint8_t expected[32] = {
       0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
@@ -54,10 +76,7 @@ static int test_sha256_empty(void) {
       0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
       0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
   uint8_t out[32];
-  if (!tls13_hacl_sha256(out, NULL, 0)) {
-    fprintf(stderr, "sha256 rejected empty input\n");
-    return 1;
-  }
+  TLS13_Crypto_sha256_empty(out);
   return expect_bytes("sha256(empty)", out, expected, sizeof out);
 }
 
@@ -71,10 +90,7 @@ static int test_hmac_sha256_rfc4231_case1(void) {
   memset(key, 0x0b, sizeof key);
   static const uint8_t msg[] = "Hi There";
   uint8_t out[32];
-  if (!tls13_hacl_hmac_sha256(out, key, sizeof key, msg, strlen((const char *)msg))) {
-    fprintf(stderr, "hmac-sha256 rejected RFC 4231 case 1\n");
-    return 1;
-  }
+  TLS13_Crypto_hmac_sha256(key, sizeof key, (uint8_t *)msg, strlen((const char *)msg), out);
   return expect_bytes("hmac-sha256 RFC4231 case 1", out, expected, sizeof out);
 }
 
@@ -102,17 +118,12 @@ static int test_hkdf_sha256_rfc5869_case1(void) {
       0x58, 0x65};
   uint8_t prk[32];
   uint8_t okm[42];
-  if (!tls13_hacl_hkdf_extract_sha256(prk, salt, sizeof salt, ikm, sizeof ikm)) {
-    fprintf(stderr, "hkdf-extract rejected RFC 5869 case 1\n");
-    return 1;
-  }
+  TLS13_Crypto_hkdf_extract((uint8_t *)salt, sizeof salt, (uint8_t *)ikm, sizeof ikm, prk);
   if (expect_bytes("hkdf-extract RFC5869 case 1", prk, expected_prk, sizeof prk) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_sha256(okm, sizeof okm, prk, info, sizeof info)) {
-    fprintf(stderr, "hkdf-expand rejected RFC 5869 case 1\n");
-    return 1;
-  }
+  /* RFC 5869's info is not an HkdfLabel, so this half checks hacl-pulse. */
+  Hacl_HKDF_expand_sha256(okm, sizeof okm, prk, sizeof prk, (uint8_t *)info, sizeof info);
   return expect_bytes("hkdf-expand RFC5869 case 1", okm, expected_okm, sizeof okm);
 }
 
@@ -149,11 +160,9 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
   uint8_t handshake_secret[32];
   uint8_t client_hs_traffic[32];
 
-  if (!tls13_hacl_hkdf_extract_sha256(
-          handshake_secret, derived_secret, sizeof derived_secret, shared_secret, sizeof shared_secret)) {
-    fprintf(stderr, "RFC 8448 handshake HKDF-Extract failed\n");
-    return 1;
-  }
+  TLS13_Crypto_hkdf_extract(
+      (uint8_t *)derived_secret, sizeof derived_secret,
+      (uint8_t *)shared_secret, sizeof shared_secret, handshake_secret);
   if (expect_bytes(
           "RFC8448 handshake secret",
           handshake_secret,
@@ -161,15 +170,9 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
           sizeof handshake_secret) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_sha256(
-          client_hs_traffic,
-          sizeof client_hs_traffic,
-          handshake_secret,
-          c_hs_info,
-          sizeof c_hs_info)) {
-    fprintf(stderr, "RFC 8448 client handshake traffic secret derivation failed\n");
-    return 1;
-  }
+  hkdf_expand_label(
+      handshake_secret, c_hs_info, sizeof c_hs_info,
+      client_hs_traffic, sizeof client_hs_traffic);
   return expect_bytes(
       "RFC8448 client handshake traffic secret",
       client_hs_traffic,
@@ -232,10 +235,7 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
     fprintf(stderr, "failed to decode RFC 8448 Finished transcript\n");
     return 1;
   }
-  if (!tls13_hacl_sha256(transcript_hash, transcript, sizeof transcript)) {
-    fprintf(stderr, "failed to hash RFC 8448 Finished transcript\n");
-    return 1;
-  }
+  TLS13_Crypto_sha256(transcript, sizeof transcript, transcript_hash);
   if (expect_bytes(
           "RFC8448 Finished transcript hash",
           transcript_hash,
@@ -243,15 +243,9 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
           sizeof transcript_hash) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hkdf_expand_sha256(
-          finished_key,
-          sizeof finished_key,
-          server_handshake_traffic_secret,
-          finished_info,
-          sizeof finished_info)) {
-    fprintf(stderr, "failed to derive RFC 8448 server Finished key\n");
-    return 1;
-  }
+  hkdf_expand_label(
+      (uint8_t *)server_handshake_traffic_secret, finished_info, sizeof finished_info,
+      finished_key, sizeof finished_key);
   if (expect_bytes(
           "RFC8448 server Finished key",
           finished_key,
@@ -259,11 +253,8 @@ static int test_tls13_finished_rfc8448_simple_handshake(void) {
           sizeof finished_key) != 0) {
     return 1;
   }
-  if (!tls13_hacl_hmac_sha256(
-          finished, finished_key, sizeof finished_key, transcript_hash, sizeof transcript_hash)) {
-    fprintf(stderr, "failed to calculate RFC 8448 server Finished\n");
-    return 1;
-  }
+  TLS13_Crypto_hmac_sha256(
+      finished_key, sizeof finished_key, transcript_hash, sizeof transcript_hash, finished);
   if (expect_bytes("RFC8448 server Finished", finished, expected_finished, sizeof finished) != 0) {
     return 1;
   }
@@ -301,17 +292,14 @@ static int test_x25519_rfc7748(void) {
   uint8_t shared1[32];
   uint8_t shared2[32];
 
-  if (!tls13_hacl_x25519_public_from_private(alice_pk, alice_sk) ||
-      !tls13_hacl_x25519_public_from_private(bob_pk, bob_sk)) {
-    fprintf(stderr, "x25519 public key derivation failed\n");
-    return 1;
-  }
+  TLS13_Crypto_x25519_public_from_private((uint8_t *)alice_sk, alice_pk);
+  TLS13_Crypto_x25519_public_from_private((uint8_t *)bob_sk, bob_pk);
   if (expect_bytes("x25519 Alice public", alice_pk, alice_pk_expected, sizeof alice_pk) != 0 ||
       expect_bytes("x25519 Bob public", bob_pk, bob_pk_expected, sizeof bob_pk) != 0) {
     return 1;
   }
-  if (!tls13_hacl_x25519_shared(shared1, alice_sk, bob_pk) ||
-      !tls13_hacl_x25519_shared(shared2, bob_sk, alice_pk)) {
+  if (!TLS13_Crypto_x25519_shared_runtime((uint8_t *)alice_sk, bob_pk, shared1) ||
+      !TLS13_Crypto_x25519_shared_runtime((uint8_t *)bob_sk, alice_pk, shared2)) {
     fprintf(stderr, "x25519 shared secret failed\n");
     return 1;
   }
@@ -336,13 +324,10 @@ static int test_chacha20_poly1305_roundtrip(void) {
   memset(decrypted, 0, sizeof decrypted);
 
   uint8_t combined[sizeof plaintext + 16];
-  if (!tls13_hacl_chacha20_poly1305_seal_combined(
-          combined, sizeof combined, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext)) {
-    fprintf(stderr, "combined chacha20-poly1305 seal failed\n");
-    return 1;
-  }
-  if (!tls13_hacl_chacha20_poly1305_open_combined(
-          decrypted, sizeof decrypted, key, nonce, aad, sizeof aad, combined, sizeof combined)) {
+  TLS13_Crypto_chacha20_poly1305_seal(
+      key, nonce, aad, sizeof aad, plaintext, sizeof plaintext, combined);
+  if (!TLS13_Crypto_chacha20_poly1305_open(
+          key, nonce, aad, sizeof aad, combined, sizeof combined, decrypted)) {
     fprintf(stderr, "combined chacha20-poly1305 open failed\n");
     return 1;
   }
@@ -350,16 +335,46 @@ static int test_chacha20_poly1305_roundtrip(void) {
     return 1;
   }
   combined[sizeof combined - 1] ^= 1u;
-  if (tls13_hacl_chacha20_poly1305_open_combined(
-          decrypted, sizeof decrypted, key, nonce, aad, sizeof aad, combined, sizeof combined)) {
+  memset(decrypted, 0x5a, sizeof decrypted);
+  if (TLS13_Crypto_chacha20_poly1305_open(
+          key, nonce, aad, sizeof aad, combined, sizeof combined, decrypted)) {
     fprintf(stderr, "combined chacha20-poly1305 accepted a tampered tag\n");
     return 1;
   }
-  if (tls13_hacl_chacha20_poly1305_seal_combined(
-          combined, sizeof combined - 1, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext) ||
-      tls13_hacl_chacha20_poly1305_open_combined(
-          decrypted, sizeof decrypted, key, nonce, aad, sizeof aad, combined, sizeof combined - 1)) {
-    fprintf(stderr, "combined chacha20-poly1305 accepted a bad length\n");
+  return expect_untouched("chacha20-poly1305 failed open", decrypted, sizeof decrypted);
+}
+
+/* P-256: both sides of an ECDH exchange agree, the public key is an
+   uncompressed SEC1 point, and an invalid peer point is rejected. */
+static int test_p256_ecdh(void) {
+  uint8_t alice_sk[32];
+  uint8_t bob_sk[32];
+  uint8_t alice_pk[65];
+  uint8_t bob_pk[65];
+  uint8_t shared1[32];
+  uint8_t shared2[32];
+
+  for (size_t i = 0; i < 32; ++i) {
+    alice_sk[i] = (uint8_t)(i + 1u);
+    bob_sk[i] = (uint8_t)(0x80u + i);
+  }
+  TLS13_Crypto_p256_public_from_private(alice_sk, alice_pk);
+  TLS13_Crypto_p256_public_from_private(bob_sk, bob_pk);
+  if (alice_pk[0] != 0x04 || bob_pk[0] != 0x04) {
+    fprintf(stderr, "p256 public key is not an uncompressed point\n");
+    return 1;
+  }
+  if (!TLS13_Crypto_p256_shared_runtime(alice_sk, bob_pk, shared1) ||
+      !TLS13_Crypto_p256_shared_runtime(bob_sk, alice_pk, shared2)) {
+    fprintf(stderr, "p256 shared secret failed\n");
+    return 1;
+  }
+  if (expect_bytes("p256 shared secret agreement", shared1, shared2, sizeof shared1) != 0) {
+    return 1;
+  }
+  bob_pk[64] ^= 1u;
+  if (TLS13_Crypto_p256_shared_runtime(alice_sk, bob_pk, shared1)) {
+    fprintf(stderr, "p256 accepted a point off the curve\n");
     return 1;
   }
   return 0;
@@ -401,24 +416,17 @@ static int test_aes128_gcm_nist_case4(void) {
   uint8_t combined[76];
   uint8_t decrypted[60];
 
-  if (!tls13_hacl_aes128_gcm_available()) {
-    printf("AES-128-GCM unavailable on this host; skipping KAT\n");
-    return 0;
-  }
   memset(combined, 0, sizeof combined);
   memset(decrypted, 0, sizeof decrypted);
-  if (!tls13_hacl_aes128_gcm_seal_combined(
-          combined, sizeof combined, (uint8_t *)key, (uint8_t *)nonce,
-          (uint8_t *)aad, sizeof aad, (uint8_t *)plaintext, sizeof plaintext)) {
-    fprintf(stderr, "aes128-gcm seal failed\n");
-    return 1;
-  }
+  TLS13_Crypto_aes128_gcm_seal(
+      (uint8_t *)key, (uint8_t *)nonce, (uint8_t *)aad, sizeof aad,
+      (uint8_t *)plaintext, sizeof plaintext, combined);
   if (expect_bytes("aes128-gcm NIST case 4", combined, expected, sizeof expected) != 0) {
     return 1;
   }
-  if (!tls13_hacl_aes128_gcm_open_combined(
-          decrypted, sizeof decrypted, (uint8_t *)key, (uint8_t *)nonce,
-          (uint8_t *)aad, sizeof aad, combined, sizeof combined)) {
+  if (!TLS13_Crypto_aes128_gcm_open(
+          (uint8_t *)key, (uint8_t *)nonce, (uint8_t *)aad, sizeof aad,
+          combined, sizeof combined, decrypted)) {
     fprintf(stderr, "aes128-gcm open failed\n");
     return 1;
   }
@@ -426,13 +434,15 @@ static int test_aes128_gcm_nist_case4(void) {
     return 1;
   }
   combined[sizeof combined - 1] ^= 1u;
-  if (tls13_hacl_aes128_gcm_open_combined(
-          decrypted, sizeof decrypted, (uint8_t *)key, (uint8_t *)nonce,
-          (uint8_t *)aad, sizeof aad, combined, sizeof combined)) {
+  memset(decrypted, 0x5a, sizeof decrypted);
+  if (TLS13_Crypto_aes128_gcm_open(
+          (uint8_t *)key, (uint8_t *)nonce, (uint8_t *)aad, sizeof aad,
+          combined, sizeof combined, decrypted)) {
     fprintf(stderr, "aes128-gcm accepted a tampered tag\n");
     return 1;
   }
-  return 0;
+  /* GCM decrypts in place; the binding must still leave [out] untouched. */
+  return expect_untouched("aes128-gcm failed open", decrypted, sizeof decrypted);
 }
 
 int main(void) {
@@ -443,11 +453,12 @@ int main(void) {
   failed |= test_tls13_hkdf_rfc8448_simple_handshake();
   failed |= test_tls13_finished_rfc8448_simple_handshake();
   failed |= test_x25519_rfc7748();
+  failed |= test_p256_ecdh();
   failed |= test_chacha20_poly1305_roundtrip();
   failed |= test_aes128_gcm_nist_case4();
   if (failed != 0) {
     return 1;
   }
-  printf("hacl-pulse stub tests passed\n");
+  printf("TLS13.Crypto known-answer tests passed\n");
   return 0;
 }

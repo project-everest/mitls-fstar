@@ -79,6 +79,15 @@ EXTRACT_DIR = _extract
 HACL_PULSE_HOME ?= $(CURDIR)/tools/hacl-pulse
 HACL_DIST_DIR = $(HACL_PULSE_HOME)/dist
 HACL_C_DIR    = $(HACL_PULSE_HOME)/c
+# The Pulse crypto bindings (TLS13.Crypto) call hacl-pulse directly, so its
+# verified modules are consumed as already-cached from the checked files
+# scripts/build-hacl-pulse.sh leaves in obj/cache, and extraction links against
+# the Custard unit interface obj/build/Hacl.cui instead of re-extracting them.
+HACL_PULSE_SRC_DIRS = $(addprefix $(HACL_PULSE_HOME)/,lib spec \
+  $(addprefix code/,hash chacha salsa20 poly1305 aead curve25519 nacl ed25519 \
+    field256 p256 k256 drbg aes bignum ffdhe rsapss frodo hpke mlkem mldsa) code)
+HACL_PULSE_CACHE_DIR = $(HACL_PULSE_HOME)/obj/cache
+HACL_PULSE_CUI = $(HACL_PULSE_HOME)/obj/build/Hacl.cui
 EXTERN_DIR  = src/impl/extern
 SPEC_DIRS   = $(sort $(shell find src/spec -type d -print))
 SOURCE_DIRS = common $(SPEC_DIRS) src/impl $(EXTERN_DIR) $(GENERATED_DIR) \
@@ -91,7 +100,8 @@ INCLUDES = \
   --include src/impl \
   --include $(EXTERN_DIR) \
   --include $(GENERATED_DIR) \
-  --include $(LOWPARSE_HOME)
+  --include $(LOWPARSE_HOME) \
+  $(addprefix --include ,$(HACL_PULSE_SRC_DIRS) $(HACL_PULSE_CACHE_DIR))
 
 FSTAR_DEP_OPTIONS :=
 
@@ -113,7 +123,7 @@ FSTAR_FLAGS = \
   --odir $(OUTPUT_DIR) \
   --warn_error -321 \
   --report_assumes warn \
-  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec,Hacl,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
   $(INCLUDES)
 
@@ -127,7 +137,7 @@ FSTAR_EXTRACT_FLAGS = \
   --odir $(OUTPUT_DIR) \
   --warn_error -321 \
   --report_assumes warn \
-  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec,Hacl,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
   $(INCLUDES)
 
@@ -527,6 +537,10 @@ TLS13_BUNDLE_INIT = runtime/tls13_globals.c
 TLS13_ENGINE_DIR = $(EXTRACT_DIR)/tls13_engine_c
 TLS13_ENGINE_STAMP = $(TLS13_ENGINE_DIR)/.generated
 TLS13_ENGINE_INCLUDES = -I$(TLS13_ENGINE_DIR)
+# TLS13.Crypto alone, so test/unit/test_crypto.c can run known-answer tests
+# against the verified Pulse crypto bindings (static inside the full library).
+TLS13_CRYPTO_DIR = $(EXTRACT_DIR)/tls13_crypto_c
+TLS13_CRYPTO_STAMP = $(TLS13_CRYPTO_DIR)/.generated
 CLIENT_DRIVER_IMPL_MODULES = \
   TLS13.Impl.ArrayCopy \
   TLS13.Impl.Endpoint.Types \
@@ -647,8 +661,12 @@ TLS13_CUSTARD_EXTERN_TYPES = \
 # Custard takes a single file on the command line; it loads the checked files of
 # the entry modules on demand.
 TLS13_CUSTARD_ROOTS = src/impl/TLS13.Impl.Client.Driver.fst
+# TLS13.Crypto calls hacl-pulse directly; --custard_link resolves those calls
+# against hacl-pulse's unit interface, so they become calls into dist/Hacl.c
+# rather than re-extracted copies.
 TLS13_CUSTARD_C_FLAGS = --codegen C --custard_monomorphize_types true \
-  $(addprefix --custard_extern_type ,$(TLS13_CUSTARD_EXTERN_TYPES))
+  $(addprefix --custard_extern_type ,$(TLS13_CUSTARD_EXTERN_TYPES)) \
+  --custard_link $(HACL_PULSE_CUI) --custard_norm_budget 100000000
 
 # $(1): output directory, $(2): Custard root options
 define custard_extract_c
@@ -674,6 +692,10 @@ $(TLS13_ENGINE_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefil
 	$(call custard_extract_c,$(TLS13_ENGINE_DIR),\
 	  --custard_entry_module TLS13.Impl.Client.Engine)
 
+$(TLS13_CRYPTO_STAMP): $(ALL_FILES) $(GENERATED_SRCS) $(GENERATED_STAMP) Makefile | verify
+	$(call custard_extract_c,$(TLS13_CRYPTO_DIR),\
+	  --custard_entry_module TLS13.Crypto)
+
 extract-tls13-bundle extract-c: $(TLS13_BUNDLE_STAMP)
 
 # The provider compiles the engine unit's source directly; it is produced by
@@ -688,10 +710,9 @@ $(TLS13_ENGINE_DIR)/TLS13.c $(TLS13_ENGINE_DIR)/TLS13.h: $(TLS13_ENGINE_STAMP)
 # hacl-pulse is one translation unit; it is compiled once per flavour (tests,
 # benchmark, gprof profile) and linked as an object.  It picks its AES-NI,
 # SHA-extension and AVX2 code paths at run time, so no build-time CPU probing
-# is needed.
-HACL_WRAPPER_SOURCES = \
-  c_stubs/tls13_hacl_stubs.c \
-  $(HACL_C_DIR)/Hacl_Random.c
+# is needed.  The extracted TLS13.c calls it directly; the only C left is the
+# platform entropy shim behind c_stubs/tls13_crypto_external.c.
+HACL_RANDOM_SOURCES = $(HACL_C_DIR)/Hacl_Random.c
 
 HACL_PULSE_CFLAGS = -std=c11 -Wall -Wextra -ffunction-sections -fdata-sections \
   -I $(HACL_DIST_DIR) -I $(HACL_C_DIR)
@@ -709,8 +730,7 @@ ECHO_STUB_SOURCES = \
   c_stubs/common_tcp_stubs.c \
   c_stubs/tls13_crypto_external.c \
   c_stubs/tls13_openssl_custard.c \
-  c_stubs/tls13_openssl_stubs.c \
-  c_stubs/tls13_hacl_stubs.c
+  c_stubs/tls13_openssl_stubs.c
 
 ECHO_STUB_HEADERS = \
   runtime/common_memmove.h \
@@ -719,7 +739,6 @@ ECHO_STUB_HEADERS = \
   c_stubs/custard_option.h \
   c_stubs/common_tcp_stubs.h \
   c_stubs/tls13_crypto_external.h \
-  c_stubs/tls13_hacl_stubs.h \
   c_stubs/tls13_openssl_custard.h \
   c_stubs/tls13_openssl_stubs.h
 
@@ -745,7 +764,7 @@ TLS13_PROVIDER_C_SOURCES = \
   c_stubs/tls13_crypto_external.c \
   runtime/common_memmove.c \
   runtime/tls13_client_engine.c \
-  $(HACL_WRAPPER_SOURCES)
+  $(HACL_RANDOM_SOURCES)
 TLS13_PROVIDER_OBJ_STAMP = $(TLS13_PROVIDER_OBJ_DIR)/.built
 
 CHROMIUM_SRC ?= $(abspath ../chromium/src)
@@ -829,14 +848,14 @@ define link_benchmark
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/perf/tls13_bench.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) $(1) -lssl -lcrypto -o $(3)
 endef
 
 $(BENCHMARK_BINARY): test/perf/tls13_bench.c $(BENCHMARK_OBJ_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_BENCHMARK_OBJECTS) | check-deps
 	$(call link_benchmark,$(BENCHMARK_CFLAGS),$(BENCHMARK_OBJ_DIR),$@,$(HACL_BENCHMARK_OBJECTS))
 
@@ -844,7 +863,7 @@ $(BENCHMARK_PROFILE_BINARY): test/perf/tls13_bench.c \
   $(BENCHMARK_PROFILE_OBJ_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_PROFILE_OBJECTS) | check-deps
 	$(call link_benchmark,$(BENCHMARK_PROFILE_CFLAGS),$(BENCHMARK_PROFILE_OBJ_DIR),$@,$(HACL_PROFILE_OBJECTS))
 
@@ -881,11 +900,11 @@ $(TLS13_BUNDLE_OBJS_STAMP): $(TLS13_BUNDLE_STAMP) $(TLS13_BUNDLE_INIT) $(ECHO_ST
   test-chromium-demo-bundle-logging \
   test test-extracted-client-openssl-echo test-openssl-echo \
   test-client-engine-openssl-echo test-chromium-client-demo \
-  test-openssl-http-preconnect test-openssl-sclient test-hacl-stubs \
+  test-openssl-http-preconnect test-openssl-sclient test-crypto \
   test-atlas-loopback test-server-matrix \
   test-key-schedule-bindings check-c-stubs
 
-test: verify verify-samples check-c-stubs test-hacl-stubs test-key-schedule-bindings \
+test: verify verify-samples check-c-stubs test-crypto test-key-schedule-bindings \
   test-openssl-echo test-client-engine-openssl-echo \
   test-chromium-client-demo test-openssl-http-preconnect test-openssl-sclient \
   test-atlas-loopback test-server-matrix
@@ -896,22 +915,26 @@ check-c-stubs: | check-deps
 	  -I c_stubs -I $(HACL_DIST_DIR) -I $(HACL_C_DIR) \
 	  $(ECHO_STUB_SOURCES)
 
-# ── HACL Wrapper Tests ─────────────────────────────────────────────
-test/test_hacl_stubs: test/unit/test_hacl_stubs.c \
-  c_stubs/tls13_hacl_stubs.c c_stubs/tls13_hacl_stubs.h \
-  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
-	$(CC) $(CFLAGS_COMMON) \
+# ── Crypto Known-Answer Tests ──────────────────────────────────────
+# Run against the extracted TLS13.Crypto unit: the verified Pulse code calling
+# hacl-pulse, plus the C entropy extern.
+test/test_crypto: test/unit/test_crypto.c $(TLS13_CRYPTO_STAMP) \
+  c_stubs/tls13_crypto_external.c c_stubs/tls13_crypto_external.h \
+  $(HACL_RANDOM_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+	$(CC) $(CFLAGS_COMMON) -I$(TLS13_CRYPTO_DIR) \
 	  $(HACL_TEST_OBJECTS) \
-	  test/unit/test_hacl_stubs.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(TLS13_CRYPTO_DIR)/TLS13.c \
+	  c_stubs/tls13_crypto_external.c \
+	  test/unit/test_crypto.c \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -o $@
 
-test-hacl-stubs: test/test_hacl_stubs
-	./test/test_hacl_stubs
+test-crypto: test/test_crypto
+	./test/test_crypto
 
 test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
   $(TLS13_BUNDLE_OBJS_STAMP) $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) \
-  $(HACL_WRAPPER_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
+  $(HACL_RANDOM_SOURCES) $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
 	  $(HACL_TEST_OBJECTS) \
@@ -924,7 +947,7 @@ test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_key_schedule_bindings.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-key-schedule-bindings: test/test_key_schedule_bindings
@@ -944,7 +967,7 @@ test/certs/ec-chain.pem test/certs/ec-leaf.key test/certs/ec-leaf.der: $(TEST_CE
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
@@ -959,7 +982,7 @@ test/test_extracted_client_openssl_echo: \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-client-openssl-echo: test-openssl-echo
@@ -970,7 +993,7 @@ test-extracted-client-openssl-echo: test-openssl-echo
 test/test_interop_client: \
   test/unit/test_interop_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
@@ -985,7 +1008,7 @@ test/test_interop_client: \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_interop_client.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 .PHONY: interop-client
@@ -995,7 +1018,7 @@ test/test_extracted_client_engine_openssl_echo: \
   test/unit/test_extracted_client_engine_openssl_echo.c \
   $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_engine.c runtime/tls13_client_engine.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
@@ -1010,7 +1033,7 @@ test/test_extracted_client_engine_openssl_echo: \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_engine_openssl_echo.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test/openssl_echo_server: test/openssl_echo_server.c
@@ -1335,7 +1358,7 @@ http-sample-vtls-server: $(HTTP_SAMPLE_VTLS_BIN)
 $(HTTP_SAMPLE_VTLS_BIN): \
   $(HTTP_SAMPLE_DIR)/interop/http_server.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	@$(MAKE) --no-print-directory -C $(HTTP_SAMPLE_DIR) extract-loops
 	@mkdir -p $(HTTP_SAMPLE_EXTRACT)/vtls_obj
@@ -1369,7 +1392,7 @@ $(HTTP_SAMPLE_VTLS_BIN): \
 	  c_stubs/common_tcp_stubs.c \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 	@echo "Built $@ (verified HTTP/1.1 over verified TLS 1.3)"
 
@@ -1415,7 +1438,7 @@ test-http-sample-vtls: $(HTTP_SAMPLE_VTLS_BIN) $(HTTP_SAMPLE_VTLS_CLIENT) \
 test/test_extracted_server_openssl_client: \
   test/unit/test_extracted_server_openssl_client.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
@@ -1430,7 +1453,7 @@ test/test_extracted_server_openssl_client: \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_server_openssl_client.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-openssl-sclient: test/test_extracted_server_openssl_client \
@@ -1447,7 +1470,7 @@ test/test_atlas_loopback: \
   test/unit/test_atlas_loopback.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
@@ -1463,7 +1486,7 @@ test/test_atlas_loopback: \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_atlas_loopback.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-atlas-loopback: test/test_atlas_loopback \
@@ -1480,7 +1503,7 @@ test-atlas-loopback: test/test_atlas_loopback \
 test/test_server_interop_matrix: \
   test/unit/test_server_interop_matrix.c $(TLS13_BUNDLE_OBJS_STAMP) \
   runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
-  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_WRAPPER_SOURCES) \
+  $(ECHO_STUB_SOURCES) $(ECHO_STUB_HEADERS) $(HACL_RANDOM_SOURCES) \
   $(HACL_TEST_OBJECTS) | check-deps
 	$(CC) $(CFLAGS_COMMON) \
 	  $(TLS13_BUNDLE_INCLUDES) \
@@ -1495,7 +1518,7 @@ test/test_server_interop_matrix: \
 	  c_stubs/tls13_openssl_custard.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_server_interop_matrix.c \
-	  $(HACL_WRAPPER_SOURCES) \
+	  $(HACL_RANDOM_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-server-matrix: test/test_server_interop_matrix \

@@ -67,12 +67,12 @@ digraph TLS13Architecture {
     fillcolor="#fff7f7";
     style="rounded,filled";
 
-    CryptoABI [label="TLS13.Crypto.fsti\ncrypto ABI", fillcolor="#ffe8e8", color="#c9342c"];
+    CryptoABI [label="TLS13.Crypto.Random.fsti\nentropy ABI", fillcolor="#ffe8e8", color="#c9342c"];
     X509ABI [label="TLS13.X509.fsti\ncertificate/signature ABI", fillcolor="#ffe8e8", color="#c9342c"];
     MachineTypes [label="TLS13.MachineTypes.fsti\nmachine/runtime types", fillcolor="#ffe8e8", color="#c9342c"];
-    CryptoC [label="tls13_crypto_external.c\nHACL glue", fillcolor="#ffe8e8", color="#c9342c"];
+    CryptoC [label="tls13_crypto_external.c\nentropy shim", fillcolor="#ffe8e8", color="#c9342c"];
     X509C [label="tls13_openssl_stubs.c\nOpenSSL validation/signature checks", fillcolor="#ffe8e8", color="#c9342c"];
-    HACL [label="HACL* C snapshot", fillcolor="#ffe8e8", color="#c9342c"];
+    HACL [label="hacl-pulse entropy\n(Hacl_Random.c)", fillcolor="#ffe8e8", color="#c9342c"];
     OpenSSL [label="OpenSSL library", fillcolor="#ffe8e8", color="#c9342c"];
     Runtime [label="KaRaMeL/Pulse/C runtime,\nallocator, compiler, libc", fillcolor="#eeeeee", color="#777777"];
   }

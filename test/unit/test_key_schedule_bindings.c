@@ -1,6 +1,5 @@
 #include "TLS13.h"
-#include "tls13_crypto_external.h"
-#include "tls13_hacl_stubs.h"
+#include "Hacl.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -33,11 +32,10 @@ static int test_rfc8448_handshake_secret(void) {
   uint8_t zero_psk[32] = {0};
   uint8_t got[32];
 
-  if (!tls13_hacl_hkdf_extract_sha256(
-          early_secret, NULL, 0, zero_psk, sizeof zero_psk)) {
-    fprintf(stderr, "early-secret setup failed\n");
-    return 1;
-  }
+  uint8_t no_salt[1] = {0};
+
+  /* Reference values come straight from hacl-pulse. */
+  Hacl_HKDF_extract_sha256(early_secret, no_salt, 0, zero_psk, sizeof zero_psk);
   TLS13_KeySchedule_handshake_secret(
       early_secret, (uint8_t *)shared_secret, sizeof shared_secret, got);
   return expect_bytes(
@@ -100,15 +98,12 @@ static int test_traffic_key_iv_against_hacl(void) {
   uint8_t got_iv[12];
   uint8_t zeros[16] = {0};
 
-  if (!tls13_hacl_hkdf_expand_sha256(
-          expected_key, sizeof expected_key, traffic_secret, key_info, sizeof key_info) ||
-      !tls13_hacl_hkdf_expand_sha256(
-          expected_key16, sizeof expected_key16, traffic_secret, key_info_16, sizeof key_info_16) ||
-      !tls13_hacl_hkdf_expand_sha256(
-          expected_iv, sizeof expected_iv, traffic_secret, iv_info, sizeof iv_info)) {
-    fprintf(stderr, "direct traffic key/iv setup failed\n");
-    return 1;
-  }
+  Hacl_HKDF_expand_sha256(expected_key, sizeof expected_key, (uint8_t *)traffic_secret, 32,
+                          (uint8_t *)key_info, sizeof key_info);
+  Hacl_HKDF_expand_sha256(expected_key16, sizeof expected_key16, (uint8_t *)traffic_secret, 32,
+                          (uint8_t *)key_info_16, sizeof key_info_16);
+  Hacl_HKDF_expand_sha256(expected_iv, sizeof expected_iv, (uint8_t *)traffic_secret, 32,
+                          (uint8_t *)iv_info, sizeof iv_info);
 
   TLS13_KeySchedule_derive_traffic_key((uint8_t *)traffic_secret,
                                       TLS13_CRYPTO_SPEC_AEAD_CHACHA20_POLY1305, got_key);

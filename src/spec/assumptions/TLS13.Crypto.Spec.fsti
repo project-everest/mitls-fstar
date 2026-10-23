@@ -108,13 +108,6 @@ val hmac_sha256: key:B.bytes -> msg:B.bytes -> Tot digest32
 
 val hkdf_extract: salt:B.bytes -> ikm:B.bytes -> Tot secret
 
-val hkdf_expand_label:
-  secret:B.bytes ->
-  label:B.bytes ->
-  context:B.bytes ->
-  len:nat ->
-  Tot (bytes_of_len len)
-
 val x25519_public_from_private:
   sk:B.bytes ->
   Tot x25519_public
@@ -315,6 +308,13 @@ let hkdf_label_info_buffer
       (U8.uint_to_t (B.length context % 256)) in
   copy_bytes_into info11 (10 + B.length label) context
 
+val hkdf_expand_label:
+  secret:B.bytes ->
+  label:B.bytes ->
+  context:B.bytes ->
+  len:nat ->
+  Tot (bytes_of_len len)
+
 [@@ "opaque_to_smt"]
 let record_nonce_from_bytes
   (static_iv:B.bytes)
@@ -351,6 +351,14 @@ let tls13_record_nonce
     (nonce_byte seq 256)
     (nonce_byte seq 1)
 
+(**
+  The largest plaintext and additional data the AEAD model is defined on.
+  Beyond it [aead_seal] and [aead_open] are total but meaningless (all-zero
+  output and [None] respectively); a TLS record is far smaller (RFC 8446
+  section 5.2 bounds a TLSCiphertext fragment by 2^14 + 256 bytes).
+**)
+let aead_max_len : nat = 65280
+
 val aead_seal:
   alg:aead_alg ->
   key:B.bytes ->
@@ -368,10 +376,10 @@ val aead_open:
   Tot (option (plaintext:B.bytes{B.length plaintext + 16 == B.length ciphertext}))
 
 (**
-  Trust assumption: AEAD correctness for honest encryption/decryption with the
-  same algorithm, key, nonce, and additional authenticated data.  This is not
-  proved in the model; it is part of the cryptographic TCB used to lift
-  protected byte replay to decrypted TLS messages.
+  AEAD correctness for honest encryption/decryption with the same algorithm,
+  key, nonce, and additional authenticated data, for inputs within
+  [aead_max_len].  Proved from hacl-pulse's ChaCha20-Poly1305 and AES-GCM
+  specifications.
 
   Both supported algorithms have a 16-byte tag, so the ciphertext length
   relation above is algorithm-independent and the record framing proofs are
@@ -384,7 +392,8 @@ val lemma_aead_open_seal:
   aad:B.bytes ->
   plaintext:B.bytes ->
   Lemma
-    (aead_open
+    (requires B.length plaintext <= aead_max_len /\ B.length aad <= aead_max_len)
+    (ensures aead_open
       alg
       key
       nonce
